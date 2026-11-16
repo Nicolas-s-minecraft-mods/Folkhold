@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
@@ -16,8 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
@@ -28,15 +31,26 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.chunk.ProtoChunk;
+import net.minecraft.world.level.chunk.UpgradeData;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.TerrainAdjustment;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -61,6 +75,16 @@ public final class VillageRingGameTests {
     private static final int WALK_MARGIN = 8;
     /** The point in front of a gate of the ring is this number of blocks out of the line. */
     private static final int GATE_APPROACH = 5;
+    /** The seed of the noise terrain of the test of the terrain adaptation. */
+    private static final long NOISE_SEED = 783L;
+    /** The test of the terrain adaptation tries this number of sites. */
+    private static final int SITES = 8;
+    /** The distance between 2 sites of the test of the terrain adaptation, in chunks. */
+    private static final int SITE_STEP = 37;
+    /** The point in front of a gate in the flat terrain of the gate, in blocks out of the line. */
+    private static final int FRONT = 3;
+    /** The smallest difference between the terrain and the level of the gate for the test, in blocks. */
+    private static final int MIN_SLOPE = 3;
     /** The size of a region of the placement of the villages, in chunks. */
     private static final int REGION = 40;
     /** The number of regions that the search of a village with rings tries. */
@@ -202,6 +226,86 @@ public final class VillageRingGameTests {
             return;
         }
         helper.fail("No village with rings starts in " + CANDIDATES + " regions");
+    }
+
+    /**
+     * The ring districts shape the terrain of the noise (terrain adaptation {@code beard_thin}): a town of the level 12
+     * on the vanilla Overworld noise (seed 783), at the gate of its ring with the largest difference between the
+     * terrain and the gate level. The test fills the chunk of this gate from the noise with the start of its
+     * district, as the game does at the noise step. The top block in front of the gate is then at the gate level. With
+     * no terrain adaptation, the game does not read the pieces of the district, and the terrain stays as it is.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_ring_terrain")
+    public static void ringDistrictsShapeTheTerrain(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Registry<Structure> structures = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        FortifiedVillageStructure village = (FortifiedVillageStructure) structures.getOrThrow(
+                Settlements.VILLAGE_STRUCTURE);
+        Structure district = structures.getOrThrow(ResourceKey.create(Registries.STRUCTURE,
+                ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village_ring")));
+        helper.assertTrue(district.terrainAdaptation() == TerrainAdjustment.BEARD_THIN,
+                "The ring districts must have the terrain adaptation beard_thin: " + district.terrainAdaptation());
+        Holder<NoiseGeneratorSettings> settings = level.registryAccess().registryOrThrow(Registries.NOISE_SETTINGS)
+                .getHolderOrThrow(NoiseGeneratorSettings.OVERWORLD);
+        NoiseBasedChunkGenerator generator = new NoiseBasedChunkGenerator(MultiNoiseBiomeSource.createFromPreset(
+                level.registryAccess().registryOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST)
+                        .getHolderOrThrow(MultiNoiseBiomeSourceParameterLists.OVERWORLD)), settings);
+        RandomState random = RandomState.create(settings.value(), level.registryAccess()
+                .lookupOrThrow(Registries.NOISE), NOISE_SEED);
+        FortifiedVillageStructure.Variant land = new FortifiedVillageStructure.Variant(HolderSet.direct(),
+                village.startPool(), village.wall(), village.homes(), Optional.empty());
+        for (int site = 0; site < SITES; site++) {
+            ChunkPos start = new ChunkPos(site * SITE_STEP, 0);
+            Structure.GenerationContext context = new Structure.GenerationContext(level.registryAccess(), generator,
+                    generator.getBiomeSource(), random, level.getStructureManager(), NOISE_SEED, start, level,
+                    biome -> true);
+            if (!village.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            TerrainCache terrain = TerrainCache.of(context);
+            FortifiedVillageStructure.Layout layout = village.layout(context, land, false, TOWN_LEVEL).orElseThrow();
+            VillageWall.Wall ring = VillageWall.rings(context, terrain, layout.firstWall(), 1, VillageRings.BAND,
+                    village.wall(), false, start).get(0);
+            Optional<BlockPos> front = Optional.empty();
+            int slope = 0;
+            for (Map.Entry<WallLayout.Gate, Integer> gate : ring.gateLevels().entrySet()) {
+                WallLayout.Cell middle = ring.layout().cell(gate.getKey().side(), ring.layout().along(gate.getKey()));
+                int x = middle.x() - FRONT * gate.getKey().side().insideX();
+                int z = middle.z() - FRONT * gate.getKey().side().insideZ();
+                int top = terrain.surface(x, z) - 1;
+                int difference = Math.abs(top - gate.getValue());
+                if (top >= generator.getSeaLevel() && terrain.point(x, z).depth() == 0 && difference > slope) {
+                    slope = difference;
+                    front = Optional.of(new BlockPos(x, gate.getValue(), z));
+                }
+            }
+            if (slope < MIN_SLOPE || front.isEmpty()) {
+                continue;
+            }
+            BlockPos gate = front.get();
+            ChunkPos chunk = new ChunkPos(gate);
+            RingDistricts.District cell = RingDistricts.of(start.x, start.z, gate.getX(), gate.getZ());
+            ChunkPos anchor = new ChunkPos(cell.anchorX(start.x), cell.anchorZ(start.z));
+            List<StructurePiece> pieces = VillageWall.districts(List.of(ring), start).values().stream()
+                    .flatMap(List::stream).toList();
+            StructureStart placed = new StructureStart(district, anchor, 0, new PiecesContainer(pieces));
+            StructureManager manager = new StructureManager(level, level.getServer().getWorldData()
+                    .worldGenOptions(), null) {
+                @Override
+                public List<StructureStart> startsForStructure(ChunkPos pos, Predicate<Structure> test) {
+                    return test.test(placed.getStructure()) ? List.of(placed) : List.of();
+                }
+            };
+            ProtoChunk proto = new ProtoChunk(chunk, UpgradeData.EMPTY, level,
+                    level.registryAccess().registryOrThrow(Registries.BIOME), null);
+            generator.fillFromNoise(Blender.empty(), random, manager, proto).join();
+            int top = proto.getHeight(Heightmap.Types.WORLD_SURFACE_WG, gate.getX() & 15, gate.getZ() & 15) - 1;
+            helper.assertTrue(Math.abs(top - gate.getY()) <= 1, "In front of the ring gate at " + gate
+                    + ", the terrain must go to the gate level: top block " + top + ", natural slope " + slope);
+            helper.succeed();
+            return;
+        }
+        helper.fail("No ring gate on a slope of " + MIN_SLOPE + " blocks in " + SITES + " sites");
     }
 
     /** The saved pieces of the district at each anchor of a village that has pieces, in an order of the districts. */

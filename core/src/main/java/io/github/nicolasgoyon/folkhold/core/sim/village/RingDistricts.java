@@ -133,6 +133,39 @@ public final class RingDistricts {
     }
 
     /**
+     * True if a village keeps its rings before another village: a higher start level, or the same level and a lower
+     * start chunk (X, then Z). For 2 different start chunks, exactly one of the 2 villages has priority.
+     *
+     * @param level      the start level of the village
+     * @param chunkX     the start chunk X of the village
+     * @param chunkZ     the start chunk Z of the village
+     * @param otherLevel the start level of the other village
+     * @param otherX     the start chunk X of the other village
+     * @param otherZ     the start chunk Z of the other village
+     * @return true if the village has priority
+     */
+    public static boolean hasPriority(int level, int chunkX, int chunkZ, int otherLevel, int otherX, int otherZ) {
+        if (level != otherLevel) {
+            return level > otherLevel;
+        }
+        return chunkX < otherX || (chunkX == otherX && chunkZ < otherZ);
+    }
+
+    /**
+     * A near village from the largest box of its first wall: its outer box has all its possible rings.
+     *
+     * @param core     the largest box of the first wall of the near village
+     * @param rings    the number of rings of its tier
+     * @param band     the band of each ring
+     * @param margin   the margin of the box of a ring: its flat terrain and its piers
+     * @param priority true if the near village has priority (see {@link #hasPriority})
+     * @return the near village
+     */
+    public static Neighbor neighbor(WallLayout.Box core, int rings, int band, int margin, boolean priority) {
+        return new Neighbor(core, rings == 0 ? core : core.grow(rings * band + margin), priority);
+    }
+
+    /**
      * The number of rings that a village keeps near other villages. A ring goes away, with all the rings outside it,
      * when its box touches the core box of a near village, or the outer box of a near village with priority.
      *

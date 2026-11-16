@@ -19,11 +19,13 @@ import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -45,8 +47,8 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *       check and the biome check, see {@link FortifiedVillageStructure#generatedStart}), the start level, the layout
  *       of the village and its rings. It does not read the chunks of the village.</li>
  *   <li>The near villages keep their space (see {@link RingDistricts#keptRings}): the faction villages at
- *       {@link #NEIGHBOR_RANGE} chunks or less, and the possible starts of the vanilla villages, with
- *       {@link #VANILLA_REACH} blocks around their start chunk.</li>
+ *       {@link #NEIGHBOR_RANGE} chunks or less, and the possible starts of the vanilla villages in a biome of the
+ *       vanilla villages, with {@link #VANILLA_REACH} blocks around their start chunk.</li>
  *   <li>The plan of the rings of a village is in a bounded cache, safe for the threads of the generation. The districts
  *       of a village calculate the layout and the rings one time.</li>
  *   <li>Only a world that this version of the mod creates gets the rings: the overworld keeps a flag from its
@@ -56,10 +58,19 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 public final class VillageRings {
     /** The band of each ring, in blocks. */
     public static final int BAND = WallLayout.MIN_BAND;
-    /** The search of the near villages goes this number of chunks from the start chunk, on each axis. */
-    static final int NEIGHBOR_RANGE = 24;
-    /** A vanilla village stays in this number of blocks around the middle of its start chunk. */
-    static final int VANILLA_REACH = 80;
+    /**
+     * The search of the near villages goes this number of chunks from the start chunk, on each axis: 2 times the
+     * largest outer box of a capital with the largest radius of a plan (215 blocks), and one chunk more.
+     */
+    public static final int NEIGHBOR_RANGE = 28;
+    /**
+     * A vanilla village stays in this number of blocks around the middle of its start chunk: its range of 80 blocks
+     * around its start piece, the distance of the start piece from the middle of the chunk (18 blocks) and its terrain
+     * adaptation (12 blocks).
+     */
+    static final int VANILLA_REACH = 110;
+    /** The biome check of a vanilla start also reads the biome this number of blocks above the sea level. */
+    static final int VANILLA_HIGH = 40;
     /** The box of a ring is larger by this number of blocks: its flat terrain and its piers. */
     static final int RING_MARGIN = VillageWall.PIER_START + PierPiece.MAX_LENGTH;
     /** The number of villages in the cache. */
@@ -123,8 +134,12 @@ public final class VillageRings {
      */
     static Map<District, List<StructurePiece>> districts(FortifiedVillageStructure village,
             Holder<StructureSet> set, Structure.GenerationContext anchor, ChunkPos start) {
+        int level = Settlements.startLevel(anchor.seed(), start);
+        if (VillageSizes.forLevel(level).rings() == 0) {
+            return Map.of();
+        }
         Key key = new Key(anchor.chunkGenerator(), anchor.randomState(), anchor.seed(), start.toLong());
-        return cached(key, () -> plan(village, set, anchor, start));
+        return cached(key, () -> plan(village, set, anchor, start, level));
     }
 
     /** The value of a key: one thread calculates it, and the other threads wait for it. */
@@ -146,7 +161,7 @@ public final class VillageRings {
             } catch (RuntimeException exception) {
                 future.completeExceptionally(exception);
                 synchronized (PLANS) {
-                    PLANS.remove(key);
+                    PLANS.remove(key, future);
                 }
                 throw exception;
             }
@@ -156,12 +171,8 @@ public final class VillageRings {
 
     /** Calculates the pieces of the rings of a village in each district. */
     private static Map<District, List<StructurePiece>> plan(FortifiedVillageStructure village,
-            Holder<StructureSet> set, Structure.GenerationContext anchor, ChunkPos start) {
-        int level = Settlements.startLevel(anchor.seed(), start);
+            Holder<StructureSet> set, Structure.GenerationContext anchor, ChunkPos start, int level) {
         VillageSize size = VillageSizes.forLevel(level);
-        if (size.rings() == 0) {
-            return Map.of();
-        }
         Structure.GenerationContext context = context(village, anchor, start);
         Optional<FortifiedVillageStructure.Start> found = village.generatedStart(context);
         if (found.isEmpty()) {
@@ -196,22 +207,41 @@ public final class VillageRings {
                 ChunkPos chunk = new ChunkPos(start.x + dx, start.z + dz);
                 if (!chunk.equals(start) && set.value().placement().isStructureChunk(state, chunk.x, chunk.z)) {
                     int otherLevel = Settlements.startLevel(anchor.seed(), chunk);
-                    village.generatedStart(context(village, anchor, chunk)).ifPresent(other -> {
-                        WallLayout.Box core = around(other.center(), village.coreReach(otherLevel));
-                        int rings = VillageSizes.forLevel(otherLevel).rings();
-                        boolean priority = otherLevel > level || (otherLevel == level
-                                && (chunk.x < start.x || (chunk.x == start.x && chunk.z < start.z)));
-                        neighbors.add(new Neighbor(core, rings == 0 ? core : core.grow(rings * BAND + RING_MARGIN),
-                                priority));
-                    });
+                    village.generatedStart(context(village, anchor, chunk)).ifPresent(other -> neighbors.add(
+                            RingDistricts.neighbor(around(other.center(), village.coreReach(otherLevel)),
+                                    VillageSizes.forLevel(otherLevel).rings(), BAND, RING_MARGIN,
+                                    RingDistricts.hasPriority(otherLevel, chunk.x, chunk.z, level, start.x,
+                                            start.z))));
                 }
-                if (vanilla.isPresent() && vanilla.get().value().placement().isStructureChunk(state, chunk.x, chunk.z)) {
+                if (vanilla.isPresent() && vanilla.get().value().placement().isStructureChunk(state, chunk.x, chunk.z)
+                        && vanillaBiome(vanilla.get().value(), anchor, chunk)) {
                     WallLayout.Box box = around(chunk.getMiddleBlockPosition(0), VANILLA_REACH);
                     neighbors.add(new Neighbor(box, box, false));
                 }
             }
         }
         return neighbors;
+    }
+
+    /**
+     * True if a vanilla village can start in a chunk: a structure of the set accepts the biome at a corner or at the
+     * middle of the chunk, at the sea level or {@link #VANILLA_HIGH} blocks above it. The check reads the seed only.
+     */
+    static boolean vanillaBiome(StructureSet set, Structure.GenerationContext anchor, ChunkPos chunk) {
+        int[][] points = {{0, 0}, {15, 0}, {0, 15}, {15, 15}, {8, 8}};
+        for (int y : new int[] {anchor.chunkGenerator().getSeaLevel(), anchor.chunkGenerator().getSeaLevel()
+                + VANILLA_HIGH}) {
+            for (int[] point : points) {
+                Holder<Biome> biome = anchor.biomeSource().getNoiseBiome(
+                        QuartPos.fromBlock(chunk.getMinBlockX() + point[0]), QuartPos.fromBlock(y),
+                        QuartPos.fromBlock(chunk.getMinBlockZ() + point[1]), anchor.randomState().sampler());
+                if (set.structures().stream().anyMatch(entry -> entry.structure().value().biomes()
+                        .contains(biome))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** The context of the generation of the village at a start chunk, from the context of a district. */

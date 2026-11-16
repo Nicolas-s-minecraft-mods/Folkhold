@@ -3,6 +3,6 @@
   "biomes": "#minecraft:is_overworld",
   "step": "surface_structures",
   "spawn_overrides": {},
-  "terrain_adaptation": "none",
+  "terrain_adaptation": "beard_thin",
   "villages": "folkhold_world:villages"
 }

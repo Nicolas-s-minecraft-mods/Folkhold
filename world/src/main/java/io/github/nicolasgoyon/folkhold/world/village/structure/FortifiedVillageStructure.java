@@ -211,9 +211,7 @@ public final class FortifiedVillageStructure extends Structure {
      * @return the start, or empty if no village starts there
      */
     Optional<Start> generatedStart(GenerationContext context) {
-        return start(context).filter(start -> context.validBiome().test(context.chunkGenerator().getBiomeSource()
-                .getNoiseBiome(QuartPos.fromBlock(start.center().getX()), QuartPos.fromBlock(start.center().getY()),
-                        QuartPos.fromBlock(start.center().getZ()), context.randomState().sampler())));
+        return start(context).filter(start -> context.validBiome().test(biomeAt(context, start.center())));
     }
 
     /**
@@ -356,8 +354,8 @@ public final class FortifiedVillageStructure extends Structure {
      *         not valid (as {@code Structure.generate} checks it), or if the variant fails the test
      */
     public Optional<Layout> layout(GenerationContext context, int level, Predicate<Variant> variant) {
-        return start(context).filter(start -> context.validBiome().test(biomeAt(context, start.center())))
-                .filter(start -> variant.test(start.variant())).map(start -> layout(context, start, level));
+        return generatedStart(context).filter(start -> variant.test(start.variant()))
+                .map(start -> layout(context, start, level));
     }
 
     /**
