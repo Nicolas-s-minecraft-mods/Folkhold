@@ -47,8 +47,8 @@ class PlotTerrainTest {
     }
 
     /**
-     * A plot over deep water can hold a home on its foundation. A plot with lava or a steep slope cannot, also over
-     * deep water.
+     * A plot over deep water can hold a home on its foundation. A plot with lava, a steep slope or water deeper than
+     * the stilts cannot.
      */
     @Test
     void deepWaterHoldsAHomeOnItsFoundation() {
@@ -59,6 +59,10 @@ class PlotTerrainTest {
         assertTrue(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 0 ? LAND : deep));
         assertFalse(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 0 ? lava : deep));
         assertFalse(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 0 ? high : deep));
+        Column stilts = new Column(GROUND, GROUND - PlotTerrain.MAX_FOUNDATION_DEPTH, false);
+        Column ocean = new Column(GROUND, GROUND - PlotTerrain.MAX_FOUNDATION_DEPTH - 1, false);
+        assertTrue(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> stilts));
+        assertFalse(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 4 ? ocean : deep));
     }
 
     /**

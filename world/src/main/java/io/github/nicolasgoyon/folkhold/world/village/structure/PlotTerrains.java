@@ -36,6 +36,16 @@ public final class PlotTerrains {
     }
 
     /**
+     * True if a box in the world can hold a home on its foundation (see {@link PlotTerrain#onFoundation}).
+     *
+     * @param box the box
+     * @return true if the box has no lava, no steep slope and no water deeper than the stilts
+     */
+    public boolean onFoundation(BoundingBox box) {
+        return PlotTerrain.onFoundation(box.minX(), box.minZ(), box.maxX(), box.maxZ(), terrain::column);
+    }
+
+    /**
      * The terrain test of the plots of a plan: true for a box of the plan with good terrain.
      *
      * @param center   the middle of the plaza: (0, 0) of the plan
@@ -56,8 +66,7 @@ public final class PlotTerrains {
      */
     Predicate<VillagePlan.Box> foundation(BlockPos center, Rotation rotation) {
         return box -> {
-            BoundingBox world = world(box, center, rotation);
-            return PlotTerrain.onFoundation(world.minX(), world.minZ(), world.maxX(), world.maxZ(), terrain::column);
+            return onFoundation(world(box, center, rotation));
         };
     }
 

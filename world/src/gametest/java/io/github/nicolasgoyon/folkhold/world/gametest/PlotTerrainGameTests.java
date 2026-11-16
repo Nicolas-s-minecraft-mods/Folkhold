@@ -188,10 +188,10 @@ public final class PlotTerrainGameTests {
      * case (the missing homes take these plots on their foundation, see {@link VillagePlan}).
      *
      * <ul>
-     *   <li>A village has all its plots and homes, no layout problem, no home on bad terrain except a
-     *       home on its foundation over deep water (see {@link Measure#check}), the buildings, the job posts and the home beds of its level (see
-     *       {@link VillagePlanGameTests#checkLevel}), and 10 to 20 % spare plots. The free market plot below level 5 is
-     *       not a spare plot.</li>
+     *   <li>A village has all its plots and homes, no layout problem, no home on bad terrain except a home on its
+     *       foundation over deep water (see {@link Measure#check}), the buildings, the job posts and the home beds of
+     *       its level (see {@link VillagePlanGameTests#checkLevel}), and 10 to 20 % spare plots. The free market plot
+     *       below level 5 is not a spare plot.</li>
      *   <li>The log has a line {@code Village measure |} for each village: a row of the table of the measure.</li>
      * </ul>
      */
@@ -370,9 +370,10 @@ public final class PlotTerrainGameTests {
                 }
                 if (result != PlotTerrain.Result.GOOD) {
                     bad.merge(result, 1, Integer::sum);
-                    // A home on a plot over deep water, when the good plots are short, stands on its foundation.
-                    boolean foundation = result == PlotTerrain.Result.DEEP_WATER && plot.filter(value -> !value.good())
-                            .isPresent();
+                    // A home on a plot over deep water, when the good plots are short, stands on its foundation: the
+                    // same test as the plan (no lava, no steep slope, no water deeper than the stilts).
+                    boolean foundation = result == PlotTerrain.Result.DEEP_WATER
+                            && plot.filter(value -> !value.good()).isPresent() && terrain.onFoundation(box);
                     if (!foundation) {
                         problems.add(name + ": a building at " + box + " on bad terrain: " + result);
                     }

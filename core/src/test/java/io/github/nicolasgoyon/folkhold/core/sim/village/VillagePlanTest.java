@@ -189,9 +189,10 @@ class VillagePlanTest {
     }
 
     /**
-     * The terrain of a coast: only the plots north-west of the plaza are on land, the others are over deep water. With no foundation test, the village has
-     * missing homes. With the foundation test, the missing homes take the nearest plots over deep water, and the
-     * village has all its homes. With the good plots that the village needs, no home takes a bad plot.
+     * The terrain of a coast: only the plots north-west of the plaza are on land, the others are over deep water.
+     * With no foundation test, the village has missing homes. With the foundation test, the missing homes take the
+     * nearest plots over deep water, and the village has all its homes. With the good plots that the village needs,
+     * no home takes a bad plot.
      */
     @Test
     void missingHomesTakeThePlotsOnTheirFoundation() {

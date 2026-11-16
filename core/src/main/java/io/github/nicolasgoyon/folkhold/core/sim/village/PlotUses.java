@@ -15,8 +15,8 @@ import java.util.Objects;
  * <ul>
  *   <li>The bank plot holds the bank.</li>
  *   <li>Each building of the level takes the first free plot of the plan that holds it: a wide plot of its wide home,
- *       or a home plot that is not wide for a building that fits the home of the style. The plan gives the plots
- *       nearest to the middle first.</li>
+ *       or a home plot that is not wide for a building that fits the home of the style. The plan gives the good
+ *       plots nearest to the middle first, then the homes on their foundation (see {@link VillagePlan}).</li>
  *   <li>The job posts take the plot of the first food job, then the plots of the first trader jobs, then the free home
  *       plots that are not wide, in the order of the plan. The post 0 is the first food job.</li>
  *   <li>The other plots hold a home, except the spare plots and a wide plot of the market ({@link

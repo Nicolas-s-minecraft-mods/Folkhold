@@ -436,8 +436,8 @@ final class VillagePlanPieces {
         }
 
         /**
-         * True if posts with some jobs make the posts of a village of 2 posts or more one job only: the last posts, after
-         * posts of the same job. A maritime village with fishing huts keeps a post that is not a fisher.
+         * True if posts with some jobs make the posts of a village of 2 posts or more one job only: the last posts,
+         * after posts of the same job. A maritime village with fishing huts keeps a post that is not a fisher.
          */
         private boolean sameJobOnly(List<String> jobs) {
             return postLimit >= 2 && postJobs.size() + jobs.size() >= postLimit

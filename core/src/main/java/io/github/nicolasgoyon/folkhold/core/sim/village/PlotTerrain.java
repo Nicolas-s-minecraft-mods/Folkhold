@@ -27,6 +27,11 @@ import java.util.List;
 public final class PlotTerrain {
     /** The distance between 2 points of the grid, in blocks. The noise of the vanilla terrain has cells of 4 blocks. */
     public static final int STEP = 4;
+    /**
+     * The deepest water under a home on its foundation, in blocks: the longest stilt of the foundation of the maritime
+     * pieces and the longest post of a pier.
+     */
+    public static final int MAX_FOUNDATION_DEPTH = 32;
     /** The largest difference of the surfaces of 2 points of a plot, in blocks. */
     public static final int MAX_DROP = 8;
 
@@ -112,14 +117,15 @@ public final class PlotTerrain {
 
     /**
      * True if a box can hold a home on its foundation when the good plots are short: its only problem is deep water
-     * (no lava, no steep slope). See {@link VillagePlan}.
+     * (no lava, no steep slope), and the water is {@link #MAX_FOUNDATION_DEPTH} blocks deep at most. See
+     * {@link VillagePlan}.
      *
      * @param minX    the smallest X of the box
      * @param minZ    the smallest Z of the box
      * @param maxX    the largest X of the box
      * @param maxZ    the largest Z of the box
      * @param terrain the columns of the terrain
-     * @return true if the box has no lava and no steep slope
+     * @return true if the box has no lava, no steep slope and no water deeper than the stilts
      */
     public static boolean onFoundation(int minX, int minZ, int maxX, int maxZ, Terrain terrain) {
         List<Column> columns = new ArrayList<>();
@@ -127,6 +133,9 @@ public final class PlotTerrain {
             for (int z : axis(minZ, maxZ)) {
                 columns.add(terrain.at(x, z));
             }
+        }
+        if (columns.stream().anyMatch(column -> column.depth() > MAX_FOUNDATION_DEPTH)) {
+            return false;
         }
         return check(columns.stream().map(column -> new Column(column.surface(), column.surface(), column.lava()))
                 .toList()) == Result.GOOD;
