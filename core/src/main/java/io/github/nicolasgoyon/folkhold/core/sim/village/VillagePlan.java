@@ -30,8 +30,10 @@ import java.util.function.Predicate;
  *       (for example the 2 plots on a side of a Valeholm segment) when the plan keeps its target. A wide home goes
  *       past the end of its piece by {@link StreetStyle#endOverflow()} blocks at most, except before a street end.
  *       </li>
- *   <li>The homes take the plots with a role, the wide plots and the good plots nearest to the middle. The spare
- *       plots are the bad plots first, then the farthest plots of the plan. The other plots are not in the plan.</li>
+ *   <li>The homes take the plots with a role, the wide plots and the good plots nearest to the middle. When the good
+ *       plots do not give the homes that the village needs, the missing homes take the bad plots that hold a home on
+ *       its foundation (deep water, see the second terrain test), the nearest first. The spare plots are the bad plots
+ *       first, then the farthest plots of the plan. The other plots are not in the plan.</li>
  *   <li>When the radius is too small, the plan has fewer plots or homes: {@link #missingPlots()} and
  *       {@link #missingHomes()} give the shortfall.</li>
  * </ul>
@@ -234,10 +236,23 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      */
     public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
             Predicate<Box> terrain, long seed) {
+        return plan(size, target, style, plazaSize, starts, terrain, box -> false, seed);
+    }
+
+    /**
+     * As {@link #plan(VillageSize, int, StreetStyle, int, List, Predicate, long)}, with a test of the bad plots that
+     * can hold a home on its foundation. When the good plots do not give the homes that the village needs, the
+     * missing homes take these plots, the nearest to the middle first.
+     *
+     * @param foundation true when a box with bad terrain can hold a home on its foundation (deep water with no lava
+     *                   and no steep slope)
+     */
+    public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
+            Predicate<Box> terrain, Predicate<Box> foundation, long seed) {
         VillagePlan best = null;
         for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
             Random random = new Random(seed ^ (attempt * 0x9E3779B97F4A7C15L));
-            VillagePlan plan = new Planner(size, target, style, plazaSize, terrain, random).plan(starts);
+            VillagePlan plan = new Planner(size, target, style, plazaSize, terrain, foundation, random).plan(starts);
             if (best == null || BETTER.compare(plan, best) < 0) {
                 best = plan;
             }
@@ -249,15 +264,20 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
     private static final int ATTEMPTS = 8;
     /** The pieces that the plan adds after it has its plots, to get the plots of the wide homes. */
     private static final int WIDE_PIECES = 4;
-    /** The best plan: the fewest missing plots and homes, then the fewest missing wide plots, then the smallest. */
+    /**
+     * The best plan: the fewest missing plots and homes, then the fewest homes on bad plots, then the fewest missing
+     * wide plots, then the smallest.
+     */
     private static final Comparator<VillagePlan> BETTER = Comparator
             .comparingInt((VillagePlan plan) -> plan.missingPlots() + plan.missingHomes())
+            .thenComparingLong(plan -> plan.plots().stream()
+                    .filter(plot -> !plot.good() && !plot.spare() && plot.role() == PlotRole.HOME).count())
             .thenComparingInt(plan -> plan.missingWide().values().stream().mapToInt(Integer::intValue).sum())
             .thenComparingDouble(VillagePlan::radius);
 
     /** A plot before the choice of the homes. */
     private record Slot(int x, int z, Dir facing, int piece, int along, boolean east, Box area, PlotRole role,
-            boolean good) {
+            boolean good, boolean foundation) {
         /** True for a plot of a building of the first pieces: it is never wide and never spare. */
         boolean reserved() {
             return role != PlotRole.HOME;
@@ -277,6 +297,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final int needed;
         private final StreetStyle style;
         private final Predicate<Box> terrain;
+        private final Predicate<Box> foundation;
         private final Random random;
         private final long maxRadius;
         private final Box plaza;
@@ -286,11 +307,13 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         /** The ends where no piece fits: they keep their street end. */
         private final List<Tail> closed = new ArrayList<>();
 
-        Planner(VillageSize size, int target, StreetStyle style, int plazaSize, Predicate<Box> terrain, Random random) {
+        Planner(VillageSize size, int target, StreetStyle style, int plazaSize, Predicate<Box> terrain,
+                Predicate<Box> foundation, Random random) {
             this.target = target;
             this.needed = target - size.sparePlots(target);
             this.style = style;
             this.terrain = terrain;
+            this.foundation = foundation;
             this.random = random;
             this.maxRadius = size.maxRadius();
             int half = plazaSize / 2;
@@ -450,8 +473,9 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                         Dir side = start.dir().counterclockwise();
                         Dir facing = east ? side : side.opposite();
                         PlotRole role = tail.parent() == -1 ? role(start.dir(), row, east) : PlotRole.HOME;
-                        slots.add(new Slot(connector[0], connector[1], facing, index, along, east, area, role,
-                                terrain.test(area)));
+                        boolean good = terrain.test(area);
+                        slots.add(new Slot(connector[0], connector[1], facing, index, along, east, area, role, good,
+                                !good && foundation.test(area)));
                     }
                 }
             }
@@ -524,6 +548,12 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             homes.addAll(wideOf.keySet());
             for (Slot slot : order) {
                 if (homes.size() < Math.min(needed, count) && slot.good() && !homes.contains(slot)) {
+                    homes.add(slot);
+                }
+            }
+            // The good plots do not give the homes: the bad plots that hold a home on its foundation, nearest first.
+            for (Slot slot : order) {
+                if (homes.size() < Math.min(needed, count) && slot.foundation() && !homes.contains(slot)) {
                     homes.add(slot);
                 }
             }

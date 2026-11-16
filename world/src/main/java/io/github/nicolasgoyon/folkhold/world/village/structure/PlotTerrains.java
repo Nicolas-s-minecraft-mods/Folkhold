@@ -43,10 +43,28 @@ public final class PlotTerrains {
      * @return the test
      */
     Predicate<VillagePlan.Box> plan(BlockPos center, Rotation rotation) {
+        return box -> check(world(box, center, rotation)) == PlotTerrain.Result.GOOD;
+    }
+
+    /**
+     * The test of the bad plots of a plan that can hold a home on its foundation: no lava and no steep slope (see
+     * {@link PlotTerrain#onFoundation}). The plan uses these plots only when the good plots do not give the homes.
+     *
+     * @param center   the middle of the plaza: (0, 0) of the plan
+     * @param rotation the rotation of the plaza: the plan turns with it
+     * @return the test
+     */
+    Predicate<VillagePlan.Box> foundation(BlockPos center, Rotation rotation) {
         return box -> {
-            BlockPos first = center.atY(0).offset(new BlockPos(box.minX(), 0, box.minZ()).rotate(rotation));
-            BlockPos second = center.atY(0).offset(new BlockPos(box.maxX(), 0, box.maxZ()).rotate(rotation));
-            return check(BoundingBox.fromCorners(first, second)) == PlotTerrain.Result.GOOD;
+            BoundingBox world = world(box, center, rotation);
+            return PlotTerrain.onFoundation(world.minX(), world.minZ(), world.maxX(), world.maxZ(), terrain::column);
         };
+    }
+
+    /** The box of a box of the plan in the world, on the horizontal plane. */
+    private static BoundingBox world(VillagePlan.Box box, BlockPos center, Rotation rotation) {
+        BlockPos first = center.atY(0).offset(new BlockPos(box.minX(), 0, box.minZ()).rotate(rotation));
+        BlockPos second = center.atY(0).offset(new BlockPos(box.maxX(), 0, box.maxZ()).rotate(rotation));
+        return BoundingBox.fromCorners(first, second);
     }
 }

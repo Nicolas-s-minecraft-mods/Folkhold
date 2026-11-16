@@ -87,6 +87,8 @@ public final class PlotTerrainGameTests {
     static final String MEASURE_VARIABLE = "FOLKHOLD_VILLAGE_MEASURE";
     /** The tiers of the measure with no environment variable {@link #MEASURE_VARIABLE}. */
     private static final List<String> DEFAULT_TIERS = List.of("hamlet", "town");
+    /** The maritime measure also has the capital with no environment variable: the coast plots are the hard case. */
+    private static final List<String> DEFAULT_MARITIME_TIERS = List.of("hamlet", "town", "capital");
     /** The smallest and the largest share of the spare plots, from the plots that the village needs. */
     private static final double MIN_SPARE_SHARE = 0.10;
     private static final double MAX_SPARE_SHARE = 0.20;
@@ -173,19 +175,21 @@ public final class PlotTerrainGameTests {
     }
 
     /** The measure of the tiers of the maritime style: see {@link #measureTiers}. */
-    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_maritime", required = false)
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_maritime")
     public static void measureMaritimeTiers(GameTestHelper helper) {
         measureTiers(helper, StreetStyle.MARITIME);
     }
 
     /**
      * The measure of the tiers of a style: at the first site of the style (a site on a beach for the maritime style),
-     * the village of the top level of each tier. The tests are optional: a capital takes the most time. With no
-     * environment variable {@link #MEASURE_VARIABLE}, the tests measure the hamlet and the town only.
+     * the village of the top level of each tier. The tests of the land styles are optional: a capital takes the most
+     * time. With no environment variable {@link #MEASURE_VARIABLE}, the tests measure the hamlet and the town only.
+     * The maritime test is required, and it also measures the capital: the coast plots over deep water are the hard
+     * case (the missing homes take these plots on their foundation, see {@link VillagePlan}).
      *
      * <ul>
-     *   <li>A village has all its plots and homes, no layout problem, no home on bad terrain (see
-     *       {@link Measure#check}), the buildings, the job posts and the home beds of its level (see
+     *   <li>A village has all its plots and homes, no layout problem, no home on bad terrain except a
+     *       home on its foundation over deep water (see {@link Measure#check}), the buildings, the job posts and the home beds of its level (see
      *       {@link VillagePlanGameTests#checkLevel}), and 10 to 20 % spare plots. The free market plot below level 5 is
      *       not a spare plot.</li>
      *   <li>The log has a line {@code Village measure |} for each village: a row of the table of the measure.</li>
@@ -209,7 +213,8 @@ public final class PlotTerrainGameTests {
         List<String> problems = new ArrayList<>();
         List<Tier> tiers = LevelTables.get().tiers();
         if (System.getenv(MEASURE_VARIABLE) == null) {
-            tiers = tiers.stream().filter(tier -> DEFAULT_TIERS.contains(tier.id())).toList();
+            List<String> defaults = maritime ? DEFAULT_MARITIME_TIERS : DEFAULT_TIERS;
+            tiers = tiers.stream().filter(tier -> defaults.contains(tier.id())).toList();
         }
         for (Tier tier : tiers) {
             long time = System.nanoTime();
@@ -354,8 +359,8 @@ public final class PlotTerrainGameTests {
                     .filter(piece -> piece.getElement().getProjection() == StructureTemplatePool.Projection.RIGID)
                     .toList()) {
                 BoundingBox box = building.getBoundingBox();
-                boolean role = plotOf(plan, layout.center(), plaza.getRotation(), box)
-                        .map(plot -> plot.role() != VillagePlan.PlotRole.HOME).orElse(false);
+                Optional<VillagePlan.Plot> plot = plotOf(plan, layout.center(), plaza.getRotation(), box);
+                boolean role = plot.map(value -> value.role() != VillagePlan.PlotRole.HOME).orElse(false);
                 PlotTerrain.Result result = terrain.check(box);
                 if (role) {
                     if (result != PlotTerrain.Result.GOOD) {
@@ -365,7 +370,12 @@ public final class PlotTerrainGameTests {
                 }
                 if (result != PlotTerrain.Result.GOOD) {
                     bad.merge(result, 1, Integer::sum);
-                    problems.add(name + ": a building at " + box + " on bad terrain: " + result);
+                    // A home on a plot over deep water, when the good plots are short, stands on its foundation.
+                    boolean foundation = result == PlotTerrain.Result.DEEP_WATER && plot.filter(value -> !value.good())
+                            .isPresent();
+                    if (!foundation) {
+                        problems.add(name + ": a building at " + box + " on bad terrain: " + result);
+                    }
                 }
                 PlotTerrain.Result fine = fine(context, box);
                 if (fine != PlotTerrain.Result.GOOD) {

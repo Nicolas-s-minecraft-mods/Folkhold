@@ -68,7 +68,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       {@link Settlements#startLevel(long, ChunkPos)}). Its tier gives the size of the village (see
  *       {@link VillageSizes}): the plot target and the maximum radius of the plan (see {@link VillagePlan}).</li>
  *   <li>The plan uses the plots with good terrain (see {@link PlotTerrains}): no lava, no deep water and no steep
- *       slope. A plot with bad terrain is a spare plot. The plots of the bank and of the first jobs next to the plaza
+ *       slope. A plot with bad terrain is a spare plot. When the good plots in the radius do not give the homes that
+ *       the village needs, the missing homes take the nearest plots over deep water with no lava and no steep slope,
+ *       on their foundation. The plots of the bank and of the first jobs next to the plaza
  *       keep their building on bad terrain. A building over a ravine or a lava lake (the noise of the terrain does not
  *       show them) stands on the foundation of its template.</li>
  *   <li>The street pieces and the buildings on the plots come from the plan (see {@link VillagePlanPieces}). The
@@ -422,9 +424,11 @@ public final class FortifiedVillageStructure extends Structure {
                 size.rings(), size.wall(), size.minTerritoryRadius());
         int plazaSize = start.plaza().getBoundingBox().getXSpan();
         long seed = VillagePlanPieces.seed(context.seed(), context.chunkPos());
+        PlotTerrains plots = new PlotTerrains(start.terrain());
+        Rotation turn = start.plaza().getRotation();
         VillagePlan plan = VillagePlan.plan(limited, plotTarget(size), style, plazaSize,
-                VillagePlan.Start.around(plazaSize),
-                new PlotTerrains(start.terrain()).plan(start.center(), start.plaza().getRotation()), seed);
+                VillagePlan.Start.around(plazaSize), plots.plan(start.center(), turn),
+                plots.foundation(start.center(), turn), seed);
         VillagePlanPieces.Posts posts = posts(context, start.center(), level, seed);
         int beds = Math.max(0, LevelTables.get().traits(level).maxPopulation() - VillageBeds.staff());
         VillagePlanPieces.Result result = pieces.place(style, plan, PlotUses.assign(plan, buildings, posts.count()),

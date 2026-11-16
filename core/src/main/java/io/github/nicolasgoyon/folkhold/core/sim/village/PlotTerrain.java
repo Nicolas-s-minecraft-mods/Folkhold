@@ -110,6 +110,28 @@ public final class PlotTerrain {
         return highest - lowest > MAX_DROP ? Result.STEEP : Result.GOOD;
     }
 
+    /**
+     * True if a box can hold a home on its foundation when the good plots are short: its only problem is deep water
+     * (no lava, no steep slope). See {@link VillagePlan}.
+     *
+     * @param minX    the smallest X of the box
+     * @param minZ    the smallest Z of the box
+     * @param maxX    the largest X of the box
+     * @param maxZ    the largest Z of the box
+     * @param terrain the columns of the terrain
+     * @return true if the box has no lava and no steep slope
+     */
+    public static boolean onFoundation(int minX, int minZ, int maxX, int maxZ, Terrain terrain) {
+        List<Column> columns = new ArrayList<>();
+        for (int x : axis(minX, maxX)) {
+            for (int z : axis(minZ, maxZ)) {
+                columns.add(terrain.at(x, z));
+            }
+        }
+        return check(columns.stream().map(column -> new Column(column.surface(), column.surface(), column.lava()))
+                .toList()) == Result.GOOD;
+    }
+
     /** The coordinates of the points of the grid from a minimum to a maximum, or the middle if the grid has none. */
     static List<Integer> axis(int min, int max) {
         List<Integer> points = new ArrayList<>();

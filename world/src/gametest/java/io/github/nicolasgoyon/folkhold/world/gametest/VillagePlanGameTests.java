@@ -292,6 +292,9 @@ public final class VillagePlanGameTests {
         List<String> eligible = eligible(level, generator, layout);
         int expected = Math.min(LevelTables.get().traits(layout.level()).jobSlots(), eligible.size());
         List<String> posts = jobSigns(level, layout);
+        if (expected >= 2 && eligible.size() >= 2 && posts.stream().distinct().count() == 1) {
+            problems.add(name + ": the " + posts.size() + " job posts have one job: " + posts);
+        }
         if (posts.size() != expected || !eligible.containsAll(posts)
                 || VillageGrowth.needsFirstPost(posts)
                 || !posts.stream().sorted().toList().equals(layout.posts().stream().sorted().toList())) {
