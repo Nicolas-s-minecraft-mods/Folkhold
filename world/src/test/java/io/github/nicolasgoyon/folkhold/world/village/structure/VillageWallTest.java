@@ -267,4 +267,30 @@ class VillageWallTest {
         java.util.Arrays.fill(keep, false);
         assertTrue(VillageWall.runs(layout, first, keep).isEmpty(), "No kept column: no palisade");
     }
+
+    /**
+     * The path of a ring gate across the band: it starts 2 blocks inside the ring line, stops at the flat terrain in
+     * front of the inner gate, and ends at the level of the inner gate. An inner gate on water gives no path.
+     */
+    @Test
+    void ringGatePathGoesAcrossTheBandToTheInnerGate() {
+        WallLayout inner = layout();
+        WallLayout ring = WallLayout.ring(inner, WallLayout.MIN_BAND);
+        Gate north = ring.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        Gate innerNorth = inner.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        VillageWall.Wall wall = new VillageWall.Wall(inner, Map.of(innerNorth, BASE + 3), Set.of(), List.of());
+
+        VillageWall.Arm arm = VillageWall.bandArm(ring, north, WallLayout.MIN_BAND, wall).orElseThrow();
+
+        WallLayout.Cell gate = ring.cell(Side.NORTH, ring.along(north));
+        assertEquals(gate.x(), arm.startX());
+        assertEquals(gate.z() + 2, arm.startZ());
+        assertEquals(WallLayout.MIN_BAND - 2 - VillageWall.APPROACH, arm.length());
+        int innerLine = inner.outline().minZ();
+        assertEquals(innerLine - VillageWall.APPROACH - 1, arm.z(arm.length() - 1),
+                "The path stops before the flat terrain of the inner gate");
+        assertEquals(BASE + 3, arm.end().getAsInt());
+        VillageWall.Wall water = new VillageWall.Wall(inner, Map.of(innerNorth, BASE), Set.of(innerNorth), List.of());
+        assertTrue(VillageWall.bandArm(ring, north, WallLayout.MIN_BAND, water).isEmpty());
+    }
 }

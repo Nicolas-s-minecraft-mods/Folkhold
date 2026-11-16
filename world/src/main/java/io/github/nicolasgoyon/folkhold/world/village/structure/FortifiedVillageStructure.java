@@ -287,10 +287,11 @@ public final class FortifiedVillageStructure extends Structure {
      * @param free     the number of free plots
      * @param posts    the job ids of the house-workshops, in the order of the posts
      * @param problems the pieces and the plots of the plan with no element of their pool: empty for valid pools
+     * @param firstWall the data of the first wall: the rings of the village go around it
      */
     public record Layout(int level, VillageSize size, StreetStyle style, VillagePlan plan, BlockPos center,
             List<PoolElementStructurePiece> village, List<BoundingBox> reserved, List<StructurePiece> wall, int built,
-            int free, List<String> posts, List<String> problems) {
+            int free, List<String> posts, List<String> problems, VillageWall.Wall firstWall) {
         public Layout {
             village = List.copyOf(village);
             posts = List.copyOf(posts);
@@ -434,15 +435,15 @@ public final class FortifiedVillageStructure extends Structure {
         VillagePlanPieces.Result result = pieces.place(style, plan, PlotUses.assign(plan, buildings, posts.count()),
                 posts, beds, RandomSource.create(seed));
         List<StructurePiece> village = new ArrayList<>(result.pieces());
-        List<StructurePiece> wall = VillageWall.add(context, start.terrain(), village, result.reserved(),
+        VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, result.reserved(),
                 start.center(), start.variant().wall(), start.maritime());
         if (!result.problems().isEmpty() || plan.missingPlots() > 0 || plan.missingHomes() > 0) {
             FolkholdWorld.LOGGER.warn("The village of the level {} in the start chunk {} has {} missing plots, {} missing"
                     + " homes and these problems: {}", level, context.chunkPos(), plan.missingPlots(),
                     plan.missingHomes(), result.problems());
         }
-        return new Layout(level, size, style, plan, start.center(), result.pieces(), result.reserved(), wall,
-                result.built(), result.free(), result.posts(), result.problems());
+        return new Layout(level, size, style, plan, start.center(), result.pieces(), result.reserved(), wall.pieces(),
+                result.built(), result.free(), result.posts(), result.problems(), wall);
     }
 
     /**

@@ -758,7 +758,7 @@ public final class FortifiedVillageGameTests {
      * The columns that a walk on the ground from a position next to the heart reaches in a box, as {@link
      * ChunkPos#asLong} of their X and Z. The steps are the steps of {@link #walk}.
      */
-    private static Set<Long> reachedColumns(ServerLevel level, BlockPos heart, BoundingBox box) {
+    static Set<Long> reachedColumns(ServerLevel level, BlockPos heart, BoundingBox box) {
         ArrayDeque<BlockPos> queue = new ArrayDeque<>();
         Set<BlockPos> seen = new HashSet<>();
         for (Direction direction : Direction.Plane.HORIZONTAL) {
@@ -818,7 +818,7 @@ public final class FortifiedVillageGameTests {
     }
 
     /** The positions of the blocks of an area that pass a test. */
-    private static List<BlockPos> blocksIn(ServerLevel level, BoundingBox area, Predicate<BlockState> test) {
+    static List<BlockPos> blocksIn(ServerLevel level, BoundingBox area, Predicate<BlockState> test) {
         List<BlockPos> found = new ArrayList<>();
         for (BlockPos pos : BlockPos.betweenClosed(area.minX(), area.minY(), area.minZ(), area.maxX(), area.maxY(),
                 area.maxZ())) {

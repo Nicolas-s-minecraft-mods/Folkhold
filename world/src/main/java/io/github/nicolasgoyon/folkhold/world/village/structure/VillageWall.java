@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.village.structure;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HeightGrid;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PathRamp;
+import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
 import io.github.nicolasgoyon.folkhold.core.sim.village.SeaWall;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Box;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -113,6 +115,33 @@ public final class VillageWall {
     public static List<StructurePiece> add(Structure.GenerationContext context, TerrainCache heights,
             List<StructurePiece> village, List<BoundingBox> reserved, BlockPos center, WallSettings settings,
             boolean maritime) {
+        return build(context, heights, village, reserved, center, settings, maritime).pieces();
+    }
+
+    /**
+     * The data of a wall: the first wall of a village or a ring.
+     *
+     * @param layout     the layout of the wall
+     * @param gateLevels the level of each gate that the wall keeps
+     * @param waterGates the gates that open on water and have a pier
+     * @param pieces     the pieces of the wall
+     */
+    public record Wall(WallLayout layout, Map<Gate, Integer> gateLevels, Set<Gate> waterGates,
+            List<StructurePiece> pieces) {
+        public Wall {
+            gateLevels = Map.copyOf(gateLevels);
+            waterGates = Set.copyOf(waterGates);
+            pieces = List.copyOf(pieces);
+        }
+    }
+
+    /**
+     * As {@link #add}, with the data of the wall: the rings of the village go around it (see {@link #rings}).
+     *
+     * @return the wall
+     */
+    public static Wall build(Structure.GenerationContext context, TerrainCache heights, List<StructurePiece> village,
+            List<BoundingBox> reserved, BlockPos center, WallSettings settings, boolean maritime) {
         List<Box> boxes = village.stream().map(piece -> box(piece.getBoundingBox())).toList();
         List<Box> inside = new ArrayList<>(boxes);
         reserved.forEach(space -> inside.add(box(space)));
@@ -185,7 +214,157 @@ public final class VillageWall {
         }
         pieces.addAll(terrain(layout, smooth, gateLevels, water, waterGates));
         pieces.addAll(fills(pieces));
-        return pieces;
+        return new Wall(layout, gateLevels, waterGates, pieces);
+    }
+
+    /**
+     * The rings of a village around its first wall (see {@link WallLayout#rings}). Each ring follows the rules of the
+     * first wall: the palisade on the terrain, the towers, the gates, the flat terrain and the water side. Each gate of
+     * a ring gets a path across the band: a ramp from the ring gate to the level of the gate of the wall inside it (see
+     * {@link #bandArm}). The bands have no other piece. A segment of palisade is cut at the borders of the district
+     * cells (see {@link RingDistricts}), thus each piece goes to one district.
+     *
+     * @param context  the context of the generation
+     * @param heights  the terrain cache of the village
+     * @param first    the first wall of the village
+     * @param count    the number of rings
+     * @param band     the band of each ring, in blocks (see {@link WallLayout#ring})
+     * @param settings the settings of the wall
+     * @param maritime true for a maritime village: the palisade stands on the land side only
+     * @param start    the start chunk of the village
+     * @return the rings, from the inside to the outside
+     */
+    public static List<Wall> rings(Structure.GenerationContext context, TerrainCache heights, Wall first, int count,
+            int band, WallSettings settings, boolean maritime, ChunkPos start) {
+        Terrain terrain = new Terrain(heights);
+        int seaLevel = context.chunkGenerator().getSeaLevel();
+        StructureTemplateManager templates = context.structureTemplateManager();
+        List<Wall> rings = new ArrayList<>();
+        Wall inner = first;
+        for (int ring = 0; ring < count; ring++) {
+            WallLayout layout = WallLayout.ring(inner.layout(), band);
+            int[] bases = bases(layout, terrain);
+            boolean[] water = new boolean[layout.ringSize()];
+            for (int i = 0; i < water.length; i++) {
+                Cell cell = layout.ringCell(i);
+                water[i] = isWater(terrain.height(cell.x(), cell.z()), seaLevel);
+            }
+            boolean[] keep = maritime ? SeaWall.keep(water) : allColumns(water.length);
+            List<StructurePiece> pieces = new ArrayList<>();
+            Map<Tower, Integer> towerLevels = new HashMap<>();
+            for (Tower tower : layout.towers()) {
+                towerLevels.put(tower, flatten(bases, layout.ringIndices(layout.towerBox(tower))));
+            }
+            List<Gate> keptGates = layout.gates().stream().filter(gate -> kept(keep, layout.ringIndices(gate)))
+                    .toList();
+            Map<Gate, Integer> gateLevels = new HashMap<>();
+            Map<Gate, Arm> arms = new HashMap<>();
+            for (Gate gate : keptGates) {
+                Optional<Arm> arm = bandArm(layout, gate, band, inner);
+                arm.ifPresent(value -> arms.put(gate, value));
+                List<Integer> indices = layout.ringIndices(gate);
+                int level = reachable(flatten(bases, indices), arm);
+                indices.forEach(index -> bases[index] = level);
+                gateLevels.put(gate, level);
+            }
+            int[] smooth = PalisadeHeights.smooth(bases);
+            for (Tower tower : layout.towers()) {
+                if (kept(keep, layout.ringIndices(layout.towerBox(tower)))) {
+                    pieces.add(template(templates, settings, settings.tower(),
+                            towerOrigin(layout, tower, towerLevels.get(tower)), rotation(tower.side())));
+                }
+            }
+            for (Gate gate : keptGates) {
+                pieces.add(template(templates, settings, settings.gate(),
+                        gateOrigin(layout, gate, gateLevels.get(gate)), rotation(gate.side())));
+            }
+            for (Segment segment : layout.segments()) {
+                for (Segment run : runs(layout, segment, keep)) {
+                    for (Segment part : cut(layout, run, start)) {
+                        pieces.add(palisade(layout, part, smooth, settings.palisade()));
+                    }
+                }
+            }
+            Set<Gate> waterGates = new HashSet<>();
+            for (Gate gate : keptGates) {
+                Arm arm = arms.get(gate);
+                if (arm != null) {
+                    pieces.add(new VillagePathPiece(arm.startX(), arm.startZ(), arm.stepX(), arm.stepZ(),
+                            levels(arm, gateLevels.get(gate), terrain), true));
+                }
+                if (isWaterGate(layout, gate, terrain::height, seaLevel)) {
+                    waterGates.add(gate);
+                    pieces.add(pier(layout, gate, gateLevels.get(gate), terrain::height, seaLevel, settings.pier()));
+                }
+            }
+            pieces.addAll(terrain(layout, smooth, gateLevels, water, waterGates));
+            inner = new Wall(layout, gateLevels, waterGates, pieces);
+            rings.add(inner);
+        }
+        return List.copyOf(rings);
+    }
+
+    /**
+     * The pieces of the rings of a village in each district (see {@link RingDistricts}): a piece goes to the district
+     * of the middle of its box. Each district also gets the ground fill of its towers and gates (see {@link #fills}).
+     *
+     * @param rings the rings
+     * @param start the start chunk of the village
+     * @return the pieces of each district that has pieces, in the order of the rings
+     */
+    public static Map<RingDistricts.District, List<StructurePiece>> districts(List<Wall> rings, ChunkPos start) {
+        Map<RingDistricts.District, List<StructurePiece>> districts = new LinkedHashMap<>();
+        for (Wall ring : rings) {
+            for (StructurePiece piece : ring.pieces()) {
+                BlockPos middle = piece.getBoundingBox().getCenter();
+                districts.computeIfAbsent(RingDistricts.of(start.x, start.z, middle.getX(), middle.getZ()),
+                        key -> new ArrayList<>()).add(piece);
+            }
+        }
+        districts.values().forEach(pieces -> pieces.addAll(fills(pieces)));
+        return districts;
+    }
+
+    /** The parts of a run of palisade in each district cell. */
+    private static List<Segment> cut(WallLayout layout, Segment run, ChunkPos start) {
+        Cell first = layout.cell(run.side(), run.from());
+        Cell last = layout.cell(run.side(), run.to());
+        List<Integer> cuts = first.x() != last.x() ? RingDistricts.cuts(start.x, first.x(), last.x())
+                : RingDistricts.cuts(start.z, first.z(), last.z());
+        List<Segment> parts = new ArrayList<>();
+        int from = run.from();
+        for (int cut : cuts) {
+            parts.add(new Segment(run.side(), from, run.from() + cut - 1));
+            from = run.from() + cut;
+        }
+        parts.add(new Segment(run.side(), from, run.to()));
+        return parts;
+    }
+
+    /**
+     * The path of a gate of a ring across the band: the rows from the ring gate to the flat terrain in front of the
+     * gate of the wall inside it ({@link #APPROACH} blocks). The inner gate is on the same axis (see
+     * {@link WallLayout#ring}). The path ends at the level of the inner gate. Empty if the inner wall has no gate there
+     * or if the inner gate opens on water.
+     *
+     * @param ring  the ring
+     * @param gate  the gate of the ring
+     * @param band  the band of the ring
+     * @param inner the wall inside the ring
+     * @return the arm of the path
+     */
+    static Optional<Arm> bandArm(WallLayout ring, Gate gate, int band, Wall inner) {
+        Optional<Gate> innerGate = inner.gateLevels().keySet().stream()
+                .filter(candidate -> candidate.side() == gate.side() && !inner.waterGates().contains(candidate))
+                .findFirst();
+        int length = band - 2 - APPROACH;
+        if (innerGate.isEmpty() || length < 1) {
+            return Optional.empty();
+        }
+        Side side = gate.side();
+        Cell middle = ring.cell(side, ring.along(gate));
+        return Optional.of(new Arm(middle.x() + 2 * side.insideX(), middle.z() + 2 * side.insideZ(), side.insideX(),
+                side.insideZ(), length, OptionalInt.of(inner.gateLevels().get(innerGate.get()))));
     }
 
     /**
