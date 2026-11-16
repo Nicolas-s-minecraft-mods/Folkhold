@@ -39,8 +39,12 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class VillageRingGameTests {
     /** The start level of the town. */
     private static final int TOWN_LEVEL = 12;
+    /** The start level of the city. */
+    private static final int CITY_LEVEL = 16;
     /** The start chunk of the town is this number of chunks east of the test. */
     private static final int DISTANCE = 120;
+    /** The start chunk of the city is this number of chunks east of the test. */
+    private static final int CITY_DISTANCE = 180;
     /** The walk goes this number of blocks out of the ring. */
     private static final int WALK_MARGIN = 8;
     /** The point in front of a gate of the ring is this number of blocks out of the line. */
@@ -56,21 +60,35 @@ public final class VillageRingGameTests {
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "village_rings")
     public static void ringGatesAreReachable(GameTestHelper helper) {
+        reach(helper, TOWN_LEVEL, 1, DISTANCE);
+    }
+
+    /**
+     * The 2 rings of a city, as {@link #ringGatesAreReachable}: the walk also goes through the band path from a gate
+     * of the second ring to a gate of the first ring.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_rings_city")
+    public static void cityRingGatesAreReachable(GameTestHelper helper) {
+        reach(helper, CITY_LEVEL, 2, CITY_DISTANCE);
+    }
+
+    /** Places a village of a level with its rings, and walks from the heart to the front of each gate of each ring. */
+    private static void reach(GameTestHelper helper, int startLevel, int ringCount, int distance) {
         ServerLevel level = helper.getLevel();
         FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
                 .registryOrThrow(Registries.STRUCTURE).getOrThrow(Settlements.VILLAGE_STRUCTURE);
         ChunkGenerator generator = level.getChunkSource().getGenerator();
-        ChunkPos start = new ChunkPos((helper.absolutePos(BlockPos.ZERO).getX() >> 4) + DISTANCE,
+        ChunkPos start = new ChunkPos((helper.absolutePos(BlockPos.ZERO).getX() >> 4) + distance,
                 helper.absolutePos(BlockPos.ZERO).getZ() >> 4);
         Structure.GenerationContext context = new Structure.GenerationContext(level.registryAccess(), generator,
                 generator.getBiomeSource(), level.getChunkSource().randomState(), level.getStructureManager(),
                 level.getSeed(), start, level, biome -> true);
         FortifiedVillageStructure.Variant land = new FortifiedVillageStructure.Variant(HolderSet.direct(),
                 structure.startPool(), structure.wall(), structure.homes(), Optional.empty());
-        FortifiedVillageStructure.Layout layout = structure.layout(context, land, false, TOWN_LEVEL).orElseThrow();
+        FortifiedVillageStructure.Layout layout = structure.layout(context, land, false, startLevel).orElseThrow();
         List<VillageWall.Wall> rings = VillageWall.rings(context, TerrainCache.of(context), layout.firstWall(),
                 layout.size().rings(), WallLayout.MIN_BAND, structure.wall(), false, start);
-        helper.assertTrue(rings.size() == 1, "A town must have 1 ring: " + rings.size());
+        helper.assertTrue(rings.size() == ringCount, "The village must have " + ringCount + " rings: " + rings.size());
 
         Map<RingDistricts.District, List<StructurePiece>> districts = VillageWall.districts(rings, start);
         List<StructurePiece> ringPieces = new ArrayList<>();
@@ -88,12 +106,12 @@ public final class VillageRingGameTests {
         place(level, structure, start, layout.pieces());
         place(level, structure, start, ringPieces);
 
-        WallLayout ring = rings.get(0).layout();
+        WallLayout outer = rings.get(rings.size() - 1).layout();
         BoundingBox area = BoundingBox.fromCorners(
-                new BlockPos(ring.outline().minX() - WALK_MARGIN, level.getMinBuildHeight(),
-                        ring.outline().minZ() - WALK_MARGIN),
-                new BlockPos(ring.outline().maxX() + WALK_MARGIN, level.getMaxBuildHeight(),
-                        ring.outline().maxZ() + WALK_MARGIN));
+                new BlockPos(outer.outline().minX() - WALK_MARGIN, level.getMinBuildHeight(),
+                        outer.outline().minZ() - WALK_MARGIN),
+                new BlockPos(outer.outline().maxX() + WALK_MARGIN, level.getMaxBuildHeight(),
+                        outer.outline().maxZ() + WALK_MARGIN));
         for (BlockPos gate : FortifiedVillageGameTests.blocksIn(level, area,
                 state -> state.getBlock() instanceof FenceGateBlock)) {
             level.setBlock(gate, level.getBlockState(gate).setValue(FenceGateBlock.OPEN, true), Block.UPDATE_CLIENTS);
@@ -102,13 +120,16 @@ public final class VillageRingGameTests {
         BlockPos heart = new BlockPos((plaza.minX() + plaza.maxX()) / 2, plaza.minY() + 1,
                 (plaza.minZ() + plaza.maxZ()) / 2);
         Set<Long> reached = FortifiedVillageGameTests.reachedColumns(level, heart, area);
-        helper.assertTrue(ring.gates().size() == 4, "The ring must have 4 gates: " + ring.gates());
-        for (WallLayout.Gate gate : ring.gates()) {
-            WallLayout.Cell middle = ring.cell(gate.side(), ring.along(gate));
-            int x = middle.x() - GATE_APPROACH * gate.side().insideX();
-            int z = middle.z() - GATE_APPROACH * gate.side().insideZ();
-            helper.assertTrue(reached.contains(ChunkPos.asLong(x, z)),
-                    "A walk from the heart must go out of the ring gate " + gate + " to " + x + ", " + z);
+        for (VillageWall.Wall wall : rings) {
+            WallLayout ring = wall.layout();
+            helper.assertTrue(ring.gates().size() == 4, "The ring must have 4 gates: " + ring.gates());
+            for (WallLayout.Gate gate : ring.gates()) {
+                WallLayout.Cell middle = ring.cell(gate.side(), ring.along(gate));
+                int x = middle.x() - GATE_APPROACH * gate.side().insideX();
+                int z = middle.z() - GATE_APPROACH * gate.side().insideZ();
+                helper.assertTrue(reached.contains(ChunkPos.asLong(x, z)),
+                        "A walk from the heart must go out of the ring gate " + gate + " to " + x + ", " + z);
+            }
         }
         helper.succeed();
     }

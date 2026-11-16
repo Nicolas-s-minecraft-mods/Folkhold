@@ -306,7 +306,8 @@ public final class VillageWall {
 
     /**
      * The pieces of the rings of a village in each district (see {@link RingDistricts}): a piece goes to the district
-     * of the middle of its box. Each district also gets the ground fill of its towers and gates (see {@link #fills}).
+     * of the middle of its box. Each district also gets the ground fill of its towers and gates (see {@link #fills}),
+     * with the cleared spaces of the gates of all the districts: a gate and its cleared space can be in 2 districts.
      *
      * @param rings the rings
      * @param start the start chunk of the village
@@ -321,7 +322,8 @@ public final class VillageWall {
                         key -> new ArrayList<>()).add(piece);
             }
         }
-        districts.values().forEach(pieces -> pieces.addAll(fills(pieces)));
+        List<BoundingBox> cleared = cleared(rings.stream().flatMap(ring -> ring.pieces().stream()).toList());
+        districts.values().forEach(pieces -> pieces.addAll(fills(pieces, cleared)));
         return districts;
     }
 
@@ -373,9 +375,17 @@ public final class VillageWall {
      * templates and the foundations. They do not fill the space that the flat terrain of a gate clears.
      */
     static List<GroundFillPiece> fills(List<StructurePiece> pieces) {
-        List<BoundingBox> cleared = pieces.stream()
-                .filter(piece -> piece instanceof TerrainPiece terrain && terrain.clears())
+        return fills(pieces, cleared(pieces));
+    }
+
+    /** The boxes of the terrain pieces that clear their space. */
+    private static List<BoundingBox> cleared(List<StructurePiece> pieces) {
+        return pieces.stream().filter(piece -> piece instanceof TerrainPiece terrain && terrain.clears())
                 .map(StructurePiece::getBoundingBox).toList();
+    }
+
+    /** The ground fills of the towers and the gates of some pieces, with the cleared boxes of a larger list. */
+    private static List<GroundFillPiece> fills(List<StructurePiece> pieces, List<BoundingBox> cleared) {
         return pieces.stream().filter(PoolElementStructurePiece.class::isInstance)
                 .map(piece -> new GroundFillPiece(piece.getBoundingBox(), cleared)).toList();
     }

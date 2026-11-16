@@ -12,8 +12,8 @@ import java.util.List;
  *   <li>A cell is a square of {@link #CELL} x {@link #CELL} chunks. The cells of a village are at {@code (CELL * i,
  *       CELL * j)} chunks from the start chunk of the village, with {@code i} and {@code j} from {@code -REACH} to
  *       {@code REACH}. The anchor chunk of a cell is its middle chunk.</li>
- *   <li>A piece of a ring goes to the cell that holds its key position. A segment of palisade is cut at the borders of
- *       the cells (see {@link #cuts}). A piece is at {@link #CELL} / 2 chunks or less from its anchor, plus its own
+ *   <li>A piece of a ring goes to the cell that holds the middle of its box. A segment of palisade is cut at the
+ *       borders of the cells (see {@link #cuts}). A piece is at {@link #CELL} / 2 chunks or less from its anchor, plus its own
  *       size: it stays in the range of the anchor.</li>
  *   <li>The near villages remove the rings that overlap them (see {@link #keptRings}).</li>
  * </ul>
@@ -25,6 +25,8 @@ public final class RingDistricts {
     public static final int REACH = 2;
     /** The number of blocks of a chunk on one axis. */
     private static final int CHUNK = 16;
+    /** All the districts of a village, in a fixed order. */
+    private static final List<District> ALL = districts();
 
     /**
      * A cell of the districts of a village, as a number of cells from the cell of the start chunk on each axis.
@@ -58,6 +60,10 @@ public final class RingDistricts {
      * @return the {@code (2 * REACH + 1)^2} districts
      */
     public static List<District> all() {
+        return ALL;
+    }
+
+    private static List<District> districts() {
         List<District> districts = new ArrayList<>();
         for (int i = -REACH; i <= REACH; i++) {
             for (int j = -REACH; j <= REACH; j++) {

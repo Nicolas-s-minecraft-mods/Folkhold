@@ -70,6 +70,11 @@ public final class GroundFillPiece extends StructurePiece implements PieceBeardi
         this.cleared = cleared.stream().filter(boundingBox::intersects).toList();
     }
 
+    /** The boxes of the terrain pieces that clear their space and intersect this piece. */
+    List<BoundingBox> cleared() {
+        return cleared;
+    }
+
     /** Loads a piece. */
     public GroundFillPiece(CompoundTag tag) {
         super(ModStructures.GROUND_FILL.get(), tag);
