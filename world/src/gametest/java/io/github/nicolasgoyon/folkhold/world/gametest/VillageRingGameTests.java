@@ -5,28 +5,40 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -49,6 +61,10 @@ public final class VillageRingGameTests {
     private static final int WALK_MARGIN = 8;
     /** The point in front of a gate of the ring is this number of blocks out of the line. */
     private static final int GATE_APPROACH = 5;
+    /** The size of a region of the placement of the villages, in chunks. */
+    private static final int REGION = 40;
+    /** The number of regions that the search of a village with rings tries. */
+    private static final int CANDIDATES = 30;
 
     private VillageRingGameTests() {
     }
@@ -132,6 +148,77 @@ public final class VillageRingGameTests {
             }
         }
         helper.succeed();
+    }
+
+    /**
+     * The ring districts of a village with rings, generated in 2 orders, each time with an empty cache: each anchor
+     * gets the same pieces, and the placement of the districts accepts each anchor with pieces.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_ring_districts")
+    public static void ringDistrictsAreTheSameInAllOrders(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.assertTrue(VillageRings.enabled(), "A new world must have the rings");
+        Registry<StructureSet> sets = level.registryAccess().registryOrThrow(Registries.STRUCTURE_SET);
+        StructureSet villages = sets.getOrThrow(ResourceKey.create(Registries.STRUCTURE_SET,
+                ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "villages")));
+        StructureSet rings = sets.getOrThrow(ResourceKey.create(Registries.STRUCTURE_SET,
+                ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village_rings")));
+        Structure district = rings.structures().get(0).structure().value();
+        ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForFlat(
+                level.getChunkSource().randomState(), level.getSeed(), level.getChunkSource().getGenerator()
+                        .getBiomeSource(), Stream.empty());
+        int originX = (helper.absolutePos(BlockPos.ZERO).getX() >> 4) + DISTANCE;
+        for (int candidate = 0; candidate < CANDIDATES; candidate++) {
+            ChunkPos start = null;
+            for (int x = originX + candidate * REGION; x < originX + (candidate + 1) * REGION && start == null; x++) {
+                for (int z = 0; z < REGION && start == null; z++) {
+                    if (villages.placement().isStructureChunk(state, x, z)
+                            && VillageSizes.forLevel(Settlements.startLevel(level.getSeed(), new ChunkPos(x, z)))
+                                    .rings() > 0) {
+                        start = new ChunkPos(x, z);
+                    }
+                }
+            }
+            if (start == null) {
+                continue;
+            }
+            List<RingDistricts.District> order = new ArrayList<>(RingDistricts.all());
+            VillageRings.clear();
+            Map<ChunkPos, List<CompoundTag>> first = districts(level, district, start, order);
+            if (first.isEmpty()) {
+                continue;
+            }
+            Collections.reverse(order);
+            VillageRings.clear();
+            Map<ChunkPos, List<CompoundTag>> second = districts(level, district, start, order);
+            helper.assertTrue(first.equals(second), "The districts of the village in " + start
+                    + " must have the same pieces in the 2 orders: " + first.keySet() + " " + second.keySet());
+            helper.assertTrue(first.size() > 1, "The rings must be in more than 1 district: " + first.keySet());
+            for (ChunkPos anchor : first.keySet()) {
+                helper.assertTrue(rings.placement().isStructureChunk(state, anchor.x, anchor.z),
+                        "The placement must accept the anchor " + anchor);
+            }
+            helper.succeed();
+            return;
+        }
+        helper.fail("No village with rings starts in " + CANDIDATES + " regions");
+    }
+
+    /** The saved pieces of the district at each anchor of a village that has pieces, in an order of the districts. */
+    private static Map<ChunkPos, List<CompoundTag>> districts(ServerLevel level, Structure district, ChunkPos start,
+            List<RingDistricts.District> order) {
+        StructurePieceSerializationContext save = StructurePieceSerializationContext.fromLevel(level);
+        Map<ChunkPos, List<CompoundTag>> pieces = new HashMap<>();
+        for (RingDistricts.District cell : order) {
+            ChunkPos anchor = new ChunkPos(cell.anchorX(start.x), cell.anchorZ(start.z));
+            StructureStart generated = district.generate(level.registryAccess(), level.getChunkSource().getGenerator(),
+                    level.getChunkSource().getGenerator().getBiomeSource(), level.getChunkSource().randomState(),
+                    level.getStructureManager(), level.getSeed(), anchor, 0, level, biome -> true);
+            if (generated.isValid()) {
+                pieces.put(anchor, generated.getPieces().stream().map(piece -> piece.createTag(save)).toList());
+            }
+        }
+        return pieces;
     }
 
     /** Places some pieces in the level, chunk by chunk, as a structure start of the village. */

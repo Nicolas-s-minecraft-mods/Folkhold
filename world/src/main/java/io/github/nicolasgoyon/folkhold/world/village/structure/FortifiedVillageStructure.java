@@ -203,6 +203,32 @@ public final class FortifiedVillageStructure extends Structure {
     }
 
     /**
+     * The start of the village at the start chunk of a context, as the generation makes it: the start (see
+     * {@link #start}) and the check of the biome at the middle of the plaza, as {@code Structure.generate}. The
+     * ring districts use it to find their village (see {@link VillageRings}).
+     *
+     * @param context the context of the generation at the start chunk
+     * @return the start, or empty if no village starts there
+     */
+    Optional<Start> generatedStart(GenerationContext context) {
+        return start(context).filter(start -> context.validBiome().test(context.chunkGenerator().getBiomeSource()
+                .getNoiseBiome(QuartPos.fromBlock(start.center().getX()), QuartPos.fromBlock(start.center().getY()),
+                        QuartPos.fromBlock(start.center().getZ()), context.randomState().sampler())));
+    }
+
+    /**
+     * The largest distance of the first wall of a village of a level from the middle of the plaza, with the flat terrain
+     * and the piers of the gates: the core of the village that no ring of another village can enter.
+     *
+     * @param level the start level
+     * @return the distance, in blocks
+     */
+    int coreReach(int level) {
+        return Math.min(VillageSizes.forLevel(level).maxRadius(), maxDistanceFromCenter) + wall.margin() + 1
+                + VillageWall.PIER_START + PierPiece.MAX_LENGTH;
+    }
+
+    /**
      * The start of a village at the start chunk of a context: the plaza, its variant and its site. Empty if the site
      * does not accept a village.
      */
@@ -268,7 +294,7 @@ public final class FortifiedVillageStructure extends Structure {
      * @param maritime true for a maritime site
      * @param terrain  the terrain cache of the site check and of the layout
      */
-    private record Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
+    record Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
             TerrainCache terrain) {
     }
 
@@ -412,7 +438,7 @@ public final class FortifiedVillageStructure extends Structure {
      * A maritime village has the palisade on its land side only (see {@link VillageWall}). The plan has a wide plot
      * for each building of the level that needs one (see {@link PlotUses#withWide}).
      */
-    private Layout layout(GenerationContext context, Start start, int level) {
+    Layout layout(GenerationContext context, Start start, int level) {
         VillageSize size = VillageSizes.forLevel(level);
         VillagePlanPieces.Builder pieces = VillagePlanPieces.builder(context, start.terrain(), start.plaza(),
                 start.center(), start.variant().homes(), VillageBuildingTable.get().stream()
