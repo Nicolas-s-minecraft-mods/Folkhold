@@ -623,7 +623,7 @@
   "commands.folkhold_world.village.generate.no_site": "No place for a village (%s) within %s blocks",
   "commands.folkhold_world.village.generate.unknown_tier": "Unknown tier: %s",
   "commands.folkhold_world.village.generate.unknown_style": "Unknown style: %s",
-  "commands.folkhold_world.village.generate.started": "Generating a village: %s. The server can stop for some seconds",
+  "commands.folkhold_world.village.generate.started": "Generating a village: %s. A capital can stop the server for 10 seconds or more",
   "commands.folkhold_world.village.generate.wrong_dimension": "Faction villages generate in the Overworld only",
   "commands.folkhold_world.village.generate.no_structure": "The village structure of the data packs is not a faction village",
   "commands.folkhold_world.village.generate.failed": "The village could not be generated: see the server log",
