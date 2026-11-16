@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.core.sim.village;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotTerrain.Column;
@@ -43,6 +44,25 @@ class PlotTerrainTest {
                 (x, z) -> new Column(GROUND + x * drop / 8, GROUND + x * drop / 8, false)));
         assertEquals(Result.STEEP, PlotTerrain.check(0, 0, 8, 8,
                 (x, z) -> new Column(GROUND + x * (drop + 1) / 8, GROUND + x * (drop + 1) / 8, false)));
+    }
+
+    /**
+     * A plot over deep water can hold a home on its foundation. A plot with lava, a steep slope or water deeper than
+     * the stilts cannot.
+     */
+    @Test
+    void deepWaterHoldsAHomeOnItsFoundation() {
+        Column deep = new Column(GROUND, GROUND - 20, false);
+        Column lava = new Column(GROUND, GROUND - 2, true);
+        Column high = new Column(GROUND + PlotTerrain.MAX_DROP + 1, GROUND + PlotTerrain.MAX_DROP + 1, false);
+        assertTrue(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> deep));
+        assertTrue(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 0 ? LAND : deep));
+        assertFalse(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 0 ? lava : deep));
+        assertFalse(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 0 ? high : deep));
+        Column stilts = new Column(GROUND, GROUND - PlotTerrain.MAX_FOUNDATION_DEPTH, false);
+        Column ocean = new Column(GROUND, GROUND - PlotTerrain.MAX_FOUNDATION_DEPTH - 1, false);
+        assertTrue(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> stilts));
+        assertFalse(PlotTerrain.onFoundation(0, 0, 8, 8, (x, z) -> x == 4 ? ocean : deep));
     }
 
     /**

@@ -36,6 +36,16 @@ public final class PlotTerrains {
     }
 
     /**
+     * True if a box in the world can hold a home on its foundation (see {@link PlotTerrain#onFoundation}).
+     *
+     * @param box the box
+     * @return true if the box has no lava, no steep slope and no water deeper than the stilts
+     */
+    public boolean onFoundation(BoundingBox box) {
+        return PlotTerrain.onFoundation(box.minX(), box.minZ(), box.maxX(), box.maxZ(), terrain::column);
+    }
+
+    /**
      * The terrain test of the plots of a plan: true for a box of the plan with good terrain.
      *
      * @param center   the middle of the plaza: (0, 0) of the plan
@@ -43,10 +53,27 @@ public final class PlotTerrains {
      * @return the test
      */
     Predicate<VillagePlan.Box> plan(BlockPos center, Rotation rotation) {
+        return box -> check(world(box, center, rotation)) == PlotTerrain.Result.GOOD;
+    }
+
+    /**
+     * The test of the bad plots of a plan that can hold a home on its foundation: no lava and no steep slope (see
+     * {@link PlotTerrain#onFoundation}). The plan uses these plots only when the good plots do not give the homes.
+     *
+     * @param center   the middle of the plaza: (0, 0) of the plan
+     * @param rotation the rotation of the plaza: the plan turns with it
+     * @return the test
+     */
+    Predicate<VillagePlan.Box> foundation(BlockPos center, Rotation rotation) {
         return box -> {
-            BlockPos first = center.atY(0).offset(new BlockPos(box.minX(), 0, box.minZ()).rotate(rotation));
-            BlockPos second = center.atY(0).offset(new BlockPos(box.maxX(), 0, box.maxZ()).rotate(rotation));
-            return check(BoundingBox.fromCorners(first, second)) == PlotTerrain.Result.GOOD;
+            return onFoundation(world(box, center, rotation));
         };
+    }
+
+    /** The box of a box of the plan in the world, on the horizontal plane. */
+    private static BoundingBox world(VillagePlan.Box box, BlockPos center, Rotation rotation) {
+        BlockPos first = center.atY(0).offset(new BlockPos(box.minX(), 0, box.minZ()).rotate(rotation));
+        BlockPos second = center.atY(0).offset(new BlockPos(box.maxX(), 0, box.maxZ()).rotate(rotation));
+        return BoundingBox.fromCorners(first, second);
     }
 }

@@ -188,6 +188,36 @@ class VillagePlanTest {
         assertTrue(bad.plots().stream().anyMatch(p -> !p.good() && p.role() == PlotRole.BANK && !p.spare()));
     }
 
+    /**
+     * The terrain of a coast: only the plots north-west of the plaza are on land, the others are over deep water.
+     * With no foundation test, the village has missing homes. With the foundation test, the missing homes take the
+     * nearest plots over deep water, and the village has all its homes. With the good plots that the village needs,
+     * no home takes a bad plot.
+     */
+    @Test
+    void missingHomesTakeThePlotsOnTheirFoundation() {
+        VillageSize size = VillageSizeTable.DEFAULT.size("capital").orElseThrow();
+        Predicate<Box> coast = box -> box.maxX() < 0 && box.maxZ() < 0;
+        VillagePlan missing = VillagePlan.plan(size, size.plots(0, 0), StreetStyle.BASE, PLAZA, STARTS, coast, 4);
+        VillagePlan full = VillagePlan.plan(size, size.plots(0, 0), StreetStyle.BASE, PLAZA, STARTS, coast,
+                box -> true, 4);
+        VillagePlan land = VillagePlan.plan(size, size.plots(0, 0), StreetStyle.BASE, PLAZA, STARTS,
+                VillagePlanTest::good, box -> true, 4);
+
+        assertTrue(missing.missingHomes() > 0, "The coast leaves too few good plots");
+        assertEquals(0, full.missingHomes());
+        long onFoundation = full.plots().stream().filter(p -> !p.good() && !p.spare() && p.role() == PlotRole.HOME)
+                .count();
+        assertTrue(onFoundation > 0 && onFoundation <= missing.missingHomes(), onFoundation + " homes on their "
+                + "foundation for " + missing.missingHomes() + " missing homes");
+        // The nearest bad plots take the homes: the bad spare plots are farther.
+        double farthestHome = full.plots().stream().filter(p -> !p.good() && !p.spare() && p.role() == PlotRole.HOME)
+                .mapToDouble(VillagePlanTest::distance).max().orElseThrow();
+        assertTrue(full.plots().stream().filter(p -> !p.good() && p.spare())
+                .allMatch(p -> distance(p) >= farthestHome));
+        assertEquals(plan(size, StreetStyle.BASE, VillagePlanTest::good, 4).plots(), land.plots());
+    }
+
     private static double distance(Plot plot) {
         return Math.hypot(plot.x(), plot.z());
     }

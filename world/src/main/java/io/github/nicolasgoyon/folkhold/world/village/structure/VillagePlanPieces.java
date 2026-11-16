@@ -72,7 +72,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       population of the level: a home with no bed comes only on top of these beds.</li>
  *   <li>The job of each post comes from {@link JobAssignment#next} with the jobs of the earlier posts, as the growth
  *       chooses the job of a new post. A job with no piece in the variant, or with no piece that fits the plot, gives
- *       its place to the next job: {@link VillageGrowth#WORKSHOP_JOBS} jobs at most.</li>
+ *       its place to the next job: {@link VillageGrowth#WORKSHOP_JOBS} jobs at most. A village with 2 posts or more
+ *       does not get one job only: the last post, and a home with a job sign (the fishing hut), take another job when
+ *       the earlier posts have one job.</li>
  *   <li>The junctions of the jigsaw connect the pieces: a plot with a building has a junction in front of its connector
  *       (see {@link VillagePlots#of}).</li>
  * </ul>
@@ -350,8 +352,18 @@ final class VillagePlanPieces {
          */
         private boolean post(Site site, long seed, RandomSource random) {
             for (int i = 0; i < VillageGrowth.WORKSHOP_JOBS; i++) {
-                Optional<String> job = JobAssignment.next(postJobs, eligible, EconomyData.catalog(), Merchants::trades,
-                        JobAssignment.postSeed(seed, postJobs.size()));
+                long postSeed = JobAssignment.postSeed(seed, postJobs.size());
+                Optional<String> chosen = JobAssignment.next(postJobs, eligible, EconomyData.catalog(),
+                        Merchants::trades, postSeed);
+                if (chosen.isPresent() && sameJobOnly(List.of(chosen.get()))) {
+                    String same = chosen.get();
+                    List<Job> others = eligible.stream().filter(other -> !other.id().equals(same)).toList();
+                    if (!others.isEmpty()) {
+                        chosen = JobAssignment.next(postJobs, others, EconomyData.catalog(), Merchants::trades,
+                                postSeed);
+                    }
+                }
+                Optional<String> job = chosen;
                 if (job.isEmpty()) {
                     break;
                 }
@@ -406,7 +418,7 @@ final class VillagePlanPieces {
             Set<String> ids = eligible.stream().map(Job::id).collect(Collectors.toSet());
             List<StructurePoolElement> pool = shuffled(HOUSES, random).stream().filter(this::isHome)
                     .filter(element -> signs(element).jobs().isEmpty() || (postJobs.size() < postLimit
-                            && ids.containsAll(signs(element).jobs())))
+                            && ids.containsAll(signs(element).jobs()) && !sameJobOnly(signs(element).jobs())))
                     .toList();
             int most = pool.stream().mapToInt(element -> signs(element).beds()).max().orElse(0);
             int least = PlotUses.leastBeds(bedTarget - beds, homesLeft, most);
@@ -421,6 +433,15 @@ final class VillagePlanPieces {
                 problems.add("no piece of a home for the plot " + site.connector().connector());
             }
             return placed.isPresent();
+        }
+
+        /**
+         * True if posts with some jobs make the posts of a village of 2 posts or more one job only: the last posts,
+         * after posts of the same job. A maritime village with fishing huts keeps a post that is not a fisher.
+         */
+        private boolean sameJobOnly(List<String> jobs) {
+            return postLimit >= 2 && postJobs.size() + jobs.size() >= postLimit
+                    && Stream.concat(postJobs.stream(), jobs.stream()).distinct().count() == 1;
         }
 
         /** True if an element of the pool of the houses has no building sign of a level kind. */
