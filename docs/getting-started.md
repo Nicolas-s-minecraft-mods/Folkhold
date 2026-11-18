@@ -306,6 +306,12 @@ packwiz update --all             # update all mods
 packwiz pin <mod>                # stop updates of a mod
 ```
 
+After a change of the mods, check their required dependencies. The script downloads each mod jar of the modpack and reads its required dependencies and its embedded mods. It fails when a required mod is not in the modpack, or when its version is not in the range. The option `--jars` adds the Folkhold jars of a folder. The CI runs this check in the job **Modpack**.
+
+```bash
+python3 scripts/modpack_deps.py --cache build/modpack-cache
+```
+
 To make a `.mrpack` file with the Folkhold mods inside:
 
 ```bash
@@ -361,7 +367,7 @@ To add a language, add `site/lang/<language>.json` with all the keys of `en_us.j
   | **Version** | | Calculates the version of the build. |
   | **Build** | Version | Compiles the mods, runs the JUnit tests, the format check and the translation check. Uploads the jars (artifact `folkhold-mods`) and the coverage report of `core` (artifact `folkhold-core-coverage`). When the job fails, it uploads the Gradle log (artifact `folkhold-build-logs`). |
   | **GameTests** | Version | Compiles the mods and runs the GameTest server. When the job fails, it uploads the logs (artifact `folkhold-gametest-logs`). |
-  | **Modpack** | Build | Makes the `.mrpack` file from the jars of the job **Build** (artifact `folkhold-modpack`). |
+  | **Modpack** | Build | Checks the required dependencies of the mods of the modpack (`scripts/modpack_deps.py`). Then makes the `.mrpack` file from the jars of the job **Build** (artifact `folkhold-modpack`). |
   | **Dev pack** | GameTests, Modpack | For a push on `develop` only: makes the dev pack and the dev instance (artifact `folkhold-dev-pack`). |
 
 - "Run workflow" on the workflow **Build** has the input `release`. With this input, the run uses the version of the release and also makes the Maven files of the mods (artifact `folkhold-maven`). The run publishes nothing: use it to test a release build.

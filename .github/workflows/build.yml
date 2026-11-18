@@ -5,7 +5,8 @@ name: Build
 # - Build: compiles the mods, runs the unit tests, the translation check and the format check. Uploads the jars.
 # - GameTests: runs the GameTest server. This job compiles the mods for its server, so it runs at the same time as
 #   the job Build.
-# - Modpack: makes the .mrpack file from the jars of the job Build.
+# - Modpack: checks the required dependencies of the mods of the modpack, then makes the .mrpack file from the jars
+#   of the job Build.
 # - Dev pack: for a push on develop only. Makes the dev pack (artifact folkhold-dev-pack): the packwiz pack with the
 #   Folkhold jars, and a Prism Launcher instance that updates itself from this pack. The workflow Pages publishes it
 #   in dev/.
@@ -211,6 +212,15 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: folkhold-mods
+
+      # Each required dependency of a mod of the modpack is a mod of the modpack, with a version in its range.
+      - name: Check the required dependencies of the mods
+        run: |
+          jars=()
+          for mod in core blocks world balance events; do
+            jars+=(--jars "$mod/build/libs")
+          done
+          python3 scripts/modpack_deps.py "${jars[@]}"
 
       - name: Set up packwiz
         uses: ./.github/actions/setup-packwiz
