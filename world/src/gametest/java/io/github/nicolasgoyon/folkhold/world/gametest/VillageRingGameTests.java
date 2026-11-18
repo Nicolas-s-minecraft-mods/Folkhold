@@ -177,6 +177,9 @@ public final class VillageRingGameTests {
     /**
      * The ring districts of a village with rings, generated in 2 orders, each time with an empty cache: each anchor
      * gets the same pieces, and the placement of the districts accepts each anchor with pieces.
+     *
+     * <p>The test looks for the village in the placement regions from the chunk (0, 0), not from its position: the
+     * seed of the GameTest world is constant, so each run finds the same village.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "village_ring_districts")
     public static void ringDistrictsAreTheSameInAllOrders(GameTestHelper helper) {
@@ -191,10 +194,9 @@ public final class VillageRingGameTests {
         ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForFlat(
                 level.getChunkSource().randomState(), level.getSeed(), level.getChunkSource().getGenerator()
                         .getBiomeSource(), Stream.empty());
-        int originX = (helper.absolutePos(BlockPos.ZERO).getX() >> 4) + DISTANCE;
         for (int candidate = 0; candidate < CANDIDATES; candidate++) {
             ChunkPos start = null;
-            for (int x = originX + candidate * REGION; x < originX + (candidate + 1) * REGION && start == null; x++) {
+            for (int x = candidate * REGION; x < (candidate + 1) * REGION && start == null; x++) {
                 for (int z = 0; z < REGION && start == null; z++) {
                     if (villages.placement().isStructureChunk(state, x, z)
                             && VillageSizes.forLevel(Settlements.startLevel(level.getSeed(), new ChunkPos(x, z)))
@@ -215,6 +217,7 @@ public final class VillageRingGameTests {
             Collections.reverse(order);
             VillageRings.clear();
             Map<ChunkPos, List<CompoundTag>> second = districts(level, district, start, order);
+            FolkholdWorld.LOGGER.info("Ring district test: the village with rings starts in {}", start);
             helper.assertTrue(first.equals(second), "The districts of the village in " + start
                     + " must have the same pieces in the 2 orders: " + first.keySet() + " " + second.keySet());
             helper.assertTrue(first.size() > 1, "The rings must be in more than 1 district: " + first.keySet());
