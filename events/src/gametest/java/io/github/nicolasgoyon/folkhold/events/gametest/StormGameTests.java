@@ -366,7 +366,7 @@ public final class StormGameTests {
     @GameTest(template = "quake_small", timeoutTicks = 300, batch = "storm_lightning", skyAccess = true)
     public static void lightningStrikesInTheArea(GameTestHelper helper) {
         prepare(helper, 16, 16);
-        helper.getLevel().setWeatherParameters(0, 400, true, false);
+        EventTestSupport.setWeatherForTest(helper, 0, 400, true, false);
         Storm storm = start(helper, new BlockPos(8, 1, 8),
                 new StormSettings(6, 1.0, windAngle(helper), 0, 100, 4, 0, 10, false));
         List<LightningBolt> bolts = new ArrayList<>();
@@ -376,7 +376,7 @@ public final class StormGameTests {
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(storm.isDone(), "The storm must end"))
                 .thenExecute(() -> {
-                    helper.getLevel().setWeatherParameters(12_000, 0, false, false);
+                    EventTestSupport.setWeatherForTest(helper, 12_000, 0, false, false);
                     clearFire(helper);
                     helper.assertTrue(storm.lightningStrikes() > 0, "Lightning must strike during the storm");
                     helper.assertTrue(!bolts.isEmpty(), "The lightning must strike in the area");
@@ -406,7 +406,7 @@ public final class StormGameTests {
     public static void noWeatherWithoutTheWeatherCycle(GameTestHelper helper) {
         prepare(helper, 16, 16);
         ServerLevel level = helper.getLevel();
-        level.setWeatherParameters(12_000, 0, false, false);
+        EventTestSupport.setWeatherForTest(helper, 12_000, 0, false, false);
         EventTestSupport.setGameRuleForTest(helper, GameRules.RULE_WEATHER_CYCLE, false);
         Storm storm = start(helper, new BlockPos(8, 1, 8),
                 new StormSettings(6, 1.0, windAngle(helper), 10, 20, 4, 0, 0, true));
@@ -437,7 +437,7 @@ public final class StormGameTests {
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(level.getLevelData().isThundering(), "The thunder must start"))
                 .thenExecute(() -> {
-                    level.setWeatherParameters(12_000, 0, false, false);
+                    EventTestSupport.setWeatherForTest(helper, 12_000, 0, false, false);
                     strikesAtClear[0] = storm.lightningStrikes();
                 })
                 .thenWaitUntil(() -> helper.assertTrue(storm.isDone(), "The storm must end with its rain"))

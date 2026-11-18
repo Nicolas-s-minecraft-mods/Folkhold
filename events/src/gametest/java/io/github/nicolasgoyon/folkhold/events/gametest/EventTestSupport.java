@@ -18,6 +18,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.storage.ServerLevelData;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /** Tools that the GameTests of the events share. */
@@ -29,6 +30,8 @@ final class EventTestSupport {
      * GameTests run on the server thread only.
      */
     private static final Map<GameTestInfo, Set<Object>> CHANGED_SETTINGS = new WeakHashMap<>();
+    /** The key of the weather in the changed settings of a test. */
+    private static final Object WEATHER = new Object();
 
     private EventTestSupport() {
     }
@@ -116,6 +119,31 @@ final class EventTestSupport {
         boolean old = rule.get();
         restoreAtTestEnd(helper, key, () -> rule.set(old, server));
         rule.set(newValue, server);
+    }
+
+    /**
+     * Sets the weather of the level for one test, with the parameters of {@code ServerLevel.setWeatherParameters}. When
+     * the test ends (pass, failure or timeout), a listener sets the weather that the level had before the first change
+     * of the test, as {@link #setConfigForTest}. The weather applies to the full level: a test that uses this method
+     * goes in its own batch.
+     */
+    static void setWeatherForTest(GameTestHelper helper, int clearTime, int weatherTime, boolean raining,
+            boolean thundering) {
+        ServerLevel level = helper.getLevel();
+        ServerLevelData data = level.getServer().getWorldData().overworldData();
+        int oldClearTime = data.getClearWeatherTime();
+        int oldRainTime = data.getRainTime();
+        int oldThunderTime = data.getThunderTime();
+        boolean oldRaining = data.isRaining();
+        boolean oldThundering = data.isThundering();
+        restoreAtTestEnd(helper, WEATHER, () -> {
+            data.setClearWeatherTime(oldClearTime);
+            data.setRainTime(oldRainTime);
+            data.setThunderTime(oldThunderTime);
+            data.setRaining(oldRaining);
+            data.setThundering(oldThundering);
+        });
+        level.setWeatherParameters(clearTime, weatherTime, raining, thundering);
     }
 
     /**

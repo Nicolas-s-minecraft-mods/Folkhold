@@ -151,7 +151,7 @@ public final class MarketTradeGameTests {
     private static long marketDay(GameTestHelper helper, Settlement settlement, long from) {
         ServerLevel level = helper.getLevel();
         for (long day = from; day < from + VillageSchedule.schedule().marketDayPeriod(); day++) {
-            level.setDayTime(day * DaySchedule.DAY_TICKS);
+            TestSupport.setDayTimeForTest(helper, day * DaySchedule.DAY_TICKS);
             if (VillageSchedule.isMarketDay(level, settlement)) {
                 return day;
             }
@@ -210,11 +210,11 @@ public final class MarketTradeGameTests {
                 .orElse(false), "The meeting point must be the market sign");
         long oldTime = level.getDayTime();
         try {
-            level.setDayTime(WORK_TIME);
+            TestSupport.setDayTimeForTest(helper, WORK_TIME);
             helper.assertTrue(Merchants.marketRefusal(level, heart, atMarket) == Merchants.MarketRefusal.CLOSED
                     && !interact(player, atMarket), "The baker must refuse the trade out of the market hours");
 
-            level.setDayTime(MARKET_TIME);
+            TestSupport.setDayTimeForTest(helper, MARKET_TIME);
             helper.assertTrue(Merchants.marketRefusal(level, heart, atWork) == Merchants.MarketRefusal.AWAY
                     && !interact(player, atWork), "The baker must refuse the trade at the building of its job");
 
@@ -223,7 +223,7 @@ public final class MarketTradeGameTests {
             helper.assertTrue(atMarket.getOffers().stream().anyMatch(offer -> offer.getResult().is(Items.BREAD)),
                     "The baker at the market must sell the bread: " + atMarket.getOffers());
         } finally {
-            level.setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
         }
         helper.assertTrue(heart.tradePlaceCalculations() == calculations,
                 "The trades must use the kept trade place: " + (heart.tradePlaceCalculations() - calculations)
@@ -263,12 +263,12 @@ public final class MarketTradeGameTests {
                 .orElse(false), "The meeting point must be the bell of the plaza");
         long oldTime = level.getDayTime();
         try {
-            level.setDayTime(MARKET_TIME);
+            TestSupport.setDayTimeForTest(helper, MARKET_TIME);
             helper.assertTrue(interact(player, atPlaza), "The baker must trade at the plaza");
             helper.assertTrue(Merchants.marketRefusal(level, heart, away) == Merchants.MarketRefusal.AWAY
                     && !interact(player, away), "The baker must refuse the trade far from the plaza");
         } finally {
-            level.setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
         }
         helper.succeed();
     }
@@ -303,13 +303,13 @@ public final class MarketTradeGameTests {
                 .map(point -> point.pos().equals(bell)).orElse(false), "The worker must go to the bell");
         long oldTime = level.getDayTime();
         try {
-            level.setDayTime(MARKET_TIME);
+            TestSupport.setDayTimeForTest(helper, MARKET_TIME);
             helper.assertTrue(interact(player, atBell), "The baker must trade at the meeting point");
             helper.assertTrue(interact(player, atPlaza), "The baker must trade at the plaza");
             helper.assertTrue(Merchants.marketRefusal(level, heart, far) == Merchants.MarketRefusal.AWAY
                     && !interact(player, far), "The baker must refuse the trade far from the two places");
         } finally {
-            level.setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
         }
         helper.succeed();
     }
@@ -333,13 +333,13 @@ public final class MarketTradeGameTests {
                 && heart.workers().validMeetingPoint(level).isEmpty(), "The village must have no meeting point");
         long oldTime = level.getDayTime();
         try {
-            level.setDayTime(MARKET_TIME);
+            TestSupport.setDayTimeForTest(helper, MARKET_TIME);
             helper.assertTrue(interact(player, far), "With no meeting point, the baker must trade at the market hours");
-            level.setDayTime(WORK_TIME);
+            TestSupport.setDayTimeForTest(helper, WORK_TIME);
             helper.assertTrue(Merchants.marketRefusal(level, heart, far) == Merchants.MarketRefusal.CLOSED
                     && !interact(player, far), "The baker must refuse the trade out of the market hours");
         } finally {
-            level.setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
         }
         helper.succeed();
     }
@@ -365,17 +365,17 @@ public final class MarketTradeGameTests {
         int nextDayExtra;
         try {
             long day = marketDay(helper, settlement, 300);
-            level.setDayTime(day * DaySchedule.DAY_TICKS + MARKET_TIME);
+            TestSupport.setDayTimeForTest(helper, day * DaySchedule.DAY_TICKS + MARKET_TIME);
             marketDayExtra = VillageSchedule.extraOffers(level, settlement);
             helper.assertTrue(interact(player, miner), "The miner must trade at the plaza on the market day");
             marketDayOffers = miner.getOffers().size();
 
-            level.setDayTime((day + 1) * DaySchedule.DAY_TICKS + MARKET_TIME);
+            TestSupport.setDayTimeForTest(helper, (day + 1) * DaySchedule.DAY_TICKS + MARKET_TIME);
             nextDayExtra = VillageSchedule.extraOffers(level, settlement);
             helper.assertTrue(interact(player, miner), "The miner must trade at the plaza the next day");
             nextDayOffers = miner.getOffers().size();
         } finally {
-            level.setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
         }
         helper.assertTrue(extra == 2 && marketDayExtra == extra && nextDayExtra == 0,
                 "Expected 2 extra offers on the market day only: " + marketDayExtra + ", then " + nextDayExtra);
@@ -405,13 +405,13 @@ public final class MarketTradeGameTests {
         int offers;
         try {
             long day = marketDay(helper, settlement, 300);
-            level.setDayTime(day * DaySchedule.DAY_TICKS + MARKET_TIME);
+            TestSupport.setDayTimeForTest(helper, day * DaySchedule.DAY_TICKS + MARKET_TIME);
             extra = VillageSchedule.extraOffers(level, settlement);
             count = Merchants.offerCount(settlement, VillagerProfession.TOOLSMITH, extra);
             helper.assertTrue(interact(player, miner), "The miner must trade on the market day");
             offers = miner.getOffers().size();
         } finally {
-            level.setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
         }
         helper.assertTrue(extra == 64, "Expected 64 extra offers from the config, found " + extra);
         helper.assertTrue(count == JobTrades.MAX_OFFERS,

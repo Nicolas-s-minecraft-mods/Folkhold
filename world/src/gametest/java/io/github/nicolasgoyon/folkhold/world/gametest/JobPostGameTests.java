@@ -507,7 +507,7 @@ public final class JobPostGameTests {
             long base = 700;
             long marketDay = base;
             while (true) {
-                level.setDayTime(marketDay * DaySchedule.DAY_TICKS);
+                TestSupport.setDayTimeForTest(helper, marketDay * DaySchedule.DAY_TICKS);
                 if (VillageSchedule.daysToMarketDay(level, village.settlement()) == 0) {
                     break;
                 }
@@ -515,19 +515,19 @@ public final class JobPostGameTests {
                 helper.assertTrue(marketDay < base + 7, "No market day in 7 days");
             }
 
-            level.setDayTime(marketDay * DaySchedule.DAY_TICKS + 6000);
+            TestSupport.setDayTimeForTest(helper, marketDay * DaySchedule.DAY_TICKS + 6000);
             List<Row> noon = VillageLife.marketRows(village.heart(), village.settlement());
             helper.assertTrue(key(noon.get(0).value()).equals(SCREEN + "market.no_space"),
                     "Expected no free plot for the market: " + noon.get(0));
             assertText(helper, noon.get(1), SCREEN + "market_hours.open", "11:00", "14:00");
             assertMarketDay(helper, noon.get(2), SCREEN + "market_day.today", 0);
 
-            level.setDayTime((marketDay + 6) * DaySchedule.DAY_TICKS + 1000);
+            TestSupport.setDayTimeForTest(helper, (marketDay + 6) * DaySchedule.DAY_TICKS + 1000);
             List<Row> morning = VillageLife.marketRows(village.heart(), village.settlement());
             assertText(helper, morning.get(1), SCREEN + "market_hours.closed", "11:00", "14:00");
             assertMarketDay(helper, morning.get(2), SCREEN + "market_day.tomorrow", 1);
 
-            level.setDayTime((marketDay + 3) * DaySchedule.DAY_TICKS + 9000);
+            TestSupport.setDayTimeForTest(helper, (marketDay + 3) * DaySchedule.DAY_TICKS + 9000);
             List<Row> afternoon = VillageLife.marketRows(village.heart(), village.settlement());
             assertText(helper, afternoon.get(1), SCREEN + "market_hours.closed", "11:00", "14:00");
             assertMarketDay(helper, afternoon.get(2), SCREEN + "market_day.days", 4);
@@ -537,7 +537,7 @@ public final class JobPostGameTests {
             helper.assertTrue(key(unknown.get(0).value()).equals(SCREEN + "market.unknown"),
                     "Before the first scan, the market must be not checked yet: " + unknown.get(0));
         } finally {
-            level.setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
             village.heart().setMarketNoSpace(false);
             end(helper, village);
         }

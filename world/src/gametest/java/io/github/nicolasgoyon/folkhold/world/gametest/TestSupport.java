@@ -106,6 +106,8 @@ final class TestSupport {
      * GameTests run on the server thread only.
      */
     private static final Map<GameTestInfo, Set<Object>> CHANGED_SETTINGS = new WeakHashMap<>();
+    /** The key of the day time in the changed settings of a test. */
+    private static final Object DAY_TIME = new Object();
 
     private TestSupport() {
     }
@@ -219,7 +221,7 @@ final class TestSupport {
         for (MobileGroup group : MobileGroupData.get(level.getServer()).groups().all()) {
             GroupMaterializer.keep(group.id(), false);
         }
-        level.setDayTime(NOON);
+        setDayTimeForTest(helper, NOON);
     }
 
     /**
@@ -505,6 +507,18 @@ final class TestSupport {
         boolean old = rule.get();
         restoreAtTestEnd(helper, key, () -> rule.set(old, server));
         rule.set(newValue, server);
+    }
+
+    /**
+     * Sets the day time of the level for one test. When the test ends (pass, failure or timeout), a listener sets the
+     * day time that the level had before the first change of the test, as {@link #setConfigForTest}. The day time
+     * applies to the full level: a test that uses this method goes in its own batch.
+     */
+    static void setDayTimeForTest(GameTestHelper helper, long dayTime) {
+        ServerLevel level = helper.getLevel();
+        long old = level.getDayTime();
+        restoreAtTestEnd(helper, DAY_TIME, () -> level.setDayTime(old));
+        level.setDayTime(dayTime);
     }
 
     /**

@@ -442,7 +442,7 @@ public final class BuilderSiteGameTests {
             }
         }
         long[] time = {TestSupport.NOON};
-        helper.onEachTick(() -> level.setDayTime(time[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, time[0]));
         BlockPos[] heart = new BlockPos[1];
         BuilderSite[] site = new BuilderSite[1];
         // The largest number of steps in one tick of the catch-up, and the phase and the steps of the last tick.
@@ -1733,7 +1733,7 @@ public final class BuilderSiteGameTests {
         BlockPos from = new BlockPos(14, 1, 16);
         BlockPos to = new BlockPos(17, 2, 16);
         ResourceLocation id = template(helper, "builder_wall_night", from, to, Blocks.OAK_PLANKS);
-        level.setDayTime(MIDNIGHT);
+        TestSupport.setDayTimeForTest(helper, MIDNIGHT);
 
         BuilderSite site = BuilderSites.start(level, id, helper.absolutePos(from), Rotation.NONE, Mirror.NONE,
                 helper.absolutePos(HEART), null);
@@ -1743,7 +1743,7 @@ public final class BuilderSiteGameTests {
                     BuilderSite.Status status = site.status();
                     int applied = site.appliedSteps();
                     int workers = site.builderCount();
-                    level.setDayTime(TestSupport.NOON);
+                    TestSupport.setDayTimeForTest(helper, TestSupport.NOON);
                     cleanUp(helper, builders, from, to);
                     helper.assertTrue(status == BuilderSite.Status.NIGHT, "The site must wait at night: " + status);
                     helper.assertTrue(applied == 0 && workers == 0, "No builder works at night: " + applied + " steps, "

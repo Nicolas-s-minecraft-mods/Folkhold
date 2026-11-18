@@ -420,7 +420,7 @@ public final class MerchantGameTests {
         // The workers trade only during the market hours. The test sets a time of the market and the old time again
         // in the same tick: the other tests of the batch do not see the change.
         long oldTime = helper.getLevel().getDayTime();
-        helper.getLevel().setDayTime(MARKET_TIME);
+        TestSupport.setDayTimeForTest(helper, MARKET_TIME);
         List<Boolean> canceled;
         try {
             canceled = professions.stream().map(profession -> {
@@ -432,7 +432,7 @@ public final class MerchantGameTests {
                 return event.isCanceled();
             }).toList();
         } finally {
-            helper.getLevel().setDayTime(oldTime);
+            TestSupport.setDayTimeForTest(helper, oldTime);
         }
 
         helper.getLevel().getServer().getPlayerList().remove(player);

@@ -55,7 +55,7 @@ public final class HandymanGameTests {
         List<BlockPos> braziers = List.of(WEST, EAST);
         village(helper, braziers, false);
         long[] time = {EVENING};
-        helper.onEachTick(() -> helper.getLevel().setDayTime(time[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, time[0]));
         Villager handyman = handyman(helper);
         Map<BlockPos, BlockPos> changes = new HashMap<>();
         recordChanges(helper, braziers, handyman, changes);
@@ -79,7 +79,7 @@ public final class HandymanGameTests {
         List<BlockPos> braziers = List.of(WEST, EAST);
         village(helper, braziers, false);
         long[] time = {NIGHT};
-        helper.onEachTick(() -> helper.getLevel().setDayTime(time[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, time[0]));
         Villager handyman = handyman(helper);
         Map<BlockPos, BlockPos> changes = new HashMap<>();
 
@@ -118,7 +118,7 @@ public final class HandymanGameTests {
             }
         }
         long[] time = {NIGHT};
-        helper.onEachTick(() -> helper.getLevel().setDayTime(time[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, time[0]));
         Villager handyman = handyman(helper);
 
         helper.startSequence()
@@ -145,7 +145,7 @@ public final class HandymanGameTests {
         List<BlockPos> braziers = List.of(WEST, EAST);
         village(helper, braziers, false);
         long[] time = {EVENING};
-        helper.onEachTick(() -> helper.getLevel().setDayTime(time[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, time[0]));
 
         helper.startSequence()
                 .thenExecuteFor(60, () -> helper.assertTrue(burn(helper, braziers, false),
@@ -246,6 +246,6 @@ public final class HandymanGameTests {
         braziers.forEach(brazier -> helper.setBlock(brazier, Blocks.AIR));
         helper.setBlock(HEART, Blocks.AIR);
         time[0] = TestSupport.NOON;
-        helper.getLevel().setDayTime(TestSupport.NOON);
+        TestSupport.setDayTimeForTest(helper, TestSupport.NOON);
     }
 }

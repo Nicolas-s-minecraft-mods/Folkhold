@@ -329,15 +329,15 @@ public final class GuardGameTests {
         boolean[] night = new boolean[2];
         // The level updates the sky darkness on its next tick: the checks come one tick after the time change.
         helper.startSequence()
-                .thenExecute(() -> helper.getLevel().setDayTime(18_000L))
+                .thenExecute(() -> TestSupport.setDayTimeForTest(helper, 18_000L))
                 .thenExecuteAfter(2, () -> {
                     night[0] = AnchorStrollGoal.accepts(guard, inside);
                     night[1] = AnchorStrollGoal.accepts(guard, outside);
-                    helper.getLevel().setDayTime(6_000L);
+                    TestSupport.setDayTimeForTest(helper, 6_000L);
                 })
                 .thenExecuteAfter(2, () -> {
                     boolean dayNear = AnchorStrollGoal.accepts(guard, Vec3.atBottomCenterOf(heart.north(3)));
-                    helper.getLevel().setDayTime(dayTime);
+                    TestSupport.setDayTimeForTest(helper, dayTime);
                     guard.discard();
                     helper.assertTrue(night[0], "At night, the guard strolls on the heart side of the watch position");
                     helper.assertTrue(!night[1], "At night, the guard does not stroll beyond the gate");
