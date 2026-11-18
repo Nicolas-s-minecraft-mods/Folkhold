@@ -216,8 +216,6 @@ public final class VillageRings {
         return rings == 0 ? 0 : rings * BAND + RING_MARGIN;
     }
 
-    }
-
     /** Calculates the pieces of the rings of a village in each district. */
     private static Map<District, List<StructurePiece>> plan(FortifiedVillageStructure village,
             Holder<StructureSet> set, Structure.GenerationContext anchor, ChunkPos start, int level) {
