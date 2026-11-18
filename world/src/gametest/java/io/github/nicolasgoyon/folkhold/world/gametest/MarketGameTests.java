@@ -55,9 +55,9 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  *
  * <ul>
  *   <li>each variant has one market sign with the market post behind it, no job sign and no entities, and the size of
- *       the plot of one house of its style;</li>
+ *       the plot of one house of its style.</li>
  *   <li>the market fits the generated villages of each style: the plot of the market in the plan, or each plot where a
- *       home fits;</li>
+ *       home fits.</li>
  *   <li>the scan of the heart finds the market squares by their market signs, and not the fish market of a maritime
  *       village.</li>
  * </ul>

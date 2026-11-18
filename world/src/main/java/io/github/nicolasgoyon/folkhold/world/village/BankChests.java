@@ -60,8 +60,8 @@ import net.neoforged.neoforge.event.level.ExplosionEvent;
  *
  * <p>A pillage is one of these actions:
  * <ul>
- *   <li>a player opens a bank chest and confirms on the confirmation screen;</li>
- *   <li>a player breaks a bank chest;</li>
+ *   <li>a player opens a bank chest and confirms on the confirmation screen.</li>
+ *   <li>a player breaks a bank chest.</li>
  *   <li>an explosion that a player caused breaks a bank chest (for example TNT that the player lit).</li>
  * </ul>
  * After a pillage, the village value and the faction value of the player go to {@link WorldConfig#BANK_PILLAGE_VALUE}

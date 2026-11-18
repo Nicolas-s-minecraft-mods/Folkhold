@@ -126,7 +126,7 @@ class JobAssignmentTest {
         assertNotEquals(JobAssignment.postSeed(7, 0), JobAssignment.postSeed(7, 1));
     }
 
-    /** Only the eligible jobs (level and biome) are candidates; with no eligible job there is no job. */
+    /** Only the eligible jobs (level and biome) are candidates. With no eligible job there is no job. */
     @Test
     void onlyEligibleJobsAreCandidates() {
         IntStream.range(0, 50).forEach(seed -> assertEquals("digger",

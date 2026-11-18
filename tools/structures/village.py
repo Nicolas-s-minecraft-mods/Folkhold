@@ -800,7 +800,7 @@ def street_end():
 # have PLOT_MARGIN blocks with no home next to them. The homes on the plots of a street segment go past its ends:
 # - A home of 13 blocks (Sunreach) on the plot z = 8 of a segment of 13 blocks covers z = 2..14: 2 blocks past the end.
 # - A side long house (17 blocks) on a Norse segment of 21 blocks: on the plot z = 6, it covers z = -2..14, 2 blocks
-#   before the start; on the plot z = 16, it covers z = 8..24, 4 blocks past the end.
+#   before the start. On the plot z = 16, it covers z = 8..24, 4 blocks past the end.
 # Thus the plan of the village obeys these rules for the Norse segments:
 # - No side long house on the plot z = 16 of a segment with a piece after it.
 # - A side long house on the plot z = 6 of a segment and a home on the plot z = 16 of the same segment overlap: the
@@ -3490,8 +3490,8 @@ SUNREACH_JOBS = {
 
 # The market square takes the plot of one house. x goes along the street, z goes away from the street: z = 0 is the
 # street side, with the jigsaw connector house_front in the middle. Each layout has:
-# - size: (width along the street, depth);
-# - post: (x, z) of the market post, in the middle of the free part of the square;
+# - size: (width along the street, depth).
+# - post: (x, z) of the market post, in the middle of the free part of the square.
 # - stalls: (x, z, facing) of each stall: the corner with the lowest x and z, and the direction of the counter.
 # The caravan yard is in the corner at the west of the street side (see caravan_yard).
 MARKET_LAYOUTS = {

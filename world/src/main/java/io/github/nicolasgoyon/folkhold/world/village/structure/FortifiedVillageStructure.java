@@ -533,9 +533,9 @@ public final class FortifiedVillageStructure extends Structure {
      * The variant of a village of a culture in a biome. The order of the search:
      *
      * <ol>
-     *   <li>a variant of the culture with the biome;</li>
-     *   <li>the base variant of the culture: a variant of the culture with no biome;</li>
-     *   <li>a variant of all the cultures with the biome;</li>
+     *   <li>a variant of the culture with the biome.</li>
+     *   <li>the base variant of the culture: a variant of the culture with no biome.</li>
+     *   <li>a variant of all the cultures with the biome.</li>
      *   <li>the base variant of the structure.</li>
      * </ol>
      *

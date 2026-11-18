@@ -9,7 +9,7 @@ The classes are client classes. Only client code (screens, HUD, network handlers
 - **Sizes.** A screen works at the minimum size of 320 × 240 GUI pixels (a panel of 308 × 228 pixels). It can use more space when it is available. The vanilla font has a line of 9 pixels.
 - **Texts.** All texts come from translation keys, in English and in French. A French text is often 15 % to 30 % longer. A text that does not fit ends with "…". A button shows its complete label in its tooltip. The other elements (lists, cards, HUD) do not show the cut part: give them the space for the French text.
 - **No pause.** The screens do not pause the game, and the game stays visible behind the panel. Keep the screens compact.
-- **Server data.** The server owns all data. A button sends an action to the server, and shows the waiting state until the answer comes (`UiButton.setPending`), or for 5 seconds at most when the server does not answer.
+- **Server data.** The server owns all data. A button sends an action to the server. Then it shows the waiting state until the answer comes (`UiButton.setPending`). When the server does not answer, the waiting state stops after 5 seconds.
 - **Colors.** A color never gives a meaning alone: add a word or a glyph (✓, ✕, ▲, ●).
 - **Dangerous actions** need a confirmation (`UiDialog`).
 - **Keyboard.** Escape closes, Tab moves the focus, Enter clicks the focused button, the left and right arrow keys change the section tabs.
@@ -73,12 +73,12 @@ public class ExampleScreen extends UiScreen {
 - The game calls `init` again after a resize and after an overlay closes. Keep the state of the screen in fields (the selected tab, the scroll, the text of a field) and make the widgets again from it.
 - `isCompact()` is true for a small panel: show a shorter layout.
 - `setPrevious(screen)` gives the screen a back button in the header. The back button opens the previous screen again, and the close button closes all. For example, the caravans and quests screen of the admin screen, and the quest board opened from the village heart.
-- `UiText.draw`, `drawRight`, `drawLeft` and `drawCentered` draw a text that is a little too wide smaller (down to 75 %), and cut it with "…" only below this size. A text with more words (consequences, notes, descriptions) wraps on more lines (`UiText.wrap`, `drawWrapped`).
+- `UiText.draw`, `drawRight`, `drawLeft` and `drawCentered` draw a text that is a little too wide at a smaller size (down to 75 %). They cut it with "…" only below this size. A text with more words (consequences, notes, descriptions) wraps on more lines (`UiText.wrap`, `drawWrapped`).
 - Draw the content that is not a widget in `renderBody`. It is behind the widgets.
 - `showStatus(text, tone)` shows the result of an action in the screen, in place of a chat message. The status line covers the bottom of the body for some seconds.
 - A menu or a dialog is a screen above its parent. A network handler that updates or replaces the parent finds it below the overlays with `UiOverlay.rootScreen()`.
 - A widget does not change the screen and does not send a packet in a render method. A hold button ends its hold in `tick()`: `UiScreen` and `UiOverlay` call it on each game tick.
-- The client forgets the state of a world when the player leaves it (`FolkholdWorldClient.onLoggingOut`): a static field that keeps a state between two openings of a screen needs a `clear()` method called from there.
+- The client forgets the state of a world when the player leaves it (`FolkholdWorldClient.onLoggingOut`). A static field that keeps a state between two openings of a screen needs a `clear()` method, and `onLoggingOut` calls this method.
 - A menu action runs after the parent screen made its widgets again. If the action changes the state of the screen, call `rebuildWidgets()` in the action.
 
 ## A drop-down menu

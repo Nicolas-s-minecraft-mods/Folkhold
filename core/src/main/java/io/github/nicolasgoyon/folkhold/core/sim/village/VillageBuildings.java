@@ -76,7 +76,7 @@ public final class VillageBuildings {
      * @param counts       the number of buildings of each kind in the village
      * @param scanned      true if the counts come from a scan of the village
      * @param needsPlaces  true if the village needs places
-     * @return the steps, in their order; empty when the village needs nothing
+     * @return the steps, in their order. Empty when the village needs nothing
      */
     public static List<Step> steps(List<Requirement> requirements, int level, Map<String, Integer> counts,
             boolean scanned, boolean needsPlaces) {
@@ -105,7 +105,7 @@ public final class VillageBuildings {
      * @param scanned       true if the counts come from a scan of the village
      * @param needsPlaces   true if the village needs places
      * @param needsFirstPost true if the scanned village has no food post or no post that trades
-     * @return the steps, in their order; empty when the village needs nothing
+     * @return the steps, in their order. Empty when the village needs nothing
      */
     public static List<Step> steps(List<Requirement> requirements, int level, Map<String, Integer> counts,
             boolean scanned, boolean needsPlaces, boolean needsFirstPost) {

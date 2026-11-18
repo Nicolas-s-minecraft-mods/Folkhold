@@ -2,7 +2,7 @@
 
 This guide explains how to prepare a computer for Folkhold development, build the mods and test them in the game.
 
-The goal is a clean host machine. The JDK, Gradle, packwiz and the Minecraft development files stay in a Docker container and in one Docker volume. To remove everything, delete the container image and the volume (see [Clean up](#clean-up)).
+The goal is a clean host machine. The JDK, Gradle, packwiz and the Minecraft development files stay in a Docker container and in one Docker volume. To remove everything, remove the container image and the volume (see [Clean up](#clean-up)).
 
 ## What runs where
 
@@ -41,7 +41,7 @@ Other IDEs: IntelliJ IDEA can also open a dev container. The support depends on 
    cd Folkhold
    ```
 
-   Faster builds on Windows: clone the repository in the WSL file system (for example `\\wsl$\Ubuntu\home\<user>\Folkhold`), or use the VS Code command "Dev Containers: Clone Repository in Container Volume". Files on the Windows file system (`C:\...`) are slow in a Linux container.
+   For faster builds on Windows, clone the repository in the WSL file system (for example `\\wsl$\Ubuntu\home\<user>\Folkhold`). You can also use the VS Code command "Dev Containers: Clone Repository in Container Volume". Files on the Windows file system (`C:\...`) are slow in a Linux container.
 
 2. Open the folder in VS Code.
 
@@ -70,7 +70,7 @@ Without VS Code, use the scripts from a terminal on the host:
 .\scripts\dev.ps1 ./gradlew build       # one command in the container
 ```
 
-The scripts check that Docker runs. On Windows, if Docker Desktop is installed but does not run, `dev.ps1` starts it, runs the command, then stops Docker Desktop again. To keep it running, set `$env:FOLKHOLD_KEEP_DOCKER = '1'` before the command.
+The scripts check that Docker runs. On Windows, if the computer has Docker Desktop but Docker Desktop does not run, `dev.ps1` starts it, runs the command, then stops Docker Desktop again. To keep it running, set `$env:FOLKHOLD_KEEP_DOCKER = '1'` before the command.
 
 ## Project layout
 
@@ -162,7 +162,7 @@ Start `Folkhold-dev` in Prism Launcher. Click **Multiplayer**, then add the serv
 
 ### 5. Debug
 
-- **Server (container)**: start the server with `-PdebugPort=5005`. In VS Code, run the launch configuration **Attach to dev server (port 5005)**. Breakpoints in the Folkhold code now stop the server.
+- **Server (container)**: start the server with `-PdebugPort=5005`. In VS Code, run the debug configuration **Attach to dev server (port 5005)**. The breakpoints in the Folkhold code then stop the server.
 - **Client (Prism on the host)**: in Prism Launcher, open the instance settings, **Java**, **JVM arguments**, and add:
 
   ```
@@ -171,11 +171,11 @@ Start `Folkhold-dev` in Prism Launcher. Click **Multiplayer**, then add the serv
 
   Start the instance. In VS Code, run **Attach to Prism client on the host (port 5006)**.
 
-Hot reload: when the debugger is attached, VS Code can replace the body of a changed method without a restart. Changes to class structure (new fields, new methods) need a restart.
+Hot reload: while the debugger has a connection to the game, VS Code can replace the body of a changed method without a restart. Changes to class structure (new fields, new methods) need a restart.
 
 ## Test world
 
-The data pack "Folkhold test world" adds the world type "Folkhold Test". It is a flat world (plains, no trees) with one faction village next to the spawn point. The village starts in the chunk (10, 0), about 160 blocks to the east of the spawn point: the largest village of the start levels leaves free space around the spawn point. It is a normal faction village: heart, garrison, bank, quest board and settlement in the simulation. A test of the villages starts with no search for a village.
+The data pack "Folkhold test world" adds the world type "Folkhold Test". It is a flat world (plains, no trees) with one faction village next to the spawn point. The village starts in the chunk (10, 0), about 160 blocks to the east of the spawn point. The largest village of the start levels leaves free space around the spawn point. It is a normal faction village: heart, garrison, bank, quest board and settlement in the simulation. A test of the villages starts with no search for a village.
 
 The data pack is part of `folkhold_world` and is off by default. It also changes the placement of the faction villages for all the world types: one village only, in the chunk (10, 0). Turn it on only for a test world.
 
@@ -183,10 +183,10 @@ In the client:
 
 1. Click **Singleplayer**, then **Create New World**.
 2. In the tab **More**, click **Data Packs**. Move "Folkhold test world" to the column **Selected**, then click **Done**.
-3. In the tab **World**, click **World Type** until it shows "Folkhold Test".
+3. In the tab **World**, click **World Type** until the button has the text "Folkhold Test".
 4. Click **Create New World**.
 
-On the dev server, the world type and the data pack apply when the server creates a new world. Stop the server, delete the folder `dev/run/world`, then set these two lines in `dev/run/server.properties`:
+On the dev server, the world type and the data pack apply when the server creates a new world. Stop the server, remove the folder `dev/run/world`, then set these two lines in `dev/run/server.properties`:
 
 ```properties
 level-type=folkhold_world:test
@@ -211,7 +211,7 @@ The site of the project also has one file for each language (see [Site of the pr
 
 ## Structures
 
-The structure files of the village (`world/src/main/resources/data/folkhold_world/structure/village/`) come from a script. The script also writes the data files of the village structure: the structure (`worldgen/structure/village.json`), its template pools, its processor lists and the tag of its biomes. Do not edit these files by hand. Change the script, then run it in the container:
+The structure files of the village (`world/src/main/resources/data/folkhold_world/structure/village/`) come from a script. The script also writes the data files of the village structure. These files are the structure (`worldgen/structure/village.json`), its template pools, its processor lists and the tag of its biomes. Do not edit these files by hand. Change the script, then run it in the container:
 
 ```bash
 python3 tools/structures/village.py
@@ -276,9 +276,16 @@ python3 tools/make_test_structure.py world/src/gametest/resources/data/folkhold_
 python3 tools/make_test_structure.py world/src/gametest/resources/data/folkhold_world/structure/arena_huge.nbt --size 56 4 56
 ```
 
-The workflow **Generated files** runs all the scripts of `tools/` and fails when their output differs from the repository: commit the output of a script with the script.
+The workflow **Generated files** runs all the scripts of `tools/`. It fails when their output differs from the repository. Commit the output of a script with the script.
 
-To replace a generated house with a house built by hand: build it in creative mode, save it with a structure block (name `folkhold_world:village/house_<name>`), copy the file from the world folder (`generated/folkhold_world/structure/`) to the `village` folder, and add it to `worldgen/template_pool/village/houses.json`. The porch row (z = 0) must contain the jigsaw block (name `folkhold_world:house_front`, facing out).
+To replace a generated house with a house that you build by hand:
+
+1. Build the house in creative mode.
+2. Save it with a structure block (name `folkhold_world:village/house_<name>`).
+3. Copy the file from the world folder (`generated/folkhold_world/structure/`) to the `village` folder.
+4. Add it to `worldgen/template_pool/village/houses.json`.
+
+The porch row (z = 0) must contain the jigsaw block (name `folkhold_world:house_front`, facing out).
 
 ## Cartofold dependency
 
@@ -323,7 +330,7 @@ The CI makes the same file for each build (artifact `folkhold-modpack`), with th
 
 ### Dev instance that updates itself
 
-After each green build of a push on `develop`, the site of the project contains the dev pack: <https://nicolas-goyon.github.io/Folkhold/dev/pack.toml>. A Prism Launcher instance updates itself from this pack before each launch:
+After each green build of a push on `develop`, the site of the project contains the dev pack: <https://nicolas-goyon.github.io/Folkhold/dev/pack.toml>. A Prism Launcher instance updates itself from this pack before each start of the game:
 
 1. In Prism Launcher, select **Add Instance**, then **Import**.
 2. Paste this URL: <https://nicolas-goyon.github.io/Folkhold/dev/folkhold-dev-instance.zip>. Select **OK**.
@@ -371,17 +378,20 @@ To add a language, add `site/lang/<language>.json` with all the keys of `en_us.j
   | **Dev pack** | GameTests, Modpack | For a push on `develop` only: makes the dev pack and the dev instance (artifact `folkhold-dev-pack`). |
 
 - "Run workflow" on the workflow **Build** has the input `release`. With this input, the run uses the version of the release and also makes the Maven files of the mods (artifact `folkhold-maven`). The run publishes nothing: use it to test a release build.
-- The shared steps of the workflows are composite actions in `.github/actions/`: `setup-gradle` (JDK 21 and Gradle), `setup-packwiz` (Go and packwiz) and `version` (the version of a build or of a release).
+- The shared steps of the workflows are composite actions in `.github/actions/`:
+  - `setup-gradle`: JDK 21 and Gradle.
+  - `setup-packwiz`: Go and packwiz.
+  - `version`: the version of a build or of a release.
 - The workflow **Generated files** runs the tests of the scripts of `scripts/` and checks the output of the scripts of `tools/`.
 - Each build has a version from `scripts/version.py`:
   - A push on `develop`: the version of the commit, then `-dev.` and the short commit. Example: `0.32.0-dev.13bcc38`.
   - A pull request: the version after the merge, then `-pr.`, the number of the pull request and the short commit. Example: `0.32.1-pr.472.abc1234`. For a pull request from `develop` to `main`, the first part is the version of the release.
   - A release (push on `main`): the version of the release.
 - A build of a push on `develop` also makes the dev pack (artifact `folkhold-dev-pack`, see [Dev instance that updates itself](#dev-instance-that-updates-itself)).
-- The workflow **Pull request** checks the title of a pull request to `develop` or in a stack on `develop` (bump marker, see [CONTRIBUTING.md](../CONTRIBUTING.md#versions-and-releases)) and gives the version after the merge. For a pull request to `main`, it checks that the source branch is `develop` and gives the version and the notes of the release.
+- The workflow **Pull request** checks the title of a pull request to `develop` or in a stack on `develop` (bump marker, see [CONTRIBUTING.md](../CONTRIBUTING.md#versions-and-releases)). It also gives the version after the merge. For a pull request to `main`, it checks that the source branch is `develop` and gives the version and the notes of the release.
 - A change to `.devcontainer/` runs the workflow **Dev container**: it builds the image and checks the tools.
 - The workflow **Pages** publishes the site of the project to GitHub Pages from `develop` (see [Site of the project](#site-of-the-project)). The site also has `version.json` with the version of the latest release. The version badge of the README reads this file, with no call to the GitHub API by shields.io. The site also has the dev pack of the latest green build of a push on `develop`, in `dev/`. The workflow runs after each green build of a push on `develop`, and after each release. On a pull request that changes the site, the workflow builds the site and does not deploy it. The artifact `github-pages` of the run contains the site.
-- To make a release, merge `develop` into `main`: a pull request from `develop` to `main`, with "Create a merge commit". The workflow **Release** calls the workflow **Build** (`workflow_call`): the jobs of the build run with the version of the release, from the bump markers of the commits. The job **Build** also writes the Maven files of the mods (artifact `folkhold-maven`). When all the jobs of the build pass, the job **Publish** tags the commit of `develop`, creates a GitHub Release with the jars and the `.mrpack` file of the build, then uploads the Maven files to GitHub Packages (`io.github.nicolasgoyon.folkhold:<mod_id>`, see `scripts/maven_publish.py`). The release does not build the mods again, so the GitHub Release and GitHub Packages have the same jars. When the tag of the version exists, the workflow does not build and makes no release. All the builds use the same packwiz commit, so two runs on the same commit give the same `.mrpack` content. After the release, the workflow starts the workflow **Pages**.
+- To make a release, merge `develop` into `main`: a pull request from `develop` to `main`, with "Create a merge commit". The workflow **Release** calls the workflow **Build** (`workflow_call`). The jobs of the build run with the version of the release, from the bump markers of the commits. The job **Build** also writes the Maven files of the mods (artifact `folkhold-maven`). When all the jobs of the build pass, the job **Publish** tags the commit of `develop`. Then it creates a GitHub Release with the jars and the `.mrpack` file of the build. Then it uploads the Maven files to GitHub Packages (`io.github.nicolasgoyon.folkhold:<mod_id>`, see `scripts/maven_publish.py`). The release does not build the mods again, so the GitHub Release and GitHub Packages have the same jars. When the tag of the version exists, the workflow does not build and makes no release. All the builds use the same packwiz commit, so two runs on the same commit give the same `.mrpack` content. After the release, the workflow starts the workflow **Pages**.
 
 ## Clean up
 

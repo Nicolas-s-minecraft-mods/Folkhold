@@ -63,7 +63,7 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  * in the set stays empty. A role can also give a list of variants, for example a bow and a crossbow for the archers:
  * each unit takes one variant, from its id. Two values have a special meaning:
  * <ul>
- *   <li>{@code tabard}: a leather chestplate in the color of the faction of the unit;</li>
+ *   <li>{@code tabard}: a leather chestplate in the color of the faction of the unit.</li>
  *   <li>{@code banner}: the banner of the faction of the unit.</li>
  * </ul>
  * A culture can change the equipment of some roles: the set {@code <culture>/<set>}, for example

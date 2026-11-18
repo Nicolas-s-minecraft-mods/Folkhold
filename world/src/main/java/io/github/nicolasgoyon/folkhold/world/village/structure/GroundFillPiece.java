@@ -62,7 +62,7 @@ public final class GroundFillPiece extends StructurePiece implements PieceBeardi
      * Makes the piece of a tower or of a gate.
      *
      * @param box     the box of the template of the tower or of the gate
-     * @param cleared the boxes of the terrain pieces that clear their space; their lowest Y is their ground
+     * @param cleared the boxes of the terrain pieces that clear their space. Their lowest Y is their ground
      */
     public GroundFillPiece(BoundingBox box, List<BoundingBox> cleared) {
         super(ModStructures.GROUND_FILL.get(), 0, new BoundingBox(box.minX() - MARGIN, box.minY() - DEPTH,

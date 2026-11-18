@@ -15,10 +15,10 @@ import net.minecraft.world.level.pathfinder.Path;
  * <p>In this case only, the mob walks directly to the target. The move has no check of the blocks on the way, so the
  * goal does the move only when all these conditions are true:
  * <ul>
- *   <li>the path is done and it reached the target (not a partial path);</li>
- *   <li>the target is alive and the mob can see it;</li>
+ *   <li>the path is done and it reached the target (not a partial path).</li>
+ *   <li>the target is alive and the mob can see it.</li>
  *   <li>the target is nearer than {@link #MAX_DISTANCE} horizontally and nearer than {@link #MAX_HEIGHT}
- *       vertically;</li>
+ *       vertically.</li>
  *   <li>the target is out of the attack range.</li>
  * </ul>
  * The mob stays at its height: a target that a hit throws up does not make the mob jump.

@@ -5,8 +5,8 @@
 #
 # The script reads each log from its end: the failure is at the end of a log, and the start of a log has the
 # noise of the startup. It looks for these markers, the most specific first:
-#   - a failed GameTest ("<name> failed at <position>! <message>"), one annotation for each test;
-#   - a failed JUnit test or a compile error;
+#   - a failed GameTest ("<name> failed at <position>! <message>"), one annotation for each test.
+#   - a failed JUnit test or a compile error.
 #   - the Gradle summary ("What went wrong").
 # With no marker in any log, the last lines of the last log are the annotation.
 #

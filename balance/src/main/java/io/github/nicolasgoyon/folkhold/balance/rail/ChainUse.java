@@ -27,7 +27,7 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  * The player links and unlinks minecarts:
  * <ul>
  *   <li>the item "chain" on a first minecart, then on a second minecart, links them. The link uses 1 chain. The
- *       action bar shows the first minecart;</li>
+ *       action bar shows the first minecart.</li>
  *   <li>shears, or an empty main hand while the player sneaks, remove the front link of a minecart, or its back link
  *       when it has no front link. The chain drops. An empty hand without sneak still lets the player ride.</li>
  * </ul>

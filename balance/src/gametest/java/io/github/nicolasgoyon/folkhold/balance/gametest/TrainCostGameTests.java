@@ -31,8 +31,8 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * <p>The test measures with {@link System#nanoTime()} and writes the result to the log:
  * <ul>
  *   <li>the pass of the trains: the time between a listener of {@link LevelTickEvent.Post} with the highest priority
- *       and a listener with the lowest priority. This time also contains the other listeners of this event;</li>
- *   <li>the ticks of the locomotives: their vanilla movement and their drive (forces, look-ahead, speed cap);</li>
+ *       and a listener with the lowest priority. This time also contains the other listeners of this event.</li>
+ *   <li>the ticks of the locomotives: their vanilla movement and their drive (forces, look-ahead, speed cap).</li>
  *   <li>the ticks of the wagons: their vanilla movement with the speed cap of the train.</li>
  * </ul>
  * The code of the trains is the pass of the trains and the ticks of the locomotives. Its target is 2 ms for each tick.
