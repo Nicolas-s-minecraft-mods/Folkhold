@@ -81,11 +81,11 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  *
  * <p>A unit has:
  * <ul>
- *   <li>a <b>home position</b>: center of the patrol;</li>
- *   <li>a <b>faction</b>: the faction of its village, or none;</li>
+ *   <li>a <b>home position</b>: center of the patrol.</li>
+ *   <li>a <b>faction</b>: the faction of its village, or none.</li>
  *   <li>a <b>village</b>: the position of its village heart, or none. The unit reports threats to the heart,
- *       and the heart alerts all units of the village;</li>
- *   <li>a <b>post</b> (optional): a tower or wall position. A unit with a post stays at its post;</li>
+ *       and the heart alerts all units of the village.</li>
+ *   <li>a <b>post</b> (optional): a tower or wall position. A unit with a post stays at its post.</li>
  *   <li>a <b>night watch position</b> (optional, set by the heart): at night, the unit stays near it
  *       instead of its home.</li>
  * </ul>
@@ -435,8 +435,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
      * Tells if a position is in the chase area of the unit:
      * <ul>
      *   <li>not farther than the chase radius ({@link #chaseRadius()}) from the center of the chase area
-     *       ({@link #chaseCenter()});</li>
-     *   <li>not in the territory of another faction, for a unit with a faction;</li>
+     *       ({@link #chaseCenter()}).</li>
+     *   <li>not in the territory of another faction, for a unit with a faction.</li>
      *   <li>not in deep water (see {@link #isDeepWater}).</li>
      * </ul>
      *
@@ -577,8 +577,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
      * Animation controllers (GeckoLib). The animations are in
      * {@code assets/folkhold_world/animations/entity/faction_unit.animation.json}.
      * <ul>
-     *   <li>movement: walk or idle (see {@link #movementController()});</li>
-     *   <li>attack: wind-up and swing of the weapon arm, when the unit swings;</li>
+     *   <li>movement: walk or idle (see {@link #movementController()}).</li>
+     *   <li>attack: wind-up and swing of the weapon arm, when the unit swings.</li>
      *   <li>hold: shield up while the unit blocks, bow drawn while an archer has a target. With a crossbow: the
      *       charge, then the aim while the crossbow holds a bolt and the archer has a target. The shot is a triggered
      *       animation ({@link #CROSSBOW_SHOT}).</li>

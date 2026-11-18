@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The cost tables of the anvil, with the vanilla merge rule. Weights (vanilla anvil_cost): Efficiency, Sharpness and
- * Protection 1, Unbreaking 2, Fortune, Looting and Mending 4. Operation cost 1. The default factor k is 0.5; the
+ * Protection 1, Unbreaking 2, Fortune, Looting and Mending 4. Operation cost 1. The default factor k is 0.5. The
  * table of the owner (issue #600) uses k = 1. Repair: r = 1, bases iron 3, diamond 4.
  */
 class AnvilCostTest {

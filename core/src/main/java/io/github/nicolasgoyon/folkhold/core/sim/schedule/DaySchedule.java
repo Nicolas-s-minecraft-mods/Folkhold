@@ -11,11 +11,11 @@ import java.util.TreeMap;
  *
  * <p>The phases of one day:
  * <ul>
- *   <li>from 0 to {@code workStart}: {@link DayPhase#HOME};</li>
- *   <li>from {@code workStart} to {@code marketStart}: {@link DayPhase#WORK};</li>
- *   <li>from {@code marketStart} to {@code marketEnd}: {@link DayPhase#MARKET};</li>
- *   <li>from {@code marketEnd} to {@code homeStart}: {@link DayPhase#WORK};</li>
- *   <li>from {@code homeStart} to {@code sleepStart}: {@link DayPhase#HOME};</li>
+ *   <li>from 0 to {@code workStart}: {@link DayPhase#HOME}.</li>
+ *   <li>from {@code workStart} to {@code marketStart}: {@link DayPhase#WORK}.</li>
+ *   <li>from {@code marketStart} to {@code marketEnd}: {@link DayPhase#MARKET}.</li>
+ *   <li>from {@code marketEnd} to {@code homeStart}: {@link DayPhase#WORK}.</li>
+ *   <li>from {@code homeStart} to {@code sleepStart}: {@link DayPhase#HOME}.</li>
  *   <li>from {@code sleepStart} to the end of the day: {@link DayPhase#SLEEP}.</li>
  * </ul>
  * A start bound is in its phase. An end bound is in the next phase.

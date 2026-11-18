@@ -26,7 +26,7 @@
 5. The CI must pass before the merge. The check **Title and version** refuses a title with no bump marker, and its
    summary gives the version after the merge. The checks **Build** and **GameTests** of the workflow Build compile
    and test the mods (see [Continuous integration](docs/getting-started.md#continuous-integration-and-releases)).
-6. Use "Squash and merge": the title of the pull request becomes the title of the commit on `develop`. Delete the
+6. Use "Squash and merge": the title of the pull request becomes the title of the commit on `develop`. Remove the
    branch after the merge.
 
 Do not push directly to `develop` or to `main`.
@@ -98,7 +98,7 @@ changes, in English and in French. The CI and the release use `scripts/changelog
   game. Use simple words. Do not use the names of classes, files or settings. Do not refer to the issue or to the
   pull request.
 - Do not use `<`, `>`, `@`, backticks or line breaks in the texts. Save the file in UTF-8.
-- Do not rename or remove an entry file. To correct a text, change the file. The check refuses a rename. The revert
+- Do not rename or remove an entry file. To change a text, change the file. The check refuses a rename. The revert
   of a pull request removes its entry files, and the check accepts this removal.
 - Do not put the version in the entry. The release gets the version from Git: the squash commit that adds the file
   gives the pull request number, and the first release tag that contains this commit gives the version.

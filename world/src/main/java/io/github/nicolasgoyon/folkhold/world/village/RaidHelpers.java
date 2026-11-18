@@ -32,7 +32,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * ({@link #RAID_AREA_RADIUS} blocks or less from the center of the raid) and hurts the raiders of the raid. The player
  * helps when one of these conditions is true:
  * <ul>
- *   <li>the player kills {@code raidRewards.minKills} raiders or more;</li>
+ *   <li>the player kills {@code raidRewards.minKills} raiders or more.</li>
  *   <li>the player gives {@code raidRewards.minDamage} damage or more to the raiders (0: the damage does not count).</li>
  * </ul>
  * A hit or a kill from outside the raid area does not count. Only the damage source of a player counts, as in vanilla:
@@ -119,7 +119,7 @@ public final class RaidHelpers {
      * @param level  the level of the raid
      * @param raid   the raid
      * @param player the id of the player
-     * @return true when the player helps; false when the raid is not at a faction village
+     * @return true when the player helps. False when the raid is not at a faction village
      */
     public static boolean helps(ServerLevel level, Raid raid, UUID player) {
         Tracked tracked = RAIDS.get(key(level, raid));
@@ -132,7 +132,7 @@ public final class RaidHelpers {
      *
      * @param level the level of the raid
      * @param raid  the raid
-     * @return the ids of the helpers; empty when the raid is not at a faction village
+     * @return the ids of the helpers. Empty when the raid is not at a faction village
      */
     public static Set<UUID> helpers(ServerLevel level, Raid raid) {
         Tracked tracked = RAIDS.get(key(level, raid));
@@ -148,7 +148,7 @@ public final class RaidHelpers {
      *
      * @param level the level of the raid
      * @param raid  the raid
-     * @return true when the village falls; false when the raid is not at a faction village
+     * @return true when the village falls. False when the raid is not at a faction village
      */
     public static boolean isFallen(ServerLevel level, Raid raid) {
         Tracked tracked = RAIDS.get(key(level, raid));
@@ -160,7 +160,7 @@ public final class RaidHelpers {
      *
      * @param level the level of the raid
      * @param raid  the raid
-     * @return true when the effects are applied; false when the raid is not at a faction village
+     * @return true when the effects are applied. False when the raid is not at a faction village
      */
     public static boolean isSettled(ServerLevel level, Raid raid) {
         Tracked tracked = RAIDS.get(key(level, raid));
@@ -173,7 +173,7 @@ public final class RaidHelpers {
      *
      * @param level the level of the raid
      * @param raid  the raid
-     * @return true when the village falls; false when the raid is not at a faction village
+     * @return true when the village falls. False when the raid is not at a faction village
      */
     public static boolean updateFall(ServerLevel level, Raid raid) {
         Tracked tracked = RAIDS.get(key(level, raid));

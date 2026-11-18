@@ -38,4 +38,4 @@ CC BY work, or the written permission of the author.
 ## Dependencies
 
 The mods depend on libraries with their own licenses: NeoForge (LGPL-2.1), GeckoLib (MIT). The scripts of `tools/pixvox` use PixVox (MIT) to make the blocks of the library. The modpack
-(`modpack/`) lists other mods; each one keeps its license.
+(`modpack/`) lists other mods. Each mod keeps its license.

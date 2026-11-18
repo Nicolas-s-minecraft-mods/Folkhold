@@ -47,14 +47,14 @@ import net.neoforged.neoforge.registries.DeferredBlock;
  * again on request (see {@link #invalidate()}), for example after a new building:
  * <ul>
  *   <li><b>posts</b>: the position above each watch post block (the archer stands there), with its view score
- *       (see {@link #viewScore});</li>
- *   <li><b>gates</b>: the fence gates;</li>
+ *       (see {@link #viewScore}).</li>
+ *   <li><b>gates</b>: the fence gates.</li>
  *   <li><b>braziers</b>: the braziers of the block library, and the campfires. The heart changes a campfire into a
- *       brazier, which does not burn the entities;</li>
- *   <li><b>banners</b>: the banners (standing and on walls). The heart gives them the banner of the faction;</li>
- *   <li><b>bank chests</b>: the chests of the village bank, in the scan order;</li>
- *   <li><b>bells</b>: the alarm bells. The heart rings them in an alert;</li>
- *   <li><b>quest boards</b>: the middle part of each quest board. The heart starts the updates of their papers;</li>
+ *       brazier, which does not burn the entities.</li>
+ *   <li><b>banners</b>: the banners (standing and on walls). The heart gives them the banner of the faction.</li>
+ *   <li><b>bank chests</b>: the chests of the village bank, in the scan order.</li>
+ *   <li><b>bells</b>: the alarm bells. The heart rings them in an alert.</li>
+ *   <li><b>quest boards</b>: the middle part of each quest board. The heart starts the updates of their papers.</li>
  *   <li><b>beds</b>: the head part of each bed. The beds of the homes give the places of the inhabitants (see
  *       {@link VillageBeds}).</li>
  *   <li><b>buildings</b>: the number of building signs of each kind. The growth builds the missing buildings of the

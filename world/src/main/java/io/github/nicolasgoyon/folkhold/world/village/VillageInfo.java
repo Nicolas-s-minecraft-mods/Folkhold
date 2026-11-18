@@ -49,20 +49,20 @@ import net.minecraft.world.item.Item;
  *
  * <p>The player part comes first:
  * <ul>
- *   <li>the welcome line, for the reputation tier of the player;</li>
- *   <li>the reputation: tier, effective value, village value and faction value with their weights;</li>
+ *   <li>the welcome line, for the reputation tier of the player.</li>
+ *   <li>the reputation: tier, effective value, village value and faction value with their weights.</li>
  *   <li>what the player can do here: quests (with a link to the quest board), trade (discount, jobs that trade, the items
- *       that the village looks for), shelter at night, inn;</li>
+ *       that the village looks for), shelter at night, inn.</li>
  *   <li>an advice: what not to do, or how to improve a bad reputation.</li>
  * </ul>
  *
  * <p>The village part is in sections:
  * <ul>
- *   <li><b>village</b>: faction, culture, level and tier, experience (bar), alert state, position;</li>
- *   <li><b>garrison</b>: for each role, the units alive and dead, and the configured count (segments);</li>
+ *   <li><b>village</b>: faction, culture, level and tier, experience (bar), alert state, position.</li>
+ *   <li><b>garrison</b>: for each role, the units alive and dead, and the configured count (segments).</li>
  *   <li><b>economy</b>: the market (state, hours, market day, see {@link VillageLife}), population (bar), housing
- *       (bar), food, treasury of the faction, and the main stocks with their price;</li>
- *   <li><b>jobs</b>: the active jobs and the job posts (see {@link VillageLife});</li>
+ *       (bar), food, treasury of the faction, and the main stocks with their price.</li>
+ *   <li><b>jobs</b>: the active jobs and the job posts (see {@link VillageLife}).</li>
  *   <li><b>territory</b>: number of claimed territory chunks.</li>
  * </ul>
  * The services, the economy, the jobs and the territory need the settlement of the village.

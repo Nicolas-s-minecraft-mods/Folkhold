@@ -22,7 +22,7 @@ import net.minecraft.world.phys.AABB;
  *
  * <p>The area of a village has two parts:
  * <ul>
- *   <li>the village radius ({@link WorldConfig#VILLAGE_RADIUS}) around the heart;</li>
+ *   <li>the village radius ({@link WorldConfig#VILLAGE_RADIUS}) around the heart.</li>
  *   <li>the area of the village structure (see {@link VillageReference#area()}): the box of its wall on the horizontal
  *       plane, {@value #AREA_HEIGHT} blocks up and down from the heart. A heart with no village structure has no
  *       structure area.</li>

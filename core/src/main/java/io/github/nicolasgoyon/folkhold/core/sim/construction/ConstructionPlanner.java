@@ -573,7 +573,7 @@ public final class ConstructionPlanner {
      * later step fills. Of the possible columns at one height, the plan selects:
      * <ol>
      *   <li>a column on a block of the level or on scaffolding before a column on a block of the plan. Thus the columns
-     *       stand around a new house, and not on its floor, when possible;</li>
+     *       stand around a new house, and not on its floor, when possible.</li>
      *   <li>then the column with the fewest new blocks. Thus a column on top of an existing column makes it
      *       higher.</li>
      * </ol>

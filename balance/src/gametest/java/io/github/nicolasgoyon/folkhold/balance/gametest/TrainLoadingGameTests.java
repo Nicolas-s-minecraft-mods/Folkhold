@@ -47,8 +47,8 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * of {@code east}. Region tickets give the state of each chunk:
  * <ul>
  *   <li>a ticket of distance 2 on {@code west}: {@code west} ticks its entities, and {@code east} is at the edge of
- *       the simulation distance (the level gives its entities, but does not tick them);</li>
- *   <li>a ticket of distance 3 on a chunk: the chunk and the chunks next to it tick their entities;</li>
+ *       the simulation distance (the level gives its entities, but does not tick them).</li>
+ *   <li>a ticket of distance 3 on a chunk: the chunk and the chunks next to it tick their entities.</li>
  *   <li>a ticket of distance 0 on a chunk: the chunk is loaded and does not tick. The removal of the ticket unloads
  *       it.</li>
  * </ul>

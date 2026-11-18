@@ -325,11 +325,11 @@ public final class GroupMaterializer {
      * Ends the link between an arrived group and its entities. The entities stay in the village for some time:
      *
      * <ul>
-     *   <li>the mule chests are empty, because the cargo goes into the stock of the destination;</li>
-     *   <li>the merchant of a caravan walks to the stop of the caravan and stays there (see {@link CaravanStays}); the
-     *       guards stay near the stop, and the mules follow the merchant;</li>
+     *   <li>the mule chests are empty, because the cargo goes into the stock of the destination.</li>
+     *   <li>the merchant of a caravan walks to the stop of the caravan and stays there (see {@link CaravanStays}). The
+     *       guards stay near the stop, and the mules follow the merchant.</li>
      *   <li>the entities disappear after {@link #LINGER_MIN_TICKS} when no player is near, or after
-     *       {@link #LINGER_MAX_TICKS};</li>
+     *       {@link #LINGER_MAX_TICKS}.</li>
      *   <li>an entity that unloads does not come back, because its group does not exist.</li>
      * </ul>
      *

@@ -16,7 +16,7 @@ import net.neoforged.neoforge.event.level.BlockEvent;
  * Rules for neutral players in a faction village. These actions are offenses (see
  * {@link VillageHeartBlockEntity#recordOffense(ServerPlayer)}):
  * <ul>
- *   <li>break a block in the village radius;</li>
+ *   <li>break a block in the village radius.</li>
  *   <li>open a container (chest, barrel, furnace and so on) in the village radius.</li>
  * </ul>
  *

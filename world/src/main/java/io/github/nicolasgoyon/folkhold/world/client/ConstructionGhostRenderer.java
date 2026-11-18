@@ -20,10 +20,10 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * Draws the ghost of {@link ConstructionGhost} in the level, after the translucent blocks:
  * <ul>
  *   <li>the blocks of the ghost that it shows, from the vertex buffers of a {@link GhostMesh}: translucent, a little
- *       blue, with full light;</li>
- *   <li>an outline for a block with no block model, for example a chest or a bed;</li>
+ *       blue, with full light.</li>
+ *   <li>an outline for a block with no block model, for example a chest or a bed.</li>
  *   <li>the box of the structure: blue while the ghost follows the view, gold when it is locked, green during the
- *       construction;</li>
+ *       construction.</li>
  *   <li>a red outline for each block of the level that the construction removes.</li>
  * </ul>
  */

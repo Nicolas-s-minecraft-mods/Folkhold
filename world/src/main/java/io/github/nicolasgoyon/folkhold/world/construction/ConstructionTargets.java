@@ -31,7 +31,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 /**
  * Makes the targets of the construction plans, and the view of the level for a plan:
  * <ul>
- *   <li>from a box of the level: the blocks of the box as they are now;</li>
+ *   <li>from a box of the level: the blocks of the box as they are now.</li>
  *   <li>from a structure template at a position: the blocks of the template, turned and mirrored as the settings tell.
  *       A jigsaw block becomes its final state, as in a village. A structure void block is not part of the target.</li>
  * </ul>

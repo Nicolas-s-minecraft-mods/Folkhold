@@ -102,7 +102,7 @@ public final class AnvilRules {
      *
      * @param result        the output item
      * @param cost          the cost in levels
-     * @param materialCount the number of right items that the operation uses; 0 uses the full right stack
+     * @param materialCount the number of right items that the operation uses. 0 uses the full right stack
      */
     private record Operation(ItemStack result, int cost, int materialCount) {
     }

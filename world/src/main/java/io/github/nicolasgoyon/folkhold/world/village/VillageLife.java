@@ -27,7 +27,7 @@ import net.minecraft.server.level.ServerLevel;
  *   <li><b>market</b> (first rows of the economy section): the state of the market (see {@link VillageMarket.State}),
  *       or "not checked yet" before the first scan of the heart after a load, the market hours with the open or
  *       closed state at this time, and the days to the next market day with the extra offers of each worker on
- *       this day (no count when the config gives no extra offers);</li>
+ *       this day (no count when the config gives no extra offers).</li>
  *   <li><b>jobs</b> (a section): the number of active jobs, one row for each job post in the order of the posts (the
  *       job, the state of the post, the workers and the beds of its home), the number of homes with no post, the
  *       legacy job slots of a legacy village and their jobs, and a row when the last check of the growth found no

@@ -351,7 +351,7 @@ public final class MobileGroupData extends SavedData {
 
     /**
      * Reads one group. A group with an invalid route or an unknown kind gives null. A group with an unknown state
-     * travels; a member with an unknown role is not in the group.
+     * travels. A member with an unknown role is not in the group.
      */
     private static MobileGroup loadGroup(CompoundTag tag) {
         Optional<Route> route = loadRoute(tag.getIntArray("Route"), tag.getByteArray("RouteSurfaces"));

@@ -18,9 +18,9 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 /**
  * Player actions that change the reputation:
  * <ul>
- *   <li>kill a faction unit: {@code reputation.killUnit} with its faction and village;</li>
- *   <li>hit a faction unit (not a kill): {@code reputation.hitUnit};</li>
- *   <li>kill a hostile monster near a village: {@code reputation.killMonsterNearVillage} with this village;</li>
+ *   <li>kill a faction unit: {@code reputation.killUnit} with its faction and village.</li>
+ *   <li>hit a faction unit (not a kill): {@code reputation.hitUnit}.</li>
+ *   <li>kill a hostile monster near a village: {@code reputation.killMonsterNearVillage} with this village.</li>
  *   <li>kill a village cat: {@code reputation.killCat}, hit a village cat: {@code reputation.hitCat}.</li>
  * </ul>
  */

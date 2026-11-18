@@ -328,8 +328,8 @@ public final class Settlements {
     /**
      * Makes a settlement in ruins active again:
      * <ul>
-     *   <li>the settlement goes to the state {@link SettlementState#ACTIVE};</li>
-     *   <li>if its heart is not at its position, a new heart comes there, linked to the same settlement;</li>
+     *   <li>the settlement goes to the state {@link SettlementState#ACTIVE}.</li>
+     *   <li>if its heart is not at its position, a new heart comes there, linked to the same settlement.</li>
      *   <li>the items of the bank chests go back into the stock and the treasury
      *       ({@link BankChests#recoverFromRuins}).</li>
      * </ul>

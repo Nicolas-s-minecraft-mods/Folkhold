@@ -78,11 +78,11 @@ public final class ConstructionGameTests {
     /**
      * A target with the difficult blocks:
      * <ul>
-     *   <li>sand and gravel on a block;</li>
-     *   <li>a wall torch, and a lantern under a beam;</li>
-     *   <li>a sign with text on a post;</li>
-     *   <li>a door and a bed;</li>
-     *   <li>a fence line to a block, and a trapdoor on this block;</li>
+     *   <li>sand and gravel on a block.</li>
+     *   <li>a wall torch, and a lantern under a beam.</li>
+     *   <li>a sign with text on a post.</li>
+     *   <li>a door and a bed.</li>
+     *   <li>a fence line to a block, and a trapdoor on this block.</li>
      *   <li>a waterlogged slab.</li>
      * </ul>
      * The test puts the blocks, captures them as the target, and removes them. The run of the plan gives the target

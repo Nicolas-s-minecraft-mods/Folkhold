@@ -66,7 +66,7 @@ public final class BlockedEnchantments {
      * @param filter   the blocked enchantments
      * @param pool     the tag of the possible new enchantments
      * @param weighted true to pick the new enchantment with the weights of the enchantments, as the loot functions
-     *                 do; false to pick with the same chance for each enchantment, as a librarian does
+     *                 do. False to pick with the same chance for each enchantment, as a librarian does
      * @param registry the registries of the level
      * @param random   the random source
      * @return true if the item changed

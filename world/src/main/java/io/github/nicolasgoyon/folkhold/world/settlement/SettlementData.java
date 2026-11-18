@@ -59,7 +59,7 @@ public final class SettlementData extends SavedData {
     private List<Claimant> claimants = List.of();
     private final Map<String, Long> treasuries = new HashMap<>();
 
-    /** An empty data. Package-private for the unit tests; the game uses {@link #get}. */
+    /** An empty data. Package-private for the unit tests. The game uses {@link #get}. */
     SettlementData() {
     }
 

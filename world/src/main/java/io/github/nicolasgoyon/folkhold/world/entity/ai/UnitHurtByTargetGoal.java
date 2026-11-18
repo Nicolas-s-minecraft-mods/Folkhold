@@ -10,7 +10,7 @@ import net.minecraft.world.phys.AABB;
 /**
  * Targets the attacker of the unit, except a friendly player. Then:
  * <ul>
- *   <li>the other units in the alert radius also target the attacker;</li>
+ *   <li>the other units in the alert radius also target the attacker.</li>
  *   <li>the unit reports the attack to its village heart, which alerts all units of the village.</li>
  * </ul>
  */

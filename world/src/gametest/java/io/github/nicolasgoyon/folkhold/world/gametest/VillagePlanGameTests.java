@@ -116,17 +116,17 @@ public final class VillagePlanGameTests {
      * A village of each start level of a style is valid:
      *
      * <ul>
-     *   <li>the plan has all its plots and homes, and each piece and plot of the plan has an element of its pool;</li>
+     *   <li>the plan has all its plots and homes, and each piece and plot of the plan has an element of its pool.</li>
      *   <li>each plot of the plan has a building or is free, the free plots are the spare plots and the plot of the
-     *       market under the level of the market, and each free plot keeps its space;</li>
-     *   <li>the village has the buildings of its level and the job posts of its level (see {@link #checkLevel});</li>
-     *   <li>the same seed gives the same village (the top level of each tier);</li>
+     *       market under the level of the market, and each free plot keeps its space.</li>
+     *   <li>the village has the buildings of its level and the job posts of its level (see {@link #checkLevel}).</li>
+     *   <li>the same seed gives the same village (the top level of each tier).</li>
      *   <li>each home of the pool {@code houses} of the variant is in a village of the style: the pieces with no
      *       building sign of a level kind, and with no job sign or a job sign of an allowed job (see
-     *       {@link #checkVariety});</li>
+     *       {@link #checkVariety}).</li>
      *   <li>the pieces of the plan stay in the maximum distance from the middle, and all the pieces stay in the range of
-     *       chunks of the game;</li>
-     *   <li>the wall has 4 gates and 4 arms;</li>
+     *       chunks of the game.</li>
+     *   <li>the wall has 4 gates and 4 arms.</li>
      *   <li>no 2 template pieces touch, and no template piece and no palisade is in the space of a free plot.</li>
      * </ul>
      *
@@ -259,12 +259,12 @@ public final class VillagePlanGameTests {
      *
      * <ul>
      *   <li>the number of building signs of each kind of the requirements is the number of requirements of the level
-     *       with this kind: the growth has no building step;</li>
+     *       with this kind: the growth has no building step.</li>
      *   <li>the number of job posts (job signs) is the job slots of the level, or the number of jobs that the level and
-     *       the biome allow when it is smaller;</li>
+     *       the biome allow when it is smaller.</li>
      *   <li>each post has a job that the level and the biome allow, a post has a food job and a post trades: the growth
-     *       has no first post step;</li>
-     *   <li>the job signs are the posts of the layout;</li>
+     *       has no first post step.</li>
+     *   <li>the job signs are the posts of the layout.</li>
      *   <li>the home beds and the places of the hall hold the maximum population of the level.</li>
      * </ul>
      */

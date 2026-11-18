@@ -32,7 +32,7 @@ The reputation of the player decides how each village receives them.
 
 ## Features
 
-- **A world that lives on its own.** An abstract simulation runs the factions, the stocks and the caravans, also in the chunks that are not loaded. The world around the player changes with no visit.
+- **A world that lives on its own.** An abstract simulation runs the factions, the stocks and the caravans. It also runs in the chunks that the game does not load. The world around the player changes with no visit.
 - **Factions and territories.** Each village claims the territory around it. The claim grows with the level of the village, from a hamlet to a city.
 - **Fortified villages.** A walled compound with towers and a village heart. Guards patrol, archers hold the towers and a captain leads the garrison. Healers treat the wounded units, riders patrol outside the walls, and faction golems guard the gates of the large villages. The garrison grows with the level of the village. Kill the captain and destroy the heart: the village becomes ruins.
 - **Simulated economy.** Each village produces and consumes goods with the jobs of its inhabitants. Its prices follow its stock and its needs, and its merchants sell its stock.
@@ -49,7 +49,7 @@ The modpack is the simple way to play. It contains the Folkhold mods and a selec
 3. Start the game and create a new world.
 4. Optional: pre-generate the area around the spawn with Chunky. The game then generates fewer chunks during the play, for example with an elytra or a boat on ice. Use the commands `/chunky spawn`, `/chunky radius 2000` and `/chunky start` (cheats must be on). A radius of 2000 blocks is about 62,500 chunks: the generation takes time, and the world uses more disk space. Chunky continues after a restart of the game.
 
-To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance with NeoForge 21.1.259 or later, [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later and [Cartofold](https://github.com/nicolas-goyon/Cartofold/releases) 0.33.12 or later.
+To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance. The instance needs NeoForge 21.1.259 or later, [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later and [Cartofold](https://github.com/nicolas-goyon/Cartofold/releases) 0.33.12 or later.
 
 ## Modules
 
@@ -69,7 +69,7 @@ The packwiz modpack (`modpack/`) adds existing mods for performance, nature and 
 
 | Document | Content |
 | --- | --- |
-| [Design document](docs/design.md) | Vision, rules of the simulation, what is implemented and what is planned |
+| [Design document](docs/design.md) | Vision, rules of the simulation, the features that the mods have and the features of the plan |
 | [Getting started](docs/getting-started.md) | Prerequisites, first build, daily workflow, CI and releases |
 | [UI framework](docs/ui-framework.md) | The shared widgets and the look of the screens |
 | [Contributing](CONTRIBUTING.md) | Branches, commit titles and versions, pull requests, translations |

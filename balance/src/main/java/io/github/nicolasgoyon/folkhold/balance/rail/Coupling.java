@@ -13,10 +13,10 @@ package io.github.nicolasgoyon.folkhold.balance.rail;
  * <ul>
  *   <li>below the buffer gap, or when the gap of the next tick goes below the buffer gap: at most the negative
  *       change that makes the gap of the next tick equal to the buffer gap. The two minecarts do not go into each
- *       other, also when the leader comes nearer fast;</li>
- *   <li>from the buffer gap to the rest gap: no change (the chain is slack);</li>
+ *       other, also when the leader comes nearer fast.</li>
+ *   <li>from the buffer gap to the rest gap: no change (the chain is slack).</li>
  *   <li>from the rest gap to the maximum gap: a spring with damping,
- *       {@code stiffness × stretch + damping × separation speed}. The change is not negative;</li>
+ *       {@code stiffness × stretch + damping × separation speed}. The change is not negative.</li>
  *   <li>above the maximum gap: at least the change that brings the gap back to the maximum gap in the next
  *       tick.</li>
  * </ul>

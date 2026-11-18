@@ -10,9 +10,9 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Plot;
  *
  * <ul>
  *   <li>{@code P} the plaza, {@code =} a segment, {@code +} a crossroad, {@code s} a side piece, {@code e} a street
- *       end;</li>
+ *       end.</li>
  *   <li>{@code B} the bank, {@code J} a plot of a first job, {@code W} a plot with a wide home, {@code h} a home
- *       plot, {@code o} a spare plot, {@code x} a spare plot with bad terrain;</li>
+ *       plot, {@code o} a spare plot, {@code x} a spare plot with bad terrain.</li>
  *   <li>{@code .} inside the maximum radius, a space outside it.</li>
  * </ul>
  */

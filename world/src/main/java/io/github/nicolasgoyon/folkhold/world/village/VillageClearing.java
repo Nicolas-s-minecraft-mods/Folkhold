@@ -28,10 +28,10 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  *
  * <ul>
  *   <li>the blocks of the structure pieces (see {@link VillageRepairs#expectedBlocks}). In a piece, the clearing removes
- *       a block of a tree only where the piece has air;</li>
- *   <li>the columns of the palisade, also their logs above the reference of the repairs;</li>
- *   <li>the blocks under the template pieces: their foundations and their stilts over water;</li>
- *   <li>the logs in the boxes of the piers: their posts;</li>
+ *       a block of a tree only where the piece has air.</li>
+ *   <li>the columns of the palisade, also their logs above the reference of the repairs.</li>
+ *   <li>the blocks under the template pieces: their foundations and their stilts over water.</li>
+ *   <li>the logs in the boxes of the piers: their posts.</li>
  *   <li>the blocks of the players and of the construction sites (see {@link VillageRepairData#keeps}).</li>
  * </ul>
  *
