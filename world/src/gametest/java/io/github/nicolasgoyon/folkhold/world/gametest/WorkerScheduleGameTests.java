@@ -116,12 +116,12 @@ public final class WorkerScheduleGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.SCHEDULE_WORKER_SPREAD_TICKS, 0);
         ServerLevel level = helper.getLevel();
         long[] dayTime = {MORNING};
-        helper.onEachTick(() -> level.setDayTime(dayTime[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, dayTime[0]));
         List<BoundingBox> boxes = new ArrayList<>();
         VillageHeartBlockEntity heart = village(helper, boxes, List.of("market", "job_farmer"),
                 List.of(MARKET_ORIGIN, WORKSHOP_ORIGIN), List.of(), false);
         // The floor of the test sets the noon: set the morning after it.
-        level.setDayTime(MORNING);
+        TestSupport.setDayTimeForTest(helper, MORNING);
         BoundingBox workshop = boxes.get(1);
         List<Villager> villagers = new ArrayList<>();
         TestSupport.atTestEnd(helper, () -> {
@@ -210,7 +210,7 @@ public final class WorkerScheduleGameTests {
                 }))
                 .thenExecute(() -> {
                     dayTime[0] = NOON;
-                    level.setDayTime(NOON);
+                    TestSupport.setDayTimeForTest(helper, NOON);
                     int before = heart.workers().calculations();
                     heart.updateWorkers();
                     helper.assertTrue(heart.workers().calculations() == before + 1,
@@ -247,12 +247,12 @@ public final class WorkerScheduleGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_GROWTH, false);
         TestSupport.setConfigForTest(helper, WorldConfig.SCHEDULE_WORKER_SPREAD_TICKS, 0);
         ServerLevel level = helper.getLevel();
-        helper.onEachTick(() -> level.setDayTime(MORNING));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, MORNING));
         List<BoundingBox> boxes = new ArrayList<>();
         int slots = LevelTables.get().traits(3).jobSlots();
         VillageHeartBlockEntity heart = village(helper, boxes, List.of("job_farmer", "house_cottage"),
                 List.of(LEGACY_WORKSHOP_ORIGIN, COTTAGE_ORIGIN), Collections.nCopies(slots, GARDENER), true);
-        level.setDayTime(MORNING);
+        TestSupport.setDayTimeForTest(helper, MORNING);
         BlockPos composter = helper.absolutePos(COMPOSTER);
         GlobalPos composterSite = GlobalPos.of(level.dimension(), composter);
         Settlement settlement = Settlements.of(level.getServer(), heart).orElseThrow();

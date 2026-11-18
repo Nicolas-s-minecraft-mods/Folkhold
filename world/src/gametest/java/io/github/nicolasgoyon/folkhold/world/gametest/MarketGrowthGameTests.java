@@ -103,7 +103,7 @@ public final class MarketGrowthGameTests {
         settlement.economy().setPopulation(20);
         // The construction is longer than a day: the test stops the cycle of the day, else the builders stop at night.
         TestSupport.setGameRuleForTest(helper, GameRules.RULE_DAYLIGHT, false);
-        level.setDayTime(TestSupport.NOON);
+        TestSupport.setDayTimeForTest(helper, TestSupport.NOON);
 
         Optional<BuilderSite> site = VillageGrowth.check(level, heart);
         helper.assertTrue(site.isPresent(), "A village of the level 5 must start its market on a free plot");
@@ -168,7 +168,7 @@ public final class MarketGrowthGameTests {
         BuilderSites.stop(level);
         TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_BUILDER_TICKS, 1);
         TestSupport.setGameRuleForTest(helper, GameRules.RULE_DAYLIGHT, false);
-        level.setDayTime(TestSupport.NOON);
+        TestSupport.setDayTimeForTest(helper, TestSupport.NOON);
         VillageHeartBlockEntity heart = village(helper, HUGE, twoPlots(helper));
         BlockPos heartPos = heart.getBlockPos();
         VillageHearts.register(level, heartPos);

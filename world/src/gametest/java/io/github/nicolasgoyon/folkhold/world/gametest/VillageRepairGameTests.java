@@ -440,7 +440,7 @@ public final class VillageRepairGameTests {
                 Rotation.NONE)));
         heart.setRepairReference(reference);
         long[] time = {TestSupport.NOON};
-        helper.onEachTick(() -> level.setDayTime(time[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, time[0]));
 
         Map<BlockPos, BlockState> expected = new HashMap<>();
         for (BlockPos relative : List.of(TORCH, WALL.get(0), WALL.get(1), WALL.get(2), CONSTRUCTION_TORCH)) {
@@ -537,7 +537,7 @@ public final class VillageRepairGameTests {
                 Rotation.NONE)));
         heart.setRepairReference(reference);
         long[] time = {TestSupport.NOON};
-        helper.onEachTick(() -> level.setDayTime(time[0]));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, time[0]));
         for (BlockPos relative : WALL) {
             level.setBlock(origin.offset(relative), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         }

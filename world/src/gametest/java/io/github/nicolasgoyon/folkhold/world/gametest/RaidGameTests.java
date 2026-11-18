@@ -216,7 +216,7 @@ public final class RaidGameTests {
         Witch raider = helper.spawn(EntityType.WITCH, heartRelative.offset(10, 0, -PALISADE - 10));
         Raid raid = new Raid(RAID_ID + 1, level, heartPos);
         // At midnight, the heart keeps the gate closed: only the raider opens it.
-        helper.onEachTick(() -> level.setDayTime(MIDNIGHT));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, MIDNIGHT));
 
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(VillageHearts.findNearest(level, heartPos, 1.0).isPresent(),
@@ -278,7 +278,7 @@ public final class RaidGameTests {
         boolean[] forced = new boolean[1];
         int outside = PALISADE + 5;
         helper.onEachTick(() -> {
-            level.setDayTime(MIDNIGHT);
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
             if (!forced[0] && !raiders.isEmpty() && isOpen(level, gates)) {
                 forced[0] = raiders.stream()
                         .anyMatch(raider -> horizontalDistance(raider.blockPosition(), front) <= 3.0);
@@ -338,7 +338,7 @@ public final class RaidGameTests {
         Raider[] raider = new Raider[1];
         boolean[] forced = new boolean[1];
         helper.onEachTick(() -> {
-            level.setDayTime(MIDNIGHT);
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
             if (!forced[0] && raider[0] != null && gates.stream()
                     .anyMatch(gate -> level.getBlockState(gate).getValue(FenceGateBlock.OPEN))) {
                 forced[0] = horizontalDistance(raider[0].blockPosition(), front) <= 3.0 && isOpen(level, gates);
@@ -405,7 +405,7 @@ public final class RaidGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
         BlockPos front = helper.absolutePos(heartRelative.north(PALISADE + 1));
         helper.onEachTick(() -> {
-            level.setDayTime(MIDNIGHT);
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
             if (raider[0] != null && closeGateOnRaider(level, gates, heartPos, front, raider[0])) {
                 closes[0]++;
             }
@@ -466,7 +466,7 @@ public final class RaidGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_AFTER_SECONDS, 4);
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
         helper.onEachTick(() -> {
-            level.setDayTime(MIDNIGHT);
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
             helper.assertTrue(gates.stream().allMatch(gate -> level.getBlockState(gate).getBlock()
                     instanceof FenceGateBlock), "With mobGriefing false, the raider must not break the gate");
             if (raider[0] != null && closeGateOnRaider(level, gates, heartPos, front, raider[0])) {
@@ -522,7 +522,7 @@ public final class RaidGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
         BlockPos front = helper.absolutePos(heartRelative.north(PALISADE + 1));
         helper.onEachTick(() -> {
-            level.setDayTime(MIDNIGHT);
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
             closeGateOnRaiders(level, gates, heartPos, front, ravagers);
             long broken = gates.stream().filter(gate -> level.getBlockState(gate).isAir()).count();
             if (broken == 1 && !narrow[0]) {
@@ -587,7 +587,7 @@ public final class RaidGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_AFTER_SECONDS, 4);
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
         helper.onEachTick(() -> {
-            level.setDayTime(MIDNIGHT);
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
             if (raider[0] == null) {
                 return;
             }
@@ -639,7 +639,7 @@ public final class RaidGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_FORCE_SECONDS, 1);
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_AFTER_SECONDS, 4);
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
-        helper.onEachTick(() -> level.setDayTime(MIDNIGHT));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, MIDNIGHT));
 
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(VillageHearts.findNearest(level, heartPos, 1.0).isPresent(),
@@ -696,7 +696,7 @@ public final class RaidGameTests {
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_AFTER_SECONDS, 4);
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
         helper.onEachTick(() -> {
-            level.setDayTime(MIDNIGHT);
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
             helper.assertTrue(walls.stream().noneMatch(wall -> level.getBlockState(wall).isAir()),
                     "With mobGriefing false, the ravager must not break the palisade");
         });
@@ -1005,7 +1005,7 @@ public final class RaidGameTests {
         BlockPos front = helper.absolutePos(heartRelative.north(PALISADE + 1));
         Witch raider = helper.spawn(EntityType.WITCH, heartRelative.offset(10, 0, -PALISADE - 10));
         Raid raid = new Raid(RAID_ID + 5, level, heartPos);
-        helper.onEachTick(() -> level.setDayTime(MIDNIGHT));
+        helper.onEachTick(() -> TestSupport.setDayTimeForTest(helper, MIDNIGHT));
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_FORCE_SECONDS, 1);
         long[] arrival = {0L};
 

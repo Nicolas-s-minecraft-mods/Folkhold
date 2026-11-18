@@ -29,6 +29,10 @@ final class EventTestSupport {
      * GameTests run on the server thread only.
      */
     private static final Map<GameTestInfo, Set<Object>> CHANGED_SETTINGS = new WeakHashMap<>();
+    /** The key of the weather in the changed settings of a test. */
+    private static final Object WEATHER = new Object();
+    /** The clear weather after a test that changes the weather stays this number of ticks. */
+    private static final int CLEAR_TICKS = 12_000;
 
     private EventTestSupport() {
     }
@@ -116,6 +120,26 @@ final class EventTestSupport {
         boolean old = rule.get();
         restoreAtTestEnd(helper, key, () -> rule.set(old, server));
         rule.set(newValue, server);
+    }
+
+    /**
+     * Sets the weather of the level for one test, with the parameters of {@code ServerLevel.setWeatherParameters}. When
+     * the test ends, the weather is clear (see {@link #clearWeatherAtTestEnd}). The weather applies to the full level:
+     * a test that uses this method goes in its own batch.
+     */
+    static void setWeatherForTest(GameTestHelper helper, int clearTime, int weatherTime, boolean raining,
+            boolean thundering) {
+        clearWeatherAtTestEnd(helper);
+        helper.getLevel().setWeatherParameters(clearTime, weatherTime, raining, thundering);
+    }
+
+    /**
+     * Sets clear weather when the test ends (pass, failure or timeout): the next tests see the weather of a new
+     * GameTest world also after a failure. A test of an event that changes the weather uses this method.
+     */
+    static void clearWeatherAtTestEnd(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        restoreAtTestEnd(helper, WEATHER, () -> level.setWeatherParameters(CLEAR_TICKS, 0, false, false));
     }
 
     /**
