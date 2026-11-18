@@ -66,10 +66,12 @@ public final class StormGameTests {
 
     /**
      * Stops the storms of the earlier tests, sets the default values of the config that the tests change, and fills the
-     * bottom layer of the area with stone. A test that fails or times out does not change the next tests.
+     * bottom layer of the area with stone. The weather is clear when the test ends. A test that fails or times out does
+     * not change the next tests.
      */
     private static void prepare(GameTestHelper helper, int sizeX, int sizeZ) {
         Storms.stop(helper.getLevel());
+        EventTestSupport.clearWeatherAtTestEnd(helper);
         EventTestSupport.setConfigForTest(helper, EventsConfig.STORM_WIND_PUSH,
                 EventsConfig.STORM_WIND_PUSH.getDefault());
         EventTestSupport.setConfigForTest(helper, EventsConfig.MAX_ACTIVE_EVENTS,

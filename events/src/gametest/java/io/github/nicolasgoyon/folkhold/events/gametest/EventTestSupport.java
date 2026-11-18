@@ -18,7 +18,6 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.storage.ServerLevelData;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /** Tools that the GameTests of the events share. */
@@ -32,6 +31,8 @@ final class EventTestSupport {
     private static final Map<GameTestInfo, Set<Object>> CHANGED_SETTINGS = new WeakHashMap<>();
     /** The key of the weather in the changed settings of a test. */
     private static final Object WEATHER = new Object();
+    /** The clear weather after a test that changes the weather stays this number of ticks. */
+    private static final int CLEAR_TICKS = 12_000;
 
     private EventTestSupport() {
     }
@@ -123,27 +124,22 @@ final class EventTestSupport {
 
     /**
      * Sets the weather of the level for one test, with the parameters of {@code ServerLevel.setWeatherParameters}. When
-     * the test ends (pass, failure or timeout), a listener sets the weather that the level had before the first change
-     * of the test, as {@link #setConfigForTest}. The weather applies to the full level: a test that uses this method
-     * goes in its own batch.
+     * the test ends, the weather is clear (see {@link #clearWeatherAtTestEnd}). The weather applies to the full level:
+     * a test that uses this method goes in its own batch.
      */
     static void setWeatherForTest(GameTestHelper helper, int clearTime, int weatherTime, boolean raining,
             boolean thundering) {
+        clearWeatherAtTestEnd(helper);
+        helper.getLevel().setWeatherParameters(clearTime, weatherTime, raining, thundering);
+    }
+
+    /**
+     * Sets clear weather when the test ends (pass, failure or timeout): the next tests see the weather of a new
+     * GameTest world also after a failure. A test of an event that changes the weather uses this method.
+     */
+    static void clearWeatherAtTestEnd(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        ServerLevelData data = level.getServer().getWorldData().overworldData();
-        int oldClearTime = data.getClearWeatherTime();
-        int oldRainTime = data.getRainTime();
-        int oldThunderTime = data.getThunderTime();
-        boolean oldRaining = data.isRaining();
-        boolean oldThundering = data.isThundering();
-        restoreAtTestEnd(helper, WEATHER, () -> {
-            data.setClearWeatherTime(oldClearTime);
-            data.setRainTime(oldRainTime);
-            data.setThunderTime(oldThunderTime);
-            data.setRaining(oldRaining);
-            data.setThundering(oldThundering);
-        });
-        level.setWeatherParameters(clearTime, weatherTime, raining, thundering);
+        restoreAtTestEnd(helper, WEATHER, () -> level.setWeatherParameters(CLEAR_TICKS, 0, false, false));
     }
 
     /**

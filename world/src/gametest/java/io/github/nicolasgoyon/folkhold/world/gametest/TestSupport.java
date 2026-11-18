@@ -221,7 +221,8 @@ final class TestSupport {
         for (MobileGroup group : MobileGroupData.get(level.getServer()).groups().all()) {
             GroupMaterializer.keep(group.id(), false);
         }
-        setDayTimeForTest(helper, NOON);
+        // The day time at the start of each test. This is not a change of the test: it has no restore.
+        level.setDayTime(NOON);
     }
 
     /**
@@ -511,13 +512,13 @@ final class TestSupport {
 
     /**
      * Sets the day time of the level for one test. When the test ends (pass, failure or timeout), a listener sets the
-     * day time that the level had before the first change of the test, as {@link #setConfigForTest}. The day time
-     * applies to the full level: a test that uses this method goes in its own batch.
+     * day time to noon, the day time at the start of each test (see {@link #sweep}): the next tests see the day also
+     * after a failure. The day time applies to the full level: a test that needs a day time for more than one tick
+     * goes in its own batch, or sets the day time on each tick.
      */
     static void setDayTimeForTest(GameTestHelper helper, long dayTime) {
         ServerLevel level = helper.getLevel();
-        long old = level.getDayTime();
-        restoreAtTestEnd(helper, DAY_TIME, () -> level.setDayTime(old));
+        restoreAtTestEnd(helper, DAY_TIME, () -> level.setDayTime(NOON));
         level.setDayTime(dayTime);
     }
 
