@@ -9,13 +9,10 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -51,8 +48,9 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *   <li>The near villages keep their space (see {@link RingDistricts#keptRings}): the faction villages at
  *       {@link #NEIGHBOR_RANGE} chunks or less, and the possible starts of the vanilla villages in a biome of the
  *       vanilla villages, with {@link #VANILLA_REACH} blocks around their start chunk.</li>
- *   <li>The plan of the rings of a village is in a bounded cache, safe for the threads of the generation. The districts
- *       of a village calculate the layout and the rings one time.</li>
+ *   <li>The plan of the rings of a village and its layout are in bounded caches, safe for the threads of the generation
+ *       (see {@link PlanCache}). The village structure and the districts of a village calculate the layout and the
+ *       rings one time.</li>
  *   <li>Only a world that this version of the mod creates gets the rings: the overworld keeps a flag from its
  *       creation. In a world of an earlier version, the old villages keep their first wall only.</li>
  * </ul>
@@ -81,15 +79,10 @@ public final class VillageRings {
 
     /** True when the overworld of the server has the flag of the rings. Written on the server thread. */
     private static volatile boolean enabled;
-    /** The districts of each village, by key. Synchronized on itself. */
-    private static final Map<Key, CompletableFuture<Map<District, List<StructurePiece>>>> PLANS =
-            new LinkedHashMap<>(16, 0.75F, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<Key, CompletableFuture<Map<District,
-                        List<StructurePiece>>>> eldest) {
-                    return size() > CACHE_SIZE;
-                }
-            };
+    /** The districts of each village with rings, by key. */
+    private static final PlanCache<Key, Map<District, List<StructurePiece>>> PLANS = new PlanCache<>(CACHE_SIZE);
+    /** The layout of each village with rings, by key: the village structure and the ring districts share it. */
+    private static final PlanCache<Key, FortifiedVillageStructure.Layout> LAYOUTS = new PlanCache<>(CACHE_SIZE);
 
     /** The key of a village in the cache: the generator, its random state, the seed and the start chunk. */
     private record Key(ChunkGenerator generator, RandomState random, long seed, long chunk) {
@@ -118,11 +111,39 @@ public final class VillageRings {
         clear();
     }
 
-    /** Clears the cache of the plans: the next district of each village calculates its plan again. */
+    /**
+     * Clears the caches of the plans and of the layouts: the next district of each village calculates its plan again,
+     * and the next request of a layout calculates it again.
+     */
     public static void clear() {
-        synchronized (PLANS) {
-            PLANS.clear();
+        PLANS.clear();
+        LAYOUTS.clear();
+    }
+
+    /** The number of layouts of villages with rings that the generation calculated, for the tests. */
+    public static int layoutCalculations() {
+        return LAYOUTS.calculations();
+    }
+
+    /**
+     * The layout of a village at the generation. A village with rings in a world with the rings gets its layout from
+     * a cache: the village structure and the ring districts calculate it one time. The other villages have no
+     * district, and their layout does not go into the cache.
+     *
+     * @param village the village structure
+     * @param context the context of the generation at the start chunk
+     * @param site    the start of the village (see {@link FortifiedVillageStructure#generatedStart})
+     * @param level   the start level
+     * @return the layout
+     */
+    static FortifiedVillageStructure.Layout layout(FortifiedVillageStructure village,
+            Structure.GenerationContext context, FortifiedVillageStructure.Start site, int level) {
+        if (!enabled || VillageSizes.forLevel(level).rings() == 0) {
+            return village.layout(context, site, level);
         }
+        Key key = new Key(context.chunkGenerator(), context.randomState(), context.seed(),
+                context.chunkPos().toLong());
+        return LAYOUTS.get(key, () -> village.layout(context, site, level));
     }
 
     /**
@@ -141,7 +162,7 @@ public final class VillageRings {
             return Map.of();
         }
         Key key = new Key(anchor.chunkGenerator(), anchor.randomState(), anchor.seed(), start.toLong());
-        return cached(key, () -> plan(village, set, anchor, start, level));
+        return PLANS.get(key, () -> plan(village, set, anchor, start, level));
     }
 
     /**
@@ -195,33 +216,6 @@ public final class VillageRings {
         return rings == 0 ? 0 : rings * BAND + RING_MARGIN;
     }
 
-    /** The value of a key: one thread calculates it, and the other threads wait for it. */
-    private static Map<District, List<StructurePiece>> cached(Key key,
-            Supplier<Map<District, List<StructurePiece>>> calculation) {
-        CompletableFuture<Map<District, List<StructurePiece>>> future;
-        boolean owner = false;
-        synchronized (PLANS) {
-            future = PLANS.get(key);
-            if (future == null) {
-                future = new CompletableFuture<>();
-                PLANS.put(key, future);
-                owner = true;
-            }
-        }
-        if (owner) {
-            try {
-                future.complete(calculation.get());
-            } catch (RuntimeException exception) {
-                future.completeExceptionally(exception);
-                synchronized (PLANS) {
-                    PLANS.remove(key, future);
-                }
-                throw exception;
-            }
-        }
-        return future.join();
-    }
-
     /** Calculates the pieces of the rings of a village in each district. */
     private static Map<District, List<StructurePiece>> plan(FortifiedVillageStructure village,
             Holder<StructureSet> set, Structure.GenerationContext anchor, ChunkPos start, int level) {
@@ -233,7 +227,7 @@ public final class VillageRings {
         }
         FortifiedVillageStructure.Start site = found.get();
         List<Neighbor> neighbors = neighbors(village, set, anchor, start, level);
-        FortifiedVillageStructure.Layout layout = village.layout(context, site, level);
+        FortifiedVillageStructure.Layout layout = layout(village, context, site, level);
         List<VillageWall.Wall> rings = VillageWall.rings(context, site.terrain(), layout.firstWall(), size.rings(),
                 BAND, site.variant().wall(), site.maritime(), start);
         int kept = RingDistricts.keptRings(rings.stream().map(ring -> ring.layout().outline().grow(RING_MARGIN))

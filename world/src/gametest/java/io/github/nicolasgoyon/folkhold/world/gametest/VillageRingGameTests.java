@@ -176,7 +176,9 @@ public final class VillageRingGameTests {
 
     /**
      * The ring districts of a village with rings, generated in 2 orders, each time with an empty cache: each anchor
-     * gets the same pieces, and the placement of the districts accepts each anchor with pieces.
+     * gets the same pieces, and the placement of the districts accepts each anchor with pieces. After the first
+     * order, the village structure and the districts calculate no new layout, and the districts have the same pieces
+     * with the full cache.
      *
      * <p>The test looks for the village in the placement regions from the chunk (0, 0), not from its position: the
      * seed of the GameTest world is constant, so each run finds the same village.
@@ -214,6 +216,18 @@ public final class VillageRingGameTests {
             if (first.isEmpty()) {
                 continue;
             }
+            // The village structure and all the districts of a village calculate one layout.
+            int layouts = VillageRings.layoutCalculations();
+            StructureStart village = villages.structures().get(0).structure().value().generate(level.registryAccess(),
+                    level.getChunkSource().getGenerator(), level.getChunkSource().getGenerator().getBiomeSource(),
+                    level.getChunkSource().randomState(), level.getStructureManager(), level.getSeed(), start, 0,
+                    level, biome -> true);
+            helper.assertTrue(village.isValid(), "The village structure must start in " + start);
+            Map<ChunkPos, List<CompoundTag>> cached = districts(level, district, start, order);
+            helper.assertTrue(VillageRings.layoutCalculations() == layouts, "The village structure and the districts"
+                    + " must use the layout of the cache: " + (VillageRings.layoutCalculations() - layouts)
+                    + " new layouts");
+            helper.assertTrue(first.equals(cached), "The districts must have the same pieces with a full cache");
             Collections.reverse(order);
             VillageRings.clear();
             Map<ChunkPos, List<CompoundTag>> second = districts(level, district, start, order);

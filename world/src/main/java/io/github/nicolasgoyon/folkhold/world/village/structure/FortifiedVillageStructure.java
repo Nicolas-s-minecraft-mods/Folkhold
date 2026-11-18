@@ -198,7 +198,7 @@ public final class FortifiedVillageStructure extends Structure {
             return Optional.empty();
         }
         Start village = start.get();
-        return Optional.of(new GenerationStub(village.center(), builder -> layout(context, village,
+        return Optional.of(new GenerationStub(village.center(), builder -> VillageRings.layout(this, context, village,
                 Settlements.startLevel(context.seed(), context.chunkPos())).pieces().forEach(builder::addPiece)));
     }
 
