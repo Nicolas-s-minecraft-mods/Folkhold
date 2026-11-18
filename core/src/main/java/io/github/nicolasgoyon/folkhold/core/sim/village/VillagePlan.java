@@ -161,8 +161,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      *
      * <p>The first piece of each axis street is a segment ({@code parent} -1). It takes the place of the first street
      * piece of the current village structure, with the same dimensions: {@code street_bank} for the street to the
-     * north, {@code street_jobs} for the street to the south and {@code street} for the streets to the east and to the
-     * west (the Norse pieces in the Valeholm style). Its plots have the roles of these pieces (see {@link PlotRole}).
+     * north and {@code street} for the other axis streets (the Norse pieces in the Valeholm style). Its plots have the roles of these pieces (see {@link PlotRole}).
      *
      * @param kind   the kind of the piece
      * @param x      the block X of the start: the middle of the start edge

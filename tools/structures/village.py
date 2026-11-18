@@ -20,9 +20,9 @@ pieces and the buildings on their plots, see VillagePlan), then it adds the pali
 them. The jigsaw connectors give the positions of the plots and the pools of the pieces. Pieces:
 - plaza.nbt: the start piece. The village heart, 4 braziers, the alarm bell, the hall sign, the quest board and lamp
   posts. 4 jigsaw connectors for the streets: the street to the north has the plot of the bank.
-- street.nbt, street_bank.nbt, street_jobs.nbt, street_end.nbt: the parts of a street. The paths follow the terrain. A
-  segment has a plot on each side, and a connector for the end of the street. The end has a lamp post on each edge.
-  The plan places the first house-workshops on the plots of the first piece of the street to the south (street_jobs).
+- street.nbt, street_bank.nbt, street_end.nbt: the parts of a street. The paths follow the terrain. A segment has a
+  plot on each side, and a connector for the end of the street. The end has a lamp post on each edge. The plan places
+  the first house-workshops on the plots of the first piece of the street to the south.
 - street_next.nbt, street_cross.nbt, street_side.nbt: the pieces of the planned streets, in the pools
   village/streets_next and village/streets_side (see street_cross). The connectors of the other pieces do not target
   these pools.
@@ -79,7 +79,6 @@ STREET_ENDS_POOL = f"{NS}:village/street_ends"
 NEXT_STREETS_POOL = f"{NS}:village/streets_next"
 SIDE_STREETS_POOL = f"{NS}:village/streets_side"
 FIRST_STREETS_POOL = f"{NS}:village/streets_first"
-JOB_STREETS_POOL = f"{NS}:village/streets_jobs"
 BANK_STREETS_POOL = f"{NS}:village/streets_bank"
 # The village heart gives the banner of the faction to each banner of the village.
 BANNER = "minecraft:white_banner"
@@ -738,14 +737,11 @@ def plaza():
                   {"facing": "west", "column": str(column), "row": str(row), "papers": "0"})
     for (x, z) in ((1, 1), (PLAZA - 2, 1), (1, PLAZA - 2)):
         lamp_post(t, x, z)
-    # The connectors of the streets, in the middle of each side. The street to the north has the plot of the bank, and
-    # the street to the south has the plots of the first house-workshops. The jigsaw places the plots of the street to
-    # the south first (placement priority): a large house of a next street (13 x 13 in Sunreach, a side long house in
-    # Valeholm) does not take the space of a house-workshop.
+    # The connectors of the streets, in the middle of each side. The street to the north has the plot of the bank. The
+    # plan places the first house-workshops on the plots of the street to the south.
     last = PLAZA - 1
     t.jigsaw(PLAZA_MID, 0, 0, "north_up", PLAZA_EXIT, STREET, BANK_STREETS_POOL, "minecraft:dirt_path")
-    t.jigsaw(PLAZA_MID, 0, last, "south_up", PLAZA_EXIT, STREET, JOB_STREETS_POOL, "minecraft:dirt_path",
-             placement_priority=1)
+    t.jigsaw(PLAZA_MID, 0, last, "south_up", PLAZA_EXIT, STREET, FIRST_STREETS_POOL, "minecraft:dirt_path")
     t.jigsaw(0, 0, PLAZA_MID, "west_up", PLAZA_EXIT, STREET, FIRST_STREETS_POOL, "minecraft:dirt_path")
     t.jigsaw(last, 0, PLAZA_MID, "east_up", PLAZA_EXIT, STREET, FIRST_STREETS_POOL, "minecraft:dirt_path")
     return t
@@ -3647,7 +3643,6 @@ PIECES = {
     "plaza": plaza,
     "street": street,
     "street_bank": lambda: street(bank=True),
-    "street_jobs": street,
     "street_end": street_end,
     "street_next": lambda: street(next_street=True),
     "street_cross": lambda: street_cross(W),
@@ -3670,7 +3665,6 @@ STYLES = {
     "valeholm": {
         "street": norse_street,
         "street_bank": lambda: norse_street(bank=True),
-        "street_jobs": norse_street,
         "street_next": lambda: norse_street(next_street=True),
         "street_cross": lambda: street_cross(SL),
         "street_side": lambda: street_side(LD),
@@ -3906,7 +3900,6 @@ def pools(v):
         "jobs": pool([(1, house(f"job_{job}")) for job in JOBS]),
         "market": pool([(1, house("market"))]),
         "streets_first": pool([(1, street("street"))], v.id("street_ends")),
-        "streets_jobs": pool([(1, street("street_jobs"))], v.id("street_ends")),
         "streets_bank": pool([(1, street("street_bank"))], v.id("street_ends")),
         "street_ends": pool([(1, street("street_end"))]),
         "streets_next": pool([(2, street("street_next")), (1, street("street_cross"))], v.id("street_ends")),
