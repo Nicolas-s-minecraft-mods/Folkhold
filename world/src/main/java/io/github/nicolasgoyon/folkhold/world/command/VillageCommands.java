@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -30,16 +29,10 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
-import net.minecraft.world.level.chunk.ImposterProtoChunk;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructureSets;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
-import net.minecraft.world.level.levelgen.structure.StructureStart;
-import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 
 /**
  * The command {@code /folkhold village generate <tier> [style]} (permission level 2): places a faction village of a
@@ -54,13 +47,13 @@ import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
  *       the middle of the plaza is a biome of the structure, and the variant of the site has the given style. The box
  *       of the village does not contain the source.</li>
  *   <li>The layout is the layout of the generation (see {@link FortifiedVillageStructure#layout(
- *       Structure.GenerationContext, int, java.util.function.Predicate)}). The structure start goes into the start
- *       chunk at the status {@code STRUCTURE_STARTS} (see {@link #place}): the world generation of the chunks of the
- *       box then adds the references, the terrain adaptation and the pieces, as for a natural village.</li>
+ *       Structure.GenerationContext, int, java.util.function.Predicate)}). The world generation of the chunks of the
+ *       box adds the references, the terrain adaptation and the pieces, as for a natural village.</li>
  *   <li>The settlement of the start chunk gets the start level. The heart of the plaza binds to it.</li>
  * </ul>
  *
- * <p>The command runs in one server tick: a capital can stop the server for 10 seconds or more.
+ * <p>The work goes over many server ticks (see {@link VillageGeneration}): the server keeps its tick rate. The source
+ * gets a message at the start, the progress of the chunks, then the result. One generation runs at a time.
  */
 public final class VillageCommands {
     private static final String KEY = "commands.folkhold_world.village.generate.";
@@ -120,89 +113,40 @@ public final class VillageCommands {
             source.sendFailure(Component.translatable(KEY + "no_structure"));
             return 0;
         }
-        source.sendSuccess(() -> Component.translatable(KEY + "started", tierName(tierId)), false);
         BlockPos origin = BlockPos.containing(source.getPosition());
-        Optional<Generated> village;
-        try {
-            village = generate(level, structure, origin, tier.get().maxLevel(), style);
-        } catch (RuntimeException e) {
-            FolkholdWorld.LOGGER.error("The command could not generate a village near {}", origin, e);
-            source.sendFailure(Component.translatable(KEY + "failed"));
+        boolean started = VillageGeneration.start(level, structure, origin, tier.get().maxLevel(), style,
+                percent -> source.sendSuccess(() -> Component.translatable(KEY + "progress", percent), false),
+                (end, village) -> sendEnd(source, tierId, origin, end, village));
+        if (!started) {
+            source.sendFailure(Component.translatable(KEY + "busy"));
             return 0;
         }
-        if (village.isEmpty()) {
-            source.sendFailure(Component.translatable(KEY + "no_site", tierName(tierId), MAX_DISTANCE * 16));
-            return 0;
-        }
-        BlockPos center = village.get().center();
-        int distance = (int) Math.round(Math.sqrt(center.distSqr(origin.atY(center.getY()))));
-        source.sendSuccess(() -> Component.translatable(KEY + "success", tierName(tierId), village.get().style(),
-                village.get().level(), center.getX(), center.getY(), center.getZ(), distance), true);
+        source.sendSuccess(() -> Component.translatable(KEY + "started", tierName(tierId)), false);
         return 1;
+    }
+
+    /** Sends the result of a generation to the source of its command. */
+    private static void sendEnd(CommandSourceStack source, String tierId, BlockPos origin, VillageGeneration.End end,
+            Optional<VillageGeneration.Generated> village) {
+        switch (end) {
+            case PLACED -> {
+                BlockPos center = village.orElseThrow().center();
+                int distance = (int) Math.round(Math.sqrt(center.distSqr(origin.atY(center.getY()))));
+                source.sendSuccess(() -> Component.translatable(KEY + "success", tierName(tierId),
+                        village.get().style(), village.get().level(), center.getX(), center.getY(), center.getZ(),
+                        distance), true);
+            }
+            case NO_SITE -> source.sendFailure(Component.translatable(KEY + "no_site", tierName(tierId),
+                    MAX_DISTANCE * 16));
+            case TIMEOUT -> source.sendFailure(Component.translatable(KEY + "timeout",
+                    VillageGeneration.TIMEOUT_SECONDS));
+            case FAILED -> source.sendFailure(Component.translatable(KEY + "failed"));
+            default -> throw new IllegalStateException("Unknown end " + end);
+        }
     }
 
     private static Component tierName(String tier) {
         return Component.translatable("folkhold_world.settlement_tier." + tier);
-    }
-
-    /**
-     * A placed village.
-     *
-     * @param start  the start chunk
-     * @param center the middle of the plaza
-     * @param level  the start level
-     * @param style  the name of the style
-     * @param box    the box of the structure
-     */
-    record Generated(ChunkPos start, BlockPos center, int level, String style, BoundingBox box) {
-    }
-
-    /**
-     * Places a village of a start level near a position (see {@link VillageCommands}).
-     *
-     * @param level     the Overworld
-     * @param structure the village structure
-     * @param origin    the position of the source: the box of the village does not contain it
-     * @param start     the start level
-     * @param style     the name of the style, or empty for the style of the site
-     * @return the village, or empty if no start chunk in the distance accepts it
-     */
-    static Optional<Generated> generate(ServerLevel level, FortifiedVillageStructure structure, BlockPos origin,
-            int start, Optional<String> style) {
-        SettlementData data = SettlementData.get(level.getServer());
-        for (ChunkPos chunk : candidates(new ChunkPos(origin))) {
-            if (!farFromVillages(level, structure, chunk, start)) {
-                continue;
-            }
-            Structure.GenerationContext context = new Structure.GenerationContext(level.registryAccess(),
-                    level.getChunkSource().getGenerator(), level.getChunkSource().getGenerator().getBiomeSource(),
-                    level.getChunkSource().randomState(), level.getStructureManager(), level.getSeed(), chunk, level,
-                    structure.biomes()::contains);
-            Optional<FortifiedVillageStructure.Layout> layout = structure.layout(context, start, variant -> style
-                    .map(name -> FortifiedVillageStructure.styleOf(variant).name().equals(name)).orElse(true));
-            if (layout.isEmpty()) {
-                continue;
-            }
-            StructureStart structureStart = new StructureStart(structure, chunk, 0,
-                    new PiecesContainer(layout.get().pieces()));
-            BoundingBox box = structureStart.getBoundingBox();
-            if (box.isInside(origin.getX(), box.minY(), origin.getZ())) {
-                continue;
-            }
-            try {
-                place(level, structure, structureStart, chunk);
-            } catch (RuntimeException e) {
-                FolkholdWorld.LOGGER.error("The village of the start chunk {} could not be placed", chunk);
-                throw e;
-            }
-            BlockPos center = layout.get().center();
-            data.registry().add(Settlements.create(level.getServer(), UUID.randomUUID(), chunk, center, start));
-            data.setDirty();
-            FolkholdWorld.LOGGER.info("Generated a village of the level {} at {} (start chunk {}), box {}", start,
-                    center, chunk, box);
-            return Optional.of(new Generated(chunk, center, start, layout.get().style().name(), box));
-        }
-        return Optional.empty();
     }
 
     /**
@@ -251,7 +195,7 @@ public final class VillageCommands {
     }
 
     /** The start chunks in the distance, every {@link #STEP} chunks, the nearest first. */
-    private static List<ChunkPos> candidates(ChunkPos origin) {
+    static List<ChunkPos> candidates(ChunkPos origin) {
         List<ChunkPos> chunks = new ArrayList<>();
         for (int dx = -MAX_DISTANCE; dx <= MAX_DISTANCE; dx += STEP) {
             for (int dz = -MAX_DISTANCE; dz <= MAX_DISTANCE; dz += STEP) {
@@ -263,56 +207,5 @@ public final class VillageCommands {
         chunks.sort(Comparator.comparingLong(chunk -> (long) (chunk.x - origin.x) * (chunk.x - origin.x)
                 + (long) (chunk.z - origin.z) * (chunk.z - origin.z)));
         return chunks;
-    }
-
-    /**
-     * Puts a structure start into the world, as the world generation does.
-     *
-     * <ol>
-     *   <li>The start goes into the start chunk at the status {@code STRUCTURE_STARTS}, before the references of the
-     *       other chunks.</li>
-     *   <li>Each chunk of the box goes to the status {@code STRUCTURE_STARTS} at least. A new chunk gets its reference,
-     *       its terrain adaptation and its pieces from the world generation. A chunk that is already past
-     *       {@code STRUCTURE_REFERENCES} gets its reference from this method, and a chunk that is already past
-     *       {@code FEATURES} also gets its pieces from this method, with no terrain adaptation. With no structures in
-     *       the world settings, the world generation places no pieces: this method places them in each chunk.</li>
-     *   <li>Then each chunk of the box goes to the status {@code FULL}.</li>
-     * </ol>
-     */
-    private static void place(ServerLevel level, Structure structure, StructureStart start, ChunkPos startChunk) {
-        BoundingBox box = start.getBoundingBox();
-        ChunkAccess origin = chunk(level, startChunk.x, startChunk.z);
-        origin.setStartForStructure(structure, start);
-        origin.setUnsaved(true);
-        // With no structures in the world settings, the world generation places no pieces: the command does it.
-        boolean structures = level.structureManager().shouldGenerateStructures();
-        List<ChunkPos> generated = new ArrayList<>();
-        List<ChunkPos> all = new ArrayList<>();
-        for (int x = box.minX() >> 4; x <= box.maxX() >> 4; x++) {
-            for (int z = box.minZ() >> 4; z <= box.maxZ() >> 4; z++) {
-                ChunkAccess chunk = chunk(level, x, z);
-                all.add(chunk.getPos());
-                if (chunk.getPersistedStatus().isOrAfter(ChunkStatus.STRUCTURE_REFERENCES)) {
-                    chunk.addReferenceForStructure(structure, startChunk.toLong());
-                    chunk.setUnsaved(true);
-                }
-                if (chunk.getPersistedStatus().isOrAfter(ChunkStatus.FEATURES) || !structures) {
-                    generated.add(chunk.getPos());
-                }
-            }
-        }
-        all.forEach(pos -> level.getChunk(pos.x, pos.z));
-        for (ChunkPos pos : generated) {
-            start.placeInChunk(level, level.structureManager(), level.getChunkSource().getGenerator(),
-                    level.getRandom(), new BoundingBox(pos.getMinBlockX(), level.getMinBuildHeight(),
-                            pos.getMinBlockZ(), pos.getMaxBlockX(), level.getMaxBuildHeight(), pos.getMaxBlockZ()),
-                    pos);
-        }
-    }
-
-    /** A chunk at the status {@code STRUCTURE_STARTS} at least: the full chunk if it is full. */
-    private static ChunkAccess chunk(ServerLevel level, int x, int z) {
-        ChunkAccess chunk = level.getChunk(x, z, ChunkStatus.STRUCTURE_STARTS, true);
-        return chunk instanceof ImposterProtoChunk imposter ? imposter.getWrapped() : chunk;
     }
 }
