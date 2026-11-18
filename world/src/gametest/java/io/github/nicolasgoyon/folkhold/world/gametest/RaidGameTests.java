@@ -13,12 +13,14 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageRaids;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Pillager;
@@ -559,6 +561,135 @@ public final class RaidGameTests {
                             "The raiders must break 2 columns or more");
                     ravagers.forEach(Raider::discard);
                     rider[0].discard();
+                    helper.setBlock(heartRelative, Blocks.AIR);
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A pillager on a ravager goes through a gate with a lintel and takes no damage. The palisade of
+     * {@link #buildPalisade} has one gate of 3 fence gates on the north side, with 3 blocks of free height below a
+     * lintel of stone bricks, as the gate of a generated village. The group is higher than the gate: the pillager gets
+     * off in front of the gate, and the two raiders go through it. The lintel stays, and the health of the pillager
+     * never goes down, so its head is never in a block.
+     */
+    @GameTest(template = "arena_huge", timeoutTicks = 2400, batch = "raid_gate_lintel")
+    public static void riddenRavagerPassesALowGateWithNoDamage(GameTestHelper helper) {
+        TestSupport.setGameRuleForTest(helper, GameRules.RULE_MOBGRIEFING, true);
+        TestSupport.buildFloor(helper, HUGE);
+        BlockPos heartRelative = new BlockPos(HUGE / 2, 1, HUGE / 2);
+        buildPalisade(helper, heartRelative, 1);
+        for (int dx = -PALISADE; dx <= PALISADE; dx++) {
+            helper.setBlock(heartRelative.offset(dx, 3, -PALISADE), Blocks.STONE_BRICKS);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            helper.setBlock(heartRelative.offset(dx, 2, -PALISADE), Blocks.AIR);
+        }
+        helper.setBlock(heartRelative, ModBlocks.VILLAGE_HEART.get());
+        ServerLevel level = helper.getLevel();
+        BlockPos heartPos = helper.absolutePos(heartRelative);
+        Raider[] ravager = new Raider[1];
+        Raider[] rider = new Raider[1];
+        // The cause and the position of the first damage of the pillager.
+        String[] firstHurt = new String[1];
+        TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_FORCE_SECONDS, 1);
+        TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_AFTER_SECONDS, 4);
+        TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
+        TestSupport.atTestEnd(helper, () -> {
+            if (ravager[0] != null) {
+                ravager[0].discard();
+                rider[0].discard();
+            }
+        });
+        helper.onEachTick(() -> {
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
+            if (rider[0] != null && firstHurt[0] == null && rider[0].getHealth() < rider[0].getMaxHealth()) {
+                DamageSource source = rider[0].getLastDamageSource();
+                firstHurt[0] = (source == null ? "unknown" : source.getMsgId()) + " at "
+                        + helper.relativePos(rider[0].blockPosition());
+            }
+        });
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(VillageHearts.findNearest(level, heartPos, 1.0).isPresent(),
+                        "The heart must be in the list of the loaded hearts"))
+                .thenExecute(() -> {
+                    VillageHeartBlockEntity heart = helper.getBlockEntity(heartRelative);
+                    helper.assertTrue(heart.getLayout().scan(level, heartPos), "The heart must scan the village");
+                    Raid raid = raid(level, heartPos);
+                    ravager[0] = helper.spawn(EntityType.RAVAGER, heartRelative.offset(0, 0, -PALISADE - 8));
+                    rider[0] = helper.spawn(EntityType.PILLAGER, heartRelative.offset(0, 0, -PALISADE - 8));
+                    rider[0].startRiding(ravager[0], true);
+                    raid.joinRaid(1, ravager[0], null, true);
+                    raid.joinRaid(1, rider[0], null, true);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(Stream.of(ravager[0], rider[0]).allMatch(raider ->
+                        raider.isAlive() && horizontalDistance(raider.blockPosition(), heartPos)
+                                <= MarchOnVillageGoal.ARRIVAL),
+                        "The ravager and its pillager must arrive at the heart: "
+                        + helper.relativePos(ravager[0].blockPosition()) + " "
+                        + helper.relativePos(rider[0].blockPosition())))
+                .thenExecute(() -> {
+                    helper.assertTrue(!rider[0].isPassenger(), "The pillager must get off in front of the low gate");
+                    for (int dx = -1; dx <= 1; dx++) {
+                        helper.assertBlockPresent(Blocks.STONE_BRICKS, heartRelative.offset(dx, 3, -PALISADE));
+                    }
+                    helper.assertTrue(firstHurt[0] == null, "The pillager on the ravager must take no damage: "
+                            + firstHurt[0]);
+                    helper.setBlock(heartRelative, Blocks.AIR);
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * The break of a gate does not use time on a column that is open. The middle column of a gate of 3 columns has no
+     * fence gate at the start. A ravager needs 2 columns: it breaks one side column, and the other side column keeps
+     * its fence gate.
+     */
+    @GameTest(template = "arena_huge", timeoutTicks = 2400, batch = "raid_gate_break_open_column")
+    public static void breakSkipsAnOpenColumn(GameTestHelper helper) {
+        TestSupport.setGameRuleForTest(helper, GameRules.RULE_MOBGRIEFING, true);
+        TestSupport.buildFloor(helper, HUGE);
+        BlockPos heartRelative = new BlockPos(HUGE / 2, 1, HUGE / 2);
+        List<BlockPos> gates = buildPalisade(helper, heartRelative, 1);
+        for (int dx = -1; dx <= 1; dx++) {
+            helper.setBlock(heartRelative.offset(dx, 2, -PALISADE), Blocks.AIR);
+        }
+        helper.setBlock(heartRelative, ModBlocks.VILLAGE_HEART.get());
+        ServerLevel level = helper.getLevel();
+        BlockPos heartPos = helper.absolutePos(heartRelative);
+        BlockPos middle = helper.absolutePos(heartRelative.north(PALISADE));
+        BlockPos front = helper.absolutePos(heartRelative.north(PALISADE + 1));
+        List<Raider> ravagers = new ArrayList<>();
+        TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_FORCE_SECONDS, 1);
+        TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_AFTER_SECONDS, 4);
+        TestSupport.setConfigForTest(helper, WorldConfig.RAID_GATE_BREAK_SECONDS, 2);
+        TestSupport.atTestEnd(helper, () -> ravagers.forEach(Raider::discard));
+        helper.onEachTick(() -> {
+            TestSupport.setDayTimeForTest(helper, MIDNIGHT);
+            closeGateOnRaiders(level, gates, heartPos, front, ravagers);
+        });
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(VillageHearts.findNearest(level, heartPos, 1.0).isPresent(),
+                        "The heart must be in the list of the loaded hearts"))
+                .thenExecute(() -> {
+                    VillageHeartBlockEntity heart = helper.getBlockEntity(heartRelative);
+                    helper.assertTrue(heart.getLayout().scan(level, heartPos), "The heart must scan the village");
+                    setGates(level, gates, false);
+                    level.setBlockAndUpdate(middle, Blocks.AIR.defaultBlockState());
+                    Raider ravager = helper.spawn(EntityType.RAVAGER, heartRelative.offset(0, 0, -PALISADE - 8));
+                    raid(level, heartPos).joinRaid(1, ravager, null, true);
+                    ravagers.add(ravager);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(ravagers.get(0).isAlive()
+                        && horizontalDistance(ravagers.get(0).blockPosition(), heartPos) <= MarchOnVillageGoal.ARRIVAL,
+                        "The ravager must break one column and arrive at the heart: "
+                        + helper.relativePos(ravagers.get(0).blockPosition())))
+                .thenExecute(() -> {
+                    long broken = gates.stream().filter(gate -> level.getBlockState(gate).isAir()).count();
+                    helper.assertTrue(broken == 2, "The ravager must break one column next to the open column: "
+                            + broken + " columns have no fence gate");
                     helper.setBlock(heartRelative, Blocks.AIR);
                 })
                 .thenSucceed();
