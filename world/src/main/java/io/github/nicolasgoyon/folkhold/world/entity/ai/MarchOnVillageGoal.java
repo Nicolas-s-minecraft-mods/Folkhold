@@ -17,6 +17,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
@@ -197,6 +198,11 @@ public class MarchOnVillageGoal extends Goal {
             nextRecruit = raider.tickCount + RECRUIT_INTERVAL;
             recruitNearby(raid);
         }
+        if (getsOff(level)) {
+            raider.stopRiding();
+            nextPath = 0;
+            return;
+        }
         if (force(level)) {
             raider.getNavigation().stop();
             return;
@@ -286,6 +292,18 @@ public class MarchOnVillageGoal extends Goal {
         blockedOpened = true;
         nextPath = 0;
         return false;
+    }
+
+    /**
+     * True if the raider gets off its vehicle: the raider rides a vehicle, it is in front of the gate that it forces,
+     * and the group does not go through this gate with all its fence gates open (see {@link #width()} and
+     * {@link #height()}). The raider and its vehicle then go on separately. Thus a pillager on a ravager does not go
+     * under the lintel of a gate with its head in a block.
+     */
+    private boolean getsOff(ServerLevel level) {
+        return raider.isPassenger() && forcing != null
+                && horizontalDistanceSqr(RaidMarch.front(forcing)) <= FORCE_REACH * FORCE_REACH
+                && !forcing.fits(level, width(), height());
     }
 
     /**
@@ -440,11 +458,17 @@ public class MarchOnVillageGoal extends Goal {
     }
 
     /**
-     * The height that the raider needs to go through a gate: the height of the raider, or of its vehicle when it rides
-     * one.
+     * The height that the raider needs to go through a gate: from the feet of the raider, or of its vehicle when it
+     * rides one, to the top of the highest entity of the group (the raider, its vehicle and all the passengers). A
+     * ravager with a pillager on it is thus higher than a ravager alone.
      */
     private double height() {
-        return Math.max(raider.getBbHeight(), raider.getRootVehicle().getBbHeight());
+        Entity root = raider.getRootVehicle();
+        double top = root.getBoundingBox().maxY;
+        for (Entity passenger : root.getIndirectPassengers()) {
+            top = Math.max(top, passenger.getBoundingBox().maxY);
+        }
+        return top - root.getBoundingBox().minY;
     }
 
     /**
