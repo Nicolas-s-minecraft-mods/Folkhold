@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Box;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Gate;
@@ -16,9 +17,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
+import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings;
 import org.junit.jupiter.api.Test;
 
 /** The terrain pieces, the water gates and the piers of the wall of a village. */
@@ -266,5 +274,54 @@ class VillageWallTest {
                 new Segment(first.side(), first.from() + 4, first.to())), runs);
         java.util.Arrays.fill(keep, false);
         assertTrue(VillageWall.runs(layout, first, keep).isEmpty(), "No kept column: no palisade");
+    }
+
+    /**
+     * The path of a ring gate across the band: it starts 2 blocks inside the ring line, stops at the flat terrain in
+     * front of the inner gate, and ends at the level of the inner gate. An inner gate on water gives no path.
+     */
+    @Test
+    void ringGatePathGoesAcrossTheBandToTheInnerGate() {
+        WallLayout inner = layout();
+        WallLayout ring = WallLayout.ring(inner, WallLayout.MIN_BAND);
+        Gate north = ring.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        Gate innerNorth = inner.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        VillageWall.Wall wall = new VillageWall.Wall(inner, Map.of(innerNorth, BASE + 3), Set.of(), List.of());
+
+        VillageWall.Arm arm = VillageWall.bandArm(ring, north, WallLayout.MIN_BAND, wall).orElseThrow();
+
+        WallLayout.Cell gate = ring.cell(Side.NORTH, ring.along(north));
+        assertEquals(gate.x(), arm.startX());
+        assertEquals(gate.z() + 2, arm.startZ());
+        assertEquals(WallLayout.MIN_BAND - 2 - VillageWall.APPROACH, arm.length());
+        int innerLine = inner.outline().minZ();
+        assertEquals(innerLine - VillageWall.APPROACH - 1, arm.z(arm.length() - 1),
+                "The path stops before the flat terrain of the inner gate");
+        assertEquals(BASE + 3, arm.end().getAsInt());
+        VillageWall.Wall water = new VillageWall.Wall(inner, Map.of(innerNorth, BASE), Set.of(innerNorth), List.of());
+        assertTrue(VillageWall.bandArm(ring, north, WallLayout.MIN_BAND, water).isEmpty());
+    }
+
+    /**
+     * A gate template and the terrain piece that clears its space in 2 districts: the ground fill of the gate knows
+     * the cleared space, thus it does not fill the passage of the gate.
+     */
+    @Test
+    void groundFillOfAGateKnowsTheClearedSpaceOfAnotherDistrict() {
+        BoundingBox gateBox = new BoundingBox(61, BASE, 0, 65, BASE + 6, 4);
+        PoolElementStructurePiece gate = new PoolElementStructurePiece(null,
+                StructurePoolElement.single("minecraft:empty").apply(StructureTemplatePool.Projection.RIGID),
+                new BlockPos(61, BASE, 0), 1, Rotation.NONE, gateBox, LiquidSettings.APPLY_WATERLOGGING);
+        TerrainPiece clear = new TerrainPiece(63, 0, 67, 4, BASE, true);
+        VillageWall.Wall ring = new VillageWall.Wall(layout(), Map.of(), Set.of(), List.of(gate, clear));
+
+        Map<RingDistricts.District, List<StructurePiece>> districts = VillageWall.districts(List.of(ring),
+                new ChunkPos(0, 0));
+
+        List<StructurePiece> gateDistrict = districts.get(new RingDistricts.District(0, 0));
+        assertTrue(districts.get(new RingDistricts.District(1, 0)).contains(clear), "The terrain piece is in cell 1");
+        GroundFillPiece fill = gateDistrict.stream().filter(GroundFillPiece.class::isInstance)
+                .map(GroundFillPiece.class::cast).findFirst().orElseThrow();
+        assertEquals(List.of(clear.getBoundingBox()), fill.cleared());
     }
 }
