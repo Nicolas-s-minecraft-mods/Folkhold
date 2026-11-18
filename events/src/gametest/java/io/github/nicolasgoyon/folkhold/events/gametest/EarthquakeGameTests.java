@@ -56,12 +56,16 @@ public final class EarthquakeGameTests {
     private static final long SEED = 130L;
     private static final int LANDING_TICKS = EventTestSupport.LANDING_TICKS;
     /**
-     * The limit of each flee step of {@link #animalsRunAway}, in orders to run away. On a flat floor, approximately 2
-     * orders of 3 give no target, so the probability that all the orders give no target is below 10^-7.
+     * The limit of each flee step of {@link #animalsRunAway}, in orders to run away. On a flat floor, most orders give
+     * a target (see {@link #mostFleeOrdersFindATarget}).
      */
     private static final int FLEE_ORDERS = 40;
     /** The cow of {@link #animalsRunAway} goes this distance farther from the epicenter, in blocks. */
     private static final int FLEE_DISTANCE = 3;
+    /** The number of searches of a flee target in {@link #mostFleeOrdersFindATarget}. */
+    private static final int FLEE_SEARCHES = 200;
+    /** The smallest number of searches that give a target in {@link #mostFleeOrdersFindATarget}. */
+    private static final int FLEE_FOUND = 160;
     /**
      * The tick limit of {@link #animalsRunAway}: the wait for the floor, the two flee steps of {@link #FLEE_ORDERS}
      * orders each, and a margin.
@@ -366,7 +370,7 @@ public final class EarthquakeGameTests {
         prepare(helper, 16, 16);
         // Bedrock below the sheep: a crack does not open below it.
         helper.setBlock(new BlockPos(8, 0, 8), Blocks.BEDROCK);
-        // No AI: the sheep does not run away, and the block falls on it.
+        // No free will: the sheep has no goals, and the block falls before the sheep goes out of its column.
         Sheep sheep = helper.spawnWithNoFreeWill(EntityType.SHEEP, new BlockPos(8, 1, 8));
         helper.setBlock(new BlockPos(8, 8, 8), Blocks.OAK_PLANKS);
         Earthquake earthquake = start(helper, new BlockPos(8, 1, 8), new EarthquakeSettings(6, 10.0, 0, 1, 64));
@@ -399,8 +403,7 @@ public final class EarthquakeGameTests {
      *   <li>The cow has a navigation target farther from the epicenter than the cow at the start, then the cow is
      *       {@value #FLEE_DISTANCE} blocks farther from the epicenter than at the start. The earthquake gives an order
      *       to run away each 20 ticks. The target of an order comes from the random source of the cow, with no seed,
-     *       and on a flat floor approximately 2 orders of 3 find no target. Thus the limit of each step is
-     *       {@value #FLEE_ORDERS} orders. A step also stops when the earthquake ends before this limit.</li>
+     *       and an order can find no target. Thus the limit of each step is {@value #FLEE_ORDERS} orders. A step also stops when the earthquake ends before this limit.</li>
      * </ol>
      */
     @GameTest(template = "quake_arena", timeoutTicks = FLEE_TIMEOUT_TICKS, batch = "earthquake_flee")
@@ -449,6 +452,32 @@ public final class EarthquakeGameTests {
                         + " orders: " + fleeState(cow, earthquake[0], epicenter, startDistance[0])))
                 .thenExecute(() -> FolkholdEvents.LOGGER.info("Earthquake flee test: the cow has a flee target after {} "
                         + "orders and is away after {} orders", targetOrders[0], fleeOrders(earthquake[0])))
+                .thenSucceed();
+    }
+
+    /**
+     * On a flat floor, most searches of a flee target give a position: {@value #FLEE_FOUND} or more of
+     * {@value #FLEE_SEARCHES} searches for a cow that stands at 2 blocks from the epicenter.
+     */
+    @GameTest(template = "quake_arena", timeoutTicks = 100, batch = "earthquake_flee_target")
+    public static void mostFleeOrdersFindATarget(GameTestHelper helper) {
+        prepare(helper, 40, 32);
+        Vec3 epicenter = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(18, 1, 16)));
+        Cow cow = helper.spawnWithNoFreeWill(EntityType.COW, new BlockPos(20, 1, 16));
+        EventTestSupport.atTestEnd(helper, cow::discard);
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(cow.onGround(), "The cow must stand on the floor"))
+                .thenExecute(() -> {
+                    int found = 0;
+                    for (int search = 0; search < FLEE_SEARCHES; search++) {
+                        if (Earthquake.fleeTarget(cow, epicenter) != null) {
+                            found++;
+                        }
+                    }
+                    helper.assertTrue(found >= FLEE_FOUND, "Most searches must find a flee target: " + found + " of "
+                            + FLEE_SEARCHES);
+                })
                 .thenSucceed();
     }
 

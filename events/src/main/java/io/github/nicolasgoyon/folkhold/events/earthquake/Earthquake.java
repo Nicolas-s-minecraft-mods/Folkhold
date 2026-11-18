@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -26,7 +27,9 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
+import net.minecraft.world.entity.ai.util.LandRandomPos;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.level.block.Block;
@@ -79,6 +82,10 @@ public final class Earthquake implements WorldEvent {
     private static final int FLEE_MARGIN = 16;
     /** Speed of the animals that run away, relative to their walk. */
     private static final double FLEE_SPEED = 1.5;
+    /** The flee target of an animal is this number of blocks or less from the animal, on the horizontal plane. */
+    private static final int FLEE_RANGE = 16;
+    /** The flee target of an animal is this number of blocks or less above or below the animal. */
+    private static final int FLEE_HEIGHT = 7;
     /** Interval of the rumble and of the orders to run away, in ticks. */
     private static final int RUMBLE_INTERVAL = 20;
     /** The scan of the columns stops while this number of batches waits. */
@@ -287,11 +294,24 @@ public final class Earthquake implements WorldEvent {
             if (!level.isPositionEntityTicking(animal.blockPosition())) {
                 continue;
             }
-            Vec3 target = DefaultRandomPos.getPosAway(animal, 16, 7, epicenter);
+            Vec3 target = fleeTarget(animal, epicenter);
             if (target != null && BlockRules.isReady(level, BlockPos.containing(target))) {
                 animal.getNavigation().moveTo(target.x, target.y, target.z, FLEE_SPEED);
             }
         }
+    }
+
+    /**
+     * A position away from the epicenter for an animal that runs away, or null if the search finds no position. An
+     * animal that walks gets a position on the ground. The other animals (the animals that fly or swim) get a position
+     * in the air or in the water.
+     */
+    @Nullable
+    public static Vec3 fleeTarget(Animal animal, Vec3 epicenter) {
+        if (animal.getNavigation() instanceof GroundPathNavigation) {
+            return LandRandomPos.getPosAway(animal, FLEE_RANGE, FLEE_HEIGHT, epicenter);
+        }
+        return DefaultRandomPos.getPosAway(animal, FLEE_RANGE, FLEE_HEIGHT, epicenter);
     }
 
     /**
