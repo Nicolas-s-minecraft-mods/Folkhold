@@ -157,11 +157,11 @@ public final class VillageCommands {
      *
      * <ul>
      *   <li>the outer walls of the new village and of each settlement (with the maximum radius and all the rings of
-     *       its level) are {@link #GAP} blocks apart at least;</li>
+     *       its level) are {@link #GAP} blocks apart at least.</li>
      *   <li>no possible vanilla village start is in {@link #VANILLA_EXCLUSION} chunks, as the exclusion zone of the
-     *       structure set of the faction villages;</li>
+     *       structure set of the faction villages.</li>
      *   <li>no possible natural faction village start is near enough for its first wall to come near the new first
-     *       wall: the natural village has the largest radius of the structure;</li>
+     *       wall: the natural village has the largest radius of the structure.</li>
      *   <li>in a world that generates structures, the rings also keep their space (see {@link #ringsAreFree}).</li>
      * </ul>
      */
