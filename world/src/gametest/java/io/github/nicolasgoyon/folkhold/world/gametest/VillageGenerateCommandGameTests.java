@@ -1,25 +1,26 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
-import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.nicolasgoyon.folkhold.core.sim.level.Tier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
+import io.github.nicolasgoyon.folkhold.world.command.VillageGeneration;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -39,6 +40,11 @@ public final class VillageGenerateCommandGameTests {
     /** The position of the source: far from the areas of the other tests. */
     private static final BlockPos ORIGIN = new BlockPos(-24000, 0, 24000);
     private static final String COMMAND = "folkhold village generate ";
+    /**
+     * The limit of the work of a generation on the server thread in one tick, in milliseconds. The budget of a tick is
+     * 10 milliseconds, and one chunk can go past it: the limit has a margin for a slow machine.
+     */
+    private static final int MAX_TICK_MILLIS = 1000;
 
     private VillageGenerateCommandGameTests() {
     }
@@ -48,49 +54,76 @@ public final class VillageGenerateCommandGameTests {
      * Each run adds one settlement with the top level of its tier. The structure manager finds each structure start
      * at the middle of its plaza and at a corner of its box, with the start chunk of the settlement. No box contains
      * the source, and no 2 boxes overlap. The heart of the plaza binds to the settlement.
+     *
+     * <p>The work of a run goes over many ticks (see {@link VillageGeneration}): the test waits for the end of each
+     * run with a real-time limit ({@link TestSupport#thenWaitForWorker}), and the tick limit is a safety limit only. A second command during a run fails. The longest work of each run on the server thread in one tick is
+     * below {@link #MAX_TICK_MILLIS} milliseconds.
      */
-    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_generate_command")
-    public static void generateCommandPlacesVillagesApart(GameTestHelper helper) throws CommandSyntaxException {
+    @GameTest(template = "empty", timeoutTicks = TestSupport.WORKER_TICKS, batch = "village_generate_command")
+    public static void generateCommandPlacesVillagesApart(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         CommandSourceStack source = source(level);
         FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
                 .registryOrThrow(Registries.STRUCTURE).get(Settlements.VILLAGE_STRUCTURE);
         List<StructureStart> starts = new ArrayList<>();
-        StructureStart first = run(helper, source, "hamlet", starts);
-        run(helper, source, "village", starts);
-        String style = FortifiedVillageStructure.styleOf(structure.variantOf(level, first.getPieces())).name();
-        StructureStart third = run(helper, source, "hamlet " + style, starts);
-        String thirdStyle = FortifiedVillageStructure.styleOf(structure.variantOf(level, third.getPieces())).name();
-        helper.assertTrue(thirdStyle.equals(style), "The third village must have the style " + style + ", not "
-                + thirdStyle);
-        for (int i = 0; i < starts.size(); i++) {
-            BoundingBox box = starts.get(i).getBoundingBox();
-            helper.assertFalse(box.isInside(ORIGIN.getX(), box.minY(), ORIGIN.getZ()),
-                    "A village must not contain the source: " + box);
-            for (int j = i + 1; j < starts.size(); j++) {
-                helper.assertFalse(box.intersects(starts.get(j).getBoundingBox()),
-                        "The villages " + box + " and " + starts.get(j).getBoundingBox() + " must not overlap");
-            }
-        }
-        helper.assertTrue(server.getCommands().getDispatcher().parse(COMMAND + "hamlet", source.withPermission(0))
-                .getContext().getNodes().stream().noneMatch(node -> node.getNode().getName().equals("village")),
-                "A source with no permission level 2 must not have the command");
-        helper.succeed();
+        Set<String> before = new HashSet<>();
+        String[] style = new String[1];
+        GameTestSequence sequence = helper.startSequence()
+                .thenExecute(() -> {
+                    start(helper, source, "hamlet", before);
+                    helper.assertTrue(execute(server, COMMAND + "hamlet", source) == 0,
+                            "A second command must fail while a generation runs");
+                });
+        TestSupport.thenWaitForWorker(helper, sequence, () -> !VillageGeneration.isRunning(),
+                "The generation of the hamlet must end")
+                .thenExecute(() -> {
+                    StructureStart first = check(helper, "hamlet", before, starts);
+                    style[0] = FortifiedVillageStructure.styleOf(structure.variantOf(level, first.getPieces())).name();
+                    start(helper, source, "village", before);
+                });
+        TestSupport.thenWaitForWorker(helper, sequence, () -> !VillageGeneration.isRunning(),
+                "The generation of the village must end")
+                .thenExecute(() -> {
+                    check(helper, "village", before, starts);
+                    start(helper, source, "hamlet " + style[0], before);
+                });
+        TestSupport.thenWaitForWorker(helper, sequence, () -> !VillageGeneration.isRunning(),
+                "The generation of the last hamlet must end")
+                .thenExecute(() -> {
+                    StructureStart third = check(helper, "hamlet", before, starts);
+                    String thirdStyle = FortifiedVillageStructure.styleOf(structure.variantOf(level,
+                            third.getPieces())).name();
+                    helper.assertTrue(thirdStyle.equals(style[0]), "The third village must have the style " + style[0]
+                            + ", not " + thirdStyle);
+                    for (int i = 0; i < starts.size(); i++) {
+                        BoundingBox box = starts.get(i).getBoundingBox();
+                        helper.assertFalse(box.isInside(ORIGIN.getX(), box.minY(), ORIGIN.getZ()),
+                                "A village must not contain the source: " + box);
+                        for (int j = i + 1; j < starts.size(); j++) {
+                            helper.assertFalse(box.intersects(starts.get(j).getBoundingBox()), "The villages " + box
+                                    + " and " + starts.get(j).getBoundingBox() + " must not overlap");
+                        }
+                    }
+                    helper.assertTrue(server.getCommands().getDispatcher().parse(COMMAND + "hamlet",
+                            source.withPermission(0)).getContext().getNodes().stream()
+                            .noneMatch(node -> node.getNode().getName().equals("village")),
+                            "A source with no permission level 2 must not have the command");
+                })
+                .thenSucceed();
     }
 
     /** The command fails with no village for an unknown tier, an unknown style and a level that is not the Overworld. */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "village_generate_command_failures")
-    public static void generateCommandRefusesBadArguments(GameTestHelper helper) throws CommandSyntaxException {
+    public static void generateCommandRefusesBadArguments(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
         CommandSourceStack source = source(level);
         int settlements = SettlementData.get(server).registry().size();
 
-        int tier = dispatcher.execute(COMMAND + "metropolis", source);
-        int style = dispatcher.execute(COMMAND + "hamlet gothic", source);
-        int nether = dispatcher.execute(COMMAND + "hamlet", source.withLevel(server.getLevel(Level.NETHER)));
+        int tier = execute(server, COMMAND + "metropolis", source);
+        int style = execute(server, COMMAND + "hamlet gothic", source);
+        int nether = execute(server, COMMAND + "hamlet", source.withLevel(server.getLevel(Level.NETHER)));
 
         helper.assertTrue(tier == 0 && style == 0 && nether == 0, "The command must fail: tier " + tier + ", style "
                 + style + ", Nether " + nether);
@@ -104,20 +137,40 @@ public final class VillageGenerateCommandGameTests {
                 .withPosition(Vec3.atBottomCenterOf(ORIGIN)).withPermission(2).withSuppressedOutput();
     }
 
-    /** Runs the command for a tier, checks the new village, and adds its structure start to a list. */
-    private static StructureStart run(GameTestHelper helper, CommandSourceStack source, String arguments,
-            List<StructureStart> starts) throws CommandSyntaxException {
+    /** Runs a command. Returns its result, or 0 for a command that is not valid. */
+    private static int execute(MinecraftServer server, String command, CommandSourceStack source) {
+        try {
+            return server.getCommands().getDispatcher().execute(command, source);
+        } catch (CommandSyntaxException e) {
+            return 0;
+        }
+    }
+
+    /** Starts the command for a tier and an optional style, and keeps the ids of the current settlements. */
+    private static void start(GameTestHelper helper, CommandSourceStack source, String arguments,
+            Set<String> before) {
+        MinecraftServer server = helper.getLevel().getServer();
+        before.clear();
+        SettlementData.get(server).registry().all().stream().map(Settlement::id).forEach(before::add);
+        helper.assertTrue(execute(server, COMMAND + arguments, source) == 1,
+                "The command must start a generation: " + arguments);
+        helper.assertTrue(VillageGeneration.isRunning(), "A generation must run after the command: " + arguments);
+    }
+
+    /** Checks the new village of a tier after the end of a run, and adds its structure start to a list. */
+    private static StructureStart check(GameTestHelper helper, String tierId, Set<String> before,
+            List<StructureStart> starts) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         SettlementData data = SettlementData.get(server);
-        Set<String> before = data.registry().all().stream().map(Settlement::id).collect(Collectors.toSet());
-        String tierId = arguments.contains(" ") ? arguments.substring(0, arguments.indexOf(' ')) : arguments;
         int top = LevelTables.get().tiers().stream().filter(tier -> tier.id().equals(tierId)).findFirst()
                 .map(Tier::maxLevel).orElseThrow();
+        long tickMillis = VillageGeneration.lastLongestTickNanos() / 1_000_000L;
+        FolkholdWorld.LOGGER.info("Village generate test: the longest tick of the generation of a {} is {} ms", tierId,
+                tickMillis);
+        helper.assertTrue(tickMillis < MAX_TICK_MILLIS, "The generation must not stop the server: its longest tick is "
+                + tickMillis + " ms");
 
-        int result = server.getCommands().getDispatcher().execute(COMMAND + arguments, source);
-
-        helper.assertTrue(result == 1, "The command must place a village: " + arguments);
         List<Settlement> added = data.registry().all().stream().filter(s -> !before.contains(s.id())).toList();
         helper.assertTrue(added.size() == 1, "The command must add one settlement, not " + added.size());
         Settlement settlement = added.get(0);
