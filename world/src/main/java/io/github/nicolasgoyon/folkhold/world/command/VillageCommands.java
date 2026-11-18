@@ -51,6 +51,7 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
  *   <li>The layout is the layout of the generation (see {@link FortifiedVillageStructure#layout(
  *       Structure.GenerationContext, int, java.util.function.Predicate)}). The world generation of the chunks of the
  *       box adds the references, the terrain adaptation and the pieces, as for a natural village.</li>
+ *   <li>A town, a city or a capital gets all the rings of its tier (see {@link VillageRings#planOfLevel}).</li>
  *   <li>The settlement of the start chunk gets the start level. The heart of the plaza binds to it.</li>
  * </ul>
  *
