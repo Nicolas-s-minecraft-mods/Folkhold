@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.nicolasgoyon.folkhold.core.sim.level.Tier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.command.VillageGeneration;
@@ -21,11 +22,17 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestSequence;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -39,6 +46,8 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class VillageGenerateCommandGameTests {
     /** The position of the source: far from the areas of the other tests. */
     private static final BlockPos ORIGIN = new BlockPos(-24000, 0, 24000);
+    /** The source of the test of the rings, far from {@link #ORIGIN}. */
+    private static final BlockPos RINGS_ORIGIN = new BlockPos(24000, 0, -24000);
     private static final String COMMAND = "folkhold village generate ";
     /**
      * The limit of the work of a generation on the server thread in one tick, in milliseconds. The budget of a tick is
@@ -109,6 +118,52 @@ public final class VillageGenerateCommandGameTests {
                             source.withPermission(0)).getContext().getNodes().stream()
                             .noneMatch(node -> node.getNode().getName().equals("village")),
                             "A source with no permission level 2 must not have the command");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * The command places a city with its 2 rings. Each ring district with pieces is a structure start of the ring
+     * structure in its anchor chunk. The districts have the 4 gates of each ring, and each gate has its fence gates
+     * in the world. The origin of this test is far from the origin of the other tests: their villages do not take
+     * the space of the rings.
+     */
+    @GameTest(template = "empty", timeoutTicks = TestSupport.WORKER_TICKS, batch = "village_generate_command_rings")
+    public static void generateCommandPlacesTheRingsOfACity(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        CommandSourceStack source = source(level).withPosition(Vec3.atBottomCenterOf(RINGS_ORIGIN));
+        FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
+                .registryOrThrow(Registries.STRUCTURE).get(Settlements.VILLAGE_STRUCTURE);
+        Structure ringStructure = level.registryAccess().registryOrThrow(Registries.STRUCTURE)
+                .get(ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village_ring"));
+        List<StructureStart> starts = new ArrayList<>();
+        Set<String> before = new HashSet<>();
+        GameTestSequence sequence = helper.startSequence().thenExecute(() -> start(helper, source, "city", before));
+        TestSupport.thenWaitForWorker(helper, sequence, () -> !VillageGeneration.isRunning(),
+                "The generation of the city must end")
+                .thenExecute(() -> {
+                    StructureStart city = check(helper, "city", before, starts);
+                    String gate = structure.variantOf(level, city.getPieces()).wall().gate().toString();
+                    ChunkPos start = city.getChunkPos();
+                    int gates = 0;
+                    for (RingDistricts.District district : RingDistricts.all()) {
+                        StructureStart ring = level.getChunk(district.anchorX(start.x), district.anchorZ(start.z))
+                                .getStartForStructure(ringStructure);
+                        if (ring == null) {
+                            continue;
+                        }
+                        for (StructurePiece piece : ring.getPieces()) {
+                            if (piece instanceof PoolElementStructurePiece template
+                                    && template.getElement().toString().contains(gate)) {
+                                gates++;
+                                helper.assertTrue(BlockPos.betweenClosedStream(piece.getBoundingBox())
+                                        .anyMatch(pos -> level.getBlockState(pos).getBlock() instanceof FenceGateBlock),
+                                        "The ring gate at " + piece.getBoundingBox() + " must have its fence gates");
+                            }
+                        }
+                    }
+                    helper.assertTrue(gates == 2 * 4, "The 2 rings of the city must have 4 gates each, not " + gates
+                            + " gates");
                 })
                 .thenSucceed();
     }

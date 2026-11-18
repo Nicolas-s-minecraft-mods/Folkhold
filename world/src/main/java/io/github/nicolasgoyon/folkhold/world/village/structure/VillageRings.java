@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
@@ -26,6 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -68,7 +70,7 @@ public final class VillageRings {
      * around its start piece, the distance of the start piece from the middle of the chunk (18 blocks) and its terrain
      * adaptation (12 blocks).
      */
-    static final int VANILLA_REACH = 110;
+    public static final int VANILLA_REACH = 110;
     /** The biome check of a vanilla start also reads the biome this number of blocks above the sea level. */
     static final int VANILLA_HIGH = 40;
     /** The box of a ring is larger by this number of blocks: its flat terrain and its piers. */
@@ -140,6 +142,57 @@ public final class VillageRings {
         }
         Key key = new Key(anchor.chunkGenerator(), anchor.randomState(), anchor.seed(), start.toLong());
         return cached(key, () -> plan(village, set, anchor, start, level));
+    }
+
+    /**
+     * A village of a start level with the pieces of its rings.
+     *
+     * @param layout    the layout of the village
+     * @param districts the pieces of the rings of the tier in each district, empty for a tier with no ring
+     */
+    public record Planned(FortifiedVillageStructure.Layout layout, Map<District, List<StructurePiece>> districts) {
+    }
+
+    /**
+     * The layout of a village of a start level at the start chunk of a context, with all the rings of its tier. The
+     * near villages remove no ring: the caller selects a start chunk that is far from them (see {@link #reach}). The
+     * command {@code /folkhold village generate} uses this method.
+     *
+     * @param village the village structure
+     * @param context the context of the generation at the start chunk: its biome test is the biome rule of the
+     *                structure
+     * @param level   the start level: its tier gives the size of the village and the number of rings
+     * @param variant the test of the variant of the site
+     * @return the village, or empty if the site does not accept a village, if the biome at the middle of the plaza is
+     *         not valid, or if the variant fails the test
+     */
+    public static Optional<Planned> planOfLevel(FortifiedVillageStructure village, Structure.GenerationContext context,
+            int level, Predicate<FortifiedVillageStructure.Variant> variant) {
+        return village.generatedStart(context).filter(site -> variant.test(site.variant())).map(site -> {
+            FortifiedVillageStructure.Layout layout = village.layout(context, site, level);
+            VillageSize size = VillageSizes.forLevel(level);
+            if (size.rings() == 0) {
+                return new Planned(layout, Map.of());
+            }
+            ChunkPos start = context.chunkPos();
+            List<VillageWall.Wall> rings = VillageWall.rings(context, site.terrain(), layout.firstWall(),
+                    size.rings(), BAND, site.variant().wall(), site.maritime(), start);
+            Map<District, List<StructurePiece>> districts = VillageWall.districts(rings, start);
+            if (districts.keySet().removeIf(district -> !district.exists())) {
+                FolkholdWorld.LOGGER.warn("The rings of the village in the start chunk {} go out of the districts",
+                        start);
+            }
+            return new Planned(layout, districts);
+        });
+    }
+
+    /**
+     * The rings of a village of a level go this number of blocks or less past its first wall, with their flat terrain
+     * and their piers: 0 for a tier with no ring.
+     */
+    public static int reach(int level) {
+        int rings = VillageSizes.forLevel(level).rings();
+        return rings == 0 ? 0 : rings * BAND + RING_MARGIN;
     }
 
     /** The value of a key: one thread calculates it, and the other threads wait for it. */
@@ -228,13 +281,20 @@ public final class VillageRings {
      * middle of the chunk, at the sea level or {@link #VANILLA_HIGH} blocks above it. The check reads the seed only.
      */
     static boolean vanillaBiome(StructureSet set, Structure.GenerationContext anchor, ChunkPos chunk) {
+        return vanillaBiome(set, anchor.chunkGenerator(), anchor.biomeSource(), anchor.randomState(), chunk);
+    }
+
+    /**
+     * As {@link #vanillaBiome(StructureSet, Structure.GenerationContext, ChunkPos)}, with the parts of the context
+     * that the check reads.
+     */
+    public static boolean vanillaBiome(StructureSet set, ChunkGenerator generator, BiomeSource biomes,
+            RandomState random, ChunkPos chunk) {
         int[][] points = {{0, 0}, {15, 0}, {0, 15}, {15, 15}, {8, 8}};
-        for (int y : new int[] {anchor.chunkGenerator().getSeaLevel(), anchor.chunkGenerator().getSeaLevel()
-                + VANILLA_HIGH}) {
+        for (int y : new int[] {generator.getSeaLevel(), generator.getSeaLevel() + VANILLA_HIGH}) {
             for (int[] point : points) {
-                Holder<Biome> biome = anchor.biomeSource().getNoiseBiome(
-                        QuartPos.fromBlock(chunk.getMinBlockX() + point[0]), QuartPos.fromBlock(y),
-                        QuartPos.fromBlock(chunk.getMinBlockZ() + point[1]), anchor.randomState().sampler());
+                Holder<Biome> biome = biomes.getNoiseBiome(QuartPos.fromBlock(chunk.getMinBlockX() + point[0]),
+                        QuartPos.fromBlock(y), QuartPos.fromBlock(chunk.getMinBlockZ() + point[1]), random.sampler());
                 if (set.structures().stream().anyMatch(entry -> entry.structure().value().biomes()
                         .contains(biome))) {
                     return true;

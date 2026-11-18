@@ -14,6 +14,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -23,6 +24,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -49,6 +51,7 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
  *   <li>The layout is the layout of the generation (see {@link FortifiedVillageStructure#layout(
  *       Structure.GenerationContext, int, java.util.function.Predicate)}). The world generation of the chunks of the
  *       box adds the references, the terrain adaptation and the pieces, as for a natural village.</li>
+ *   <li>A town, a city or a capital gets all the rings of its tier (see {@link VillageRings#planOfLevel}).</li>
  *   <li>The settlement of the start chunk gets the start level. The heart of the plaza binds to it.</li>
  * </ul>
  *
@@ -150,15 +153,16 @@ public final class VillageCommands {
     }
 
     /**
-     * True if a start chunk is far from the other villages, with the rules of the world generation:
+     * True if a start chunk is far from the other villages:
      *
      * <ul>
-     *   <li>the walls of the new village and of each settlement (with the maximum radius of its level) are
-     *       {@link #GAP} blocks apart at least;</li>
+     *   <li>the outer walls of the new village and of each settlement (with the maximum radius and all the rings of
+     *       its level) are {@link #GAP} blocks apart at least;</li>
      *   <li>no possible vanilla village start is in {@link #VANILLA_EXCLUSION} chunks, as the exclusion zone of the
      *       structure set of the faction villages;</li>
-     *   <li>no possible natural faction village start is near enough for its wall to come near the new wall: the
-     *       natural village has the largest radius of the structure.</li>
+     *   <li>no possible natural faction village start is near enough for its first wall to come near the new first
+     *       wall: the natural village has the largest radius of the structure;</li>
+     *   <li>in a world that generates structures, the rings also keep their space (see {@link #ringsAreFree}).</li>
      * </ul>
      */
     static boolean farFromVillages(ServerLevel level, FortifiedVillageStructure structure, ChunkPos chunk, int start) {
@@ -174,16 +178,79 @@ public final class VillageCommands {
             }
         }
         ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
+        int wall = firstWall(structure, start);
         int natural = structure.maxDistanceFromCenter() + structure.wall().margin() + WALL_LINE;
-        int naturalRange = Math.ceilDiv(radius + natural + GAP, 16);
+        int naturalRange = Math.ceilDiv(wall + natural + GAP, 16);
         return !inRange(level, state, BuiltinStructureSets.VILLAGES, chunk, VANILLA_EXCLUSION)
-                && !inRange(level, state, SettlementDiscovery.VILLAGE_SET, chunk, naturalRange);
+                && !inRange(level, state, SettlementDiscovery.VILLAGE_SET, chunk, naturalRange)
+                && (!level.structureManager().shouldGenerateStructures()
+                        || ringsAreFree(level, structure, state, chunk, start));
     }
 
-    /** The largest distance of the wall of a village of a level from its middle, in blocks. */
-    private static int radius(FortifiedVillageStructure structure, int level) {
+    /**
+     * True if the rings of the new village and the rings of the natural villages keep their space. The world
+     * generation does not know the new village, so its rings do not go away for it.
+     *
+     * <ul>
+     *   <li>No vanilla village can start (placement and biome, see {@link VillageRings#vanillaBiome}) near enough to
+     *       touch the outer wall of the new village: a vanilla village stays in {@link VillageRings#VANILLA_REACH}
+     *       blocks around its start chunk.</li>
+     *   <li>The outer wall of each possible natural faction village, with the rings of its start level, and the outer
+     *       wall of the new village are {@link #GAP} blocks apart at least.</li>
+     * </ul>
+     */
+    private static boolean ringsAreFree(ServerLevel level, FortifiedVillageStructure structure,
+            ChunkGeneratorStructureState state, ChunkPos chunk, int start) {
+        int radius = radius(structure, start);
+        Registry<StructureSet> sets = level.registryAccess().registryOrThrow(Registries.STRUCTURE_SET);
+        Optional<StructureSet> vanilla = sets.getOptional(BuiltinStructureSets.VILLAGES);
+        if (vanilla.isPresent()) {
+            int range = Math.ceilDiv(radius + VillageRings.VANILLA_REACH, 16);
+            for (int dx = -range; dx <= range; dx++) {
+                for (int dz = -range; dz <= range; dz++) {
+                    ChunkPos other = new ChunkPos(chunk.x + dx, chunk.z + dz);
+                    if (vanilla.get().placement().isStructureChunk(state, other.x, other.z)
+                            && VillageRings.vanillaBiome(vanilla.get(), level.getChunkSource().getGenerator(),
+                                    level.getChunkSource().getGenerator().getBiomeSource(),
+                                    level.getChunkSource().randomState(), other)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        Optional<StructureSet> villages = sets.getOptional(SettlementDiscovery.VILLAGE_SET);
+        if (villages.isPresent()) {
+            int range = Math.ceilDiv(radius + radius(structure, LevelTables.get().maxLevel()) + GAP, 16);
+            for (int dx = -range; dx <= range; dx++) {
+                for (int dz = -range; dz <= range; dz++) {
+                    ChunkPos other = new ChunkPos(chunk.x + dx, chunk.z + dz);
+                    if (villages.get().placement().isStructureChunk(state, other.x, other.z)) {
+                        long distance = (long) radius + radius(structure, Settlements.startLevel(level.getSeed(),
+                                other)) + GAP;
+                        long blocksX = 16L * dx;
+                        long blocksZ = 16L * dz;
+                        if (blocksX * blocksX + blocksZ * blocksZ < distance * distance) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /** The largest distance of the first wall of a village of a level from its middle, in blocks. */
+    private static int firstWall(FortifiedVillageStructure structure, int level) {
         return Math.min(VillageSizes.forLevel(level).maxRadius(), structure.maxDistanceFromCenter())
                 + structure.wall().margin() + WALL_LINE;
+    }
+
+    /**
+     * The largest distance of the outer wall of a village of a level from its middle, in blocks: the first wall, then
+     * the rings of the tier with their flat terrain and their piers.
+     */
+    private static int radius(FortifiedVillageStructure structure, int level) {
+        return firstWall(structure, level) + VillageRings.reach(level);
     }
 
     /** True if a structure set has a possible start chunk in a range of chunks. */

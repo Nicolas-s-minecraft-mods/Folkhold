@@ -4,10 +4,13 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
@@ -15,6 +18,9 @@ import java.util.function.IntConsumer;
 import javax.annotation.Nullable;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
@@ -38,14 +44,16 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>{@link Phase#SEARCH}: it looks for the next start chunk that is far from the other villages (see
  *       {@link VillageCommands#farFromVillages}), the nearest first, for {@link #TICK_BUDGET_NANOS} at most in a
  *       tick.</li>
- *   <li>{@link Phase#LAYOUT}: a background thread calculates the layout of the village at this start chunk, as a
- *       worker thread of the world generation does. The layout reads the noise of the terrain and no chunk. With no
- *       layout, or with a box that contains the source, the search continues.</li>
- *   <li>{@link Phase#STARTS}: the structure start goes into the start chunk at the status {@code STRUCTURE_STARTS},
- *       before the references of the other chunks. Then each chunk of the box goes to this status at least, some
- *       chunks in each tick. A chunk that is already past {@code STRUCTURE_REFERENCES} gets its reference from this
- *       class.</li>
- *   <li>{@link Phase#CHUNKS}: each chunk of the box gets a chunk ticket at the full status. The world generation
+ *   <li>{@link Phase#LAYOUT}: a background thread calculates the layout of the village at this start chunk and the
+ *       rings of its tier (see {@link VillageRings#planOfLevel}), as a worker thread of the world generation does.
+ *       The layout reads the noise of the terrain and no chunk. With no layout, or with a box that contains the
+ *       source, the search continues.</li>
+ *   <li>{@link Phase#STARTS}: the structure start of the village goes into the start chunk at the status
+ *       {@code STRUCTURE_STARTS}, before the references of the other chunks. Each ring district with pieces is a
+ *       structure start of the ring structure in its anchor chunk, as at the generation. Then each chunk of the boxes
+ *       goes to this status at least, some chunks in each tick. A chunk that is already past
+ *       {@code STRUCTURE_REFERENCES} gets its references from this class.</li>
+ *   <li>{@link Phase#CHUNKS}: each chunk of the boxes gets a chunk ticket at the full status. The world generation
  *       then adds the references, the terrain adaptation and the pieces on its worker threads, as for a natural
  *       village. The source gets the progress each {@link #PROGRESS_TICKS} ticks. The wait stops after
  *       {@link #TIMEOUT_SECONDS} seconds of real time.</li>
@@ -69,6 +77,8 @@ public final class VillageGeneration {
     private static final int TICKET_DISTANCE = 0;
     private static final TicketType<Long> TICKET = TicketType.create("folkhold_world_village_generate",
             Long::compare);
+    private static final ResourceKey<Structure> RING_STRUCTURE = ResourceKey.create(Registries.STRUCTURE,
+            ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village_ring"));
 
     /** The generation that runs, or null. */
     @Nullable
@@ -86,9 +96,24 @@ public final class VillageGeneration {
      * @param center the middle of the plaza
      * @param level  the start level
      * @param style  the name of the style
-     * @param box    the box of the structure
+     * @param box    the box of the village structure, with no rings
+     * @param districts the number of ring districts with pieces
      */
-    record Generated(ChunkPos start, BlockPos center, int level, String style, BoundingBox box) {
+    record Generated(ChunkPos start, BlockPos center, int level, String style, BoundingBox box, int districts) {
+    }
+
+    /**
+     * A structure start of the generation.
+     *
+     * @param structure the structure: the village or the ring structure
+     * @param start     the structure start
+     */
+    private record Placed(Structure structure, StructureStart start) {
+        /** True if the box of the start has blocks in a chunk. */
+        boolean isIn(ChunkPos pos) {
+            return start.getBoundingBox().intersects(pos.getMinBlockX(), pos.getMinBlockZ(), pos.getMaxBlockX(),
+                    pos.getMaxBlockZ());
+        }
     }
 
     /** The end of a generation: a village, no site, the time limit of the chunks, or an error. */
@@ -96,6 +121,9 @@ public final class VillageGeneration {
 
     private final ServerLevel level;
     private final FortifiedVillageStructure structure;
+    /** The structure of the ring districts, or null if the data packs have no such structure. */
+    @Nullable
+    private final Structure ringStructure;
     private final BlockPos origin;
     private final int startLevel;
     private final Optional<String> style;
@@ -105,12 +133,13 @@ public final class VillageGeneration {
     private final boolean structures;
     private Phase phase = Phase.SEARCH;
     private ChunkPos startChunk;
-    private CompletableFuture<Optional<FortifiedVillageStructure.Layout>> layoutTask;
+    private CompletableFuture<Optional<VillageRings.Planned>> layoutTask;
     private FortifiedVillageStructure.Layout layout;
-    private StructureStart start;
-    /** The chunks of the box of the village. */
+    /** The structure starts to place: the village first, then its ring districts. */
+    private final List<Placed> starts = new ArrayList<>();
+    /** The chunks of the boxes of the structure starts. */
     private final List<ChunkPos> chunks = new ArrayList<>();
-    /** The chunks of the box that get their pieces from this class. */
+    /** The chunks of the boxes that get their pieces from this class. */
     private final List<ChunkPos> manual = new ArrayList<>();
     /** The index of the next chunk of the current phase. */
     private int next;
@@ -128,6 +157,7 @@ public final class VillageGeneration {
         this.style = style;
         this.progress = progress;
         this.ended = ended;
+        this.ringStructure = level.registryAccess().registryOrThrow(Registries.STRUCTURE).get(RING_STRUCTURE);
         this.candidates = VillageCommands.candidates(new ChunkPos(origin)).iterator();
         // With no structures in the world settings, the world generation places no pieces: this class does it.
         this.structures = level.structureManager().shouldGenerateStructures();
@@ -216,9 +246,9 @@ public final class VillageGeneration {
                         level.getChunkSource().getGenerator(), level.getChunkSource().getGenerator().getBiomeSource(),
                         level.getChunkSource().randomState(), level.getStructureManager(), level.getSeed(), chunk,
                         level, structure.biomes()::contains);
-                layoutTask = CompletableFuture.supplyAsync(() -> structure.layout(context, startLevel,
-                        variant -> style.map(name -> FortifiedVillageStructure.styleOf(variant).name().equals(name))
-                                .orElse(true)), Util.backgroundExecutor());
+                layoutTask = CompletableFuture.supplyAsync(() -> VillageRings.planOfLevel(structure, context,
+                        startLevel, variant -> style.map(name -> FortifiedVillageStructure.styleOf(variant).name()
+                                .equals(name)).orElse(true)), Util.backgroundExecutor());
                 phase = Phase.LAYOUT;
                 return;
             }
@@ -229,41 +259,59 @@ public final class VillageGeneration {
         end(End.NO_SITE, Optional.empty());
     }
 
-    /** Reads the layout when the background thread has it. A site with no village sends the search to the next chunk. */
+    /**
+     * Reads the layout when the background thread has it. A site with no village sends the search to the next chunk.
+     * Else the structure starts of the village and of its ring districts go into their chunks.
+     */
     private void readLayout() {
         if (!layoutTask.isDone()) {
             return;
         }
-        Optional<FortifiedVillageStructure.Layout> found = layoutTask.join();
+        Optional<VillageRings.Planned> found = layoutTask.join();
         layoutTask = null;
         if (found.isEmpty()) {
             phase = Phase.SEARCH;
             return;
         }
-        StructureStart structureStart = new StructureStart(structure, startChunk, 0,
-                new PiecesContainer(found.get().pieces()));
-        BoundingBox box = structureStart.getBoundingBox();
+        StructureStart village = new StructureStart(structure, startChunk, 0,
+                new PiecesContainer(found.get().layout().pieces()));
+        BoundingBox box = village.getBoundingBox();
         if (box.isInside(origin.getX(), box.minY(), origin.getZ())) {
             phase = Phase.SEARCH;
             return;
         }
-        layout = found.get();
-        start = structureStart;
-        ChunkAccess first = chunk(startChunk.x, startChunk.z);
-        first.setStartForStructure(structure, start);
-        first.setUnsaved(true);
-        for (int x = box.minX() >> 4; x <= box.maxX() >> 4; x++) {
-            for (int z = box.minZ() >> 4; z <= box.maxZ() >> 4; z++) {
-                chunks.add(new ChunkPos(x, z));
+        layout = found.get().layout();
+        starts.add(new Placed(structure, village));
+        if (ringStructure != null) {
+            found.get().districts().forEach((district, pieces) -> {
+                if (!pieces.isEmpty()) {
+                    starts.add(new Placed(ringStructure, new StructureStart(ringStructure, new ChunkPos(
+                            district.anchorX(startChunk.x), district.anchorZ(startChunk.z)), 0,
+                            new PiecesContainer(pieces))));
+                }
+            });
+        }
+        Set<ChunkPos> all = new LinkedHashSet<>();
+        for (Placed placed : starts) {
+            ChunkPos pos = placed.start().getChunkPos();
+            ChunkAccess first = chunk(pos.x, pos.z);
+            first.setStartForStructure(placed.structure(), placed.start());
+            first.setUnsaved(true);
+            BoundingBox area = placed.start().getBoundingBox();
+            for (int x = area.minX() >> 4; x <= area.maxX() >> 4; x++) {
+                for (int z = area.minZ() >> 4; z <= area.maxZ() >> 4; z++) {
+                    all.add(new ChunkPos(x, z));
+                }
             }
         }
+        chunks.addAll(all);
         next = 0;
         phase = Phase.STARTS;
     }
 
     /**
-     * Sends each chunk of the box to the status {@code STRUCTURE_STARTS} at least. A chunk past
-     * {@code STRUCTURE_REFERENCES} gets its reference, and a chunk past {@code FEATURES} is a chunk that gets its
+     * Sends each chunk of the boxes to the status {@code STRUCTURE_STARTS} at least. A chunk past
+     * {@code STRUCTURE_REFERENCES} gets its references, and a chunk past {@code FEATURES} is a chunk that gets its
      * pieces from this class. Then each chunk gets its ticket.
      */
     private void prepareChunks(long startNanos) {
@@ -271,7 +319,11 @@ public final class VillageGeneration {
             ChunkPos pos = chunks.get(next++);
             ChunkAccess chunk = chunk(pos.x, pos.z);
             if (chunk.getPersistedStatus().isOrAfter(ChunkStatus.STRUCTURE_REFERENCES)) {
-                chunk.addReferenceForStructure(structure, startChunk.toLong());
+                for (Placed placed : starts) {
+                    if (placed.isIn(pos)) {
+                        chunk.addReferenceForStructure(placed.structure(), placed.start().getChunkPos().toLong());
+                    }
+                }
                 chunk.setUnsaved(true);
             }
             if (chunk.getPersistedStatus().isOrAfter(ChunkStatus.FEATURES) || !structures) {
@@ -314,10 +366,14 @@ public final class VillageGeneration {
     private void placePieces(long startNanos) {
         while (next < manual.size()) {
             ChunkPos pos = manual.get(next++);
-            start.placeInChunk(level, level.structureManager(), level.getChunkSource().getGenerator(),
-                    level.getRandom(), new BoundingBox(pos.getMinBlockX(), level.getMinBuildHeight(),
-                            pos.getMinBlockZ(), pos.getMaxBlockX(), level.getMaxBuildHeight(), pos.getMaxBlockZ()),
-                    pos);
+            BoundingBox area = new BoundingBox(pos.getMinBlockX(), level.getMinBuildHeight(), pos.getMinBlockZ(),
+                    pos.getMaxBlockX(), level.getMaxBuildHeight(), pos.getMaxBlockZ());
+            for (Placed placed : starts) {
+                if (placed.isIn(pos)) {
+                    placed.start().placeInChunk(level, level.structureManager(),
+                            level.getChunkSource().getGenerator(), level.getRandom(), area, pos);
+                }
+            }
             if (!hasTime(startNanos)) {
                 return;
             }
@@ -326,10 +382,11 @@ public final class VillageGeneration {
         SettlementData data = SettlementData.get(level.getServer());
         data.registry().add(Settlements.create(level.getServer(), UUID.randomUUID(), startChunk, center, startLevel));
         data.setDirty();
-        FolkholdWorld.LOGGER.info("Generated a village of the level {} at {} (start chunk {}), box {}", startLevel,
-                center, startChunk, start.getBoundingBox());
-        end(End.PLACED, Optional.of(new Generated(startChunk, center, startLevel, layout.style().name(),
-                start.getBoundingBox())));
+        BoundingBox box = starts.get(0).start().getBoundingBox();
+        FolkholdWorld.LOGGER.info("Generated a village of the level {} at {} (start chunk {}), box {}, {} ring"
+                + " districts", startLevel, center, startChunk, box, starts.size() - 1);
+        end(End.PLACED, Optional.of(new Generated(startChunk, center, startLevel, layout.style().name(), box,
+                starts.size() - 1)));
     }
 
     /** Ends the generation: the tickets go away, and the listener gets the result. */
