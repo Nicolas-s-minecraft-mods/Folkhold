@@ -74,4 +74,51 @@ class RingDistrictsTest {
         assertEquals(2, RingDistricts.keptRings(rings, List.of(new Neighbor(core, outer, false))));
         assertEquals(1, RingDistricts.keptRings(rings, List.of(new Neighbor(core, outer, true))));
     }
+
+    @Test
+    void exactlyOneOfTwoVillagesHasPriority() {
+        int[][] villages = {{12, 0, 0}, {12, 0, 5}, {12, 5, -3}, {16, 2, 2}, {9, -4, 7}, {16, -4, 7}};
+        for (int[] a : villages) {
+            for (int[] b : villages) {
+                if (a != b) {
+                    assertTrue(RingDistricts.hasPriority(a[0], a[1], a[2], b[0], b[1], b[2])
+                            != RingDistricts.hasPriority(b[0], b[1], b[2], a[0], a[1], a[2]),
+                            "Priority of " + List.of(a[0], a[1], a[2]) + " and " + List.of(b[0], b[1], b[2]));
+                }
+            }
+        }
+        assertTrue(RingDistricts.hasPriority(16, 9, 9, 12, 0, 0));
+        assertTrue(RingDistricts.hasPriority(12, 0, 9, 12, 1, 0));
+    }
+
+    /**
+     * Two villages at many distances, with rings as large as their largest boxes: the kept rings of a village never
+     * touch the core or the kept rings of the other village.
+     */
+    @Test
+    void theKeptRingsOfTwoVillagesNeverOverlap() {
+        int band = 24;
+        int margin = 14;
+        for (int distance = 100; distance <= 500; distance += 7) {
+            Box coreA = new Box(-125, -125, 125, 125);
+            Box coreB = new Box(distance - 115, 20 - 115, distance + 115, 20 + 115);
+            List<Box> ringsA = List.of(coreA.grow(band + margin), coreA.grow(2 * band + margin),
+                    coreA.grow(3 * band + margin));
+            List<Box> ringsB = List.of(coreB.grow(band + margin), coreB.grow(2 * band + margin));
+            boolean aFirst = RingDistricts.hasPriority(20, 0, 0, 16, distance / 16, 1);
+            int keptA = RingDistricts.keptRings(ringsA, List.of(RingDistricts.neighbor(coreB, 2, band, margin,
+                    !aFirst)));
+            int keptB = RingDistricts.keptRings(ringsB, List.of(RingDistricts.neighbor(coreA, 3, band, margin,
+                    aFirst)));
+            for (int a = 0; a < keptA; a++) {
+                assertFalse(RingDistricts.touches(ringsA.get(a), coreB), "Ring " + a + " of A at " + distance);
+                for (int b = 0; b < keptB; b++) {
+                    assertFalse(RingDistricts.touches(ringsA.get(a), ringsB.get(b)), "Rings at " + distance);
+                }
+            }
+            for (int b = 0; b < keptB; b++) {
+                assertFalse(RingDistricts.touches(ringsB.get(b), coreA), "Ring " + b + " of B at " + distance);
+            }
+        }
+    }
 }

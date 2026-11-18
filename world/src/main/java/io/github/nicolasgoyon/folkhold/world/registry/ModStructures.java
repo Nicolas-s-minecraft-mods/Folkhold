@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRingStructure;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.levelgen.structure.StructureType;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
@@ -31,6 +32,10 @@ public final class ModStructures {
     /** The faction village: the pieces of the jigsaw pools in a closed wall ({@link FortifiedVillageStructure}). */
     public static final DeferredHolder<StructureType<?>, StructureType<FortifiedVillageStructure>> FORTIFIED_VILLAGE =
             TYPES.register("fortified_village", () -> () -> FortifiedVillageStructure.CODEC);
+
+    /** A ring district of a faction village ({@link VillageRingStructure}). */
+    public static final DeferredHolder<StructureType<?>, StructureType<VillageRingStructure>> VILLAGE_RING =
+            TYPES.register("village_ring", () -> () -> VillageRingStructure.CODEC);
 
     /** A segment of the palisade of a village ({@link PalisadePiece}). */
     public static final DeferredHolder<StructurePieceType, StructurePieceType> PALISADE =

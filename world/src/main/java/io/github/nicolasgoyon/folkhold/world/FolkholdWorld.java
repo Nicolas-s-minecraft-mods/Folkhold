@@ -66,6 +66,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageRaids;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSpawnProtection;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -133,6 +134,8 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(AdminMap::onServerTick);
         NeoForge.EVENT_BUS.addListener(AdminMap::onLoggedOut);
         NeoForge.EVENT_BUS.addListener(AdminMap::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(VillageRings::onLevelLoad);
+        NeoForge.EVENT_BUS.addListener(VillageRings::onServerStopped);
         NeoForge.EVENT_BUS.addListener(Notices::onLoggedOut);
         NeoForge.EVENT_BUS.addListener(Notices::onServerStopped);
         NeoForge.EVENT_BUS.addListener(VillageSpawnProtection::onPositionCheck);
