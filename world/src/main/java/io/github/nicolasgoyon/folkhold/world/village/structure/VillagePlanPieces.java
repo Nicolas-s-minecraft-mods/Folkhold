@@ -54,8 +54,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>The plan uses the frame of the plaza template: its north is the side of the street of the bank. The plan turns
  *       with the plaza: the middle of the plaza is (0, 0) of the plan.</li>
  *   <li>Each street piece is the element of its pool with the length of the piece (rotation {@code NONE}, along z):
- *       {@code streets_bank}, {@code streets_jobs} and {@code streets_first} for the first piece of the street to the
- *       north, to the south and to the east or west, {@code streets_next} for a segment or a crossroad,
+ *       {@code streets_bank} for the first piece of the street to the north and {@code streets_first} for the first
+ *       piece of the other axis streets, {@code streets_next} for a segment or a crossroad,
  *       {@code streets_side} for the start of a side street and {@code street_ends} for a street end. The pools are in
  *       the folder of the pool of the homes of the variant. The piece follows the terrain, as in a jigsaw
  *       structure.</li>
@@ -304,8 +304,7 @@ final class VillagePlanPieces {
             String name = switch (piece.kind()) {
                 case SEGMENT, CROSS -> piece.parent() >= 0 ? "streets_next" : switch (piece.dir()) {
                     case NORTH -> "streets_bank";
-                    case SOUTH -> "streets_jobs";
-                    case EAST, WEST -> "streets_first";
+                    case SOUTH, EAST, WEST -> "streets_first";
                 };
                 case SIDE -> "streets_side";
                 case END -> "street_ends";

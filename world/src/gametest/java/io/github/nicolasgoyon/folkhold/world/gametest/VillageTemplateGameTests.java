@@ -38,11 +38,11 @@ public final class VillageTemplateGameTests {
     /** The number of the other rigid pieces of each variant: the plaza, the bank, the market, the tower, the gate. */
     private static final int OTHER_PIECES = 5;
     /**
-     * The number of the street pieces of each variant: {@code street}, {@code street_bank}, {@code street_jobs} and
+     * The number of the street pieces of each variant: {@code street}, {@code street_bank} and
      * {@code street_end}, and the planned streets {@code street_next}, {@code street_cross} and {@code street_side}
      * (see {@link VillagePieces#PLANNED_STREETS}).
      */
-    private static final int STREET_PIECES = 7;
+    private static final int STREET_PIECES = 6;
     /** The number of the pieces that the plan test checks: all the rigid pieces of all the variants. */
     private static final int PLAN_PIECES = (JOBS + OTHER_PIECES) * VARIANTS + HomeTemplateGameTests.HOME_PIECES;
     /** The number of the pieces that the plan test does not check: the streets of all the variants. */
