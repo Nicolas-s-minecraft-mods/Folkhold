@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
+import io.github.nicolasgoyon.folkhold.world.group.RoadNetwork;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -84,9 +85,18 @@ public final class StreetBlocks {
         return state.isAir() || !state.getFluidState().isEmpty() || state.canBeReplaced();
     }
 
-    /** True if a top block can be the surface of a street: a full block, or a block of path. */
-    static boolean isStreetBlock(ServerLevel level, BlockPos pos, BlockState state) {
-        return !isHole(state) && (state.is(Blocks.DIRT_PATH) || state.isCollisionShapeFullBlock(level, pos));
+    /**
+     * True if a top block can be the surface of a street: a full block, a block of path, or a block of the road tag
+     * (the slabs, and the stairs of the streets on a slope).
+     *
+     * @param level the level
+     * @param pos   the position of the block
+     * @param state the block
+     * @return true for a block of a street
+     */
+    public static boolean isStreetBlock(ServerLevel level, BlockPos pos, BlockState state) {
+        return !isHole(state) && (state.is(Blocks.DIRT_PATH) || state.is(RoadNetwork.ROAD)
+                || state.isCollisionShapeFullBlock(level, pos));
     }
 
     /** The bridge block of a village: the planks of the log of its palisade, else the base of its palisade. */

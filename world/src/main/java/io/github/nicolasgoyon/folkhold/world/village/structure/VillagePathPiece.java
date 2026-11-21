@@ -1,10 +1,15 @@
 package io.github.nicolasgoyon.folkhold.world.village.structure;
 
 import io.github.nicolasgoyon.folkhold.core.sim.village.PathRamp;
+import io.github.nicolasgoyon.folkhold.core.sim.village.StreetSteps;
 import io.github.nicolasgoyon.folkhold.world.registry.ModStructures;
 import java.util.Arrays;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
@@ -12,6 +17,7 @@ import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -39,6 +45,10 @@ import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
  *       becomes the surface block of the terrain of its column (grass, sand).</li>
  * </ul>
  *
+ * <p>A path with a stair block puts a stair where 2 rows side by side have a difference of 1 block (see
+ * {@link StreetSteps}): on the 3 blocks of path of the lower row, facing the higher row. A path of an earlier save has
+ * no stair block, and it gets no stairs.
+ *
  * <p>The path does not change deep water, and it does not change the blocks of the other pieces.
  */
 public final class VillagePathPiece extends StructurePiece implements PieceBeardifierModifier {
@@ -61,6 +71,8 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     /** The level of each row: the Y of its top block. */
     private final int[] levels;
     private final boolean edges;
+    /** The stair of the level changes, or empty for no stairs. */
+    private final Optional<BlockState> stairs;
 
     /**
      * Makes a path with no edges.
@@ -86,6 +98,22 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      * @param edges  true for a path with an edge of terrain on each side: the width of a street
      */
     public VillagePathPiece(int startX, int startZ, int stepX, int stepZ, int[] levels, boolean edges) {
+        this(startX, startZ, stepX, stepZ, levels, edges, Optional.empty());
+    }
+
+    /**
+     * Makes a path with stairs.
+     *
+     * @param startX the X of the middle of the first row
+     * @param startZ the Z of the middle of the first row
+     * @param stepX  the X step from a row to the next one: -1, 0 or 1
+     * @param stepZ  the Z step from a row to the next one: -1, 0 or 1
+     * @param levels the level of each row: the Y of its top block, at least one row
+     * @param edges  true for a path with an edge of terrain on each side: the width of a street
+     * @param stairs the stair of the level changes, or empty for no stairs
+     */
+    public VillagePathPiece(int startX, int startZ, int stepX, int stepZ, int[] levels, boolean edges,
+            Optional<BlockState> stairs) {
         super(ModStructures.VILLAGE_PATH.get(), 0, boundingBox(startX, startZ, stepX, stepZ, levels, edges));
         this.startX = startX;
         this.startZ = startZ;
@@ -94,6 +122,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         this.length = levels.length;
         this.levels = levels.clone();
         this.edges = edges;
+        this.stairs = stairs;
     }
 
     /** Loads a path. */
@@ -106,6 +135,13 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         this.length = tag.getInt("Length");
         this.levels = tag.getIntArray("Levels");
         this.edges = tag.getBoolean("Edges");
+        this.stairs = tag.contains("Stairs") ? Optional.of(NbtUtils.readBlockState(BuiltInRegistries.BLOCK
+                .asLookup(), tag.getCompound("Stairs"))) : Optional.empty();
+    }
+
+    /** The stair of the level changes, or empty for no stairs. */
+    public Optional<BlockState> stairs() {
+        return stairs;
     }
 
     /** The level of each row: the Y of its top block. */
@@ -145,6 +181,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         tag.putInt("Length", length);
         tag.putIntArray("Levels", levels);
         tag.putBoolean("Edges", edges);
+        stairs.ifPresent(state -> tag.put("Stairs", NbtUtils.writeBlockState(state)));
     }
 
     @Override
@@ -167,6 +204,43 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
                 }
             }
         }
+        if (stairs.isEmpty() || levels.length != length) {
+            return;
+        }
+        int[] steps = StreetSteps.stairs(levels);
+        for (int row = 0; row < length; row++) {
+            if (steps[row] == StreetSteps.NONE) {
+                continue;
+            }
+            Direction facing = Direction.fromDelta(stepX * steps[row], 0, stepZ * steps[row]);
+            for (int side = -HALF_WIDTH; side <= HALF_WIDTH; side++) {
+                int x = startX + stepX * row + acrossX * side;
+                int z = startZ + stepZ * row + acrossZ * side;
+                if (x >= box.minX() && x <= box.maxX() && z >= box.minZ() && z <= box.maxZ()) {
+                    placeStair(level, pos, x, levels[row], z, stairs.get(), facing);
+                }
+            }
+        }
+    }
+
+    /**
+     * Places a stair on the top block of a street, facing the higher row: only on a block of path, under air or a
+     * plant.
+     *
+     * @param top the Y of the top block of the row
+     */
+    static void placeStair(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int top, int z,
+            BlockState stairs, Direction facing) {
+        if (facing == null || !isStreet(level.getBlockState(pos.set(x, top, z)))) {
+            return;
+        }
+        BlockState above = level.getBlockState(pos.set(x, top + 1, z));
+        if (!(above.isAir() || TerrainPiece.isPlant(above))) {
+            return;
+        }
+        BlockState stair = stairs.hasProperty(StairBlock.FACING) ? stairs.setValue(StairBlock.FACING, facing)
+                : stairs;
+        level.setBlock(pos, stair, Block.UPDATE_CLIENTS);
     }
 
     /**

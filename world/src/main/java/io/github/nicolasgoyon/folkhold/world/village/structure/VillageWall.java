@@ -266,7 +266,8 @@ public final class VillageWall {
             Arm arm = arms.get(gate);
             if (arm != null) {
                 int[] levels = levels(arm, gateLevels.get(gate), terrain);
-                pieces.add(new VillagePathPiece(arm.startX(), arm.startZ(), arm.stepX(), arm.stepZ(), levels, true));
+                pieces.add(new VillagePathPiece(arm.startX(), arm.startZ(), arm.stepX(), arm.stepZ(), levels, true,
+                        Optional.of(settings.streetStairs())));
                 moveHouses(templates, village, arm, levels);
             }
             if (waterGates.contains(gate)) {
@@ -367,7 +368,7 @@ public final class VillageWall {
                 Arm arm = arms.get(gate);
                 if (arm != null) {
                     pieces.add(new VillagePathPiece(arm.startX(), arm.startZ(), arm.stepX(), arm.stepZ(),
-                            levels(arm, gateLevels.get(gate), terrain), true));
+                            levels(arm, gateLevels.get(gate), terrain), true, Optional.of(settings.streetStairs())));
                 }
                 if (isWaterGate(layout, gate, terrain::height, seaLevel)) {
                     waterGates.add(gate);

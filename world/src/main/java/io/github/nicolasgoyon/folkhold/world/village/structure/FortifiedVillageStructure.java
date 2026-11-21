@@ -345,7 +345,8 @@ public final class FortifiedVillageStructure extends Structure {
      * @param village  the plaza, the street pieces and the buildings of the core
      * @param reserved the spaces of the free plots of the core and of the bands: the spare plots, and the wide plots
      *                 with no home of the pools
-     * @param wall     the pieces of the first wall
+     * @param wall     the pieces of the first wall, then the stairs of the streets of the core (see
+     *                 {@link StreetStepsPiece})
      * @param built    the number of plots with a building, in the core and in the bands
      * @param free     the number of free plots, in the core and in the bands
      * @param posts    the job ids of the house-workshops, in the order of the posts
@@ -567,6 +568,10 @@ public final class FortifiedVillageStructure extends Structure {
         List<BoundingBox> reserved = new ArrayList<>(core.reserved());
         VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, core.reserved(),
                 start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)));
+        // The stairs of the streets on the slopes, after the paths of the gates: a path has its own stairs.
+        List<StructurePiece> wallPieces = new ArrayList<>(wall.pieces());
+        wallPieces.addAll(StreetStepsPiece.of(plan, start.center(), turn, start.terrain(), paths(wall.pieces()),
+                start.variant().wall().streetStairs()));
         int built = core.built();
         int free = core.free();
         int placedPosts = uses.posts();
@@ -597,7 +602,10 @@ public final class FortifiedVillageStructure extends Structure {
                 free += stage.free();
                 reserved.addAll(stage.reserved());
                 bandPlans.add(bandPlan);
-                rings.add(walls.get(ring).withBand(stage.pieces()));
+                List<StructurePiece> bandPieces = new ArrayList<>(stage.pieces());
+                bandPieces.addAll(StreetStepsPiece.of(bandPlan, start.center(), turn, start.terrain(),
+                        paths(walls.get(ring).pieces()), start.variant().wall().streetStairs()));
+                rings.add(walls.get(ring).withBand(bandPieces));
             }
         }
         pieces.finish(missing.stream().map(PlotUses.Building::kind).toList(), placedPosts, posts.count());
@@ -611,7 +619,7 @@ public final class FortifiedVillageStructure extends Structure {
         }
         List<PoolElementStructurePiece> corePieces = new ArrayList<>(List.of(start.plaza()));
         corePieces.addAll(core.pieces());
-        return new Layout(level, size, style, plan, start.center(), corePieces, reserved, wall.pieces(), built, free,
+        return new Layout(level, size, style, plan, start.center(), corePieces, reserved, wallPieces, built, free,
                 pieces.postJobs(), problems, wall, bandPlans, rings);
     }
 
@@ -647,6 +655,11 @@ public final class FortifiedVillageStructure extends Structure {
      */
     public static int firstRadius(VillageSize size) {
         return hasBands(size) ? size.coreRadius() : size.maxRadius();
+    }
+
+    /** The boxes of the paths from the gates in some pieces of a wall. */
+    private static List<BoundingBox> paths(List<StructurePiece> pieces) {
+        return pieces.stream().filter(VillagePathPiece.class::isInstance).map(StructurePiece::getBoundingBox).toList();
     }
 
     /** The buildings of a list with a kind in a list of missing kinds: one building for each missing kind. */
