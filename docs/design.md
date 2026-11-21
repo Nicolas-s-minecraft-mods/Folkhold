@@ -50,6 +50,7 @@ The pinned versions are in `modpack/mods/*.pw.toml`.
 | Terrain | Tectonic | `tectonic` | 3.0.28 | Large continents, deep oceans, mountain ranges. Requires Lithostitched |
 | Light | LambDynamicLights | `lambdynamiclights` | 4.8.11 | Client only |
 | Library | GeckoLib | `geckolib` | 4.9.3 | Required by `folkhold_world` |
+| Library | Confee | `confee` | 0.2.0 | Beta, pinned. Client only. Required by `folkhold_world` and `folkhold_events` on the client: the config screens of the client options. The jar of its GitHub Release |
 | Comfort | JEI, Jade | `jei`, `jade` | 19.57.0.451, 15.10.6 | For development |
 | Comfort | Inventory Tweaks: ReFoxed | `inventory-tweaks-refoxed` | 1.2.0 | Client only. The key R sorts the inventory under the cursor (default key of the pack). Refills a stack that runs out, and replaces a tool that breaks |
 | Comfort | Default Options | `default-options` | 21.1.8 | Client only. Sets the default keys of the pack (`config/defaultoptions/keybindings.txt`), and keeps the keys that the player set. Requires Balm |
@@ -93,6 +94,13 @@ flowchart TB
 ```
 
 The balance mod has no dependency on `core` and stays usable alone. When the world mod is present, the balance mod uses it through an optional interface (for example to read village stocks).
+
+**Configuration.** Each mod has two kinds of options:
+
+- **Server options** (`ModConfigSpec` of NeoForge, type SERVER): the rules of the game. The file is `serverconfig/<mod id>-server.toml` of the world, and the server sends the values to the clients. The NeoForge config screen edits them only in a single player world that is not open to LAN. On a dedicated server, the operator edits the file.
+- **Client options** (Confee API, scope CLIENT): the display options of each player. `folkhold_world` has `showTerritoryHud` and `showQuestHud` (both on by default). `folkhold_events` has `cameraShake` (0 to 1, default 1). The file is `config/<mod id>-client.toml`. Each option has a label and a tooltip in English and in French (keys `config.<mod id>.client.<option>` and `<key>.tooltip`).
+
+The button "Config" of `folkhold_world` and `folkhold_events` in the mod list opens the Confee screen of the client options. The button "Server options" of this screen opens the NeoForge screen of the server options (`ServerConfigScreen` of `core`). Confee 0.2.0 has no server options and no sync from the server to the clients: thus the server options stay on `ModConfigSpec`. `folkhold_balance` has only server options and keeps the NeoForge screen. The button "Config" of `folkhold_core` opens the "What's new" screen.
 
 The concrete layer reads the blocks only in chunks that are ready: loaded and complete (`ReadyChunks`). On the server, `Level.isLoaded` is also true for a chunk that has a ticket and a generation that is not complete. A read in such a chunk stops the server thread until the generation is complete. For example, the village heart does its work only when all the chunks of its scan area (the area of the village structure) are ready.
 

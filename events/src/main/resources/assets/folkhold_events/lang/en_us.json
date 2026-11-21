@@ -37,7 +37,6 @@
   "folkhold_events.configuration.earthquakeCrackDepth": "Depth of a crack (blocks)",
   "folkhold_events.configuration.earthquakeFallDamage": "Damage of a falling block for each block of fall",
   "folkhold_events.configuration.earthquakeMaxFallDamage": "Largest damage of a falling block",
-  "folkhold_events.configuration.cameraShake": "Camera shake",
   "commands.folkhold_events.earthquake.refused": "No earthquake: its area overlaps an active earthquake, or the server has the largest number of active earthquakes or events.",
   "folkhold_events.storm.announce": "The wind rises. A storm is coming...",
   "folkhold_events.storm.start": "The storm breaks!",
@@ -84,5 +83,8 @@
   "folkhold_events.configuration.stormThrowChance": "Chance that a gust throws a mob",
   "folkhold_events.configuration.stormFlyingDamage": "Damage of a flying block",
   "folkhold_events.configuration.stormLightningSeconds": "Mean time between two lightning strikes (seconds)",
-  "commands.folkhold_events.storm.refused_dimension": "No storm in this dimension: a storm needs a sky with no ceiling, and the End has no storms."
+  "commands.folkhold_events.storm.refused_dimension": "No storm in this dimension: a storm needs a sky with no ceiling, and the End has no storms.",
+  "config.folkhold_events.client.cameraShake": "Camera shake",
+  "config.folkhold_events.client.cameraShake.tooltip": "Strength of the camera shake during an earthquake. 1 is the full shake. 0 turns off the shake.",
+  "config.folkhold_events.client.serverOptions": "Server options"
 }

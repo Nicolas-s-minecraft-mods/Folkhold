@@ -1,0 +1,34 @@
+// Confee: the config library of the client options. The world project and the events project apply this file
+// after gradle/mod-common.gradle.
+dependencies {
+    implementation "fr.heetstudio.confee:confee:${confee_version}"
+}
+
+// The Confee jar must be the jar of the modpack: its sha256 must be the hash of modpack/mods/confee.pw.toml.
+def confeeJars = configurations.compileClasspath.incoming.artifactView {
+    componentFilter { it instanceof ModuleComponentIdentifier && it.group == 'fr.heetstudio.confee' }
+}.files
+def verifyConfee = tasks.register('verifyConfee') {
+    def metafile = rootProject.file('modpack/mods/confee.pw.toml')
+    def jars = confeeJars
+    inputs.files(jars)
+    inputs.file(metafile)
+    doLast {
+        def match = metafile.text =~ /(?m)^hash = "([0-9a-f]{64})"$/
+        if (!match.find()) {
+            throw new GradleException("No sha256 hash in ${metafile}")
+        }
+        if (jars.isEmpty()) {
+            throw new GradleException("No Confee jar on the compile classpath. See docs/getting-started.md, Confee dependency.")
+        }
+        jars.each { jar ->
+            def actual = java.security.MessageDigest.getInstance('SHA-256').digest(jar.bytes).encodeHex().toString()
+            if (actual != match.group(1)) {
+                throw new GradleException("The sha256 of ${jar.name} is ${actual}, not the hash of ${metafile.name}")
+            }
+        }
+    }
+}
+tasks.named('compileJava') {
+    dependsOn verifyConfee
+}

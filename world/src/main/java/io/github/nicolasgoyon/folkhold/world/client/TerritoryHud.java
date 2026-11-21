@@ -22,7 +22,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffectInstance;
 
 /**
- * The territory panel at the top right of the screen (client option {@link ClientConfig#SHOW_TERRITORY_HUD}).
+ * The territory panel at the top right of the screen (client option {@link ClientConfig#showTerritoryHud}).
  *
  * <ul>
  *   <li>The banner of the faction that owns the territory.</li>
@@ -46,7 +46,7 @@ public final class TerritoryHud {
     public static void render(GuiGraphics graphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
-        if (!ClientConfig.SHOW_TERRITORY_HUD.get() || minecraft.options.hideGui
+        if (!ClientConfig.get().showTerritoryHud || minecraft.options.hideGui
                 || minecraft.getDebugOverlay().showDebugScreen() || player == null) {
             return;
         }

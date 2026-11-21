@@ -204,7 +204,6 @@
   "folkhold_world.configuration.reputationOffenseWindowSeconds": "Fenêtre des infractions (secondes)",
   "folkhold_world.configuration.reputationDestroyVillage": "Destruction d'un village",
   "message.folkhold_world.village_entry": "%s · %s · %s · %s",
-  "folkhold_world.configuration.showTerritoryHud": "Affichage du territoire",
   "folkhold_world.configuration.villageMessageRadius": "Distance du message de village",
   "folkhold_world.configuration.simulation": "Simulation",
   "folkhold_world.configuration.discoveryRadius": "Rayon de découverte des villages",
@@ -498,7 +497,6 @@
   "entity.minecraft.villager.folkhold_world.handyman": "Homme à tout faire",
   "message.folkhold_world.inhabitant_no_trade": "%s ne fait pas de commerce. Les travailleurs du village vendent les produits de leur métier.",
   "message.folkhold_world.builders.leave": "%s : Merci de sortir de la zone de travaux. Nous ne pouvons pas construire tant que vous y êtes.",
-  "folkhold_world.configuration.showQuestHud": "HUD des quêtes",
   "message.folkhold_world.quest_board_no_village": "Ce tableau de quêtes n'est pas dans un village actif.",
   "message.folkhold_world.captain_refuses": "%s : Je n'ai pas de travail pour toi.",
   "message.folkhold_world.quest_accepted": "Quête acceptée : %s",
@@ -965,5 +963,10 @@
   "folkhold_world.layer.route": "Itinéraire du journal",
   "folkhold_world.map.village": "%s · %s",
   "folkhold_world.layer.admin": "Carte d'administration",
-  "folkhold_world.map.admin": "%s · X %s, Z %s"
+  "folkhold_world.map.admin": "%s · X %s, Z %s",
+  "config.folkhold_world.client.showTerritoryHud": "Affichage du territoire",
+  "config.folkhold_world.client.showTerritoryHud.tooltip": "Affiche le panneau du territoire en haut à droite de l'écran : la faction qui possède le territoire, votre rang de réputation et le village proche.",
+  "config.folkhold_world.client.showQuestHud": "HUD des quêtes",
+  "config.folkhold_world.client.showQuestHud.tooltip": "Affiche le panneau des quêtes en haut à gauche de l'écran : vos quêtes en cours et les minutes avant leur échéance.",
+  "config.folkhold_world.client.serverOptions": "Options du serveur"
 }

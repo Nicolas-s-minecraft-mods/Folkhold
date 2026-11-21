@@ -22,7 +22,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * The quest panel at the top left of the screen (client option {@link ClientConfig#SHOW_QUEST_HUD}).
+ * The quest panel at the top left of the screen (client option {@link ClientConfig#showQuestHud}).
  *
  * <ul>
  *   <li>A header with the number of active quests and the maximum.</li>
@@ -53,7 +53,7 @@ public final class QuestHud {
 
     public static void render(GuiGraphics graphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!ClientConfig.SHOW_QUEST_HUD.get() || minecraft.options.hideGui
+        if (!ClientConfig.get().showQuestHud || minecraft.options.hideGui
                 || minecraft.getDebugOverlay().showDebugScreen() || minecraft.player == null) {
             return;
         }

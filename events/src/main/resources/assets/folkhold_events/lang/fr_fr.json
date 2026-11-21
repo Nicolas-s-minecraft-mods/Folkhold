@@ -37,7 +37,6 @@
   "folkhold_events.configuration.earthquakeCrackDepth": "Profondeur d'une fissure (blocs)",
   "folkhold_events.configuration.earthquakeFallDamage": "Dégâts d'un bloc qui tombe, par bloc de chute",
   "folkhold_events.configuration.earthquakeMaxFallDamage": "Dégâts maximaux d'un bloc qui tombe",
-  "folkhold_events.configuration.cameraShake": "Tremblement de la caméra",
   "commands.folkhold_events.earthquake.refused": "Pas de séisme : sa zone recouvre un séisme actif, ou le serveur a le nombre maximal de séismes ou d'événements actifs.",
   "folkhold_events.storm.announce": "Le vent se lève. Une tempête approche...",
   "folkhold_events.storm.start": "La tempête éclate !",
@@ -84,5 +83,8 @@
   "folkhold_events.configuration.stormThrowChance": "Probabilité qu'une rafale projette un mob",
   "folkhold_events.configuration.stormFlyingDamage": "Dégâts d'un bloc projeté",
   "folkhold_events.configuration.stormLightningSeconds": "Délai moyen entre deux éclairs (secondes)",
-  "commands.folkhold_events.storm.refused_dimension": "Pas de tempête dans cette dimension : une tempête demande un ciel sans plafond, et l'End n'a pas de tempête."
+  "commands.folkhold_events.storm.refused_dimension": "Pas de tempête dans cette dimension : une tempête demande un ciel sans plafond, et l'End n'a pas de tempête.",
+  "config.folkhold_events.client.cameraShake": "Tremblement de la caméra",
+  "config.folkhold_events.client.cameraShake.tooltip": "Force du tremblement de la caméra pendant un séisme. 1 donne le tremblement complet. 0 coupe le tremblement.",
+  "config.folkhold_events.client.serverOptions": "Options du serveur"
 }

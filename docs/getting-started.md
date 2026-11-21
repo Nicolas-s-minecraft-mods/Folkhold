@@ -303,6 +303,12 @@ To use the folder for each build, put `cartofoldDir=/home/dev/cartofold` (an abs
 
 The published POM of `folkhold_world` (GitHub Packages) has a runtime dependency on `io.github.nicolasgoyon.cartofold:cartofold`. A project that uses `folkhold_world` must declare the ivy repository of `gradle/repositories.gradle`, or the GitHub Packages repository of Cartofold (token with `read:packages`).
 
+## Confee dependency
+
+The world mod and the events mod require Confee on the client: Confee gives the config screen of their client options. Gradle downloads the NeoForge jar of the GitHub Release of Confee with no token (`gradle/repositories.gradle`). `confee_version` in `gradle.properties` is the version of the mod, and `confee_release` is the tag of the release. Confee is not on Modrinth and has no Maven repository. Before the compilation, the task `verifyConfee` (`gradle/confee.gradle`) compares the sha256 of the jar with the hash in `modpack/mods/confee.pw.toml`.
+
+The published POM of `folkhold_world` and `folkhold_events` has a runtime dependency on `fr.heetstudio.confee:confee`. A project that uses these mods must declare the ivy repository of `gradle/repositories.gradle`.
+
 ## Modpack
 
 The modpack is in `modpack/` (packwiz). Use packwiz in the container:
