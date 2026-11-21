@@ -148,10 +148,21 @@ final class BuilderWorker {
     }
 
     /**
-     * True if a villager can work on a site now: an adult builder that is awake. It does not panic, hide or fight a
-     * raid.
+     * True if a villager can work on a site now: an adult builder that is awake, with no rescue. It does not panic,
+     * hide or fight a raid.
      */
     static boolean isAvailable(Villager villager) {
+        return canWork(villager) && !VillageRescues.isRescuer(villager.getUUID());
+    }
+
+    /**
+     * True if a builder can work: awake and calm, with the builder profession. A builder with a rescue (see
+     * {@link VillageRescues}) can work, but it is not available for a construction site.
+     *
+     * @param villager the villager
+     * @return true if the builder can work
+     */
+    static boolean canWork(Villager villager) {
         Brain<Villager> brain = villager.getBrain();
         return villager.isAlive() && !villager.isBaby() && !villager.isSleeping() && !villager.isPassenger()
                 && !villager.isLeashed()

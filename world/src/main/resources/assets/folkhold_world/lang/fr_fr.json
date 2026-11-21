@@ -284,6 +284,8 @@
   "screen.folkhold_world.village_heart.population": "Population",
   "screen.folkhold_world.village_heart.housing": "Logement",
   "screen.folkhold_world.village_heart.blocked_villagers": "Villageois bloqués",
+  "screen.folkhold_world.village_heart.rescue": "Sauvetage",
+  "screen.folkhold_world.village_heart.rescue.no_ladders": "Attend des échelles",
   "screen.folkhold_world.village_heart.jobs": "Métiers",
   "screen.folkhold_world.village_heart.food": "Nourriture",
   "screen.folkhold_world.village_heart.treasury": "Trésor de la faction",

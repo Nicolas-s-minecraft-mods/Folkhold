@@ -61,6 +61,19 @@ public class UnitNavigation extends GroundPathNavigation {
         return new PathFinder(nodeEvaluator, maxVisitedNodes);
     }
 
+    /**
+     * A new node evaluator of the units: a closed fence gate is a closed wooden door. Other searches of a path for a
+     * unit use it, for example the search of a way of a blocked unit.
+     *
+     * @return the node evaluator
+     */
+    public static WalkNodeEvaluator newEvaluator() {
+        WalkNodeEvaluator evaluator = new GateNodeEvaluator();
+        evaluator.setCanPassDoors(true);
+        evaluator.setCanOpenDoors(true);
+        return evaluator;
+    }
+
     /** True if the block at the position is a closed fence gate. */
     public static boolean isClosedGate(BlockState state) {
         return state.getBlock() instanceof FenceGateBlock && !state.getValue(FenceGateBlock.OPEN);

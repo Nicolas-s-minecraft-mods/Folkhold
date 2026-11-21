@@ -10,6 +10,7 @@ import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderMaterials;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSites;
 import io.github.nicolasgoyon.folkhold.world.construction.ConstructionRuns;
+import io.github.nicolasgoyon.folkhold.world.construction.VillageRescues;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
@@ -195,6 +196,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(ConstructionRuns::onServerTick);
         NeoForge.EVENT_BUS.addListener(BuilderSites::onLevelTick);
         NeoForge.EVENT_BUS.addListener(BuilderMaterials::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(VillageRescues::onServerStopped);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, VillageRepairs::onBlockPlaced);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, VillageBeds::onBlockPlaced);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, VillageBeds::onBlockBroken);

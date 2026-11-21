@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.village;
 
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitNavigation;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -12,6 +13,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
@@ -135,28 +137,34 @@ public final class FolkNavigation extends GroundPathNavigation {
     }
 
     /**
-     * True if a villager has a way to a target: the path finder of the villager (with the zones of the wall of its
-     * village) finds a path that reaches the target. The search does not change the path of the villager. Its range
-     * is the distance to the target and {@value #WAY_MARGIN} blocks, from {@value #MIN_WAY_RANGE} to
+     * True if a mob has a way to a target: the path finder of the mob finds a path that reaches the target. A villager
+     * uses the path finder of the villagers, with the zones of the wall of its village. A unit of a garrison uses the
+     * path finder of the units (see {@link UnitNavigation#newEvaluator}). The search does not change the path of the
+     * mob. Its range is the distance to the target and {@value #WAY_MARGIN} blocks, from {@value #MIN_WAY_RANGE} to
      * {@value #MAX_WAY_RANGE} blocks.
      *
-     * @param villager    the villager
+     * @param mob         the mob
      * @param target      the target
      * @param closeEnough the path reaches the target at this distance or nearer, in blocks
      * @return true with a way
      */
-    public static boolean hasWay(Villager villager, BlockPos target, int closeEnough) {
-        BlockPos from = villager.blockPosition();
+    public static boolean hasWay(PathfinderMob mob, BlockPos target, int closeEnough) {
+        BlockPos from = mob.blockPosition();
         int distance = (int) Math.ceil(Math.sqrt(from.distSqr(target)));
         int range = Mth.clamp(distance + WAY_MARGIN, MIN_WAY_RANGE, MAX_WAY_RANGE);
-        PathNavigationRegion region = new PathNavigationRegion(villager.level(), from.offset(-range, -range, -range),
+        PathNavigationRegion region = new PathNavigationRegion(mob.level(), from.offset(-range, -range, -range),
                 from.offset(range, range, range));
-        Evaluator evaluator = new Evaluator();
-        evaluator.setCanPassDoors(true);
-        evaluator.setCanOpenDoors(true);
-        evaluator.setCanFloat(villager.getNavigation().canFloat());
+        WalkNodeEvaluator evaluator;
+        if (mob.getNavigation() instanceof UnitNavigation) {
+            evaluator = UnitNavigation.newEvaluator();
+        } else {
+            evaluator = new Evaluator();
+            evaluator.setCanPassDoors(true);
+            evaluator.setCanOpenDoors(true);
+        }
+        evaluator.setCanFloat(mob.getNavigation().canFloat());
         PathFinder finder = new PathFinder(evaluator, range * WAY_NODES_PER_BLOCK);
-        Path path = finder.findPath(region, villager, Set.of(target), range, closeEnough, 1.0F);
+        Path path = finder.findPath(region, mob, Set.of(target), range, closeEnough, 1.0F);
         return path != null && path.canReach();
     }
 

@@ -9,13 +9,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.PathfinderMob;
 
 /**
- * The blocked villagers of a village: the villagers that cannot walk back to the heart, for example in a hole or on
- * the top of the palisade.
+ * The blocked villagers of a village: the villagers and the units of the garrison that cannot walk back to the heart,
+ * for example in a hole or on the top of the palisade.
  *
  * <ul>
+ *   <li>The check covers the villagers of the village, and the units of its garrison with a width of less than 1
+ *       block. A golem is not in the check. Below, a villager is a villager or a unit.</li>
  *   <li>A villager is still when it stays for {@value #STILL_TICKS} ticks in a cube of {@value #STILL_RADIUS} blocks
  *       around a position. A villager that goes out of this cube is not still and not blocked.</li>
  *   <li>A still villager gets a search of a way to the heart (see {@link FolkNavigation#hasWay}). With no way, the
@@ -47,20 +49,23 @@ public final class BlockedVillagers {
     /**
      * Updates the blocked villagers of a village.
      *
-     * @param heart       the position of the heart
-     * @param inhabitants the loaded villagers of the village
-     * @param now         the game time
-     * @return the number of blocked villagers
+     * @param heart the position of the heart
+     * @param mobs  the loaded villagers and units of the village
+     * @param now   the game time
+     * @return the number of blocked villagers and units
      */
-    public int update(BlockPos heart, List<Villager> inhabitants, long now) {
+    public int update(BlockPos heart, List<? extends PathfinderMob> mobs, long now) {
         Set<UUID> present = new HashSet<>();
         int searches = SEARCHES;
-        for (Villager villager : inhabitants) {
-            UUID id = villager.getUUID();
+        for (PathfinderMob mob : mobs) {
+            if (mob.getBbWidth() >= 1.0F) {
+                continue;
+            }
+            UUID id = mob.getUUID();
             present.add(id);
-            BlockPos pos = villager.blockPosition();
+            BlockPos pos = mob.blockPosition();
             Watch watch = watches.get(id);
-            if (watch == null || villager.isSleeping() || villager.navigation instanceof BuilderNavigation
+            if (watch == null || mob.isSleeping() || mob.getNavigation() instanceof BuilderNavigation
                     || !watch.isNear(pos)) {
                 watches.put(id, new Watch(pos.immutable(), now, now));
                 blocked.remove(id);
@@ -70,7 +75,7 @@ public final class BlockedVillagers {
                 continue;
             }
             searches--;
-            if (FolkNavigation.hasWay(villager, heart, HEART_DISTANCE)) {
+            if (FolkNavigation.hasWay(mob, heart, HEART_DISTANCE)) {
                 blocked.remove(id);
                 watches.put(id, new Watch(watch.anchor(), now, now));
             } else {
@@ -83,22 +88,22 @@ public final class BlockedVillagers {
         return blocked.size();
     }
 
-    /** The number of blocked villagers. */
+    /** The number of blocked villagers and units. */
     public int count() {
         return blocked.size();
     }
 
     /**
-     * True if a villager is blocked.
+     * True if a villager or a unit is blocked.
      *
-     * @param id the UUID of the villager
+     * @param id the UUID of the villager or of the unit
      * @return true for a blocked villager
      */
     public boolean isBlocked(UUID id) {
         return blocked.contains(id);
     }
 
-    /** The UUIDs of the blocked villagers, in the order of their detection. */
+    /** The UUIDs of the blocked villagers and units, in the order of their detection. */
     public List<UUID> blocked() {
         return List.copyOf(blocked);
     }

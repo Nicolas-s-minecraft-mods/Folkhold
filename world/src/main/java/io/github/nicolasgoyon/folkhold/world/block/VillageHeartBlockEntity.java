@@ -11,6 +11,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.garrison.PostAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.construction.VillageRescues;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
@@ -70,6 +71,7 @@ import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
@@ -82,6 +84,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
@@ -109,6 +112,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String LAST_THREAT_TAG = "LastThreat";
     private static final String GARRISON_TAG = "Garrison";
     private static final String PENS_TAG = "Pens";
+    private static final String RESCUES_TAG = "Rescues";
     /** The heart checks its garrison every 2 seconds. */
     private static final int GARRISON_INTERVAL = 40;
     /** In an alert, the heart rings the bells every 5 seconds. */
@@ -177,6 +181,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private boolean repairReferenceSearched;
     /** The blocked villagers of the village. Not saved: the villagers wait for the delay again after a load. */
     private final BlockedVillagers blockedVillagers = new BlockedVillagers();
+    /** The rescues of the blocked villagers by the builders. The heart saves the blocks of the rescue. */
+    private final VillageRescues rescues = new VillageRescues();
     /** The zones of the wall where the villagers do not walk, or null before the first use. Not saved. */
     @Nullable
     private WallZones wallZones;
@@ -920,7 +926,10 @@ public class VillageHeartBlockEntity extends BlockEntity {
         VillageHomes.claim(serverLevel, worldPosition, inhabitants, seats, beds);
         workers.update(serverLevel, this, inhabitants, seats, beds, settlement.get().jobPosts().orElse(List.of()));
         FolkNavigation.leaveWall(worldPosition, wallZones(serverLevel), inhabitants);
-        blockedVillagers.update(worldPosition, inhabitants, now);
+        List<PathfinderMob> mobs = new ArrayList<>(inhabitants);
+        mobs.addAll(getUnits());
+        blockedVillagers.update(worldPosition, mobs, now);
+        rescues.update(serverLevel, worldPosition, blockedVillagers.blocked(), now);
         int missing = missingInhabitants.size();
         if (missing == 0) {
             boolean changed = villagersFilling;
@@ -1036,6 +1045,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
             repairReference = VillageReference.find(serverLevel, worldPosition).orElse(null);
         }
         return Optional.ofNullable(repairReference);
+    }
+
+    /** The rescues of the blocked villagers by the builders of the village (see {@link VillageRescues}). */
+    public VillageRescues rescues() {
+        return rescues;
     }
 
     /** The blocked villagers of the village (see {@link BlockedVillagers}). The heart screen shows their number. */
@@ -1449,6 +1463,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     public static void serverTick(Level level, BlockPos pos, BlockState state, VillageHeartBlockEntity heart) {
         if (level instanceof ServerLevel serverLevel) {
             heart.handymen.tick(serverLevel);
+            heart.rescues.tick(serverLevel, heart);
         }
         long time = level.getGameTime() + Math.floorMod(pos.hashCode(), ROTATION_INTERVAL);
         if (time % CHECK_INTERVAL != 0) {
@@ -1488,7 +1503,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 heart.setChanged();
             }
             long repairTicks = WorldConfig.CONSTRUCTION_REPAIR_CHECK_SECONDS.get() * 20L;
-            if (heart.alertState == AlertState.CALM && time % repairTicks < CHECK_INTERVAL
+            if (heart.alertState == AlertState.CALM && !heart.rescues.isActive() && time % repairTicks < CHECK_INTERVAL
                     && VillageRepairs.check(serverLevel, heart).isEmpty()
                     && VillageGrowth.check(serverLevel, heart).isEmpty()) {
                 VillageLand.check(serverLevel, heart);
@@ -1522,6 +1537,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (level instanceof ServerLevel serverLevel) {
             handymen.stop(serverLevel);
+            rescues.stop(serverLevel);
         }
         super.setRemoved();
     }
@@ -1533,6 +1549,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (level instanceof ServerLevel serverLevel) {
             handymen.stop(serverLevel);
+            rescues.stop(serverLevel);
         }
         super.onChunkUnloaded();
     }
@@ -1545,6 +1562,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         tag.putLong(LAST_THREAT_TAG, lastThreatTick);
         tag.put(GARRISON_TAG, garrison.save());
         tag.put(PENS_TAG, pens.save());
+        tag.put(RESCUES_TAG, rescues.save());
         tag.put(LAYOUT_TAG, layout.save());
         tag.putBoolean(NIGHT_TAG, nightMode);
         tag.putBoolean(EXITS_TAG, exitStairs);
@@ -1585,6 +1603,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         lastThreatTick = tag.getLong(LAST_THREAT_TAG);
         garrison.load(tag.getList(GARRISON_TAG, Garrison.TAG_TYPE));
         pens.load(tag.getList(PENS_TAG, Tag.TAG_COMPOUND));
+        rescues.load(registries.lookupOrThrow(Registries.BLOCK), tag.getCompound(RESCUES_TAG));
         layout.load(tag.getCompound(LAYOUT_TAG));
         tradePlaceCache = null;
         nightMode = tag.getBoolean(NIGHT_TAG);
