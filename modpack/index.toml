@@ -16,12 +16,17 @@ metafile = true
 
 [[files]]
 file = "mods/cartofold.pw.toml"
-hash = "b33b5d865cf80ce5711daf6d8994a35118ace45aedf4ca03d69d57fd80869cc1"
+hash = "5dd564dd6628d9018c7eed5ab11aa3613520be212256bcb258fb4825cd1b42f1"
 metafile = true
 
 [[files]]
 file = "mods/chunky.pw.toml"
 hash = "1d5cc2b6dcfd1fc3adba4566b1c29b57ff1175316678c1f22e63cbc3e28a5ba0"
+metafile = true
+
+[[files]]
+file = "mods/confee.pw.toml"
+hash = "13b4962a64463bb01c526000fb67560ffa6b60ff9fd142673d88c368b7a4a642"
 metafile = true
 
 [[files]]

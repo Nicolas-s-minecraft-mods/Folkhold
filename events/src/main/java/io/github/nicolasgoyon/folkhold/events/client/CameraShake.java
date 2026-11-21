@@ -10,7 +10,7 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
  * The camera shake of an earthquake on the client. The server starts it (see
  * {@link io.github.nicolasgoyon.folkhold.events.network.EarthquakeShakePayload}). The camera turns by small angles
  * around the three axes. The shake fades out in its last second. The client config
- * {@link ClientConfig#CAMERA_SHAKE} scales it, and 0 turns it off.
+ * {@link ClientConfig#cameraShake} scales it, and 0 turns it off.
  */
 public final class CameraShake {
     /** The shake fades out in this number of ticks at its end. */
@@ -52,7 +52,7 @@ public final class CameraShake {
         if (remaining <= 0) {
             return;
         }
-        float scale = (float) (double) ClientConfig.CAMERA_SHAKE.get();
+        float scale = (float) ClientConfig.get().cameraShake;
         float strength = amplitude * scale * Math.min(1.0F, remaining / FADE_TICKS);
         if (strength <= 0.0F) {
             return;

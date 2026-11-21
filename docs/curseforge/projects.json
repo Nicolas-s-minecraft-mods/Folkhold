@@ -5,8 +5,13 @@
     "id": 1821107,
     "slug": "folkhold-world",
     "name": "Folkhold World",
-    "requires": ["folkhold-core", "folkhold-blocks", "geckolib", "cartofold"]
+    "requires": ["folkhold-core", "folkhold-blocks", "geckolib", "cartofold", "confee"]
   },
   "balance": {"id": 1821102, "slug": "folkhold-balance", "name": "Folkhold Balance", "requires": []},
-  "events": {"id": 1821115, "slug": "folkhold-events", "name": "Folkhold Events", "requires": ["folkhold-core"]}
+  "events": {
+    "id": 1821115,
+    "slug": "folkhold-events",
+    "name": "Folkhold Events",
+    "requires": ["folkhold-core", "confee"]
+  }
 }

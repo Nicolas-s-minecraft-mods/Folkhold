@@ -1,0 +1,8 @@
+name = "Confee"
+filename = "confee-0.2.0+1.21.1-neoforge.jar"
+side = "client"
+
+[download]
+url = "https://github.com/HeetroNoft/Confee/releases/download/0.2.0%2B1.21-1.21.1/confee-0.2.0%2B1.21.1-neoforge.jar"
+hash-format = "sha256"
+hash = "8222f986f675413ba2d67ddd1337a5cf74e193ab68332a02aa3884efe24c21fe"

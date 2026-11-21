@@ -6,9 +6,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -19,9 +17,11 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class FolkholdEventsClient {
 
     public FolkholdEventsClient(IEventBus modEventBus, ModContainer modContainer) {
-        // Config screen in the mod list. Server values are editable only in a world.
-        modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
-        modContainer.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
+        // Config screen in the mod list: the Confee screen of the client options. Its button "Server options"
+        // opens the NeoForge screen of the server options, which edits them only in a single player world.
+        ClientConfig.register();
+        modContainer.registerExtensionPoint(IConfigScreenFactory.class,
+                (container, parent) -> ClientConfig.config().createScreen(parent));
         NeoForge.EVENT_BUS.addListener(CameraShake::onClientTick);
         NeoForge.EVENT_BUS.addListener(CameraShake::onCameraAngles);
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> CameraShake.clear());

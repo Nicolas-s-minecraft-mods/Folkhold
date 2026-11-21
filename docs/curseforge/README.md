@@ -39,12 +39,16 @@ The relations of each CurseForge file. They are the required dependencies of `ne
 | Folkhold World | Folkhold Blocks | the same version |
 | Folkhold World | GeckoLib | 4.9.3 |
 | Folkhold World | Cartofold | 0.33.12 |
+| Folkhold World | Confee | 0.2.0 |
 | Folkhold Balance | none | |
 | Folkhold Events | Folkhold Core | the same version |
+| Folkhold Events | Confee | 0.2.0 |
 
 - All the Folkhold mods share one version. Upload the 5 jars of one release together.
-- A relation needs a CurseForge project on the other side. GeckoLib is on CurseForge. Cartofold must be a
-  CurseForge project before the upload of Folkhold World.
+- A relation needs a CurseForge project on the other side. GeckoLib and Confee (slug `confee`) are on CurseForge.
+  Cartofold must be a CurseForge project before the upload of Folkhold World.
+- Confee is required only on the client (`side = "CLIENT"` in `neoforge.mods.toml`). A dedicated server starts
+  with no Confee. CurseForge has no side for a relation: the relation is a required dependency.
 - NeoForge and Minecraft are not relations: they are the loader and the game version of the file.
 
 ## Upload of a release

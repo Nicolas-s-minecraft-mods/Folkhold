@@ -33,3 +33,11 @@ type = "required"
 versionRange = "[${mod_version},)"
 ordering = "AFTER"
 side = "BOTH"
+
+# Confee: the config screen of the client options. Only the client uses it.
+[[dependencies.${mod_id}]]
+modId = "confee"
+type = "required"
+versionRange = "[${confee_version},)"
+ordering = "AFTER"
+side = "CLIENT"

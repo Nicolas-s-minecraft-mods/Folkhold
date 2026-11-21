@@ -9,6 +9,7 @@ evaluationDependsOn(':core')
 evaluationDependsOn(':blocks')
 
 apply from: rootProject.file('gradle/mod-common.gradle')
+apply from: rootProject.file('gradle/confee.gradle')
 
 dependencies {
     api project(':core')

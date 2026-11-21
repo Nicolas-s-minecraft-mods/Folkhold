@@ -106,6 +106,7 @@ def generateModMetadata = tasks.register('generateModMetadata', ProcessResources
             mod_authors            : mod_authors,
             geckolib_version       : geckolib_version,
             cartofold_version      : cartofold_version,
+            confee_version         : confee_version,
     ]
     inputs.properties replaceProperties
     expand replaceProperties

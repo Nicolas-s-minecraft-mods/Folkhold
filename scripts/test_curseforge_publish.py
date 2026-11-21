@@ -51,7 +51,7 @@ class MetadataTest(unittest.TestCase):
         data = curseforge_publish.metadata(projects()["world"], "0.35.0", "notes", [10])
         self.assertEqual(data["displayName"], "Folkhold World 0.35.0")
         self.assertEqual([r["slug"] for r in data["relations"]["projects"]],
-                         ["folkhold-core", "folkhold-blocks", "geckolib", "cartofold"])
+                         ["folkhold-core", "folkhold-blocks", "geckolib", "cartofold", "confee"])
         self.assertEqual({r["type"] for r in data["relations"]["projects"]}, {"requiredDependency"})
 
     def test_no_relations(self):
