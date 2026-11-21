@@ -8,7 +8,9 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 
 /**
- * Stops the natural spawn of hostile monsters near a loaded village heart.
+ * Stops the natural spawn of hostile monsters near a loaded village heart: in the spawn protection radius around the
+ * heart, and in the area of its village structure (see {@link VillageHearts#findNear}). Thus no monster spawns inside
+ * the wall of a large village.
  */
 public final class VillageSpawnProtection {
 
@@ -26,8 +28,7 @@ public final class VillageSpawnProtection {
      */
     public static boolean isProtected(Level level, double x, double y, double z) {
         int radius = WorldConfig.SPAWN_PROTECTION_RADIUS.get();
-        return radius > 0
-                && VillageHearts.findNearest(level, BlockPos.containing(x, y, z), radius).isPresent();
+        return radius > 0 && VillageHearts.findNear(level, BlockPos.containing(x, y, z), radius, 0).isPresent();
     }
 
     public static void onPositionCheck(MobSpawnEvent.PositionCheck event) {

@@ -246,6 +246,7 @@ public final class WorldConfig {
                 .defineInRange("messageRadius", 50, 8, 256);
         SPAWN_PROTECTION_RADIUS = builder
                 .comment("Radius in blocks around a village heart where hostile monsters do not spawn naturally.",
+                        "The protection also covers the area of the village structure of the heart.",
                         "0 turns off the protection.")
                 .translation(KEY_PREFIX + "spawnProtectionRadius")
                 .defineInRange("spawnProtectionRadius", 48, 0, 256);
@@ -455,7 +456,8 @@ public final class WorldConfig {
                 .push("raid");
         RAID_HEART_RADIUS = builder
                 .comment("A raid is at a faction village when a loaded village heart is this distance or less from",
-                        "the center of the raid, in blocks.")
+                        "the center of the raid, in blocks, or when the center of the raid is in the area of the",
+                        "village structure of the heart.")
                 .translation(KEY_PREFIX + "raidHeartRadius")
                 .defineInRange("heartRadius", 64, 16, 256);
         RAID_SPAWN_MIN_DISTANCE = builder

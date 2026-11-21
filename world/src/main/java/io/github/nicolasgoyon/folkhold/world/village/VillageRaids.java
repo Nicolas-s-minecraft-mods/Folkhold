@@ -75,11 +75,11 @@ public final class VillageRaids {
      *
      * @param raid  the raid
      * @param level the level of the raid
-     * @return the position of the loaded heart that is the nearest to the center of the raid, or empty if the raid is
-     *         not at a faction village
+     * @return the position of the nearest loaded heart with the center of the raid in its raid radius or in its
+     *         structure area (see {@link VillageHearts#findNear}), or empty if the raid is not at a faction village
      */
     public static Optional<BlockPos> heartOf(Raid raid, Level level) {
-        return VillageHearts.findNearest(level, raid.getCenter(), WorldConfig.RAID_HEART_RADIUS.get());
+        return VillageHearts.findNear(level, raid.getCenter(), WorldConfig.RAID_HEART_RADIUS.get(), 0);
     }
 
     /**
