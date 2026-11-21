@@ -86,6 +86,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       {@link VillageWall}). The wall has towers, a gate on each axis of the start piece and the palisade. Paths go
  *       from the gates to the streets. The number of towers comes from the archers of the tier (see
  *       {@link #towers}).</li>
+ *   <li>A town, a city or a capital in a world with the rings has a small first wall around its core plots. Its other
+ *       plots are in the bands between its walls (see {@link Layout#rings()}).</li>
  * </ul>
  *
  * <p>A saved village keeps its pieces: only a new village start uses this generation.
@@ -238,7 +240,7 @@ public final class FortifiedVillageStructure extends Structure {
      * @return the distance, in blocks
      */
     int coreReach(int level) {
-        return Math.min(VillageSizes.forLevel(level).maxRadius(), maxDistanceFromCenter) + wall.margin() + 1
+        return Math.min(firstRadius(VillageSizes.forLevel(level)), maxDistanceFromCenter) + wall.margin() + 1
                 + VillageWall.PIER_START + PierPiece.MAX_LENGTH;
     }
 
@@ -335,33 +337,80 @@ public final class FortifiedVillageStructure extends Structure {
      * @param level    the start level of the village
      * @param size     the size of the tier of the village
      * @param style    the style of the street pieces
-     * @param plan     the plan of the streets and of the plots
+     * @param plan     the plan of the streets and of the plots of the core: the plots inside the first wall
      * @param center   the middle of the plaza
-     * @param village  the plaza, the street pieces and the buildings
-     * @param reserved the spaces of the free plots: the spare plots, and the wide plots with no home of the pools
-     * @param wall     the pieces of the wall
-     * @param built    the number of plots with a building
-     * @param free     the number of free plots
+     * @param village  the plaza, the street pieces and the buildings of the core
+     * @param reserved the spaces of the free plots of the core and of the bands: the spare plots, and the wide plots
+     *                 with no home of the pools
+     * @param wall     the pieces of the first wall
+     * @param built    the number of plots with a building, in the core and in the bands
+     * @param free     the number of free plots, in the core and in the bands
      * @param posts    the job ids of the house-workshops, in the order of the posts
      * @param problems the pieces and the plots of the plan with no element of their pool: empty for valid pools
      * @param firstWall the data of the first wall: the rings of the village go around it. Null for a cave village: it
      *                  has no wall and no ring (see {@link CaveVillage})
+     * @param bands    the plan of the band of each ring, from the inside to the outside: empty for a village with no
+     *                 band plots (see {@link VillageSize#hasBands()})
+     * @param rings    the rings of the village, each with the streets and the buildings of its band (see
+     *                 {@link VillageWall.Wall#band()}): all the rings of the tier, before the rule of the near
+     *                 villages (see {@link VillageRings})
      */
     public record Layout(int level, VillageSize size, StreetStyle style, VillagePlan plan, BlockPos center,
             List<PoolElementStructurePiece> village, List<BoundingBox> reserved, List<StructurePiece> wall, int built,
-            int free, List<String> posts, List<String> problems, VillageWall.Wall firstWall) {
+            int free, List<String> posts, List<String> problems, VillageWall.Wall firstWall, List<VillagePlan> bands,
+            List<VillageWall.Wall> rings) {
         public Layout {
             village = List.copyOf(village);
             posts = List.copyOf(posts);
             reserved = List.copyOf(reserved);
             wall = List.copyOf(wall);
             problems = List.copyOf(problems);
+            bands = List.copyOf(bands);
+            rings = List.copyOf(rings);
         }
 
-        /** All the pieces of the village: the plaza first, then the streets, the buildings and the wall. */
+        /** A layout with no ring. */
+        public Layout(int level, VillageSize size, StreetStyle style, VillagePlan plan, BlockPos center,
+                List<PoolElementStructurePiece> village, List<BoundingBox> reserved, List<StructurePiece> wall,
+                int built, int free, List<String> posts, List<String> problems, VillageWall.Wall firstWall) {
+            this(level, size, style, plan, center, village, reserved, wall, built, free, posts, problems, firstWall,
+                    List.of(), List.of());
+        }
+
+        /**
+         * The pieces of the village structure: the plaza first, then the streets, the buildings of the core and the
+         * first wall. The ring districts place the rings and their bands (see {@link VillageRings}).
+         */
         public List<StructurePiece> pieces() {
             List<StructurePiece> pieces = new ArrayList<>(village);
             pieces.addAll(wall);
+            return pieces;
+        }
+
+        /** The plaza, then the streets and the buildings of the core and of all the bands. */
+        public List<PoolElementStructurePiece> buildings() {
+            List<PoolElementStructurePiece> all = new ArrayList<>(village);
+            rings.forEach(ring -> ring.band().stream().filter(PoolElementStructurePiece.class::isInstance)
+                    .map(PoolElementStructurePiece.class::cast).forEach(all::add));
+            return all;
+        }
+
+        /** The plans of the core and of all the bands. */
+        public List<VillagePlan> plans() {
+            List<VillagePlan> plans = new ArrayList<>(List.of(plan));
+            plans.addAll(bands);
+            return plans;
+        }
+
+        /** The plots of the core and of all the bands. */
+        public List<VillagePlan.Plot> plots() {
+            return plans().stream().flatMap(part -> part.plots().stream()).toList();
+        }
+
+        /** The pieces of the village structure, then the pieces of all the rings and of their bands. */
+        public List<StructurePiece> allPieces() {
+            List<StructurePiece> pieces = pieces();
+            rings.forEach(ring -> pieces.addAll(ring.allPieces()));
             return pieces;
         }
     }
@@ -469,42 +518,155 @@ public final class FortifiedVillageStructure extends Structure {
      * The pieces of the plan, then the pieces of the wall around them. The wall also keeps the space of each free plot.
      * A maritime village has the palisade on its land side only (see {@link VillageWall}). The plan has a wide plot
      * for each building of the level that needs one (see {@link PlotUses#withWide}).
+     *
+     * <p>A village with band plots in a world with the rings (see {@link VillageSize#hasBands()} and
+     * {@link VillageRings#enabled()}) has 2 parts. The core is the plan of the core plots in the core radius, in the
+     * first wall. Then each ring of the tier goes around the wall inside it (see {@link VillageWall#rings}), and its
+     * band gets the plan of its band plots (see {@link VillagePlan#band}). The buildings of the level and the job posts
+     * take the plots of the core first, then the plots of the bands, from the inside to the outside. Another village
+     * has all its plots in the first wall, in the maximum radius.
      */
     Layout layout(GenerationContext context, Start start, int level) {
         if (start.cave().isPresent()) {
             return CaveVillage.layout(this, context, start, level);
         }
         VillageSize size = VillageSizes.forLevel(level);
+        boolean bands = hasBands(size);
         VillagePlanPieces.Builder pieces = VillagePlanPieces.builder(context, start.terrain(), start.plaza(),
                 start.center(), start.variant().homes(), VillageBuildingTable.get().stream()
                         .map(VillageBuildings.Requirement::kind).collect(Collectors.toSet()));
         List<PlotUses.Building> buildings = pieces.buildings(
                 VillageBuildings.kinds(VillageBuildingTable.get(), level), styleOf(start.variant()));
         StreetStyle style = PlotUses.withWide(styleOf(start.variant()), buildings);
-        int radius = Math.min(size.maxRadius(), maxDistanceFromCenter);
+        int radius = Math.min(firstRadius(size), maxDistanceFromCenter);
         VillageSize limited = new VillageSize(size.tier(), size.plots(), size.bedsPerPlot(), size.spareShare(), radius,
                 size.rings(), size.wall(), size.minTerritoryRadius());
+        int target = plotTarget(size);
         int plazaSize = start.plaza().getBoundingBox().getXSpan();
         long seed = VillagePlanPieces.seed(context.seed(), context.chunkPos());
         PlotTerrains plots = new PlotTerrains(start.terrain());
         Rotation turn = start.plaza().getRotation();
-        VillagePlan plan = VillagePlan.plan(limited, plotTarget(size), style, plazaSize,
+        VillagePlan plan = VillagePlan.plan(limited, bands ? size.corePlots(target) : target, style, plazaSize,
                 VillagePlan.Start.around(plazaSize), plots.plan(start.center(), turn),
                 plots.foundation(start.center(), turn), seed);
         VillagePlanPieces.Posts posts = posts(context, start.center(), level, seed);
         int beds = Math.max(0, LevelTables.get().traits(level).maxPopulation() - VillageBeds.staff());
-        VillagePlanPieces.Result result = pieces.place(style, plan, PlotUses.assign(plan, buildings, posts.count()),
-                posts, beds, RandomSource.create(seed));
-        List<StructurePiece> village = new ArrayList<>(result.pieces());
-        VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, result.reserved(),
+        PlotUses.Result uses = PlotUses.assign(plan, buildings, posts.count());
+        RandomSource random = RandomSource.create(seed);
+        pieces.start(posts, beds);
+        List<Integer> bandPlots = bands ? size.bandPlots() : List.of();
+        int laterHomes = bandPlots.stream().mapToInt(count -> count - size.sparePlots(count)).sum()
+                - (posts.count() - uses.posts()) - uses.missing().size();
+        VillagePlanPieces.Builder.Stage core = pieces.plots(style, plan, uses, random, false, Math.max(0, laterHomes));
+        List<StructurePiece> village = new ArrayList<>(List.of(start.plaza()));
+        village.addAll(core.pieces());
+        List<BoundingBox> reserved = new ArrayList<>(core.reserved());
+        VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, core.reserved(),
                 start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)));
-        if (!result.problems().isEmpty() || plan.missingPlots() > 0 || plan.missingHomes() > 0) {
-            FolkholdWorld.LOGGER.warn("The village of the level {} in the start chunk {} has {} missing plots, {} missing"
-                    + " homes and these problems: {}", level, context.chunkPos(), plan.missingPlots(),
-                    plan.missingHomes(), result.problems());
+        int built = core.built();
+        int free = core.free();
+        int placedPosts = uses.posts();
+        List<PlotUses.Building> missing = missing(buildings, uses.missing());
+        List<VillagePlan> bandPlans = new ArrayList<>();
+        List<VillageWall.Wall> rings = new ArrayList<>();
+        if (VillageRings.enabled() && size.rings() > 0) {
+            int band = bandOf(size, start.variant());
+            List<VillageWall.Wall> walls = VillageWall.rings(context, start.terrain(), wall, size.rings(), band,
+                    start.variant().wall(), start.maritime(), context.chunkPos());
+            if (!bands) {
+                rings.addAll(walls);
+            }
+            StreetStyle plain = styleOf(start.variant());
+            for (int ring = 0; bands && ring < walls.size(); ring++) {
+                VillageWall.Wall inner = ring == 0 ? wall : walls.get(ring - 1);
+                VillagePlan bandPlan = VillagePlan.band(size, bandPlots.get(ring), plain,
+                        planBox(inner.layout().outline(), start.center(), turn), band,
+                        plots.plan(start.center(), turn), plots.foundation(start.center(), turn), seed + ring + 1);
+                PlotUses.Result bandUses = PlotUses.assign(bandPlan, missing, posts.count() - placedPosts);
+                laterHomes -= (int) bandUses.uses().stream().filter(use -> use.type() == PlotUses.Type.HOME).count();
+                VillagePlanPieces.Builder.Stage stage = pieces.plots(plain, bandPlan, bandUses, random, true,
+                        Math.max(0, laterHomes));
+                placedPosts += bandUses.posts();
+                missing = missing(missing, bandUses.missing());
+                built += stage.built();
+                free += stage.free();
+                reserved.addAll(stage.reserved());
+                bandPlans.add(bandPlan);
+                rings.add(walls.get(ring).withBand(stage.pieces()));
+            }
         }
-        return new Layout(level, size, style, plan, start.center(), result.pieces(), result.reserved(), wall.pieces(),
-                result.built(), result.free(), result.posts(), result.problems(), wall);
+        pieces.finish(missing.stream().map(PlotUses.Building::kind).toList(), placedPosts, posts.count());
+        List<String> problems = pieces.problems();
+        int missingPlots = bandPlans.stream().mapToInt(VillagePlan::missingPlots).sum() + plan.missingPlots();
+        int missingHomes = bandPlans.stream().mapToInt(VillagePlan::missingHomes).sum() + plan.missingHomes();
+        if (!problems.isEmpty() || missingPlots > 0 || missingHomes > 0) {
+            FolkholdWorld.LOGGER.warn("The village of the level {} in the start chunk {} has {} missing plots, {} missing"
+                    + " homes and these problems: {}", level, context.chunkPos(), missingPlots, missingHomes,
+                    problems);
+        }
+        List<PoolElementStructurePiece> corePieces = new ArrayList<>(List.of(start.plaza()));
+        corePieces.addAll(core.pieces());
+        return new Layout(level, size, style, plan, start.center(), corePieces, reserved, wall.pieces(), built, free,
+                pieces.postJobs(), problems, wall, bandPlans, rings);
+    }
+
+    /**
+     * True if a village of a size has its plots in the core and in the bands of its rings: a size with band plots, in
+     * a world with the rings (see {@link VillageRings#enabled()}).
+     *
+     * @param size the size of the tier
+     * @return true for a village with bands
+     */
+    public static boolean hasBands(VillageSize size) {
+        return VillageRings.enabled() && size.rings() > 0 && size.hasBands();
+    }
+
+    /**
+     * The band of each ring of a village of a size and a variant: the band of the style of the variant (see
+     * {@link VillagePlan#bandWidth}) for a size with band plots, else {@link WallLayout#MIN_BAND}.
+     *
+     * @param size    the size of the tier
+     * @param variant the variant
+     * @return the band, in blocks
+     */
+    public static int bandOf(VillageSize size, Variant variant) {
+        return size.hasBands() ? VillagePlan.bandWidth(styleOf(variant)) : WallLayout.MIN_BAND;
+    }
+
+    /**
+     * The radius of the plan inside the first wall: the core radius for a village with bands (see
+     * {@link #hasBands}), else the maximum radius.
+     *
+     * @param size the size of the tier
+     * @return the radius, in blocks
+     */
+    public static int firstRadius(VillageSize size) {
+        return hasBands(size) ? size.coreRadius() : size.maxRadius();
+    }
+
+    /** The buildings of a list with a kind in a list of missing kinds: one building for each missing kind. */
+    private static List<PlotUses.Building> missing(List<PlotUses.Building> buildings, List<String> kinds) {
+        List<String> left = new ArrayList<>(kinds);
+        List<PlotUses.Building> missing = new ArrayList<>();
+        for (PlotUses.Building building : buildings) {
+            if (left.remove(building.kind())) {
+                missing.add(building);
+            }
+        }
+        return missing;
+    }
+
+    /** The box of a box of the world in the frame of the plan: (0, 0) is the middle of the plaza. */
+    private static VillagePlan.Box planBox(WallLayout.Box box, BlockPos center, Rotation rotation) {
+        Rotation back = switch (rotation) {
+            case CLOCKWISE_90 -> Rotation.COUNTERCLOCKWISE_90;
+            case COUNTERCLOCKWISE_90 -> Rotation.CLOCKWISE_90;
+            default -> rotation;
+        };
+        BlockPos first = new BlockPos(box.minX() - center.getX(), 0, box.minZ() - center.getZ()).rotate(back);
+        BlockPos second = new BlockPos(box.maxX() - center.getX(), 0, box.maxZ() - center.getZ()).rotate(back);
+        return new VillagePlan.Box(Math.min(first.getX(), second.getX()), Math.min(first.getZ(), second.getZ()),
+                Math.max(first.getX(), second.getX()), Math.max(first.getZ(), second.getZ()));
     }
 
     /**

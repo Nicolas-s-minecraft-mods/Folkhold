@@ -5,10 +5,10 @@
     {"tier": "village", "plots": 28, "spare_share": 0.15, "max_radius": 80, "rings": 0, "wall": "palisade",
      "min_territory_radius": 13},
     {"tier": "town", "plots": 42, "spare_share": 0.15, "max_radius": 96, "rings": 1, "wall": "palisade",
-     "min_territory_radius": 20},
+     "min_territory_radius": 20, "core_radius": 64, "band_plots": [28]},
     {"tier": "city", "plots": 53, "spare_share": 0.15, "max_radius": 106, "rings": 2, "wall": "palisade",
-     "min_territory_radius": 27},
+     "min_territory_radius": 27, "core_radius": 64, "band_plots": [19, 20]},
     {"tier": "capital", "plots": 66, "spare_share": 0.15, "max_radius": 106, "rings": 3, "wall": "palisade",
-     "min_territory_radius": 30}
+     "min_territory_radius": 30, "core_radius": 64, "band_plots": [15, 18, 19]}
   ]
 }

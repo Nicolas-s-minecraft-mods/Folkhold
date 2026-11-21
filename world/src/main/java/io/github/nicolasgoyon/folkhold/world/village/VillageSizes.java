@@ -38,6 +38,12 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  * beds rule (see {@link VillageSize}). {@code spare_share} is from 0.1 to 0.2. {@code max_radius} is in blocks,
  * {@code min_territory_radius} in chunks. {@code wall} is {@code none} or {@code palisade}. The file must have a size
  * for each tier of the level table (see {@link LevelTables}).
+ *
+ * <p>A tier with rings can have the optional fields {@code band_plots} and {@code core_radius}, for example
+ * {@code "core_radius": 64, "band_plots": [19, 20]}. {@code band_plots} gives the plots of the band of each ring, from
+ * the inside to the outside, with their spare plots: one number for each ring. The core inside the first wall gets the
+ * other plots of the tier, in the core radius (in blocks, the max radius by default). With no {@code band_plots}, all
+ * the plots are inside the first wall, in the max radius.
  */
 public final class VillageSizes extends SimplePreparableReloadListener<VillageSizeTable> {
     public static final ResourceLocation FILE =
@@ -152,6 +158,18 @@ public final class VillageSizes extends SimplePreparableReloadListener<VillageSi
                     GsonHelper.getAsInt(size, "max_radius"), GsonHelper.getAsInt(size, "rings"),
                     SerializedName.lookup(VillageSize.Wall.class, wall).orElseThrow(() -> new IllegalArgumentException(
                             "The village size of the tier " + tier + " has an unknown wall type " + wall)),
-                    GsonHelper.getAsInt(size, "min_territory_radius"));
+                    GsonHelper.getAsInt(size, "min_territory_radius"),
+                    GsonHelper.getAsInt(size, "core_radius", GsonHelper.getAsInt(size, "max_radius")), bandPlots(size));
+    }
+
+    /** Reads the band plots of a size: an empty list when the size has no field {@code band_plots}. */
+    private static List<Integer> bandPlots(JsonObject size) {
+        List<Integer> plots = new ArrayList<>();
+        if (size.has("band_plots")) {
+            for (JsonElement element : GsonHelper.getAsJsonArray(size, "band_plots")) {
+                plots.add(GsonHelper.convertToInt(element, "band_plots"));
+            }
+        }
+        return plots;
     }
 }

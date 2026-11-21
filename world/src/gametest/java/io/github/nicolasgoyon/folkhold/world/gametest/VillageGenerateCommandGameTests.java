@@ -238,7 +238,8 @@ public final class VillageGenerateCommandGameTests {
         FortifiedVillageStructure structure = (FortifiedVillageStructure) village.getStructure();
         for (Tier tier : LevelTables.get().tiers()) {
             int top = tier.maxLevel();
-            int outer = Math.min(VillageSizes.forLevel(top).maxRadius(), structure.maxDistanceFromCenter())
+            int outer = Math.min(FortifiedVillageStructure.firstRadius(VillageSizes.forLevel(top)),
+                    structure.maxDistanceFromCenter())
                     + structure.wall().margin() + VillageRings.reach(top);
             helper.assertTrue(SettlementData.claimRadius(top) * 16 >= outer, "The claim radius of the tier "
                     + tier.id() + " must contain its outer ring: " + SettlementData.claimRadius(top)

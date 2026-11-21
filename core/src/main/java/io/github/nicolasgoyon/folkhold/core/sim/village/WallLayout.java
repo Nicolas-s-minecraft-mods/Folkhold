@@ -55,8 +55,8 @@ public final class WallLayout {
     public static final int MIN_TOWER_SPACING = 2 * (TOWER + STAIR + GATE_CLEARANCE + GATE / 2);
     /** The smallest band of an outer ring: the distance from the line of the inner wall to the line of the ring. */
     public static final int MIN_BAND = 24;
-    /** The largest band of an outer ring. */
-    public static final int MAX_BAND = 32;
+    /** The largest band of an outer ring: the band of the Valeholm style (see {@link VillagePlan#bandWidth}). */
+    public static final int MAX_BAND = 48;
     /** The fewest towers of the first wall of a village: one next to each of its 4 gates. */
     public static final int MIN_TOWERS = 4;
     /** The towers of a village for each archer of its garrison: an archer changes its post between the towers. */

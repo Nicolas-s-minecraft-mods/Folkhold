@@ -42,31 +42,35 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 /**
  * The rings of the faction villages at the generation. A town, a city or a capital gets the rings of its tier (see
- * {@link VillageSize#rings()}) around its first wall (see {@link VillageWall#rings}). The ring districts place them
- * (see {@link VillageRingStructure}).
+ * {@link VillageSize#rings()}) around its first wall (see {@link VillageWall#rings}), each with the streets and the
+ * buildings of its band (see {@link FortifiedVillageStructure.Layout#rings()}). The ring districts place them (see
+ * {@link VillageRingStructure}).
  *
  * <ul>
  *   <li>A district finds its village from the world seed only: the placement of the village set, the start (the site
  *       check and the biome check, see {@link FortifiedVillageStructure#generatedStart}), the start level, the layout
  *       of the village and its rings. It does not read the chunks of the village.</li>
- *   <li>The near villages keep their space (see {@link RingDistricts#keptRings}): the faction villages at
+ *   <li>The near villages keep their space (see {@link RingDistricts#keptRings}). A ring that goes away takes its band
+ *       with it. The near villages are the faction villages at
  *       {@link #NEIGHBOR_RANGE} chunks or less, and the possible starts of the vanilla villages in a biome of the
  *       vanilla villages, with {@link #VANILLA_REACH} blocks around their start chunk.</li>
  *   <li>The plan of the rings of a village and its layout are in bounded caches, safe for the threads of the generation
  *       (see {@link PlanCache}). The village structure and the districts of a village calculate the layout and the
  *       rings one time.</li>
  *   <li>Only a world that this version of the mod creates gets the rings: the overworld keeps a flag from its
- *       creation. In a world of an earlier version, the old villages keep their first wall only.</li>
+ *       creation. In a world of an earlier version, the new towns, cities and capitals have their first wall only,
+ *       with all their plots inside it (see {@link FortifiedVillageStructure#hasBands}).</li>
  * </ul>
  */
 public final class VillageRings {
-    /** The band of each ring, in blocks. */
-    public static final int BAND = WallLayout.MIN_BAND;
+    /** The largest band of a ring, in blocks: the band of the style with the deepest homes. */
+    public static final int MAX_BAND = WallLayout.MAX_BAND;
     /**
      * The search of the near villages goes this number of chunks from the start chunk, on each axis: 2 times the
-     * largest outer box of a capital with the largest radius of a plan (215 blocks), and one chunk more.
+     * largest outer box of a capital (the largest core radius of a plan, 3 rings of the largest band and the margin
+     * of the outer ring: about 240 blocks), and one chunk more.
      */
-    public static final int NEIGHBOR_RANGE = 28;
+    public static final int NEIGHBOR_RANGE = 31;
     /**
      * A vanilla village stays in this number of blocks around the middle of its start chunk: its range of 80 blocks
      * around its start piece, the distance of the start piece from the middle of the chunk (18 blocks) and its terrain
@@ -198,14 +202,11 @@ public final class VillageRings {
             int level, Predicate<FortifiedVillageStructure.Variant> variant) {
         return village.generatedStart(context).filter(site -> variant.test(site.variant())).map(site -> {
             FortifiedVillageStructure.Layout layout = village.layout(context, site, level);
-            VillageSize size = VillageSizes.forLevel(level);
-            if (size.rings() == 0) {
+            if (layout.rings().isEmpty()) {
                 return new Planned(layout, Map.of());
             }
             ChunkPos start = context.chunkPos();
-            List<VillageWall.Wall> rings = VillageWall.rings(context, site.terrain(), layout.firstWall(),
-                    size.rings(), BAND, site.variant().wall(), site.maritime(), start);
-            Map<District, List<StructurePiece>> districts = VillageWall.districts(rings, start);
+            Map<District, List<StructurePiece>> districts = VillageWall.districts(layout.rings(), start);
             if (districts.keySet().removeIf(district -> !district.exists())) {
                 FolkholdWorld.LOGGER.warn("The rings of the village in the start chunk {} go out of the districts",
                         start);
@@ -220,7 +221,7 @@ public final class VillageRings {
      */
     public static int reach(int level) {
         int rings = VillageSizes.forLevel(level).rings();
-        return rings == 0 ? 0 : rings * BAND + RING_MARGIN;
+        return rings == 0 ? 0 : rings * MAX_BAND + RING_MARGIN;
     }
 
     /**
@@ -252,7 +253,6 @@ public final class VillageRings {
     /** Calculates the pieces of the rings of a village in each district. */
     private static Map<District, List<StructurePiece>> plan(FortifiedVillageStructure village,
             Holder<StructureSet> set, Structure.GenerationContext anchor, ChunkPos start, int level) {
-        VillageSize size = VillageSizes.forLevel(level);
         Structure.GenerationContext context = context(village, anchor, start);
         Optional<FortifiedVillageStructure.Start> found = village.generatedStart(context);
         if (found.isEmpty()) {
@@ -261,8 +261,7 @@ public final class VillageRings {
         FortifiedVillageStructure.Start site = found.get();
         Neighbors neighbors = neighbors(village, set, anchor, start, level);
         FortifiedVillageStructure.Layout layout = layout(village, context, site, level);
-        List<VillageWall.Wall> rings = VillageWall.rings(context, site.terrain(), layout.firstWall(), size.rings(),
-                BAND, site.variant().wall(), site.maritime(), start);
+        List<VillageWall.Wall> rings = layout.rings();
         int kept = RingDistricts.keptRings(boxes(rings), neighbors.all());
         Map<District, List<StructurePiece>> districts = VillageWall.districts(rings.subList(0, kept), start);
         if (districts.keySet().removeIf(district -> !district.exists())) {
@@ -305,9 +304,7 @@ public final class VillageRings {
         }
         Structure.GenerationContext context = context(village, anchor, start);
         return village.generatedStart(context).map(site -> {
-            FortifiedVillageStructure.Layout layout = village.layout(context, site, level);
-            List<WallLayout.Box> rings = boxes(VillageWall.rings(context, site.terrain(), layout.firstWall(),
-                    size.rings(), BAND, site.variant().wall(), site.maritime(), start));
+            List<WallLayout.Box> rings = boxes(village.layout(context, site, level).rings());
             Neighbors neighbors = neighbors(village, set, anchor, start, level);
             return new RingCount(size.rings(), RingDistricts.keptRings(rings, neighbors.all()),
                     RingDistricts.keptRings(rings, neighbors.factions()),
@@ -345,9 +342,11 @@ public final class VillageRings {
                 ChunkPos chunk = new ChunkPos(start.x + dx, start.z + dz);
                 if (!chunk.equals(start) && set.value().placement().isStructureChunk(state, chunk.x, chunk.z)) {
                     int otherLevel = Settlements.startLevel(anchor.seed(), chunk);
+                    VillageSize otherSize = VillageSizes.forLevel(otherLevel);
                     village.generatedStart(context(village, anchor, chunk)).ifPresent(other -> factions.add(
                             RingDistricts.neighbor(around(other.center(), village.coreReach(otherLevel)),
-                                    VillageSizes.forLevel(otherLevel).rings(), BAND, RING_MARGIN,
+                                    otherSize.rings(), FortifiedVillageStructure.bandOf(otherSize, other.variant()),
+                                    RING_MARGIN,
                                     RingDistricts.hasPriority(otherLevel, chunk.x, chunk.z, level, start.x,
                                             start.z))));
                 }

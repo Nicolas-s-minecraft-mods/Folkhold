@@ -26,6 +26,20 @@ class VillageSizeTableTest {
         assertEquals(9, TABLE.size("capital").orElseThrow().sparePlots(66));
     }
 
+    /** The towns, the cities and the capitals have about 14 plots in the core and the other plots in the bands. */
+    @Test
+    void ringTiersHaveTheirPlotsInTheCoreAndTheBands() {
+        for (VillageSize size : TABLE.sizes()) {
+            if (size.rings() == 0) {
+                assertTrue(!size.hasBands(), size.tier());
+                continue;
+            }
+            assertEquals(size.rings(), size.bandPlots().size(), size.tier());
+            assertEquals(14, size.corePlots(size.plots(0, 0)), size.tier());
+            assertEquals(64, size.coreRadius(), size.tier());
+        }
+    }
+
     /** The beds rule: the homes hold the population minus the hall places, then the spare plots come in addition. */
     @Test
     void bedsRuleGivesTheHomesAndTheSparePlots() {
@@ -55,6 +69,15 @@ class VillageSizeTableTest {
         IllegalArgumentException radius = assertThrows(IllegalArgumentException.class,
                 () -> new VillageSize("hamlet", 14, 0, 0.15, 200, 0, Wall.PALISADE, 9));
         assertTrue(radius.getMessage().contains("outside its min territory radius"), radius.getMessage());
+        IllegalArgumentException bands = assertThrows(IllegalArgumentException.class,
+                () -> new VillageSize("city", 53, 0, 0.15, 106, 2, Wall.PALISADE, 27, 64, List.of(20)));
+        assertTrue(bands.getMessage().contains("each of its 2 rings"), bands.getMessage());
+        IllegalArgumentException core = assertThrows(IllegalArgumentException.class,
+                () -> new VillageSize("town", 42, 0, 0.15, 96, 1, Wall.PALISADE, 20, 64, List.of(42)));
+        assertTrue(core.getMessage().contains("more plots than its band plots"), core.getMessage());
+        IllegalArgumentException coreRadius = assertThrows(IllegalArgumentException.class,
+                () -> new VillageSize("town", 42, 0, 0.15, 96, 1, Wall.PALISADE, 20, 120, List.of(28)));
+        assertTrue(coreRadius.getMessage().contains("core radius"), coreRadius.getMessage());
         VillageSize hamlet = TABLE.size("hamlet").orElseThrow();
         IllegalArgumentException twice = assertThrows(IllegalArgumentException.class,
                 () -> new VillageSizeTable(List.of(hamlet, hamlet)));

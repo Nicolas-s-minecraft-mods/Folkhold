@@ -161,7 +161,7 @@ public final class VillagePlanGameTests {
                     + rotation;
             check(level, structure, chunk, layout, name, problems);
             checkLevel(level, generator, layout, name, problems);
-            layout.village().forEach(piece -> VillageReference.templateOf(level, piece.getElement())
+            layout.buildings().forEach(piece -> VillageReference.templateOf(level, piece.getElement())
                     .ifPresent(id -> placed.add(id.getPath())));
             eligible = eligible(level, generator, layout);
             boolean top = levels.tiers().stream().anyMatch(tier -> tier.maxLevel() == start);
@@ -174,7 +174,7 @@ public final class VillagePlanGameTests {
             FolkholdWorld.LOGGER.info("Village plan {}: {} street pieces, {} plots, {} buildings, {} free plots, "
                     + "{} wall pieces, radius {}, {} ms, market {}, storehouses {}, barracks {}, posts {}, homes {}, "
                     + "forges {}, home beds {}",
-                    name, layout.village().size() - 1 - layout.built(), plan.plots().size(), layout.built(),
+                    name, layout.buildings().size() - 1 - layout.built(), layout.plots().size(), layout.built(),
                     layout.free(), layout.wall().size(), Math.round(plan.radius()), time / 1_000_000,
                     signs.getOrDefault(MARKET, 0), signs.getOrDefault(STOREHOUSE, 0),
                     signs.getOrDefault(BARRACKS, 0), layout.posts().size(),
@@ -188,19 +188,24 @@ public final class VillagePlanGameTests {
 
     private static void check(ServerLevel level, FortifiedVillageStructure structure, ChunkPos chunk,
             FortifiedVillageStructure.Layout layout, String name, List<String> problems) {
-        VillagePlan plan = layout.plan();
         layout.problems().forEach(problem -> problems.add(name + ": " + problem));
-        if (plan.missingPlots() > 0 || plan.missingHomes() > 0 || plan.plots().size() != plan.target()) {
-            problems.add(name + ": the plan has " + plan.plots().size() + " plots of " + plan.target() + ", "
-                    + plan.missingHomes() + " missing homes");
+        for (VillagePlan plan : layout.plans()) {
+            if (plan.missingPlots() > 0 || plan.missingHomes() > 0 || plan.plots().size() != plan.target()) {
+                problems.add(name + ": a plan has " + plan.plots().size() + " plots of " + plan.target() + ", "
+                        + plan.missingHomes() + " missing homes");
+            }
         }
-        long buildings = layout.village().stream().skip(1)
+        int plots = layout.plots().size();
+        long buildings = layout.buildings().stream().skip(1)
                 .filter(piece -> piece.getElement().getProjection() == StructureTemplatePool.Projection.RIGID)
                 .count();
-        if (layout.built() + layout.free() != plan.plots().size() || buildings != layout.built()
+        if (layout.built() + layout.free() != plots || buildings != layout.built()
                 || layout.reserved().size() != layout.free() || layout.free() != expectedFree(layout)) {
             problems.add(name + ": " + layout.built() + " buildings (" + buildings + " pieces) and " + layout.free()
-                    + " free plots (" + layout.reserved().size() + " spaces) for " + plan.plots().size() + " plots");
+                    + " free plots (" + layout.reserved().size() + " spaces) for " + plots + " plots");
+        }
+        if (layout.rings().size() != layout.size().rings()) {
+            problems.add(name + ": " + layout.rings().size() + " rings of " + layout.size().rings());
         }
         BlockPos center = layout.center();
         int distance = structure.maxDistanceFromCenter();
@@ -227,7 +232,7 @@ public final class VillagePlanGameTests {
         if (gates != 4 || arms != 4) {
             problems.add(name + ": " + gates + " gates and " + arms + " arms");
         }
-        List<BoundingBox> templates = layout.pieces().stream().filter(PoolElementStructurePiece.class::isInstance)
+        List<BoundingBox> templates = layout.allPieces().stream().filter(PoolElementStructurePiece.class::isInstance)
                 .map(StructurePiece::getBoundingBox).toList();
         for (int i = 0; i < templates.size(); i++) {
             for (int j = i + 1; j < templates.size(); j++) {
@@ -236,7 +241,7 @@ public final class VillagePlanGameTests {
                 }
             }
         }
-        List<BoundingBox> solid = layout.pieces().stream()
+        List<BoundingBox> solid = layout.allPieces().stream()
                 .filter(piece -> piece instanceof PalisadePiece || (piece instanceof PoolElementStructurePiece pool
                         && pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID))
                 .map(StructurePiece::getBoundingBox).toList();
@@ -249,7 +254,7 @@ public final class VillagePlanGameTests {
     /** The free plots of a layout: the spare plots, and the wide plot of the market with no market. */
     private static long expectedFree(FortifiedVillageStructure.Layout layout) {
         boolean market = VillageBuildings.kinds(VillageBuildingTable.get(), layout.level()).contains(MARKET);
-        return layout.plan().plots().stream().filter(plot -> plot.spare()
+        return layout.plots().stream().filter(plot -> plot.spare()
                 || (!market && plot.wide() && plot.homes().get(1).name().equals(MARKET))).count();
     }
 
@@ -341,7 +346,7 @@ public final class VillagePlanGameTests {
 
     /** True if 2 layouts have the same pieces at the same positions and the same posts. */
     private static boolean same(FortifiedVillageStructure.Layout first, FortifiedVillageStructure.Layout second) {
-        Function<FortifiedVillageStructure.Layout, List<String>> pieces = layout -> layout.pieces().stream()
+        Function<FortifiedVillageStructure.Layout, List<String>> pieces = layout -> layout.allPieces().stream()
                 .map(piece -> piece.getBoundingBox() + " " + piece.getRotation()).toList();
         return pieces.apply(first).equals(pieces.apply(second)) && first.posts().equals(second.posts());
     }
@@ -366,7 +371,7 @@ public final class VillagePlanGameTests {
 
     /** The signs of the templates of the pieces of a village, one for each piece. */
     private static List<TemplateSigns> templateSigns(ServerLevel level, FortifiedVillageStructure.Layout layout) {
-        return layout.village().stream()
+        return layout.buildings().stream()
                 .flatMap(piece -> VillageReference.templateOf(level, piece.getElement()).stream())
                 .flatMap(id -> level.getStructureManager().get(id).map(template -> TemplateSigns.of(id, template))
                         .stream())

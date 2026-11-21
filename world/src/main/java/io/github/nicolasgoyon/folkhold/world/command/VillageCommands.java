@@ -241,8 +241,8 @@ public final class VillageCommands {
 
     /** The largest distance of the first wall of a village of a level from its middle, in blocks. */
     private static int firstWall(FortifiedVillageStructure structure, int level) {
-        return Math.min(VillageSizes.forLevel(level).maxRadius(), structure.maxDistanceFromCenter())
-                + structure.wall().margin() + WALL_LINE;
+        return Math.min(FortifiedVillageStructure.firstRadius(VillageSizes.forLevel(level)),
+                structure.maxDistanceFromCenter()) + structure.wall().margin() + WALL_LINE;
     }
 
     /**

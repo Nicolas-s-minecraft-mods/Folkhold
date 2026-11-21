@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.core.sim.village;
 
 import io.github.nicolasgoyon.folkhold.core.sim.SerializedName;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -20,13 +21,21 @@ import java.util.Locale;
  * @param bedsPerPlot        the beds of a home for the beds rule, or 0 for a plot target
  * @param spareShare         the share of spare plots: the plots that stay empty, from {@link #MIN_SPARE} to
  *                           {@link #MAX_SPARE} of the plots that the village needs
- * @param maxRadius          the maximum distance in blocks from the center of the village to the edge of a plot
+ * @param maxRadius          the maximum distance in blocks from the center of the village to the edge of a plot, for
+ *                           a village with all its plots inside the first wall
  * @param rings              the number of rings outside the first wall
  * @param wall               the type of the first wall
  * @param minTerritoryRadius the minimum radius of the territory, in chunks
+ * @param coreRadius         the maximum distance in blocks from the center of the village to the edge of a plot of
+ *                           the core: the plots inside the first wall of a village with bands. From 1 to
+ *                           {@code maxRadius}
+ * @param bandPlots          the plots of the band of each ring, from the inside to the outside, with their spare
+ *                           plots: empty, or one number for each ring. The core gets the other plots of the village
+ *                           (see {@link #corePlots(int)}). Empty: all the plots are inside the first wall, in the
+ *                           maximum radius
  */
 public record VillageSize(String tier, int plots, int bedsPerPlot, double spareShare, int maxRadius, int rings,
-        Wall wall, int minTerritoryRadius) {
+        Wall wall, int minTerritoryRadius, int coreRadius, List<Integer> bandPlots) {
     /** The smallest share of spare plots. */
     public static final double MIN_SPARE = 0.10;
     /** The largest share of spare plots. */
@@ -43,6 +52,12 @@ public record VillageSize(String tier, int plots, int bedsPerPlot, double spareS
         public String serializedName() {
             return name().toLowerCase(Locale.ROOT);
         }
+    }
+
+    /** A village size with no band plots: all the plots are inside the first wall. */
+    public VillageSize(String tier, int plots, int bedsPerPlot, double spareShare, int maxRadius, int rings,
+            Wall wall, int minTerritoryRadius) {
+        this(tier, plots, bedsPerPlot, spareShare, maxRadius, rings, wall, minTerritoryRadius, maxRadius, List.of());
     }
 
     /**
@@ -74,6 +89,41 @@ public record VillageSize(String tier, int plots, int bedsPerPlot, double spareS
             throw new IllegalArgumentException(error(tier, "has a max radius of " + maxRadius
                     + " blocks outside its min territory radius of " + minTerritoryRadius + " chunks"));
         }
+        if (coreRadius < 1 || coreRadius > maxRadius) {
+            throw new IllegalArgumentException(error(tier, "needs a core radius from 1 to its max radius "
+                    + maxRadius + ", not " + coreRadius));
+        }
+        bandPlots = List.copyOf(bandPlots);
+        if (!bandPlots.isEmpty() && bandPlots.size() != rings) {
+            throw new IllegalArgumentException(error(tier, "needs one number of band plots for each of its " + rings
+                    + " rings, not " + bandPlots.size()));
+        }
+        if (bandPlots.stream().anyMatch(count -> count < 1)) {
+            throw new IllegalArgumentException(error(tier, "needs 1 band plot or more in each band: " + bandPlots));
+        }
+        if (plots > 0 && plots <= bandTotal(bandPlots)) {
+            throw new IllegalArgumentException(error(tier, "needs more plots than its band plots: plots " + plots
+                    + ", band plots " + bandPlots));
+        }
+    }
+
+    private static int bandTotal(List<Integer> bandPlots) {
+        return bandPlots.stream().mapToInt(Integer::intValue).sum();
+    }
+
+    /** True if the plots of the village go into the core and into the bands of its rings. */
+    public boolean hasBands() {
+        return !bandPlots.isEmpty();
+    }
+
+    /**
+     * The plots of the core: the plots inside the first wall of a village with bands.
+     *
+     * @param plots the plots of the village, with the spare plots (see {@link #plots(int, int)})
+     * @return the plots minus the band plots, 1 at least
+     */
+    public int corePlots(int plots) {
+        return Math.max(1, plots - bandTotal(bandPlots));
     }
 
     private static String error(String tier, String text) {
