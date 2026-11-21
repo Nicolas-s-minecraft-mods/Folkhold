@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.entity;
 import io.github.nicolasgoyon.folkhold.world.config.UnitStats;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.CrossbowAttackGoal;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.PlatformLookoutGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.PostRangedAttackGoal;
 import io.github.nicolasgoyon.folkhold.world.registry.ModSounds.UnitVoice;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
@@ -39,6 +40,9 @@ import net.minecraft.world.level.Level;
  *   <li>When the archer has a post (a tower or a wall), it stays there: it shoots from the post and does not go to
  *       a target (see {@link PostRangedAttackGoal}). An archer with no post, for example in a caravan, goes to its
  *       target as a vanilla ranged mob.</li>
+ *   <li>When the archer on its post does not see its target, it goes to a spot of its platform with a line of sight,
+ *       for example the edge of its tower above a target at the foot of the tower (see {@link PlatformLookoutGoal}).
+ *       The rule is the same for all the weapons.</li>
  *   <li>With a crossbow, the archer charges the crossbow, aims, and shoots a bolt (see {@link CrossbowAttackGoal}).
  *       The bolt is faster than an arrow of the bow, so it does more damage.</li>
  *   <li>The arrow damage comes from the "attackDamage" value of the archer config.</li>
@@ -78,6 +82,7 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
     protected void registerAttackGoals() {
         int interval = WorldConfig.ARCHER_ATTACK_INTERVAL_TICKS.get();
         float radius = WorldConfig.ARCHER_ATTACK_RADIUS.get().floatValue();
+        goalSelector.addGoal(2, new PlatformLookoutGoal(this));
         goalSelector.addGoal(2, new PostRangedAttackGoal(this, interval, radius) {
             @Override
             public boolean canUse() {
