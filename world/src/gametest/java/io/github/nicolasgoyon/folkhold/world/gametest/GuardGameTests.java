@@ -15,12 +15,14 @@ import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -36,6 +38,7 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -160,6 +163,30 @@ public final class GuardGameTests {
             helper.assertTrue(targeted, "The husk must target the guard. Husk target: " + husk.getTarget()
                     + ", husk alive: " + husk.isAlive());
         }, guard, husk);
+    }
+
+    /**
+     * A hostile monster at the edge of a city targets a guard. The heart of the test is farther from the arena than
+     * {@link MonsterTargeting#gateRadius()}, and the arena is in its structure area.
+     */
+    @GameTest(template = "arena", timeoutTicks = 200, batch = "monster_targets_guard_at_city_edge")
+    public static void monsterAtTheEdgeOfACityTargetsAGuard(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ServerLevel level = helper.getLevel();
+        BlockPos corner = helper.absolutePos(new BlockPos(0, 1, 0));
+        int distance = (int) MonsterTargeting.gateRadius() + 100;
+        BlockPos heart = corner.west(distance);
+        VillageHearts.register(level, heart, Optional.of(new BoundingBox(heart.getX() - 8, heart.getY() - 8,
+                corner.getZ(), corner.getX() + 16, heart.getY() + 8, corner.getZ() + 16)));
+        TestSupport.atTestEnd(helper, () -> VillageHearts.unregister(level, heart));
+        GuardEntity guard = TestSupport.spawnGuard(helper, new BlockPos(3, 1, 3));
+        // The guard has no AI in this test: only the husk can start the fight.
+        guard.setNoAi(true);
+        Husk husk = helper.spawn(EntityType.HUSK, new BlockPos(10, 1, 10));
+
+        TestSupport.succeedWhenAndRemove(helper, () -> helper.assertTrue(husk.getTarget() == guard,
+                "The husk at the edge of the city must target the guard. Husk target: " + husk.getTarget()
+                        + ", husk alive: " + husk.isAlive()), guard, husk);
     }
 
     /** A hostile monster far from every village heart does not look for a guard. */

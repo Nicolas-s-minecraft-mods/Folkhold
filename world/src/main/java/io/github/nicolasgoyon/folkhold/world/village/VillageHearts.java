@@ -179,18 +179,34 @@ public final class VillageHearts {
      * @return the position of the heart, or empty if the position is in no village
      */
     public static Optional<BlockPos> findAt(Level level, BlockPos pos) {
+        return findNear(level, pos, WorldConfig.VILLAGE_RADIUS.get(), 0);
+    }
+
+    /**
+     * Finds the village near a position, for a system with its own radius: the nearest loaded heart that is at the
+     * radius from the position or nearer, or that has the position in its structure area with a margin (on the
+     * horizontal plane, and {@value #AREA_HEIGHT} blocks up or down from the heart or nearer). Thus the system covers
+     * all the area of a large village, and its radius is the minimum for a small village.
+     *
+     * @param level  the level
+     * @param pos    the position
+     * @param radius the radius of the system around a heart, in blocks
+     * @param margin the distance around the structure area that is also near the village, in blocks
+     * @return the position of the heart, or empty if the position is near no village
+     */
+    public static Optional<BlockPos> findNear(Level level, BlockPos pos, double radius, int margin) {
         Map<BlockPos, Optional<BoundingBox>> hearts = LOADED.get(level.dimension());
         if (hearts == null) {
             return Optional.empty();
         }
-        double radius = WorldConfig.VILLAGE_RADIUS.get();
         double maxSqr = radius * radius;
         BlockPos nearest = null;
         double nearestSqr = Double.MAX_VALUE;
         // A copy of the keys: the search of a structure area changes the values of the map.
         for (BlockPos heart : List.copyOf(hearts.keySet())) {
             double sqr = heart.distSqr(pos);
-            if (sqr < nearestSqr && (sqr <= maxSqr || inStructure(resolve(level, hearts, heart), heart, pos))) {
+            if (sqr < nearestSqr
+                    && (sqr <= maxSqr || inStructure(resolve(level, hearts, heart), heart, pos, margin))) {
                 nearest = heart;
                 nearestSqr = sqr;
             }
@@ -198,10 +214,10 @@ public final class VillageHearts {
         return Optional.ofNullable(nearest);
     }
 
-    /** True if a position is in the structure area of a heart. */
-    private static boolean inStructure(Optional<BoundingBox> structure, BlockPos heart, BlockPos pos) {
-        return structure.filter(box -> pos.getX() >= box.minX() && pos.getX() <= box.maxX()
-                && pos.getZ() >= box.minZ() && pos.getZ() <= box.maxZ()
+    /** True if a position is in the structure area of a heart, or at a margin from it or nearer. */
+    private static boolean inStructure(Optional<BoundingBox> structure, BlockPos heart, BlockPos pos, int margin) {
+        return structure.filter(box -> pos.getX() >= box.minX() - margin && pos.getX() <= box.maxX() + margin
+                && pos.getZ() >= box.minZ() - margin && pos.getZ() <= box.maxZ() + margin
                 && Math.abs(pos.getY() - heart.getY()) <= AREA_HEIGHT).isPresent();
     }
 
