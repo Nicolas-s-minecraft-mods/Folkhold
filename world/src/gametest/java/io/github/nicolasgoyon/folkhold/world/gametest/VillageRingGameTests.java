@@ -83,7 +83,7 @@ public final class VillageRingGameTests {
     /** The seed of the noise terrain of the test of the terrain adaptation. */
     private static final long NOISE_SEED = 783L;
     /** The test of the terrain adaptation tries this number of sites. */
-    private static final int SITES = 8;
+    private static final int SITES = 16;
     /** The distance between 2 sites of the test of the terrain adaptation, in chunks. */
     private static final int SITE_STEP = 37;
     /** The point in front of a gate in the flat terrain of the gate, in blocks out of the line. */
@@ -274,8 +274,8 @@ public final class VillageRingGameTests {
     }
 
     /**
-     * The ring districts shape the terrain of the noise (terrain adaptation {@code beard_thin}): a town of the level 12
-     * on the vanilla Overworld noise (seed 783), at the gate of its ring with the largest difference between the
+     * The ring districts shape the terrain of the noise (terrain adaptation {@code beard_thin}): a city of the level 16
+     * on the vanilla Overworld noise (seed 783), at the gate of its rings with the largest difference between the
      * terrain and the gate level. The test fills the chunk of this gate from the noise with the start of its
      * district, as the game does at the noise step. The top block in front of the gate is then at the gate level. With
      * no terrain adaptation, the game does not read the pieces of the district, and the terrain stays as it is.
@@ -308,21 +308,27 @@ public final class VillageRingGameTests {
                 continue;
             }
             TerrainCache terrain = TerrainCache.of(context);
-            FortifiedVillageStructure.Layout layout = village.layout(context, land, false, TOWN_LEVEL).orElseThrow();
-            VillageWall.Wall ring = layout.rings().get(0);
+            FortifiedVillageStructure.Layout layout = village.layout(context, land, false, CITY_LEVEL).orElseThrow();
             Optional<BlockPos> front = Optional.empty();
+            VillageWall.Wall ring = null;
             int slope = 0;
-            for (Map.Entry<WallLayout.Gate, Integer> gate : ring.gateLevels().entrySet()) {
-                WallLayout.Cell middle = ring.layout().cell(gate.getKey().side(), ring.layout().along(gate.getKey()));
-                int x = middle.x() - FRONT * gate.getKey().side().insideX();
-                int z = middle.z() - FRONT * gate.getKey().side().insideZ();
-                int top = terrain.surface(x, z) - 1;
-                int difference = Math.abs(top - gate.getValue());
-                if (top >= generator.getSeaLevel() && terrain.point(x, z).depth() == 0 && difference > slope) {
-                    slope = difference;
-                    front = Optional.of(new BlockPos(x, gate.getValue(), z));
+            for (VillageWall.Wall wall : layout.rings()) {
+                for (Map.Entry<WallLayout.Gate, Integer> gate : wall.gateLevels().entrySet()) {
+                    WallLayout.Cell middle = wall.layout().cell(gate.getKey().side(),
+                            wall.layout().along(gate.getKey()));
+                    int x = middle.x() - FRONT * gate.getKey().side().insideX();
+                    int z = middle.z() - FRONT * gate.getKey().side().insideZ();
+                    int top = terrain.surface(x, z) - 1;
+                    int difference = Math.abs(top - gate.getValue());
+                    if (top >= generator.getSeaLevel() && terrain.point(x, z).depth() == 0 && difference > slope) {
+                        slope = difference;
+                        front = Optional.of(new BlockPos(x, gate.getValue(), z));
+                        ring = wall;
+                    }
                 }
             }
+            FolkholdWorld.LOGGER.info("Ring terrain site {}: the largest slope in front of a ring gate is {} blocks",
+                    start, slope);
             if (slope < MIN_SLOPE || front.isEmpty()) {
                 continue;
             }

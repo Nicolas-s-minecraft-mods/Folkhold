@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PathRamp;
 import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
 import io.github.nicolasgoyon.folkhold.core.sim.village.SeaWall;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Box;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Cell;
@@ -999,18 +1000,34 @@ public final class VillageWall {
             if (row.isEmpty()) {
                 continue;
             }
-            BlockPos front = plot.front();
-            for (StructurePiece piece : village) {
-                if (piece instanceof PoolElementStructurePiece house && !isStreet(house)
-                        && house.getBoundingBox().isInside(front.getX(), house.getBoundingBox().minY(), front.getZ())) {
-                    OptionalInt y = VillagePlots.connectorY(templates, house, plot.target(), front.getX(),
-                            front.getZ());
-                    if (y.isPresent()) {
-                        house.move(0, levels[row.getAsInt()] + 1 - y.getAsInt(), 0);
-                    }
+            // The house stands in front of the connector, or a setback away from it (see VillagePlan.Plot#setback).
+            for (int setback = 0; setback <= VillagePlan.MAX_SETBACK; setback++) {
+                BlockPos front = plot.front().relative(plot.facing(), setback);
+                if (moveHouse(templates, village, plot, front, levels[row.getAsInt()])) {
+                    break;
                 }
             }
         }
+    }
+
+    /**
+     * Moves the house with the connector of a plot at a position up or down: its connector goes 1 block above a level.
+     *
+     * @return true if a house has its connector at the position
+     */
+    private static boolean moveHouse(StructureTemplateManager templates, List<StructurePiece> village, Plot plot,
+            BlockPos front, int level) {
+        for (StructurePiece piece : village) {
+            if (piece instanceof PoolElementStructurePiece house && !isStreet(house)
+                    && house.getBoundingBox().isInside(front.getX(), house.getBoundingBox().minY(), front.getZ())) {
+                OptionalInt y = VillagePlots.connectorY(templates, house, plot.target(), front.getX(), front.getZ());
+                if (y.isPresent()) {
+                    house.move(0, level + 1 - y.getAsInt(), 0);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

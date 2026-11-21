@@ -173,13 +173,14 @@ public final class VillagePlanGameTests {
             Map<String, Integer> signs = signs(level, layout);
             FolkholdWorld.LOGGER.info("Village plan {}: {} street pieces, {} plots, {} buildings, {} free plots, "
                     + "{} wall pieces, radius {}, {} ms, market {}, storehouses {}, barracks {}, posts {}, homes {}, "
-                    + "forges {}, home beds {}",
+                    + "forges {}, home beds {}, plots of side streets and ring streets {}",
                     name, layout.buildings().size() - 1 - layout.built(), layout.plots().size(), layout.built(),
                     layout.free(), layout.wall().size(), Math.round(plan.radius()), time / 1_000_000,
                     signs.getOrDefault(MARKET, 0), signs.getOrDefault(STOREHOUSE, 0),
                     signs.getOrDefault(BARRACKS, 0), layout.posts().size(),
                     signs.getOrDefault(HOME, 0) - layout.posts().size(), signs.getOrDefault(FORGE, 0),
-                    homeBeds(level, layout));
+                    homeBeds(level, layout), plan.plots().stream().filter(plan::onSideStreet).count()
+                            + layout.bands().stream().mapToInt(band -> band.plots().size()).sum());
         }
         checkVariety(level, variant, placed, eligible, problems);
         helper.assertTrue(problems.isEmpty(), "Problems of the villages: " + problems);
