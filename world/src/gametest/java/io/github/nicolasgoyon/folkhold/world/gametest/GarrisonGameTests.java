@@ -5,6 +5,7 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
+import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
@@ -34,12 +35,20 @@ public final class GarrisonGameTests {
     private GarrisonGameTests() {
     }
 
-    /** Places a heart. Its settlement is at the level 1, so its garrison has the units of the level 1. */
+    /**
+     * Places a heart. Its settlement is at the level 1, so its garrison has the units of the level 1.
+     *
+     * <p>The culture of a settlement can add units to its garrison ({@code culture_garrison} in {@code levels.json}).
+     * The culture of a new settlement comes from the region of its position, and the GameTest server puts each test at
+     * a random position. Thus the settlement goes in a faction of Ashmark, a culture with no extra units: the counts of
+     * the tests are the same at all the positions. {@code CultureGarrisonGameTests} tests the extra units.
+     */
     private static VillageHeartBlockEntity placeHeart(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
         helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
         VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
         setLevel(helper, heart, 1);
+        RaidBalanceGameTests.joinFaction(helper, heart, Cultures.ASHMARK.id());
         return heart;
     }
 
