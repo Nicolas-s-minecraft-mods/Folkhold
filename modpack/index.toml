@@ -135,6 +135,11 @@ hash = "f8ee1a1a3f4658aebb894eb6a4dd656514cececbc03b209c43a1c72dabc09b04"
 metafile = true
 
 [[files]]
+file = "mods/slumbermod.pw.toml"
+hash = "ff8b8d90af82a1aa8e676a83116e771deb643d40dfcd9567a21ae50ded926855"
+metafile = true
+
+[[files]]
 file = "mods/small-ships.pw.toml"
 hash = "c2d278ebcbade513817f8cb165a441148bb2a36298eac561afd5611ec265ddcf"
 metafile = true

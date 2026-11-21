@@ -49,6 +49,7 @@ The pinned versions are in `modpack/mods/*.pw.toml`.
 | Navigation | Cartofold | `cartofold` | 0.33.12 | Required by `folkhold_world`. Minimap (the key Y shows or hides it), map of the explored world (key M), survey maps. The jar of its GitHub Release |
 | Terrain | Tectonic | `tectonic` | 3.0.28 | Large continents, deep oceans, mountain ranges. Requires Lithostitched |
 | Light | LambDynamicLights | `lambdynamiclights` | 4.8.11 | Client only |
+| Time | Slumber | `slumbermod` | 1.0.0 | Pinned. MIT license. While all the players sleep, the server runs extra ticks of the levels in place of the night skip. Server side: the pack installs it on both sides, so that a single player world (integrated server) also has it. See "Sleep" below |
 | Library | GeckoLib | `geckolib` | 4.9.3 | Required by `folkhold_world` |
 | Library | Confee | `confee` | 0.2.0 | Beta, pinned. Client only. Required by `folkhold_world` and `folkhold_events` on the client: the config screens of the client options. The jar of its GitHub Release |
 | Comfort | JEI, Jade | `jei`, `jade` | 19.57.0.451, 15.10.6 | For development |
@@ -59,6 +60,15 @@ packwiz resolves most dependencies automatically (for example GlitchCore for Ser
 
 - Immersive Weathering: Renewed requires Moonlight Lib.
 - Smart Feeding Troughs requires Dirigo (1.3.0 or later, before 2.0.0).
+
+**Sleep** (Slumber 1.0.0, decision of the owner on issue #772): the night does not jump to the morning. The game runs the ticks of the night: the furnaces smelt, the crops grow, the monsters move, and the villagers follow their daily schedule.
+
+- When all the players that are not spectators sleep, Slumber sets the game rule `playersSleepingPercentage` to 101 (no vanilla night skip). Then, at the end of each server tick, it runs extra ticks of all the levels (`ServerLevel.tick`), until the morning. It sets the game rule back at the morning.
+- The number of extra ticks in one server tick is `max(slumberTickMultiplier - 1, ceil(ticks to the morning / 40))`. Slumber has the 40 in its code: the night ends in about 40 server ticks. The game rule `slumberTickMultiplier` (default 20) is only a minimum. It applies only at the end of the night (the last `40 × (multiplier - 1)` ticks). It does not change the highest number of extra ticks.
+- Measure (GameTest server with Folkhold and Slumber, a mock player in a bed at the time 13000): the night of 11,004 game ticks took 142 server ticks, with 276 game ticks at most in one server tick. A furnace smelted 55 raw iron, as in 11,004 normal ticks.
+- Cost: the total work of the night is the same as with no sleep: about 11,000 level ticks. A spark profile of the owner gives about 29 ms for a level tick. Thus one server tick at the start of the night takes about 276 × 29 ms = 8 s, and the night takes about 11,000 × 29 ms = 5.3 minutes of real time (9.2 minutes with no sleep). The server answers the players only between two server ticks. The watchdog of the server (`max-tick-time`, 60 s) stops the server when a level tick takes more than about 200 ms during the start of a night.
+- Value of `slumberTickMultiplier`: keep the default (20). A lower value does not lower the time of the longest server tick (it comes from the 40 of the code), and it makes the end of the night longer. A higher value makes the end of the night shorter and its server ticks longer. To limit the time of one server tick, Slumber needs a maximum of extra ticks for each server tick: Slumber 1.0.0 has no such option.
+- The handlers of the server tick and the level tick of Folkhold run one time for each server tick, not for each extra tick (see "General architecture", "Fast ticks").
 
 Maintenance rules:
 
@@ -103,6 +113,12 @@ The balance mod has no dependency on `core` and stays usable alone. When the wor
 The button "Config" of `folkhold_world` and `folkhold_events` in the mod list opens the Confee screen of the client options. The button "Server options" of this screen opens the NeoForge screen of the server options (`ServerConfigScreen` of `core`). Confee 0.2.0 has no server options and no sync from the server to the clients: thus the server options stay on `ModConfigSpec`. `folkhold_balance` has only server options and keeps the NeoForge screen. The button "Config" of `folkhold_core` opens the "What's new" screen.
 
 The concrete layer reads the blocks only in chunks that are ready: loaded and complete (`ReadyChunks`). On the server, `Level.isLoaded` is also true for a chunk that has a ticket and a generation that is not complete. A read in such a chunk stops the server thread until the generation is complete. For example, the village heart does its work only when all the chunks of its scan area (the area of the village structure) are ready.
+
+**Fast ticks.** The game time can advance by more than one tick in one server tick: Slumber runs extra ticks of the levels while the players sleep (see "Base modpack", "Sleep"). These extra ticks run the entities, the block entities, the random ticks and the vanilla raids. They do not fire the events `ServerTickEvent` and `LevelTickEvent`. Rules for the code of the mods:
+
+- A periodic check of a handler of the server tick uses `IntervalCheck` (`core`): the check is due when the game time is one interval or more after its last run. A test `gameTime % interval == 0` skips most of the checks during a fast night. The checks of the escorts, of the materialization of the groups, of the discovery of the settlements and of the detachments of the vanilla villages use `IntervalCheck`.
+- The code of an entity or of a block entity (for example the village heart) runs at each tick, also at each extra tick.
+- The abstract simulation (`SimulationTicker`) starts one abstract tick at most in one server tick, when the game time reaches the time of the next abstract tick. The next abstract tick comes one interval (2,400 game ticks) after the start of the abstract tick. In a fast night, each abstract tick can start up to 275 game ticks after its time: a night can have one abstract tick less than with no sleep.
 
 The blocks of all the mods are in the library `blocks` (mod `folkhold_blocks`). It has no dependency, except Minecraft and NeoForge. A block of the library has its definition: shape, block states, placement of the parts, light, model, item, loot table, tags and names. It also has the behavior that a player expects from a similar vanilla block, with no other Folkhold mod. For example, a player lights and puts out a brazier as a campfire. The library has no game logic. The other mods add the features of a block: block entity, click, scheduled tick, and actions when the block goes into the level or away. A mod registers one `BlockFeature` for a block (`BlockFeatures.register`). For example, the world mod gives the village heart its block entity, its screen and the destruction of the village. The ids `folkhold_world:<block>` of the blocks of the library resolve to the blocks of the library (registry aliases).
 

@@ -1,0 +1,14 @@
+name = "Slumber"
+filename = "slumber-neoforge-1.21.1-1.0.0.jar"
+side = "both"
+pin = true
+
+[download]
+url = "https://cdn.modrinth.com/data/ApGOv8nw/versions/hwLmQFQr/slumber-neoforge-1.21.1-1.0.0.jar"
+hash-format = "sha512"
+hash = "b520cea4c53e8deb87b2bb50a5117bbb6e66ff5256f2ef4ff48accb6d1b70bcef21b608259c4e98f195c7e5756e4974b8d9997e1a2efeebba1cf200fe1fdea98"
+
+[update]
+[update.modrinth]
+mod-id = "ApGOv8nw"
+version = "hwLmQFQr"
