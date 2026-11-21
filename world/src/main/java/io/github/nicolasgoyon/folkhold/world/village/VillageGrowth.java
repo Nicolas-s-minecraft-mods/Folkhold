@@ -90,21 +90,27 @@ public final class VillageGrowth {
     private static final String BUILDING_PREFIX = "house_";
     /** The name of the pool of the market of a variant, in the folder of the pool of its homes. */
     private static final String MARKET = "market";
+    /** The name of the pool of the fields of a variant, in the folder of the pool of its homes. */
+    public static final String FIELDS = "fields";
+    /** The name of the pool of the mills of a variant, in the folder of the pool of its homes. */
+    public static final String MILLS = "mills";
     /** The name of the piece of a house-workshop starts with this text. */
     private static final String JOB_PREFIX = "job_";
     /** The number of jobs that one check of the growth tries for a house-workshop. */
     public static final int WORKSHOP_JOBS = 3;
 
     /**
-     * The pools of the pieces that the growth builds in a variant: the house-workshops, the buildings of the levels
-     * and the market. The pools are in the folder of the pool of the homes of the variant.
+     * The pools of the pieces that the growth builds in a variant: the house-workshops, the buildings of the levels,
+     * the market, and the fields and the mills outside the palisade. The pools are in the folder of the pool of the
+     * homes of the variant.
      *
      * @param homes the id of the pool of the homes of the variant
      * @return the ids of the pools
      */
     public static List<ResourceLocation> pools(ResourceLocation homes) {
         return List.of(VillagePlots.sibling(homes, VillagePlots.JOBS), VillagePlots.sibling(homes, HOUSES),
-                VillagePlots.sibling(homes, MARKET));
+                VillagePlots.sibling(homes, MARKET), VillagePlots.sibling(homes, FIELDS),
+                VillagePlots.sibling(homes, MILLS));
     }
 
     /**
