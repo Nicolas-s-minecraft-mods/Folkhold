@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.core.sim.level.Tier;
 import io.github.nicolasgoyon.folkhold.core.sim.village.CliffSide;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanGround;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotTerrain;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
@@ -28,6 +29,7 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -256,7 +258,7 @@ public final class PlotTerrainGameTests {
             }
             Map<String, Integer> signs = VillagePlanGameTests.signs(level, layout);
             FolkholdWorld.LOGGER.info("Village measure | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} / {} / {} "
-                    + "| {} | {} | {} | {} |", tier.id(), style.name(), tier.maxLevel(), plots.size(),
+                    + "| {} | {} | {} | {} | {} |", tier.id(), style.name(), tier.maxLevel(), plots.size(),
                     layout.plans().stream().map(part -> String.valueOf(part.plots().size()))
                             .collect(Collectors.joining(" + ")),
                     layout.free(), spare, signs.getOrDefault(VillagePlanGameTests.HOME, 0) - layout.posts().size(),
@@ -264,9 +266,15 @@ public final class PlotTerrainGameTests {
                     LevelTables.get().traits(tier.maxLevel()).maxPopulation() - VillageBeds.staff(),
                     layout.built(), signs.getOrDefault("storehouse", 0), signs.getOrDefault("barracks", 0),
                     signs.getOrDefault(VillageBuildings.MARKET, 0), layout.posts().size(), layout.problems().size(),
-                    plots.stream().filter(plot -> plot.spare() && !plot.good()).count(), time);
+                    plots.stream().filter(plot -> plot.spare() && !plot.good()).count(), time, rules(layout));
         }
         measure.end(helper, tiers.size(), tiers.size(), problems);
+    }
+
+    /** The rules of the ground of the plans of a layout: the core, then each band (see {@link VillagePlan.Rules}). */
+    static String rules(FortifiedVillageStructure.Layout layout) {
+        return layout.plans().stream().map(plan -> plan.rules().name().toLowerCase(Locale.ROOT))
+                .collect(Collectors.joining(" + "));
     }
 
     /**
@@ -409,6 +417,121 @@ public final class PlotTerrainGameTests {
         helper.assertTrue(cliffWalls > 0, "No wall of the mountain sites has cliff blocks");
         helper.assertTrue(problems.isEmpty(), "Problems of the cliff side: " + problems);
         helper.succeed();
+    }
+
+    /**
+     * The plans of the towns at the first mountain sites (see {@link #mountainWallsHaveNoGateOnACliff}) follow the
+     * ground of the site (see {@link PlanGround}). The test reads the terrain from a new terrain cache.
+     *
+     * <ul>
+     *   <li>Each town has all its plots and homes.</li>
+     *   <li>For a plan with the level rule, each grid point of each plot with a building is
+     *       {@link PlanGround#MAX_PLOT_RISE} blocks or less above or below the surface at its connector. The plots of
+     *       the first pieces of the axis streets (the bank and the first jobs) do not obey this rule.</li>
+     *   <li>For a core plan with the outline rule, the line of the first wall around the plan climbs no more than the
+     *       line around the plaza and the first pieces of the axis streets (see {@link PlanGround#climb}).</li>
+     *   <li>One site at least has a steep side: a grid point in the radius of the core is not in the region of the
+     *       ground with the small rise.</li>
+     * </ul>
+     *
+     * <p>The log has a line {@code Ground of the plan} for each town, with the rules of its plans.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_ground")
+    public static void mountainPlansFollowTheGround(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        List<String> problems = new ArrayList<>();
+        Map<String, Integer> rules = new TreeMap<>();
+        int sites = 0;
+        int steep = 0;
+        for (int i = 0; i < TRIES && sites < MOUNTAIN_SITES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.isMountain(context)
+                    || !structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            sites++;
+            FortifiedVillageStructure.Variant variant = measure.variant(context, false);
+            FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, TOWN_LEVEL)
+                    .orElseThrow();
+            String name = "chunk " + context.chunkPos() + " town " + layout.style().name();
+            measure.check(context, layout, " ground", problems);
+            TerrainCache terrain = TerrainCache.of(context);
+            PlotTerrains plots = new PlotTerrains(terrain);
+            BlockPos center = layout.center();
+            Rotation rotation = layout.village().get(0).getRotation();
+            int radius = Math.min(FortifiedVillageStructure.firstRadius(layout.size()),
+                    structure.maxDistanceFromCenter());
+            PlanGround core = plots.core(center, rotation, radius, variant.wall().margin());
+            PlanGround band = plots.band(center, rotation);
+            for (int p = 0; p < layout.plans().size(); p++) {
+                VillagePlan plan = layout.plans().get(p);
+                rules.merge(plan.rules().name(), 1, Integer::sum);
+                if (plan.rules() == VillagePlan.Rules.NONE) {
+                    continue;
+                }
+                PlanGround ground = p == 0 ? core : band;
+                for (VillagePlan.Plot plot : plan.plots()) {
+                    boolean first = p == 0 && plan.pieces().get(plot.piece()).parent() < 0;
+                    if (plan.rules().level() && !first && !plot.spare()
+                            && !ground.level(plot.area(), plot.x(), plot.z())) {
+                        problems.add(name + ": the plot at " + plot.x() + " " + plot.z() + " of the plan " + p
+                                + " is far above or below its street");
+                    }
+                }
+            }
+            VillagePlan plan = layout.plan();
+            if (plan.rules().outline()) {
+                int half = layout.village().get(0).getBoundingBox().getXSpan() / 2;
+                VillagePlan.Box start = new VillagePlan.Box(-half, -half, half, half);
+                VillagePlan.Box all = start;
+                for (VillagePlan.Piece piece : plan.pieces()) {
+                    all = union(all, piece.box());
+                    if (piece.parent() < 0) {
+                        // The first piece and the street end after it: the bounds of the plan at its start.
+                        start = union(start, piece.box());
+                        start = union(start, new VillagePlan.Box(piece.box().minX() + Math.min(0, piece.dir().dx())
+                                * StreetStyle.END, piece.box().minZ() + Math.min(0, piece.dir().dz()) * StreetStyle.END,
+                                piece.box().maxX() + Math.max(0, piece.dir().dx()) * StreetStyle.END,
+                                piece.box().maxZ() + Math.max(0, piece.dir().dz()) * StreetStyle.END));
+                    }
+                }
+                for (VillagePlan.Plot plot : plan.plots()) {
+                    all = union(all, plot.area());
+                    if (plan.pieces().get(plot.piece()).parent() < 0) {
+                        start = union(start, plot.area());
+                    }
+                }
+                long climb = core.climb(all, plan.rules().rise());
+                long first = core.climb(start, plan.rules().rise());
+                if (climb > first) {
+                    problems.add(name + ": the line of the first wall climbs " + climb + " blocks, more than the "
+                            + first + " blocks of the first pieces");
+                }
+            }
+            boolean cut = false;
+            for (int dx = -radius; dx <= radius && !cut; dx += PlanGround.STEP) {
+                for (int dz = -radius; dz <= radius && !cut; dz += PlanGround.STEP) {
+                    cut = dx * dx + dz * dz <= radius * radius
+                            && !core.inRegion(center.getX() + dx, center.getZ() + dz, PlanGround.MAX_RISE);
+                }
+            }
+            steep += cut ? 1 : 0;
+            FolkholdWorld.LOGGER.info("Ground of the plan {}: rules {}, steep side {}", name, rules(layout), cut);
+        }
+        FolkholdWorld.LOGGER.info("Ground of the plan: {} mountain sites, {} with a steep side, rules {}, problems {}",
+                sites, steep, rules, problems);
+        helper.assertTrue(sites == MOUNTAIN_SITES, "Only " + sites + " mountain sites of " + MOUNTAIN_SITES);
+        helper.assertTrue(steep > 0, "No mountain site has a steep side");
+        helper.assertTrue(problems.isEmpty(), "Problems of the ground: " + problems);
+        helper.succeed();
+    }
+
+    /** The box around 2 boxes of a plan. */
+    private static VillagePlan.Box union(VillagePlan.Box first, VillagePlan.Box second) {
+        return new VillagePlan.Box(Math.min(first.minX(), second.minX()), Math.min(first.minZ(), second.minZ()),
+                Math.max(first.maxX(), second.maxX()), Math.max(first.maxZ(), second.maxZ()));
     }
 
     /**

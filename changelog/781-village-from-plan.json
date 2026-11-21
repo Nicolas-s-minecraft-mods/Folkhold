@@ -1,5 +1,5 @@
 {
   "category": "changed",
-  "en_us": "New villages have the size of their tier: about 14 plots for a hamlet, 53 for a city, with crossroads and side streets in each quarter. The homes are not in straight lines. Faction villages stay farther from vanilla villages, thus they are fewer.",
-  "fr_fr": "Les nouveaux villages ont la taille de leur palier : environ 14 parcelles pour un hameau, 53 pour une cité, avec des carrefours et des rues secondaires dans chaque quart. Les maisons ne sont pas alignées. Les villages de faction sont plus loin des villages vanilla, donc moins nombreux."
+  "en_us": "New villages have the size of their tier (14 plots for a hamlet, 53 for a city), with side streets in each quarter and homes out of line. Their shape follows the terrain: no street, home or first wall on a cliff. Faction villages stay farther from vanilla villages, thus they are fewer.",
+  "fr_fr": "Les nouveaux villages ont la taille de leur palier (14 parcelles en hameau, 53 en cité), avec des rues secondaires et des maisons non alignées. Leur forme suit le terrain : ni rue, ni maison, ni rempart sur une falaise. Les villages de faction sont loin des villages vanilla, donc moins nombreux."
 }

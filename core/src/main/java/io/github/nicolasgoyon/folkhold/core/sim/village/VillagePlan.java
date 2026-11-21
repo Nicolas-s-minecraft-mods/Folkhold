@@ -56,9 +56,119 @@ import java.util.function.Predicate;
  * @param missingHomes the homes under the plots that the village needs
  * @param missingWide  for each wide home of the style, the marks under its count
  * @param radius       the largest distance from the middle to a corner of a piece or of a plot
+ * @param rules        the rules of the ground that the plan obeys (see {@link Ground})
  */
 public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int missingPlots, int missingHomes,
-        Map<String, Integer> missingWide, double radius) {
+        Map<String, Integer> missingWide, double radius, Rules rules) {
+
+    /**
+     * The ground of a plan: the rules of the terrain for the street pieces, the plots and the first wall, in the frame
+     * of the plan (see {@link PlanGround}).
+     */
+    public interface Ground {
+        /** A ground with no rule: each box is in the region, and each position has no cost. */
+        Ground ANY = new Ground() {
+            @Override
+            public boolean inside(Box box, int rise) {
+                return true;
+            }
+
+            @Override
+            public boolean level(Box area, int x, int z) {
+                return true;
+            }
+
+            @Override
+            public double cost(int x, int z) {
+                return 0;
+            }
+
+            @Override
+            public long climb(Box box, int rise) {
+                return 0;
+            }
+        };
+
+        /**
+         * True when a box of a street piece, of a street end or of a plot is in the region of the ground.
+         *
+         * @param box  the box
+         * @param rise the largest difference of the ground with the plaza (see {@link Rules#rise()})
+         * @return true for a box in the region
+         */
+        boolean inside(Box box, int rise);
+
+        /**
+         * True when the area of a plot is near the level of its street.
+         *
+         * @param area the area of the plot
+         * @param x    the block X of the plot connector, on the edge of the street
+         * @param z    the block Z of the plot connector
+         * @return true for a plot near the level of its street
+         */
+        boolean level(Box area, int x, int z);
+
+        /**
+         * The cost of a position, in blocks of distance: the plan adds it to the distance to the middle.
+         *
+         * @param x the block X
+         * @param z the block Z
+         * @return the cost, 0 or more
+         */
+        double cost(int x, int z);
+
+        /**
+         * The climb of the line of the first wall around a box: the sum, on the points of the line, of the blocks
+         * more than a rise above the plaza. 0 for a line on good ground.
+         *
+         * @param box  the box around all the pieces and the plots
+         * @param rise the largest difference of the ground with the plaza (see {@link Rules#rise()})
+         * @return the climb, 0 or more
+         */
+        long climb(Box box, int rise);
+    }
+
+    /**
+     * The rules of the ground that a plan obeys, from the strongest to the weakest. The rise is the largest difference
+     * of the ground of the plan with the plaza (see {@link PlanGround#MAX_RISE} and {@link PlanGround#HIGH_RISE}).
+     */
+    public enum Rules {
+        /** The region, the cost, the outline of the first wall and the level of the plots, with the small rise. */
+        ALL(PlanGround.MAX_RISE, true, true),
+        /** The region, the cost, the outline of the first wall and the level of the plots, with the high rise. */
+        HIGH(PlanGround.HIGH_RISE, true, true),
+        /** As {@link #HIGH}, with no level rule: a plot far above or below its street can be a home. */
+        NO_LEVEL(PlanGround.HIGH_RISE, true, false),
+        /** The region and the cost only, with the high rise. */
+        REGION(PlanGround.HIGH_RISE, false, false),
+        /** No rule of the ground. */
+        NONE(0, false, false);
+
+        private final int rise;
+        private final boolean outline;
+        private final boolean level;
+
+        Rules(int rise, boolean outline, boolean level) {
+            this.rise = rise;
+            this.outline = outline;
+            this.level = level;
+        }
+
+        /** The largest difference of the ground of the plan with the plaza, in blocks. */
+        public int rise() {
+            return rise;
+        }
+
+        /** True when the plan obeys the outline rule of the first wall. */
+        public boolean outline() {
+            return outline;
+        }
+
+        /** True when the plan obeys the level of the plots. */
+        public boolean level() {
+            return level;
+        }
+    }
 
     /** A direction on the horizontal plane. */
     public enum Dir {
@@ -305,21 +415,54 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
     }
 
     /**
-     * As {@link #plan(VillageSize, int, StreetStyle, int, List, Predicate, Predicate, long)}, with or with no setback
-     * and shift of the homes.
+     * As {@link #plan(VillageSize, int, StreetStyle, int, List, Predicate, Predicate, long, boolean)} with no ground
+     * rule.
+     */
+    public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
+            Predicate<Box> terrain, Predicate<Box> foundation, long seed, boolean stagger) {
+        return plan(size, target, style, plazaSize, starts, terrain, foundation, Ground.ANY, seed, stagger);
+    }
+
+    /**
+     * As {@link #plan(VillageSize, int, StreetStyle, int, List, Predicate, Predicate, long)}, with a ground and with or
+     * with no setback and shift of the homes.
      *
+     * <p>With a ground, the plan tries the rules of the ground from the strongest ({@link Rules}), and keeps the first
+     * plan with all its plots, all its homes and all its wide plots. When no plan has them, it keeps the best plan of
+     * the rules (see {@link #BETTER}), the strongest rules first. The first piece of each axis street and its plots do
+     * not obey the rules of the ground: they keep the bank and the first jobs next to the plaza.
+     *
+     * @param ground  the rules of the terrain (see {@link Ground}), or {@link Ground#ANY}
      * @param stagger true for homes with a random setback and a random shift (see {@link Plot#setback()}). False for
      *                homes at the edge of the street, in the middle of their plot: the rooms of a cave village open on
      *                the wall of their tunnel
      */
     public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
-            Predicate<Box> terrain, Predicate<Box> foundation, long seed, boolean stagger) {
+            Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed, boolean stagger) {
         int half = plazaSize / 2;
         Box plaza = new Box(-half, -half, plazaSize - 1 - half, plazaSize - 1 - half);
         long maxRadius = size.maxRadius();
-        return best(seed, random -> new Planner(target, target - size.sparePlots(target), style,
-                box -> box.reach() <= maxRadius, List.of(plaza), true, stagger, terrain, foundation, random)
-                .plan(starts));
+        List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.values());
+        return firstComplete(rules, rule -> best(seed, random -> new Planner(target,
+                target - size.sparePlots(target), style, box -> box.reach() <= maxRadius, List.of(plaza), true,
+                stagger, terrain, foundation, ground, rule, random).plan(starts)));
+    }
+
+    /**
+     * The first plan of some rules with all its plots, all its homes and all its wide plots, else the best plan.
+     */
+    private static VillagePlan firstComplete(List<Rules> rules, Function<Rules, VillagePlan> planner) {
+        VillagePlan best = null;
+        for (Rules rule : rules) {
+            VillagePlan plan = planner.apply(rule);
+            if (plan.missingPlots() + plan.missingHomes() == 0 && plan.missingWide().isEmpty()) {
+                return plan;
+            }
+            if (best == null || BETTER.compare(plan, best) < 0) {
+                best = plan;
+            }
+        }
+        return best;
     }
 
     /** The best plan of {@link #ATTEMPTS} layouts from a seed. */
@@ -387,6 +530,18 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      */
     public static VillagePlan band(VillageSize size, int target, StreetStyle style, Box inner, int band,
             Predicate<Box> terrain, Predicate<Box> foundation, long seed) {
+        return band(size, target, style, inner, band, terrain, foundation, Ground.ANY, seed);
+    }
+
+    /**
+     * As {@link #band(VillageSize, int, StreetStyle, Box, int, Predicate, Predicate, long)}, with a ground. The plan
+     * tries the region and the level of the plots of the ground first, then the region only, then no rule of the
+     * ground (see {@link Rules}). A band has no outline rule: the line of its ring is fixed.
+     *
+     * @param ground the rules of the terrain (see {@link Ground}), or {@link Ground#ANY}
+     */
+    public static VillagePlan band(VillageSize size, int target, StreetStyle style, Box inner, int band,
+            Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed) {
         StreetStyle plain = new StreetStyle(style.name(), style.segment(), style.segmentPlots(), style.crossArm(),
                 style.crossPlots(), style.side(), style.home(), List.of(), style.endOverflow());
         Box near = inner.grow(BAND_INNER - 1);
@@ -403,8 +558,10 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 new Start(inner.maxX() + middle, first, Dir.SOUTH), new Start(inner.maxX() + middle, -first, Dir.NORTH),
                 new Start(first, inner.maxZ() + middle, Dir.EAST), new Start(-first, inner.maxZ() + middle, Dir.WEST),
                 new Start(inner.minX() - middle, first, Dir.SOUTH), new Start(inner.minX() - middle, -first, Dir.NORTH));
-        return best(seed, random -> new Planner(target, target - size.sparePlots(target), plain, region, axes, false, true,
-                terrain, foundation, random).plan(starts));
+        List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.ALL, Rules.REGION, Rules.NONE);
+        // A band has no outline rule and no rise: ALL and REGION differ by the level of the plots only.
+        return firstComplete(rules, rule -> best(seed, random -> new Planner(target, target - size.sparePlots(target),
+                plain, region, axes, false, true, terrain, foundation, ground, rule, random).plan(starts)));
     }
 
     /** An axis street gets a crossroad with the chance 1 in this number, when a crossroad fits. */
@@ -486,6 +643,14 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private boolean crossNorthSouth;
         /** True when the homes get a random setback and a random shift (see {@link Plot#setback()}). */
         private final boolean stagger;
+        /** The rules of the terrain. */
+        private final Ground ground;
+        /** The rules of the ground that the plan obeys. */
+        private final Rules rules;
+        /** The box around the plaza, the pieces, the street ends and the plots: the first wall goes around it. */
+        private Box bounds;
+        /** The climb of the line of the first wall around {@link #bounds}, or -1 before its first calculation. */
+        private long climb = -1;
         private final List<Piece> pieces = new ArrayList<>();
         private final List<Slot> slots = new ArrayList<>();
         private final List<Tail> tails = new ArrayList<>();
@@ -493,7 +658,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final List<Tail> closed = new ArrayList<>();
 
         Planner(int target, int needed, StreetStyle style, Predicate<Box> region, List<Box> blocked, boolean axis,
-                boolean stagger, Predicate<Box> terrain, Predicate<Box> foundation, Random random) {
+                boolean stagger, Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, Rules rules,
+                Random random) {
             this.target = target;
             this.needed = needed;
             this.style = style;
@@ -504,6 +670,34 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             this.blocked = List.copyOf(blocked);
             this.axis = axis;
             this.stagger = stagger;
+            this.ground = ground;
+            this.rules = rules;
+            this.bounds = axis ? blocked.get(0) : null;
+        }
+
+        /** True when the plan obeys rules of the ground: the region and the cost, at least. */
+        private boolean grounded() {
+            return rules != Rules.NONE;
+        }
+
+        /**
+         * True when a box adds no climb to the line of the first wall around the bounds (see {@link Ground#climb}), or
+         * with no outline rule.
+         */
+        private boolean outlineOk(Box box) {
+            if (!rules.outline() || bounds == null) {
+                return true;
+            }
+            if (climb < 0) {
+                climb = ground.climb(bounds, rules.rise());
+            }
+            Box union = bounds.union(box);
+            return union.equals(bounds) || ground.climb(union, rules.rise()) <= climb;
+        }
+
+        /** True for an open end of the first piece of an axis street: it does not obey the rules of the ground. */
+        private boolean first(Tail tail) {
+            return axis && tail.parent() < 0 && tail.exit() < 0;
         }
 
         VillagePlan plan(List<Start> starts) {
@@ -565,7 +759,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 radius = Math.max(radius, plot.area().reach());
             }
             return new VillagePlan(pieces, choice.plots(), target, choice.missingPlots(), choice.missingHomes(),
-                    choice.missingWide(), radius);
+                    choice.missingWide(), radius, rules);
         }
 
         /**
@@ -573,7 +767,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
          * quarter with no plot of a side street comes first: the plan fills the quarters, not only the axes.
          */
         private double priority(Tail tail) {
-            double distance = Math.sqrt((double) distance(tail.start()));
+            double distance = Math.sqrt((double) distance(tail.start())) + cost(tail.start().x(), tail.start().z());
             if (axis && firstCross(tail)) {
                 return -1;
             }
@@ -601,6 +795,21 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
 
         private static long distance(Start start) {
             return (long) start.x() * start.x() + (long) start.z() * start.z();
+        }
+
+        /** The cost of the ground at a position, or 0 with no rule of the ground. */
+        private double cost(int x, int z) {
+            return grounded() ? ground.cost(x, z) : 0;
+        }
+
+        /** The squared distance of a plot to the middle, with the cost of the ground added to the distance. */
+        private double reach(Slot slot) {
+            double cost = cost(slot.x(), slot.z());
+            if (cost == 0) {
+                return slot.distance();
+            }
+            double distance = Math.sqrt((double) slot.distance()) + cost;
+            return distance * distance;
         }
 
         private int length(Kind kind) {
@@ -652,9 +861,12 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             return blocked.stream().anyMatch(other -> other.overlaps(box));
         }
 
-        /** True when the box is in the region of the plan and touches no piece, no plot and no street end. */
-        private boolean free(Box box) {
-            if (!inside(box) || isBlocked(box)) {
+        /**
+         * True when the box is in the region of the plan, in the region of the ground when the rules of the ground
+         * apply, and touches no piece, no plot and no street end.
+         */
+        private boolean free(Box box, boolean rulesApply) {
+            if (!inside(box) || isBlocked(box) || (rulesApply && grounded() && !ground.inside(box, rules.rise()))) {
                 return false;
             }
             return pieces.stream().noneMatch(p -> p.box().overlaps(box))
@@ -664,30 +876,59 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         }
 
         private boolean fits(Tail tail, Kind kind) {
+            List<Box> boxes = new ArrayList<>();
+            boolean rulesApply = !first(tail);
+            if (!fits(tail, kind, rulesApply, boxes)) {
+                return false;
+            }
+            // The first wall goes around the new piece and its street ends: its line must stand on good ground.
+            Box all = boxes.get(0);
+            for (Box box : boxes) {
+                all = all.union(box);
+            }
+            return !rulesApply || outlineOk(all);
+        }
+
+        /** True when a piece and its street ends are free. Adds their boxes to a list. */
+        private boolean fits(Tail tail, Kind kind, boolean rulesApply, List<Box> boxes) {
             Start start = tail.start();
             if (kind == Kind.SIDE) {
                 // The segment after the side piece must also fit.
                 Start next = exits(start, kind).get(0);
                 Box side = box(start, length(kind));
-                return free(side) && fits(new Tail(next, false, -1, 0, side, tail.level()), Kind.SEGMENT);
+                boxes.add(side);
+                return free(side, rulesApply)
+                        && fits(new Tail(next, false, -1, 0, side, tail.level()), Kind.SEGMENT, rulesApply, boxes);
             }
-            if (!free(box(start, length(kind)))) {
+            Box box = box(start, length(kind));
+            boxes.add(box);
+            if (!free(box, rulesApply)) {
                 return false;
             }
-            return exits(start, kind).stream().allMatch(exit -> free(box(exit, StreetStyle.END)));
+            for (Start exit : exits(start, kind)) {
+                Box end = box(exit, StreetStyle.END);
+                boxes.add(end);
+                if (!free(end, rulesApply)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private void add(Tail tail, Kind kind) {
             Start start = tail.start();
             int index = pieces.size();
+            boolean rulesApply = !first(tail);
             pieces.add(new Piece(kind, start.x(), start.z(), start.dir(), length(kind), box(start, length(kind)),
                     tail.parent(), tail.exit(), tail.level()));
+            grow(box(start, length(kind)));
             List<Start> exits = exits(start, kind);
             for (int i = 0; i < exits.size(); i++) {
                 Start exit = exits.get(i);
                 boolean side = kind == Kind.CROSS && i > 0;
                 tails.add(new Tail(exit, side, index, i, box(exit, StreetStyle.END),
                         side ? tail.level() + 1 : tail.level()));
+                grow(box(exit, StreetStyle.END));
             }
             List<Integer> plotZ = kind == Kind.SEGMENT ? style.segmentPlots()
                     : kind == Kind.CROSS ? style.crossPlots() : List.of();
@@ -698,22 +939,42 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     // homes across the street exactly. With no free space for them, the home stays on the plot.
                     int setback = stagger ? random.nextInt(MAX_SETBACK + 1) : 0;
                     int shift = stagger ? (east ? 1 : -1) * random.nextInt(MAX_SHIFT + 1) : 0;
+                    int[] connector = at(start, east ? StreetStyle.WIDTH - 1 : 0, along);
                     Box area = area(start, along, east, style.home(), setback, shift);
-                    if (!free(area)) {
+                    if (!plotFits(area, rulesApply)) {
                         setback = 0;
                         shift = 0;
                         area = area(start, along, east, style.home());
                     }
-                    if (free(area)) {
-                        int[] connector = at(start, east ? StreetStyle.WIDTH - 1 : 0, along);
+                    if (plotFits(area, rulesApply)) {
+                        grow(area);
                         Dir side = start.dir().counterclockwise();
                         Dir facing = east ? side : side.opposite();
                         PlotRole role = axis && tail.parent() == -1 ? role(start.dir(), row, east)
                                 : PlotRole.HOME;
-                        boolean good = terrain.test(area);
+                        // A plot far above or below its street is a bad plot: it can be a spare plot, never a home.
+                        boolean level = !rulesApply || !rules.level()
+                                || ground.level(area, connector[0], connector[1]);
+                        boolean good = level && terrain.test(area);
                         slots.add(new Slot(connector[0], connector[1], facing, index, along, east, area, role, good,
-                                !good && foundation.test(area), setback, shift));
+                                !good && level && foundation.test(area), setback, shift));
                     }
+                }
+            }
+        }
+
+        /** True when the area of a plot is free and, when the rules of the ground apply, inside the outline rule. */
+        private boolean plotFits(Box area, boolean rulesApply) {
+            return free(area, rulesApply) && (!rulesApply || outlineOk(area));
+        }
+
+        /** Adds a box to the bounds of the plan. */
+        private void grow(Box box) {
+            if (bounds != null) {
+                Box union = bounds.union(box);
+                if (!union.equals(bounds)) {
+                    bounds = union;
+                    climb = -1;
                 }
             }
         }
@@ -755,7 +1016,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             List<Slot> order = new ArrayList<>(slots);
             // A plot of a side street counts at a part of its distance, as its open end (see #priority).
             order.sort(Comparator.comparingDouble(slot -> pieces.get(slot.piece()).level() > 0
-                    ? slot.distance() * SIDE_PLOT_WEIGHT : (double) slot.distance()));
+                    ? reach(slot) * SIDE_PLOT_WEIGHT : reach(slot)));
             Map<Slot, Home> wideOf = new LinkedHashMap<>();
             Map<Slot, Box> areas = new HashMap<>();
             Map<String, Integer> missingWide = new LinkedHashMap<>();
@@ -836,6 +1097,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     .union(slot.area());
             int overflow = slot.along() + wide.frontage() - 1 - wide.frontage() / 2 - (piece.length() - 1);
             boolean next = pieces.stream().anyMatch(p -> p.parent() == slot.piece() && p.exit() == 0);
+            boolean rulesApply = !(axis && piece.parent() < 0) && grounded();
+            if (rulesApply && !(ground.inside(area, rules.rise()) && (!rules.level() || ground.level(area, slot.x(), slot.z()))
+                    && outlineOk(area))) {
+                return null;
+            }
             if (!inside(area) || isBlocked(area) || !terrain.test(area) || (overflow > style.endOverflow() && next)
                     || pieces.stream().anyMatch(p -> p.box().overlaps(area))
                     || tails.stream().anyMatch(t -> t.end().overlaps(area))

@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.village.structure;
 
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanGround;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotTerrain;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
@@ -67,6 +68,42 @@ public final class PlotTerrains {
     Predicate<VillagePlan.Box> foundation(BlockPos center, Rotation rotation) {
         return box -> {
             return onFoundation(world(box, center, rotation));
+        };
+    }
+
+    /**
+     * The ground of the core plan of a village (see {@link PlanGround#core}): the region from the plaza, the level of
+     * the plots, the cost and the outline of the first wall.
+     *
+     * @param center   the middle of the plaza on the surface of the terrain: (0, 0) of the plan
+     * @param rotation the rotation of the plaza: the plan turns with it
+     * @param radius   the maximum radius of the plan
+     * @param margin   the margin of the wall around the pieces
+     * @return the ground
+     */
+    public PlanGround core(BlockPos center, Rotation rotation, int radius, int margin) {
+        return PlanGround.core(terrain::column, center.getX(), center.getZ(), turns(rotation), center.getY(), radius,
+                margin);
+    }
+
+    /**
+     * The ground of the plan of a band (see {@link PlanGround#band}): no cliff in a box, and the level of the plots.
+     *
+     * @param center   the middle of the plaza: (0, 0) of the plan
+     * @param rotation the rotation of the plaza: the plan turns with it
+     * @return the ground
+     */
+    public PlanGround band(BlockPos center, Rotation rotation) {
+        return PlanGround.band(terrain::column, center.getX(), center.getZ(), turns(rotation));
+    }
+
+    /** The clockwise quarter turns of a rotation. */
+    private static int turns(Rotation rotation) {
+        return switch (rotation) {
+            case NONE -> 0;
+            case CLOCKWISE_90 -> 1;
+            case CLOCKWISE_180 -> 2;
+            case COUNTERCLOCKWISE_90 -> 3;
         };
     }
 
