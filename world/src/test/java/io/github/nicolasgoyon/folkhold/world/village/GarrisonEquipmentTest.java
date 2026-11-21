@@ -56,15 +56,16 @@ class GarrisonEquipmentTest {
                 dataFile().sets().get(GarrisonEquipment.DEFAULT_SET));
     }
 
-    /** Each variant of the archers of all the sets has a bow or a crossbow: their attack needs it. */
+    /** Each variant of the archers of all the sets has a bow, a crossbow or a trident: their attack needs it. */
     @Test
-    void archersHaveABowOrACrossbow() throws IOException {
+    void archersHaveARangedWeapon() throws IOException {
         Sets sets = dataFile();
 
         for (String set : sets.ids()) {
             for (Map<EquipmentSlot, Piece> variant : sets.variants(set, GarrisonRole.ARCHER)) {
                 String weapon = variant.get(EquipmentSlot.MAINHAND).item();
-                assertTrue(weapon.equals("minecraft:bow") || weapon.equals("minecraft:crossbow"), set + ": " + weapon);
+                assertTrue(weapon.equals("minecraft:bow") || weapon.equals("minecraft:crossbow")
+                        || weapon.equals("minecraft:trident"), set + ": " + weapon);
             }
         }
     }
@@ -130,8 +131,9 @@ class GarrisonEquipmentTest {
     }
 
     /**
-     * The cultures of the data file: Valeholm has axes and bows, Ashmark crossbows, Sunreach spears (tridents) and
-     * bows. Each culture has a set for each set of the level table.
+     * The cultures of the data file: Valeholm has axes and bows, Ashmark crossbows, Sunreach spears (tridents) for all
+     * the roles. The tridents of the Sunreach archers have Loyalty: they come back to the archer. Each culture has a set
+     * for each set of the level table.
      */
     @Test
     void dataFileHasTheWeaponsOfTheCultures() throws IOException {
@@ -149,10 +151,14 @@ class GarrisonEquipmentTest {
             for (Map<EquipmentSlot, Piece> variant : sets.variants("ashmark", set, GarrisonRole.ARCHER)) {
                 assertEquals("minecraft:crossbow", variant.get(EquipmentSlot.MAINHAND).item(), set);
             }
-            for (String culture : List.of("valeholm", "sunreach")) {
-                for (Map<EquipmentSlot, Piece> variant : sets.variants(culture, set, GarrisonRole.ARCHER)) {
-                    assertEquals("minecraft:bow", variant.get(EquipmentSlot.MAINHAND).item(), culture + " " + set);
-                }
+            for (Map<EquipmentSlot, Piece> variant : sets.variants("valeholm", set, GarrisonRole.ARCHER)) {
+                assertEquals("minecraft:bow", variant.get(EquipmentSlot.MAINHAND).item(), set);
+            }
+            for (Map<EquipmentSlot, Piece> variant : sets.variants("sunreach", set, GarrisonRole.ARCHER)) {
+                Piece weapon = variant.get(EquipmentSlot.MAINHAND);
+                assertEquals("minecraft:trident", weapon.item(), set);
+                assertTrue(weapon.enchantments().getOrDefault(ResourceLocation.withDefaultNamespace("loyalty"), 0) > 0,
+                        "The trident of an archer comes back: " + set);
             }
             assertTrue(sets.pieces("sunreach", set, GarrisonRole.GUARD, id).get(EquipmentSlot.OFFHAND) == null,
                     "A spear needs both hands: no shield " + set);

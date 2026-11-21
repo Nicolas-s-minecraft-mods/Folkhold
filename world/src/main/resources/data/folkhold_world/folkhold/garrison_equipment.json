@@ -1030,7 +1030,12 @@
     },
     "archer": [
       {
-        "mainhand": "minecraft:bow",
+        "mainhand": {
+          "item": "minecraft:trident",
+          "enchantments": {
+            "minecraft:loyalty": 3
+          }
+        },
         "head": "minecraft:golden_helmet",
         "chest": "tabard",
         "legs": "minecraft:leather_leggings",
@@ -1079,9 +1084,9 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 1
+            "minecraft:loyalty": 3
           }
         },
         "head": {
@@ -1157,9 +1162,9 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 1
+            "minecraft:loyalty": 3
           }
         },
         "head": {
@@ -1240,9 +1245,10 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 2
+            "minecraft:loyalty": 3,
+            "minecraft:sharpness": 1
           }
         },
         "head": {
@@ -1343,9 +1349,10 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 3
+            "minecraft:loyalty": 3,
+            "minecraft:sharpness": 2
           }
         },
         "head": {

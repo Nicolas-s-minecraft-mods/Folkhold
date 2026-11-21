@@ -1,4 +1,8 @@
 {
+  "village.war_horn": {
+    "subtitle": "subtitles.folkhold_world.village.war_horn",
+    "sounds": [{"name": "minecraft:item.goat_horn.sound.5", "type": "event"}]
+  },
   "entity.faction_golem.attack": {
     "subtitle": "subtitles.folkhold_world.entity.faction_golem.attack",
     "sounds": [{"name": "minecraft:entity.iron_golem.attack", "type": "event"}]

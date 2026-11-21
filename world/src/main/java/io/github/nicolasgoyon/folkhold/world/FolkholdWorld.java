@@ -14,6 +14,7 @@ import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.entity.AnimatedVillagers;
+import io.github.nicolasgoyon.folkhold.world.entity.ArcherEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.FriendlyFire;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.MonsterTargeting;
 import io.github.nicolasgoyon.folkhold.world.faction.ReputationEvents;
@@ -109,6 +110,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(RaidHelpers::onServerTick);
         NeoForge.EVENT_BUS.addListener(RaidHelpers::onServerStopped);
         NeoForge.EVENT_BUS.addListener(FriendlyFire::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(ArcherEntity::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(ReputationEvents::onDeath);
         NeoForge.EVENT_BUS.addListener(ReputationEvents::onDamage);
         NeoForge.EVENT_BUS.addListener(FolkholdCommands::onRegisterCommands);

@@ -69,8 +69,9 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  * A culture can change the equipment of some roles: the set {@code <culture>/<set>}, for example
  * {@code valeholm/hamlet}, gives the roles that change for the units of the factions of the culture. A role that is
  * not in the set of the culture comes from the set with no culture. A unit with a set that is not in the file, or a
- * role that is not in its set, gets the items of its role in the set {@code hamlet} of {@link #DEFAULT}. The archers need a bow or a crossbow in the main hand. The faction golem has no
- * equipment: its role has an empty object.
+ * role that is not in its set, gets the items of its role in the set {@code hamlet} of {@link #DEFAULT}. The archers
+ * need a bow, a crossbow or a trident in the main hand. An archer throws its trident: give it Loyalty, so that the
+ * trident comes back to the archer. The faction golem has no equipment: its role has an empty object.
  */
 public final class GarrisonEquipment extends SimplePreparableReloadListener<GarrisonEquipment.Sets> {
     public static final ResourceLocation FILE =

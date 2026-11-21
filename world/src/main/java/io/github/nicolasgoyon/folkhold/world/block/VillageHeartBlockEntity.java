@@ -49,6 +49,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillagePens;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
+import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -215,6 +216,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private int tradePlaceCalculations;
     /** Game time of the last ring of the bells. Not saved. */
     private long lastBellTick = Long.MIN_VALUE / 2;
+    /** The game time of the last sound of the war horn (see {@link WarHorn}). Not saved. */
+    private long lastHornTick = Long.MIN_VALUE / 2;
     /** Game time of the last shared target. Not saved. */
     private long lastShareTick = Long.MIN_VALUE / 2;
     /** True after the heart is linked to its settlement. Not saved: the heart links again after a load. */
@@ -358,7 +361,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
 
     /**
      * Changes the alert state and saves the change. When the village leaves the calm state, each archer goes to the
-     * nearest free tower (see {@link #assignAlertPosts()}).
+     * nearest free tower (see {@link #assignAlertPosts()}), the bells ring, and the war horn of the village sounds
+     * (see {@link WarHorn}).
      */
     public void setAlertState(AlertState state) {
         if (alertState != state) {
@@ -368,7 +372,16 @@ public class VillageHeartBlockEntity extends BlockEntity {
             if (wasCalm) {
                 assignAlertPosts();
                 ringBells();
+                soundWarHorn();
             }
+        }
+    }
+
+    /** Sounds the war horn of the village, when the culture of its faction has one (see {@link WarHorn}). */
+    private void soundWarHorn() {
+        if (level instanceof ServerLevel serverLevel && WarHorn.hasHorn(serverLevel, this)) {
+            lastHornTick = level.getGameTime();
+            WarHorn.sound(serverLevel, this);
         }
     }
 
@@ -1448,6 +1461,10 @@ public class VillageHeartBlockEntity extends BlockEntity {
         long calmDelayTicks = WorldConfig.CALM_DELAY_SECONDS.get() * 20L;
         if (heart.alertState != AlertState.CALM && level.getGameTime() - heart.lastBellTick >= BELL_INTERVAL) {
             heart.ringBells();
+        }
+        long hornTicks = WarHorn.intervalTicks();
+        if (heart.alertState != AlertState.CALM && hornTicks > 0 && level.getGameTime() - heart.lastHornTick >= hornTicks) {
+            heart.soundWarHorn();
         }
         if (heart.alertState != AlertState.CALM && level.getGameTime() - heart.lastThreatTick > calmDelayTicks) {
             heart.setAlertState(AlertState.CALM);

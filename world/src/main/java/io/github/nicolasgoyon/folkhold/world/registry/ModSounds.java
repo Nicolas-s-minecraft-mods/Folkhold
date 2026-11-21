@@ -36,6 +36,9 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> FACTION_GOLEM_HURT =
             register("entity.faction_golem.hurt");
 
+    /** The war horn of a village (see {@code WarHorn}): a vanilla goat horn sound. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> WAR_HORN = register("village.war_horn");
+
     /** A sound of the voice of a faction unit. */
     public enum UnitVoice {
         /** A calm unit, from time to time. */

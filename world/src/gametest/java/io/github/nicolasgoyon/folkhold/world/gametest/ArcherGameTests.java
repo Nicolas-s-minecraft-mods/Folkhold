@@ -7,6 +7,7 @@ import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
 import io.github.nicolasgoyon.folkhold.world.registry.ModEntities;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -23,14 +24,17 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.WanderingTrader;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -295,7 +299,20 @@ public final class ArcherGameTests {
         towerFoot(helper, Items.CROSSBOW);
     }
 
+    /**
+     * As {@link #towerArcherHitsATargetAtTheFootOfTheTower}, with a trident with Loyalty: the archer throws the
+     * trident down from the edge of the platform, and has its trident again at the end.
+     */
+    @GameTest(template = "arena", timeoutTicks = 600, batch = "archer_tower_foot_trident", skyAccess = true)
+    public static void tridentTowerArcherHitsATargetAtTheFootOfTheTower(GameTestHelper helper) {
+        towerFoot(helper, loyalTrident(helper));
+    }
+
     private static void towerFoot(GameTestHelper helper, Item weapon) {
+        towerFoot(helper, new ItemStack(weapon));
+    }
+
+    private static void towerFoot(GameTestHelper helper, ItemStack weapon) {
         BlockPos post = placeTower(helper);
         ArcherEntity archer = towerArcher(helper, post, weapon);
         Husk husk = helper.spawn(EntityType.HUSK, TOWER_FOOT);
@@ -316,11 +333,82 @@ public final class ArcherGameTests {
                 .thenExecute(husk::discard)
                 .thenWaitUntil(() -> helper.assertTrue(isAtPost(archer, post),
                         "The archer must go back to its post, position: " + archer.position()))
+                .thenWaitUntil(() -> helper.assertTrue(archer.getMainHandItem().is(weapon.getItem()),
+                        "The archer must have its weapon again"))
                 .thenExecute(() -> {
                     archer.discard();
                     helper.assertTrue(offPlatform[0] == null, "The archer must stay on the platform: " + offPlatform[0]);
                 })
                 .thenSucceed();
+    }
+
+    /**
+     * An archer with a trident with Loyalty throws the trident at a monster: its hand is empty while the trident flies.
+     * The trident hits the monster, comes back, and the archer has its trident again, with its enchantments. No
+     * trident stays in the world.
+     */
+    @GameTest(template = "arena", timeoutTicks = 400, batch = "archer_trident")
+    public static void tridentArcherThrowsItsTridentAndCatchesIt(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ArcherEntity archer = TestSupport.spawnUnit(helper, ModEntities.ARCHER.get(), new BlockPos(2, 1, 2));
+        ItemStack trident = loyalTrident(helper);
+        archer.setItemSlot(EquipmentSlot.MAINHAND, trident.copy());
+        archer.setPostPos(helper.absolutePos(new BlockPos(2, 1, 2)));
+        Husk husk = helper.spawn(EntityType.HUSK, new BlockPos(10, 1, 10));
+        husk.setNoAi(true);
+        boolean[] thrown = {false};
+        helper.onEachTick(() -> thrown[0] |= archer.hasThrownTrident() && archer.getMainHandItem().isEmpty()
+                && !tridents(helper, archer).isEmpty());
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(husk.getLastHurtByMob() == archer
+                        && husk.getHealth() < husk.getMaxHealth(), "The trident must hit the husk"))
+                .thenExecute(() -> {
+                    husk.discard();
+                    helper.assertTrue(thrown[0], "The hand of the archer must be empty while the trident flies");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(!archer.hasThrownTrident()
+                        && ItemStack.isSameItemSameComponents(archer.getMainHandItem(), trident),
+                        "The trident must come back to the archer, hand: " + archer.getMainHandItem()))
+                .thenExecute(() -> {
+                    helper.assertTrue(tridents(helper, archer).isEmpty(), "No trident must stay in the world");
+                    archer.discard();
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A trident of an archer that hits a villager on the line of fire does not hurt the villager, as an arrow (see
+     * {@link #archerArrowDoesNotHurtAVillager}).
+     */
+    @GameTest(template = "arena", timeoutTicks = 200, batch = "archer_trident_villager")
+    public static void archerTridentDoesNotHurtAVillager(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ArcherEntity archer = still(TestSupport.spawnUnit(helper, ModEntities.ARCHER.get(), new BlockPos(2, 1, 2)));
+        archer.setItemSlot(EquipmentSlot.MAINHAND, loyalTrident(helper));
+        Villager villager = still(helper.spawn(EntityType.VILLAGER, new BlockPos(6, 1, 2)));
+        Pillager pillager = still(helper.spawn(EntityType.PILLAGER, new BlockPos(10, 1, 2)));
+
+        helper.startSequence()
+                .thenExecuteAfter(1, () -> archer.throwTrident(pillager))
+                .thenExecuteAfter(30, () -> helper.assertTrue(villager.getHealth() == villager.getMaxHealth(),
+                        "A trident of an archer must not hurt a villager, health: " + villager.getHealth()))
+                .thenExecute(() -> List.of(archer, villager, pillager).forEach(Entity::discard))
+                .thenSucceed();
+    }
+
+    /** A trident with Loyalty III. */
+    private static ItemStack loyalTrident(GameTestHelper helper) {
+        ItemStack trident = new ItemStack(Items.TRIDENT);
+        trident.enchant(helper.getLevel().registryAccess().registryOrThrow(Registries.ENCHANTMENT)
+                .getHolderOrThrow(Enchantments.LOYALTY), 3);
+        return trident;
+    }
+
+    /** The thrown tridents of an archer near the test area. */
+    private static List<ThrownTrident> tridents(GameTestHelper helper, ArcherEntity archer) {
+        return helper.getLevel().getEntitiesOfClass(ThrownTrident.class, new AABB(archer.blockPosition()).inflate(32),
+                trident -> trident.getOwner() == archer);
     }
 
     /** An archer on a tower of the palisade with no target stays at its post. */
@@ -384,8 +472,13 @@ public final class ArcherGameTests {
 
     /** Spawns an archer with a weapon at the post of a tower. */
     private static ArcherEntity towerArcher(GameTestHelper helper, BlockPos post, Item weapon) {
+        return towerArcher(helper, post, new ItemStack(weapon));
+    }
+
+    /** Spawns an archer with a weapon at the post of a tower. */
+    private static ArcherEntity towerArcher(GameTestHelper helper, BlockPos post, ItemStack weapon) {
         ArcherEntity archer = TestSupport.spawnUnit(helper, ModEntities.ARCHER.get(), TOWER_POST);
-        archer.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(weapon));
+        archer.setItemSlot(EquipmentSlot.MAINHAND, weapon.copy());
         archer.setPostPos(post);
         archer.setHomePos(post);
         return archer;
