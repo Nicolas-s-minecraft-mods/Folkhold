@@ -307,6 +307,45 @@ Growth is gradual. Each settlement has a **level** from 1 to 20. The tiers are n
 
   The maximum radius of the city and of the capital is 106 blocks: with a larger radius, a plan on bad terrain can put pieces out of the range of the structure. The rings outside the first wall give the space past this radius.
 - **Village measure** (GameTests `PlotTerrainGameTests`): the villages on the vanilla Overworld noise of a fixed seed, with no block placement and no chunk generation. The required tests check 2 villages of each style at natural sites (start level of the chunk). The tests `measure<Style>Tiers` measure the top level of each tier of a style at the first site of the style (a beach site for the maritime style): the hamlet and the town, or all the tiers with the environment variable `FOLKHOLD_VILLAGE_MEASURE`. The tests of the land styles are optional. The maritime test is required and also measures the capital. Each village must have all its plots and homes, no layout problem, no home on bad terrain except a home on its foundation over deep water, the buildings, the job posts and the home beds of its level, and 10 to 20 % spare plots. The free market plot below level 5 is not a spare plot. The log has a line `Village measure |` for each village: the tier, the style, the level, the plots, the free plots, the spare plots, the homes, the home beds and the beds that the level needs, the buildings, the storehouses, the barracks and the market, the job posts, the failed placements, the spare plots with bad terrain (the plots that the terrain rejects in the plan: the plan makes the bad plots spare first) and the time of the layout in milliseconds. The optional test `measureRings` (with `FOLKHOLD_VILLAGE_MEASURE`) counts the rings of the first 40 natural towns, cities and capitals of the seed, with the start level of their chunk: the log has a line `Village ring measure |` for each tier, with the villages, the villages with all the rings of their tier, the villages that lose a ring to a faction village, and the villages that lose a ring to a possible vanilla village. With the current sizes, 37 of the 40 villages keep all their rings (29 of 31 towns and 8 of 9 cities, no capital in the sample). The 3 other villages lose a ring to a possible vanilla village, and no village loses a ring to a faction village.
+- **Sizes of version 0.5**: the sizes of `village_sizes.json` are the result of the measure. A village does not get new plots in the world in this version.
+  - Measure of the top level of each tier at the first site of each style (seed 783, all the tiers with `FOLKHOLD_VILLAGE_MEASURE`). Each village has all its plots, no failed placement, the buildings and the job posts of its level, the home beds of its level, and 10 to 20 % spare plots:
+
+    | Tier | Style | Level | Plots | Free plots | Spare plots | Homes | Home beds | Beds of the level | Buildings | Storehouses / barracks / market | Job posts | Failed placements | Spare plots with bad terrain |
+    |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+    | hamlet | base | 4 | 14 | 3 | 2 | 4 | 22 | 21 | 11 | 1 / 0 / 0 | 5 | 0 | 0 |
+    | hamlet | sunreach | 4 | 14 | 3 | 2 | 4 | 22 | 21 | 11 | 1 / 0 / 0 | 5 | 0 | 0 |
+    | hamlet | valeholm | 4 | 14 | 2 | 2 | 5 | 25 | 21 | 12 | 1 / 0 / 0 | 5 | 0 | 1 |
+    | hamlet | maritime | 4 | 14 | 3 | 2 | 4 | 22 | 21 | 11 | 1 / 0 / 0 | 5 | 0 | 2 |
+    | village | base | 8 | 28 | 4 | 4 | 8 | 42 | 41 | 24 | 1 / 0 / 1 | 9 | 0 | 0 |
+    | village | sunreach | 8 | 28 | 4 | 4 | 8 | 42 | 41 | 24 | 1 / 0 / 1 | 9 | 0 | 0 |
+    | village | valeholm | 8 | 28 | 4 | 4 | 8 | 42 | 41 | 24 | 1 / 0 / 1 | 9 | 0 | 4 |
+    | village | maritime | 8 | 28 | 4 | 4 | 8 | 42 | 41 | 24 | 1 / 0 / 1 | 9 | 0 | 4 |
+    | town | base | 12 | 42 | 6 | 6 | 16 | 74 | 61 | 36 | 2 / 1 / 1 | 13 | 0 | 0 |
+    | town | sunreach | 12 | 42 | 6 | 6 | 12 | 62 | 61 | 36 | 2 / 1 / 1 | 13 | 0 | 0 |
+    | town | valeholm | 12 | 42 | 6 | 6 | 12 | 62 | 61 | 36 | 2 / 1 / 1 | 13 | 0 | 5 |
+    | town | maritime | 12 | 42 | 6 | 6 | 12 | 62 | 61 | 36 | 2 / 1 / 1 | 13 | 0 | 6 |
+    | city | base | 16 | 53 | 7 | 7 | 17 | 85 | 81 | 46 | 2 / 1 / 1 | 17 | 0 | 0 |
+    | city | sunreach | 16 | 53 | 7 | 7 | 16 | 82 | 81 | 46 | 2 / 1 / 1 | 17 | 0 | 3 |
+    | city | valeholm | 16 | 53 | 7 | 7 | 16 | 82 | 81 | 46 | 2 / 1 / 1 | 17 | 0 | 7 |
+    | city | maritime | 16 | 53 | 7 | 7 | 16 | 82 | 81 | 46 | 2 / 1 / 1 | 17 | 0 | 7 |
+    | capital | base | 20 | 66 | 9 | 9 | 22 | 108 | 101 | 57 | 2 / 2 / 1 | 21 | 0 | 0 |
+    | capital | sunreach | 20 | 66 | 9 | 9 | 22 | 108 | 101 | 57 | 2 / 2 / 1 | 21 | 0 | 1 |
+    | capital | valeholm | 20 | 66 | 9 | 9 | 20 | 102 | 101 | 57 | 2 / 2 / 1 | 21 | 0 | 7 |
+    | capital | maritime | 20 | 66 | 9 | 9 | 20 | 102 | 101 | 57 | 2 / 2 / 1 | 21 | 0 | 9 |
+
+  - Reach of each tier, in blocks from the middle of the plaza to the outer wall. The first wall is at the maximum radius plus the wall margin (4 blocks) and the wall line (2 blocks). Each ring adds a band of 24 blocks, and the outer ring adds 14 blocks for its flat terrain and its piers:
+
+    | Tier | Maximum radius | First wall | Rings | Outer wall | Minimum territory radius |
+    |---|---|---|---|---|---|
+    | hamlet | 64 | 70 | 0 | 70 | 9 chunks (144 blocks) |
+    | village | 80 | 86 | 0 | 86 | 13 chunks (208 blocks) |
+    | town | 96 | 102 | 1 | 140 | 20 chunks (320 blocks) |
+    | city | 106 | 112 | 2 | 174 | 27 chunks (432 blocks) |
+    | capital | 106 | 112 | 3 | 198 | 30 chunks (480 blocks) |
+
+  - Spacing of the faction villages: the placement keeps spacing 40 and separation 16. Two cities with all their rings need about 348 blocks between their middles, and the placement gives 257 blocks at least. In this case the rule of the near villages removes rings (see "Rings at generation"). The measure of the rings shows that this case is rare: 37 of 40 natural towns and cities keep all their rings, and no village of the sample loses a ring to a faction village. Thus the spacing does not go up.
+  - The vanilla village exclusion zone is 12 chunks: a large city does not overlap a vanilla village. About half of the possible starts of the faction villages go away with this zone.
+  - Limits of the measure: one site for each style, and no capital in the sample of the rings. The playtest of the villages of each tier is #558.
 - **Experience**: at each cycle, the settlement gets experience from its prosperity: food need covered, inputs of the jobs available, treasury above a minimum. The experience for each level increases with the level.
 - **Loss**: a shortage of food, a pillage of the bank or the death of the captain removes experience. A settlement can go down one level.
 - **Level event**: the mod sends an event when the level changes. Other systems can use it, for example the physical growth.
