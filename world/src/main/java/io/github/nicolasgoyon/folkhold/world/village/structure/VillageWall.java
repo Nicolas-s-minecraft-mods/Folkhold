@@ -28,6 +28,8 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntBinaryOperator;
+import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
@@ -53,6 +55,11 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       keeps another gate.</li>
  *   <li>The structure reads the height of the terrain on the line of the palisade, and at 2 blocks inside and outside
  *       the line. The bases of the columns come from these heights (see {@link PalisadeHeights}).</li>
+ *   <li>The number of towers comes from the garrison of the village (see {@link WallLayout#towers(int)} and
+ *       {@link WallLayout#withTowers}): a tower next to each gate, then the corners with the largest view (see
+ *       {@link #cornerView}), then the towers along the longest free parts of the wall. A corner with no tower is a
+ *       plain corner of palisade, with flat terrain around it. The towers of the garrison that have no place on a wall
+ *       go to the next ring (see {@link Wall#spareTowers}).</li>
  *   <li>A tower or a gate is a structure template on the highest base under it. The bases near it go up again, so
  *       that the palisade has no high step next to it.</li>
  *   <li>Each segment of palisade is a {@link PalisadePiece}. A {@link VillagePathPiece} with the width of a street goes
@@ -99,6 +106,12 @@ public final class VillageWall {
     static final int PIER_START = 2;
     /** The game places the pieces of a structure only in this range of chunks from the start chunk. */
     static final int CHUNK_RANGE = 8;
+    /** The eyes of an archer on the platform of a tower are this number of blocks above the base of the tower. */
+    static final int TOWER_EYES = 9;
+    /** The view of a corner reads the terrain outside it on a grid with this step, in blocks. */
+    static final int VIEW_STEP = 8;
+    /** The view of a corner reads this number of points of its grid along each side, outside the corner. */
+    static final int VIEW_POINTS = 4;
 
     private VillageWall() {
     }
@@ -120,33 +133,45 @@ public final class VillageWall {
     public static List<StructurePiece> add(Structure.GenerationContext context, TerrainCache heights,
             List<StructurePiece> village, List<BoundingBox> reserved, BlockPos center, WallSettings settings,
             boolean maritime) {
-        return build(context, heights, village, reserved, center, settings, maritime).pieces();
+        return build(context, heights, village, reserved, center, settings, maritime, OptionalInt.empty()).pieces();
     }
 
     /**
      * The data of a wall: the first wall of a village or a ring.
      *
-     * @param layout     the layout of the wall
-     * @param gateLevels the level of each gate that the wall keeps
-     * @param waterGates the gates that open on water and have a pier
-     * @param pieces     the pieces of the wall
+     * @param layout      the layout of the wall
+     * @param gateLevels  the level of each gate that the wall keeps
+     * @param waterGates  the gates that open on water and have a pier
+     * @param pieces      the pieces of the wall
+     * @param spareTowers the towers of the garrison that have no place on this wall and on the walls inside it: the
+     *                    next ring gets them, in addition to the towers of its gates
      */
     public record Wall(WallLayout layout, Map<Gate, Integer> gateLevels, Set<Gate> waterGates,
-            List<StructurePiece> pieces) {
+            List<StructurePiece> pieces, int spareTowers) {
         public Wall {
             gateLevels = Map.copyOf(gateLevels);
             waterGates = Set.copyOf(waterGates);
             pieces = List.copyOf(pieces);
         }
+
+        /** A wall with no spare towers. */
+        public Wall(WallLayout layout, Map<Gate, Integer> gateLevels, Set<Gate> waterGates,
+                List<StructurePiece> pieces) {
+            this(layout, gateLevels, waterGates, pieces, 0);
+        }
     }
 
     /**
-     * As {@link #add}, with the data of the wall: the rings of the village go around it (see {@link #rings}).
+     * As {@link #add}, with the data of the wall and a number of towers: the rings of the village go around it (see
+     * {@link #rings}).
      *
+     * @param towers the number of towers of the wall (see {@link WallLayout#towers(int)}), or empty for the towers of
+     *               the full layout (see {@link WallLayout#plan}): a tower at each corner, and more towers along the
+     *               sides at the tower spacing of the settings
      * @return the wall
      */
     public static Wall build(Structure.GenerationContext context, TerrainCache heights, List<StructurePiece> village,
-            List<BoundingBox> reserved, BlockPos center, WallSettings settings, boolean maritime) {
+            List<BoundingBox> reserved, BlockPos center, WallSettings settings, boolean maritime, OptionalInt towers) {
         List<Box> boxes = village.stream().map(piece -> box(piece.getBoundingBox())).toList();
         List<Box> inside = new ArrayList<>(boxes);
         reserved.forEach(space -> inside.add(box(space)));
@@ -164,8 +189,13 @@ public final class VillageWall {
         // The bases of the columns come from the ring only: the gates do not change them.
         int[] bases = bases(planned, terrain);
         List<Stop> stops = stops(village);
-        WallLayout layout = withGates(planned, CliffSide.gates(planned,
+        WallLayout gated = withGates(planned, CliffSide.gates(planned,
                 gateDrop(planned, bases, terrain, gate -> arm(planned, gate, stops)), keep));
+        WallLayout layout = towers.isPresent()
+                ? gated.withTowers(towers.getAsInt(), side -> cornerView(gated, side, bases, terrain),
+                        tower -> kept(keep, gated.ringIndices(gated.towerBox(tower))))
+                : gated;
+        int spare = towers.isPresent() ? Math.max(0, towers.getAsInt() - layout.towers().size()) : 0;
         Set<Gate> waterGates = new HashSet<>();
         for (Gate gate : layout.gates()) {
             if (isWaterGate(layout, gate, terrain::height, seaLevel)) {
@@ -225,7 +255,7 @@ public final class VillageWall {
         }
         pieces.addAll(terrain(layout, smooth, gateLevels, water, waterGates));
         pieces.addAll(fills(pieces));
-        return new Wall(layout, gateLevels, waterGates, pieces);
+        return new Wall(layout, gateLevels, waterGates, pieces, spare);
     }
 
     /**
@@ -234,7 +264,8 @@ public final class VillageWall {
      * side. On the cliff side, a gate of a ring goes away and does not move (see {@link CliffSide#ringGates}). Each
      * gate of a ring gets a path across the band: a ramp from the ring gate to the level of the gate of the wall inside
      * it (see {@link #bandArm}). The bands have no other piece. A segment of palisade is cut at the borders of the
-     * district cells (see {@link RingDistricts}), thus each piece goes to one district.
+     * district cells (see {@link RingDistricts}), thus each piece goes to one district. A ring has a tower next to
+     * each of its gates, and the spare towers of the wall inside it (see {@link Wall#spareTowers}).
      *
      * @param context  the context of the generation
      * @param heights  the terrain cache of the village
@@ -263,8 +294,13 @@ public final class VillageWall {
             boolean[] keep = maritime ? SeaWall.keep(water) : allColumns(water.length);
             int[] bases = bases(planned, terrain);
             Wall wall = inner;
-            WallLayout layout = withGates(planned, CliffSide.ringGates(planned,
+            WallLayout gated = withGates(planned, CliffSide.ringGates(planned,
                     gateDrop(planned, bases, terrain, gate -> bandArm(planned, gate, band, wall)), keep));
+            ToIntFunction<Side> view = side -> cornerView(gated, side, bases, terrain);
+            Predicate<Tower> allowed = tower -> kept(keep, gated.ringIndices(gated.towerBox(tower)));
+            int gateTowers = gated.withTowers(0, view, allowed).towers().size();
+            WallLayout layout = gated.withTowers(gateTowers + inner.spareTowers(), view, allowed);
+            int spare = inner.spareTowers() - (layout.towers().size() - gateTowers);
             List<StructurePiece> pieces = new ArrayList<>();
             Map<Tower, Integer> towerLevels = new HashMap<>();
             for (Tower tower : layout.towers()) {
@@ -316,7 +352,7 @@ public final class VillageWall {
                 }
             }
             pieces.addAll(terrain(layout, smooth, gateLevels, water, waterGates));
-            inner = new Wall(layout, gateLevels, waterGates, pieces);
+            inner = new Wall(layout, gateLevels, waterGates, pieces, spare);
             rings.add(inner);
         }
         return List.copyOf(rings);
@@ -472,6 +508,35 @@ public final class VillageWall {
         };
     }
 
+    /**
+     * The view of the corner at the start of a side: the number of points of a grid outside the corner that are lower
+     * than the eyes of an archer on a tower of the corner ({@link #TOWER_EYES} blocks above the base of the corner).
+     * The grid has {@link #VIEW_POINTS} x {@link #VIEW_POINTS} points, {@link #VIEW_STEP} blocks apart, in the quarter
+     * outside the 2 sides of the corner. A corner above the terrain around it sees more points.
+     *
+     * @param layout  the wall
+     * @param side    the side that starts at the corner
+     * @param bases   the bases of the ring, before the towers and the gates
+     * @param terrain the terrain
+     * @return the view, from 0 to {@code VIEW_POINTS * VIEW_POINTS}
+     */
+    private static int cornerView(WallLayout layout, Side side, int[] bases, Terrain terrain) {
+        Cell corner = layout.cell(side, 0);
+        Side before = side.previous();
+        int eyes = bases[layout.ringIndex(side, 0)] + TOWER_EYES;
+        int view = 0;
+        for (int i = 1; i <= VIEW_POINTS; i++) {
+            for (int j = 1; j <= VIEW_POINTS; j++) {
+                int x = corner.x() - VIEW_STEP * (i * side.insideX() + j * before.insideX());
+                int z = corner.z() - VIEW_STEP * (i * side.insideZ() + j * before.insideZ());
+                if (terrain.height(x, z) < eyes) {
+                    view++;
+                }
+            }
+        }
+        return view;
+    }
+
     /** A wall with the gates of the cliff side: the same wall when the gates do not change. */
     private static WallLayout withGates(WallLayout layout, List<Gate> gates) {
         return gates.equals(layout.gates()) ? layout : layout.withGates(gates);
@@ -583,7 +648,9 @@ public final class VillageWall {
      * The pieces that make the terrain flat near the wall: along each segment of palisade, in sections of
      * {@link #SECTION} columns at their highest base, and in front of each gate and behind it, at the level of the
      * gate. On water, the palisade stands on its foundation: a section with all its columns on water gets no terrain
-     * piece. A water gate gets the flat terrain behind it only: its pier goes in front of it.
+     * piece. A water gate gets the flat terrain behind it only: its pier goes in front of it. A plain corner (a corner
+     * with no tower) gets flat terrain at its base in a square around it, {@link #FLAT_WIDTH} blocks in each direction,
+     * unless it is on water.
      *
      * @param layout     the wall
      * @param bases      the bases of the ring
@@ -610,6 +677,14 @@ public final class VillageWall {
                     pieces.add(across(layout.cell(side, from), layout.cell(side, to), side, FLAT_WIDTH, FLAT_WIDTH,
                             ground, false));
                 }
+            }
+        }
+        for (Side side : Side.values()) {
+            int index = layout.ringIndex(side, 0);
+            if (!layout.hasCornerTower(side) && !water[index]) {
+                Cell corner = layout.cell(side, 0);
+                pieces.add(new TerrainPiece(corner.x() - FLAT_WIDTH, corner.z() - FLAT_WIDTH, corner.x() + FLAT_WIDTH,
+                        corner.z() + FLAT_WIDTH, bases[index], false));
             }
         }
         for (Gate gate : layout.gates().stream().filter(gateLevels::containsKey).toList()) {

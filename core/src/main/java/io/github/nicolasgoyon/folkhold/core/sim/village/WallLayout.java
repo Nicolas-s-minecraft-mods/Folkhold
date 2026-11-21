@@ -1,8 +1,11 @@
 package io.github.nicolasgoyon.folkhold.core.sim.village;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 
 /**
  * The wall of a village: the outline around the pieces of the village, with its towers, its gates and the palisade
@@ -20,6 +23,10 @@ import java.util.OptionalInt;
  *   <li>A gate goes on a side, at its given position. A tower and its stair stay away from the gate.</li>
  *   <li>The palisade segments are the parts of the sides that the towers and the gates do not cover.</li>
  * </ul>
+ *
+ * <p>The towers of a village come from its garrison (see {@link #withTowers}): a tower next to each gate, then the
+ * corners that see the most terrain, then the towers along the longest free parts of the wall. A corner with no tower
+ * is a plain corner of palisade: its block belongs to the side that starts there.
  *
  * <p>The ring is the line of the palisade as one closed list of blocks, clockwise from the north-west corner (see
  * {@link #ringSize()}).
@@ -50,6 +57,10 @@ public final class WallLayout {
     public static final int MIN_BAND = 24;
     /** The largest band of an outer ring. */
     public static final int MAX_BAND = 32;
+    /** The fewest towers of the first wall of a village: one next to each of its 4 gates. */
+    public static final int MIN_TOWERS = 4;
+    /** The towers of a village for each archer of its garrison: an archer changes its post between the towers. */
+    public static final int TOWERS_PER_ARCHER = 2;
 
     /** A side of the outline, named for its direction from the middle of the village. */
     public enum Side {
@@ -74,6 +85,16 @@ public final class WallLayout {
         /** The Z step from the line of this side to the inside of the village: -1, 0 or 1. */
         public int insideZ() {
             return insideZ;
+        }
+
+        /** The previous side, clockwise: the side that ends at the start of this side. */
+        public Side previous() {
+            return switch (this) {
+                case NORTH -> WEST;
+                case EAST -> NORTH;
+                case SOUTH -> EAST;
+                case WEST -> SOUTH;
+            };
         }
 
         /** The next side, clockwise: the side that starts at the end of this side. */
@@ -179,9 +200,9 @@ public final class WallLayout {
      * @param end    the last block of the side: the corner at the start of the next side
      * @param length the number of blocks of the side, the 2 corners included
      * @param towers the distances from the start of the side to the first block of each tower of the side, in order.
-     *               The corner tower at the start of the side is the first tower (distance 0). The last
-     *               {@link #TOWER} blocks of the side are under the corner tower of the next side: this tower is not
-     *               in the list
+     *               The corner tower at the start of the side, if the side has one, is the first tower (distance 0).
+     *               The last {@link #TOWER} blocks of the side are under the corner tower of the next side, if the
+     *               next side has one: this tower is not in the list
      * @param gate   the distance from the start of the side to the middle of the gate, if the side has a gate
      */
     public record SideLine(Side side, Cell start, Cell end, int length, List<Integer> towers, OptionalInt gate) {
@@ -296,6 +317,195 @@ public final class WallLayout {
         return build(outline, towerSpacing, gates);
     }
 
+    /**
+     * The number of towers of the first wall of a village: {@link #TOWERS_PER_ARCHER} towers for each archer of its
+     * garrison, and {@link #MIN_TOWERS} towers at least.
+     *
+     * @param archers the archers of a full garrison of the village, 0 or more
+     * @return the number of towers
+     */
+    public static int towers(int archers) {
+        if (archers < 0) {
+            throw new IllegalArgumentException("The number of archers must be 0 or more: " + archers);
+        }
+        return Math.max(MIN_TOWERS, TOWERS_PER_ARCHER * archers);
+    }
+
+    /**
+     * This wall with a number of towers: the same outline and the same gates. The towers go in this order, until the
+     * wall has {@code count} towers or no free position stays:
+     *
+     * <ol>
+     *   <li>A tower next to each gate, also when {@code count} is less than the number of gates. The tower goes after
+     *       the gate, with its stair away from the gate. When the side has no space there, the tower goes before the
+     *       gate: this tower can be the corner tower at the start of the side.</li>
+     *   <li>The towers of the corners, the corner with the largest view first. With the same view, the corner that is
+     *       farthest from the nearest tower of the wall comes first, then the corner that is farthest from all the
+     *       towers of the wall (the sum of the distances), then the corner of the first side.</li>
+     *   <li>The towers along the sides: each new tower goes at the position that is farthest from the towers of the
+     *       wall, along the ring. Thus the towers go first on the longest free parts of the wall.</li>
+     * </ol>
+     *
+     * <p>A tower and its stair do not cover another tower, its stair, a gate or the clearance of a gate. The last
+     * {@link #TOWER} blocks of a side stay for the corner tower of the next side. A corner with no tower is a plain
+     * corner of palisade. The calculation uses the outline and the gates only, not the size of the wall, and it is
+     * deterministic.
+     *
+     * @param count   the number of towers, the towers of the gates included
+     * @param view    the view of the corner at the start of a side: a larger value is a better corner
+     * @param allowed true for a position where a tower can stand. A tower is never at another position
+     * @return the wall with these towers
+     */
+    public WallLayout withTowers(int count, ToIntFunction<Side> view, Predicate<Tower> allowed) {
+        List<Tower> chosen = new ArrayList<>();
+        for (Gate gate : gates) {
+            int middle = along(gate);
+            int after = middle + GATE / 2 + GATE_CLEARANCE + 1;
+            int before = middle - GATE / 2 - GATE_CLEARANCE - TOWER - STAIR;
+            for (int along : new int[] {after, before}) {
+                Tower tower = new Tower(gate.side(), along);
+                if (isFree(tower, chosen, allowed)) {
+                    chosen.add(tower);
+                    break;
+                }
+            }
+        }
+        List<Tower> corners = new ArrayList<>();
+        for (Side side : Side.values()) {
+            corners.add(new Tower(side, 0));
+        }
+        while (chosen.size() < count) {
+            Tower best = null;
+            for (Tower corner : corners) {
+                if (isFree(corner, chosen, allowed) && (best == null || compareCorners(corner, best, chosen, view) > 0)) {
+                    best = corner;
+                }
+            }
+            if (best == null) {
+                break;
+            }
+            chosen.add(best);
+        }
+        while (chosen.size() < count) {
+            Tower best = null;
+            int bestDistance = -1;
+            for (Side side : Side.values()) {
+                for (int along = 1; along < length(outline, side); along++) {
+                    Tower tower = new Tower(side, along);
+                    if (isFree(tower, chosen, allowed)) {
+                        int distance = distance(tower, chosen);
+                        if (distance > bestDistance) {
+                            best = tower;
+                            bestDistance = distance;
+                        }
+                    }
+                }
+            }
+            if (best == null) {
+                break;
+            }
+            chosen.add(best);
+        }
+        chosen.sort(Comparator.comparing(Tower::side).thenComparingInt(Tower::along));
+        List<Segment> segments = new ArrayList<>();
+        for (Side side : Side.values()) {
+            List<Integer> sideTowers = chosen.stream().filter(tower -> tower.side() == side).map(Tower::along)
+                    .toList();
+            OptionalInt gate = gates.stream().filter(candidate -> candidate.side() == side).mapToInt(this::along)
+                    .findFirst();
+            boolean nextCorner = chosen.contains(new Tower(side.next(), 0));
+            segments.addAll(segmentsOfSide(side, length(outline, side), sideTowers, gate.orElse(-1), nextCorner));
+        }
+        return new WallLayout(outline, towerSpacing, chosen, gates, segments);
+    }
+
+    /** True if the corner at the start of a side has a tower. */
+    public boolean hasCornerTower(Side side) {
+        return towers.contains(new Tower(side, 0));
+    }
+
+    /**
+     * Compares 2 corners for the next tower: the larger view first, then the larger distance to the nearest chosen
+     * tower, then the larger sum of the distances to the chosen towers, then the first side.
+     */
+    private int compareCorners(Tower corner, Tower other, List<Tower> chosen, ToIntFunction<Side> view) {
+        int byView = Integer.compare(view.applyAsInt(corner.side()), view.applyAsInt(other.side()));
+        if (byView != 0) {
+            return byView;
+        }
+        int byDistance = Integer.compare(distance(corner, chosen), distance(other, chosen));
+        if (byDistance != 0) {
+            return byDistance;
+        }
+        int byTotal = Long.compare(totalDistance(corner, chosen), totalDistance(other, chosen));
+        if (byTotal != 0) {
+            return byTotal;
+        }
+        return other.side().compareTo(corner.side());
+    }
+
+    /**
+     * True if a tower can go on the wall: its position is allowed, the tower and its stair fit on its side away from
+     * the gate, and they do not cover a chosen tower or its stair.
+     */
+    private boolean isFree(Tower tower, List<Tower> chosen, Predicate<Tower> allowed) {
+        int length = length(outline, tower.side());
+        OptionalInt gate = gates.stream().filter(candidate -> candidate.side() == tower.side())
+                .mapToInt(this::along).findFirst();
+        if (tower.along() < 0 || !fits(tower.along(), length, gate.orElse(-1)) || !allowed.test(tower)) {
+            return false;
+        }
+        int[] range = footprint(tower);
+        for (Tower other : chosen) {
+            int[] used = footprint(other);
+            if (overlaps(range, used)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The ring indices that a tower and its stair cover, as a range from the first index, with its number of blocks. A
+     * corner tower also covers the last blocks of the side before it.
+     */
+    private int[] footprint(Tower tower) {
+        int back = tower.along() == 0 ? TOWER - 1 : 0;
+        return new int[] {ringIndex(tower.side(), tower.along()) - back, TOWER + STAIR + back};
+    }
+
+    /** True if 2 ranges of the ring have a common index. */
+    private boolean overlaps(int[] first, int[] second) {
+        int size = ringSize();
+        int start = Math.floorMod(second[0] - first[0], size);
+        int end = Math.floorMod(first[0] - second[0], size);
+        return start < first[1] || end < second[1];
+    }
+
+    /** The sum of the distances along the ring from the middle of a tower to the middles of the chosen towers. */
+    private long totalDistance(Tower tower, List<Tower> chosen) {
+        long total = 0;
+        for (Tower other : chosen) {
+            total += distance(tower, List.of(other));
+        }
+        return total;
+    }
+
+    /**
+     * The distance along the ring from the middle of a tower to the middle of the nearest chosen tower, or the size
+     * of the ring when no tower is chosen.
+     */
+    private int distance(Tower tower, List<Tower> chosen) {
+        int size = ringSize();
+        int middle = ringIndex(tower.side(), tower.along() + TOWER / 2);
+        int nearest = size;
+        for (Tower other : chosen) {
+            int delta = Math.floorMod(middle - ringIndex(other.side(), other.along() + TOWER / 2), size);
+            nearest = Math.min(nearest, Math.min(delta, size - delta));
+        }
+        return nearest;
+    }
+
     /** Calculates the towers, the gates and the segments of the palisade on an outline. */
     private static WallLayout build(Box outline, int towerSpacing, List<Gate> gates) {
         List<Gate> placed = new ArrayList<>();
@@ -314,7 +524,7 @@ public final class WallLayout {
             for (int along : sideTowers) {
                 towers.add(new Tower(side, along));
             }
-            segments.addAll(segmentsOfSide(side, length, sideTowers, gate));
+            segments.addAll(segmentsOfSide(side, length, sideTowers, gate, true));
         }
         return new WallLayout(outline, towerSpacing, towers, placed, segments);
     }
@@ -410,10 +620,15 @@ public final class WallLayout {
         return end < gateFrom || along > gateTo;
     }
 
-    /** The parts of a side that the towers and the gate do not cover, as segments. */
-    private static List<Segment> segmentsOfSide(Side side, int length, List<Integer> towers, int gate) {
+    /**
+     * The parts of a side that the towers and the gate do not cover, as segments. The last block of the side is the
+     * corner of the next side: the corner tower of the next side covers the last {@link #TOWER} blocks, and with no
+     * corner tower, the palisade of the next side starts on the corner.
+     */
+    private static List<Segment> segmentsOfSide(Side side, int length, List<Integer> towers, int gate,
+            boolean nextCorner) {
         boolean[] covered = new boolean[length];
-        for (int along = length - TOWER; along < length; along++) {
+        for (int along = nextCorner ? length - TOWER : length - 1; along < length; along++) {
             covered[along] = true;
         }
         for (int tower : towers) {

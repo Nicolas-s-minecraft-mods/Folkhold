@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
@@ -112,7 +113,7 @@ public final class FortifiedVillageGameTests {
     }
 
     /**
-     * A generated village has its heart on the plaza, a tower at each corner, a gate on each side and a palisade with
+     * A generated village has its heart on the plaza, 4 towers or more, a gate on each side and a palisade with
      * no gap. From the heart, a walk on the ground does not go out while the gates stay closed. With the gates open,
      * the walk goes out.
      */
@@ -127,7 +128,7 @@ public final class FortifiedVillageGameTests {
                 "The heart must be in the middle of the plaza: " + village.heart());
         long towers = count(reference, TOWER);
         long gates = count(reference, GATE);
-        helper.assertTrue(towers >= 4, "A tower must be at each corner: " + towers);
+        helper.assertTrue(towers >= WallLayout.MIN_TOWERS, "A tower must be next to each gate: " + towers);
         helper.assertTrue(gates == 4, "A gate must be on each side: " + gates);
         helper.assertTrue(village.start().getPieces().stream().anyMatch(PalisadePiece.class::isInstance),
                 "The wall must have a palisade");
