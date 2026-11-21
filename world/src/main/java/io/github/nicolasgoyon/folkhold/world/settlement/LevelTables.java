@@ -35,14 +35,17 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  *   "tiers": [{"id": "hamlet", "min_level": 1, "max_level": 4}, ...],
  *   "levels": [{"experience": 15, "claim_radius": 9, "max_population": 9, "job_slots": 2,
  *               "stock_capacity": 128, "trade_offers": 3, "cats": 1,
- *               "garrison": {"guard": 2, "archer": 2, "captain": 1}, "equipment": "hamlet"}, ...],
+ *               "garrison": {"guard": 2, "archer": 2, "captain": 1}, "equipment": "hamlet",
+ *               "culture_garrison": {"valeholm": {"guard": 1}}}, ...],
  *   "start_levels": [{"min_level": 1, "max_level": 1, "weight": 40}, ...]
  * }
  * </pre>
  * The first entry of {@code levels} is the level 1. {@code experience} is the experience to go to the next level.
  * {@code garrison} gives the number of units of each garrison role, and {@code equipment} the equipment set of the
  * units (see {@link io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment}). A level with no
- * {@code garrison} uses the garrison and the equipment set of the same level in {@link LevelTable#DEFAULT}.
+ * {@code garrison} uses the garrison and the equipment set of the same level in {@link LevelTable#DEFAULT}. The
+ * optional {@code culture_garrison} gives the extra units of each role for the settlements of a culture, by culture
+ * id: a settlement of the culture has the units of {@code garrison} plus these units.
  */
 public final class LevelTables extends SimplePreparableReloadListener<LevelTable> {
     public static final ResourceLocation FILE =
@@ -125,6 +128,16 @@ public final class LevelTables extends SimplePreparableReloadListener<LevelTable
         for (Map.Entry<String, JsonElement> entry : GsonHelper.getAsJsonObject(level, "garrison").entrySet()) {
             units.put(entry.getKey(), GsonHelper.convertToInt(entry.getValue(), entry.getKey()));
         }
-        return new GarrisonTraits(units, GsonHelper.getAsString(level, "equipment"));
+        Map<String, Map<String, Integer>> cultureUnits = new HashMap<>();
+        for (Map.Entry<String, JsonElement> culture : GsonHelper.getAsJsonObject(level, "culture_garrison",
+                new JsonObject()).entrySet()) {
+            Map<String, Integer> extra = new HashMap<>();
+            for (Map.Entry<String, JsonElement> entry : GsonHelper.convertToJsonObject(culture.getValue(),
+                    culture.getKey()).entrySet()) {
+                extra.put(entry.getKey(), GsonHelper.convertToInt(entry.getValue(), entry.getKey()));
+            }
+            cultureUnits.put(culture.getKey(), extra);
+        }
+        return new GarrisonTraits(units, GsonHelper.getAsString(level, "equipment"), cultureUnits);
     }
 }

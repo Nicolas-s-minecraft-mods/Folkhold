@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.blocks.block.JobSignBlockEntity;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
 import io.github.nicolasgoyon.folkhold.core.sim.faction.VillageNames;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.GarrisonTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.PostAssignment;
@@ -790,15 +791,18 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
-     * The garrison of the level of the settlement of the heart (see {@code garrison} in the level table). A heart with
-     * no settlement uses the level 1.
+     * The garrison of the level of the settlement of the heart (see {@code garrison} in the level table), with the
+     * extra units of the culture of the faction of the heart ({@code culture_garrison}). A heart with no settlement
+     * uses the level 1.
      */
     public GarrisonTraits garrisonTraits() {
         int settlementLevel = 1;
+        String culture = null;
         if (level != null && level.getServer() != null) {
             settlementLevel = Settlements.of(level.getServer(), this).map(Settlement::level).orElse(1);
+            culture = FactionVisuals.faction(level.getServer(), factionId).map(FactionSpec::cultureId).orElse(null);
         }
-        return LevelTables.get().traits(settlementLevel).garrison();
+        return LevelTables.get().traits(settlementLevel).garrison().forCulture(culture);
     }
 
     /** The loaded cats of this village. */

@@ -79,6 +79,9 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
     private ItemStack thrownStack = ItemStack.EMPTY;
     /** The value of {@code tickCount} at the throw. */
     private int thrownAt;
+    /** The target of a shot that came while the trident flew: the archer throws at it when it catches the trident. */
+    @Nullable
+    private LivingEntity pendingTarget;
 
     public ArcherEntity(EntityType<? extends ArcherEntity> type, Level level) {
         super(type, level);
@@ -151,6 +154,8 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
     /**
      * Gives the thrown trident back to the archer when the trident comes back to it, when the trident is not in the
      * world, or after {@link #TRIDENT_RETURN_TICKS}. The trident goes back into the main hand when the hand is empty.
+     * When a shot came while the trident flew (see {@link #performRangedAttack}), the archer throws the trident again
+     * at once, if it still sees its target.
      */
     private void checkThrownTrident() {
         ThrownTrident trident = thrownTrident;
@@ -167,6 +172,12 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
         }
         thrownTrident = null;
         thrownStack = ItemStack.EMPTY;
+        LivingEntity pending = pendingTarget;
+        pendingTarget = null;
+        if (pending != null && pending == getTarget() && pending.isAlive() && holdsTrident()
+                && getSensing().hasLineOfSight(pending)) {
+            throwTrident(pending);
+        }
     }
 
     /** True if the archer holds a bow in its main hand. */
@@ -302,6 +313,10 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
     public void performRangedAttack(LivingEntity target, float velocity) {
         if (holdsTrident()) {
             throwTrident(target);
+            return;
+        }
+        if (hasThrownTrident()) {
+            pendingTarget = target;
             return;
         }
         if (!holdsBow()) {

@@ -376,7 +376,7 @@ public final class WorldConfig {
                 .comment("While the alert continues, the horn sounds again after this time, in seconds. 0: the horn",
                         "sounds only when the village goes into alert.")
                 .translation(KEY_PREFIX + "warHornIntervalSeconds")
-                .defineInRange("intervalSeconds", 60, 0, 3600);
+                .defineInRange("intervalSeconds", 30, 0, 3600);
         WAR_HORN_LEVEL = builder
                 .comment("Level of the Resistance effect of the horn. 0: no war horn.")
                 .translation(KEY_PREFIX + "warHornLevel")

@@ -3,8 +3,10 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
+import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
 import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
+import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import java.util.List;
@@ -52,6 +54,31 @@ public final class CultureGarrisonGameTests {
                 .thenSucceed();
     }
 
+    /** A Valeholm town has one guard more than the level table gives (see {@code culture_garrison}). */
+    @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_valeholm_guard")
+    public static void valeholmTownHasAnExtraGuard(GameTestHelper helper) {
+        extraUnit(helper, Cultures.VALEHOLM.id(), GarrisonRole.GUARD);
+    }
+
+    /** A Sunreach town has one healer more than the level table gives (see {@code culture_garrison}). */
+    @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_sunreach_healer")
+    public static void sunreachTownHasAnExtraHealer(GameTestHelper helper) {
+        extraUnit(helper, Cultures.SUNREACH.id(), GarrisonRole.HEALER);
+    }
+
+    private static void extraUnit(GameTestHelper helper, String culture, GarrisonRole role) {
+        VillageHeartBlockEntity[] heart = new VillageHeartBlockEntity[1];
+        thenGarrison(helper, heart, culture)
+                .thenExecute(() -> {
+                    long units = heart[0].getUnits().stream().filter(unit -> unit.role() == role).count();
+                    int table = LevelTables.get().traits(TOWN).garrison().count(role.serializedName());
+                    removeVillage(helper, heart[0]);
+                    helper.assertTrue(units == table + 1,
+                            "The town must have " + (table + 1) + " units of the role " + role + ": " + units);
+                })
+                .thenSucceed();
+    }
+
     /**
      * When a Valeholm village goes into alert, its war horn gives Resistance to the units of the village. The units of
      * an Ashmark village get no Resistance: Ashmark has no war horn.
@@ -68,6 +95,8 @@ public final class CultureGarrisonGameTests {
     }
 
     private static void warHorn(GameTestHelper helper, String culture, boolean horn) {
+        // The buff of a healer in an alert also gives Resistance: the test measures the horn alone.
+        TestSupport.setConfigForTest(helper, WorldConfig.HEALER_RESISTANCE_LEVEL, 0);
         VillageHeartBlockEntity[] heart = new VillageHeartBlockEntity[1];
         thenGarrison(helper, heart, culture)
                 .thenExecute(() -> {
