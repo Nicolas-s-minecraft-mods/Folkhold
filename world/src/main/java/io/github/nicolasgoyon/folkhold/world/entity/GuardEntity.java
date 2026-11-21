@@ -26,22 +26,14 @@ import net.minecraft.world.level.Level;
  *       the other units in the alert radius and in its village.</li>
  *   <li>It never chases a target that is farther than the chase radius from the home position.</li>
  *   <li>It raises its shield when the target is not in melee reach.</li>
- *   <li>A guard with a trident with Loyalty (a spear of Sunreach) throws it at a target out of melee reach, at
- *       {@link #THROW_RANGE} blocks or less and in sight, at most once in {@link #THROW_INTERVAL} ticks. The trident
- *       comes back to the guard (see {@link TridentThrow}).</li>
+ *   <li>A guard with a trident with Loyalty (a spear of Sunreach) throws it at a target out of melee reach (see
+ *       {@link FactionUnit#throwsSpear()}).</li>
  * </ul>
  */
 public class GuardEntity extends FactionUnit {
 
     /** Distance at which the guard lowers the shield to attack. */
     private static final double MELEE_REACH = 3.0;
-    /** The largest distance of a throw of the trident, in blocks. */
-    static final double THROW_RANGE = 12.0;
-    /** The shortest time between two throws of the trident, in ticks. */
-    static final int THROW_INTERVAL = 40;
-
-    /** The value of {@code tickCount} at the last throw of the trident. Not saved. */
-    private int lastThrow = -THROW_INTERVAL;
 
     public GuardEntity(EntityType<? extends GuardEntity> type, Level level) {
         super(type, level);
@@ -69,13 +61,6 @@ public class GuardEntity extends FactionUnit {
 
     @Override
     protected void unitServerAiStep(@Nullable LivingEntity target) {
-        if (target != null && tickCount - lastThrow >= THROW_INTERVAL && tridentThrow().holdsLoyalTrident()) {
-            double distance = distanceTo(target);
-            if (distance > MELEE_REACH && distance <= THROW_RANGE && getSensing().hasLineOfSight(target)) {
-                lastThrow = tickCount;
-                tridentThrow().throwAt(target, 0.1);
-            }
-        }
         if (!getOffhandItem().is(Items.SHIELD)) {
             return;
         }

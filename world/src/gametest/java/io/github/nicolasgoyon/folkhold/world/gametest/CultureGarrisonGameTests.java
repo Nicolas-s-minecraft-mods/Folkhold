@@ -91,10 +91,10 @@ public final class CultureGarrisonGameTests {
                 .thenSucceed();
     }
 
-    /** A Sunreach town has one healer more than the level table gives (see {@code culture_garrison}). */
-    @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_sunreach_healer")
-    public static void sunreachTownHasAnExtraHealer(GameTestHelper helper) {
-        extraUnit(helper, Cultures.SUNREACH.id(), GarrisonRole.HEALER);
+    /** A Sunreach town has one guard more than the level table gives (see {@code culture_garrison}). */
+    @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_sunreach_guard")
+    public static void sunreachTownHasAnExtraGuard(GameTestHelper helper) {
+        extraUnit(helper, Cultures.SUNREACH.id(), GarrisonRole.GUARD);
     }
 
     private static void extraUnit(GameTestHelper helper, String culture, GarrisonRole role) {

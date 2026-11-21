@@ -121,6 +121,12 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
         setAggressive(target != null);
     }
 
+    /** The attack goals of the archer throw its trident. */
+    @Override
+    protected boolean throwsSpear() {
+        return false;
+    }
+
     /** True if the archer holds a bow in its main hand. */
     public boolean holdsBow() {
         return getMainHandItem().getItem() instanceof BowItem;

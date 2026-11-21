@@ -172,7 +172,7 @@ public final class LevelTable {
                 {6, 5, 1, 2, 2, 3}};
         String[] equipment = {"hamlet", "town", "city", "city", "capital"};
         // The extra units of the cultures from the town: they close the gap of the culture equipment in the raids.
-        Map<String, Map<String, Integer>> cultureUnits = Map.of("sunreach", Map.of("healer", 1));
+        Map<String, Map<String, Integer>> cultureUnits = Map.of("sunreach", Map.of("guard", 1));
         List<LevelTraits> levels = new ArrayList<>();
         for (int level = 1; level <= 20; level++) {
             int tier = (level - 1) / 4;

@@ -1048,7 +1048,12 @@
       }
     ],
     "captain": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "offhand": "minecraft:shield",
       "head": "banner",
       "chest": "minecraft:golden_chestplate",
@@ -1056,7 +1061,12 @@
       "feet": "minecraft:chainmail_boots"
     },
     "rider": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:golden_helmet",
       "chest": "tabard",
       "legs": "minecraft:leather_leggings",
@@ -1116,7 +1126,12 @@
       }
     ],
     "captain": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "offhand": "minecraft:shield",
       "head": "banner",
       "chest": {
@@ -1139,7 +1154,12 @@
       }
     },
     "rider": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:golden_helmet",
       "chest": "tabard",
       "legs": "minecraft:leather_leggings",
@@ -1199,7 +1219,12 @@
       }
     ],
     "captain": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "offhand": "minecraft:shield",
       "head": "banner",
       "chest": {
@@ -1222,7 +1247,12 @@
       }
     },
     "rider": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:chainmail_helmet",
       "chest": "tabard",
       "legs": "minecraft:chainmail_leggings",
@@ -1287,6 +1317,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },
@@ -1315,6 +1346,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },
@@ -1397,6 +1429,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 2
         }
       },
@@ -1425,6 +1458,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },

@@ -64,14 +64,14 @@ class LevelTablesTest {
         assertEquals("city", garrison.forCulture("valeholm").equipment());
     }
 
-    /** The default table gives one healer more to Sunreach, from the town. */
+    /** The default table gives one guard more to Sunreach, from the town. */
     @Test
     void defaultTableHasTheExtraUnitsOfTheCultures() {
         LevelTable table = LevelTable.DEFAULT;
         for (int level = 1; level <= table.maxLevel(); level++) {
             GarrisonTraits garrison = table.traits(level).garrison();
             int extra = level >= 9 ? 1 : 0;
-            assertEquals(garrison.count("healer") + extra, garrison.forCulture("sunreach").count("healer"),
+            assertEquals(garrison.count("guard") + extra, garrison.forCulture("sunreach").count("guard"),
                     "Level " + level);
             assertEquals(garrison.units(), garrison.forCulture("ashmark").units(), "Level " + level);
             assertEquals(garrison.units(), garrison.forCulture("valeholm").units(), "Level " + level);
