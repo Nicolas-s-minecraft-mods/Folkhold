@@ -1,0 +1,12 @@
+{
+  "core": {"id": 1821089, "slug": "folkhold-core", "name": "Folkhold Core", "requires": []},
+  "blocks": {"id": 1821098, "slug": "folkhold-blocks", "name": "Folkhold Blocks", "requires": []},
+  "world": {
+    "id": 1821107,
+    "slug": "folkhold-world",
+    "name": "Folkhold World",
+    "requires": ["folkhold-core", "folkhold-blocks", "geckolib", "cartofold"]
+  },
+  "balance": {"id": 1821102, "slug": "folkhold-balance", "name": "Folkhold Balance", "requires": []},
+  "events": {"id": 1821115, "slug": "folkhold-events", "name": "Folkhold Events", "requires": ["folkhold-core"]}
+}

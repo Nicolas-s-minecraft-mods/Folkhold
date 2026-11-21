@@ -8,13 +8,13 @@ project. Change the page on CurseForge only through a change of this folder.
 
 ## Projects
 
-| Module | Project name | Logo | Categories | Side |
+| Module | Project name | Project id | Class | Categories (the first one is the main category) |
 | --- | --- | --- | --- | --- |
-| `core` | Folkhold Core | `core/src/main/resources/folkhold_core_logo.png` | API and Library | Client and server |
-| `blocks` | Folkhold Blocks | `blocks/src/main/resources/folkhold_blocks_logo.png` | API and Library, Cosmetic | Client and server |
-| `world` | Folkhold World | `world/src/main/resources/folkhold_world_logo.png` | Adventure and RPG, World Gen, Mobs | Client and server |
-| `balance` | Folkhold Balance | `balance/src/main/resources/folkhold_balance_logo.png` | Technology, Redstone, Tweaks | Client and server |
-| `events` | Folkhold Events | `events/src/main/resources/folkhold_events_logo.png` | World Gen, Adventure and RPG | Client and server |
+| `core` | Folkhold Core | 1821089 | Mods | API and Library |
+| `blocks` | Folkhold Blocks | 1821098 | Mods | API and Library, Cosmetic |
+| `world` | Folkhold World | 1821107 | Mods | Adventure and RPG, World Gen (Structures), Mobs |
+| `balance` | Folkhold Balance | 1821102 | Mods | Technology (Player Transport), Redstone, Utility & QoL |
+| `events` | Folkhold Events | 1821115 | Mods | World Gen, Adventure and RPG |
 
 All the projects have these values:
 
@@ -23,7 +23,9 @@ All the projects have these values:
   (see [ASSETS_LICENSES.md](../ASSETS_LICENSES.md)).
 - Source: <https://github.com/nicolas-goyon/Folkhold>. Issues: <https://github.com/nicolas-goyon/Folkhold/issues>.
 - Languages: English and French.
-- The logo comes from `tools/textures/mod_logos.py` (512 x 512 pixels).
+- The logo is `<module>/src/main/resources/folkhold_<module>_logo.png` (512 x 512 pixels, from
+  `tools/textures/mod_logos.py`).
+- Side: client and server.
 
 ## Dependencies
 
@@ -44,6 +46,20 @@ The relations of each CurseForge file. They are the required dependencies of `ne
 - A relation needs a CurseForge project on the other side. GeckoLib is on CurseForge. Cartofold must be a
   CurseForge project before the upload of Folkhold World.
 - NeoForge and Minecraft are not relations: they are the loader and the game version of the file.
+
+## Upload of a release
+
+The workflow Release uploads the 5 jars of a release with `scripts/curseforge_publish.py`. The file
+[projects.json](projects.json) gives the id and the slug of each project and the slugs of the projects that it
+requires. A test compares these requirements with `neoforge.mods.toml`.
+
+- The repository secret `CURSEFORGE_TOKEN` has the API token of the CurseForge account of the owner. With no secret,
+  the workflow uploads nothing.
+- Each file has the game versions 1.21.1, NeoForge, Java 21, Client and Server, and the notes of the release as its
+  changelog.
+- The release type is beta while the major version is 0.
+- To see the metadata of the files and send nothing:
+  `python3 scripts/curseforge_publish.py <version> <notes file> --dry-run`.
 
 ## Screenshots
 
