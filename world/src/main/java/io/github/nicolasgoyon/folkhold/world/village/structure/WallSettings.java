@@ -12,7 +12,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProc
  * The settings of the wall of a fortified village (see {@link FortifiedVillageStructure}).
  *
  * @param margin       the free blocks between the pieces of the village and the palisade
- * @param towerSpacing the maximum distance between the middles of 2 towers of a side (see {@link WallLayout})
+ * @param towerSpacing the maximum distance between the middles of 2 towers of a side of the full layout (see
+ *                     {@link WallLayout#plan}). The generation keeps the towers of the garrison (see
+ *                     {@link WallLayout#withTowers})
  * @param tower        the structure template of a tower with its stair. The outside of the template is to the west and
  *                     to the north. The stair goes along the north side to the east.
  * @param gate         the structure template of a gate. The outside of the template is to the north: the line of the

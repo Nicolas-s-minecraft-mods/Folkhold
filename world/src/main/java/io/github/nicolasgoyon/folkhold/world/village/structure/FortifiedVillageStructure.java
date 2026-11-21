@@ -12,6 +12,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.faction.CultureMap;
@@ -19,6 +20,7 @@ import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.registry.ModStructures;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBuildingTable;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
@@ -27,6 +29,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
@@ -80,7 +83,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       {@link PlotUses}). The spare plots stay free.</li>
  *   <li>Then the structure adds the wall around all the pieces and around the space of each free plot (see
  *       {@link VillageWall}). The wall has towers, a gate on each axis of the start piece and the palisade. Paths go
- *       from the gates to the streets.</li>
+ *       from the gates to the streets. The number of towers comes from the archers of the tier (see
+ *       {@link #towers}).</li>
  * </ul>
  *
  * <p>A saved village keeps its pieces: only a new village start uses this generation.
@@ -460,7 +464,7 @@ public final class FortifiedVillageStructure extends Structure {
                 posts, beds, RandomSource.create(seed));
         List<StructurePiece> village = new ArrayList<>(result.pieces());
         VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, result.reserved(),
-                start.center(), start.variant().wall(), start.maritime());
+                start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)));
         if (!result.problems().isEmpty() || plan.missingPlots() > 0 || plan.missingHomes() > 0) {
             FolkholdWorld.LOGGER.warn("The village of the level {} in the start chunk {} has {} missing plots, {} missing"
                     + " homes and these problems: {}", level, context.chunkPos(), plan.missingPlots(),
@@ -480,6 +484,30 @@ public final class FortifiedVillageStructure extends Structure {
                 cultures.cultureAt(center.getX(), center.getZ()));
         int slots = LevelTables.get().traits(level).jobSlots();
         return new VillagePlanPieces.Posts(eligible, Math.min(slots, eligible.size()), seed);
+    }
+
+    /**
+     * The number of towers of a village of a size: {@link WallLayout#TOWERS_PER_ARCHER} towers for each archer of a
+     * full garrison of the top level of the tier (see {@link WallLayout#towers(int)}). The village keeps its wall
+     * while its level goes up in its tier, thus each archer of the tier has a post.
+     *
+     * @param size the size of the tier of the village
+     * @return the number of towers of the village
+     */
+    public static int towers(VillageSize size) {
+        return WallLayout.towers(archers(size));
+    }
+
+    /**
+     * The archers of a full garrison of the top level of the tier of a size, or 0 for an unknown tier.
+     *
+     * @param size the size of the tier
+     * @return the number of archers
+     */
+    public static int archers(VillageSize size) {
+        LevelTable levels = LevelTables.get();
+        return levels.tiers().stream().filter(tier -> tier.id().equals(size.tier())).findFirst()
+                .map(tier -> GarrisonRole.ARCHER.count(levels.traits(tier.maxLevel()).garrison())).orElse(0);
     }
 
     /**
