@@ -5,6 +5,7 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
+import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
@@ -173,10 +174,15 @@ public final class GarrisonGameTests {
     /**
      * The level of the village sets the number of units of each role: a town (level 9) has 5 guards, 4 archers and
      * 1 captain.
+     *
+     * <p>The culture of a settlement can add units to its garrison ({@code culture_garrison} in {@code levels.json}).
+     * The culture of a new settlement comes from the region of its position, and the GameTest server puts the test at
+     * a random position. Thus the test puts the settlement in a faction of Ashmark, a culture with no extra units.
      */
     @GameTest(template = "arena", batch = "garrison_level")
     public static void garrisonFollowsTheLevel(GameTestHelper helper) {
         VillageHeartBlockEntity heart = placeHeart(helper);
+        RaidBalanceGameTests.joinFaction(helper, heart, Cultures.ASHMARK.id());
         setLevel(helper, heart, 9);
 
         heart.ensureGarrison(helper.getLevel().getGameTime());
