@@ -243,8 +243,8 @@ public final class VillageGeneration {
                         level.getChunkSource().randomState(), level.getStructureManager(), level.getSeed(), chunk,
                         level, structure.biomes()::contains);
                 layoutTask = CompletableFuture.supplyAsync(() -> VillageRings.planOfLevel(structure, context,
-                        startLevel, variant -> style.map(name -> FortifiedVillageStructure.styleOf(variant).name()
-                                .equals(name)).orElse(true)), Util.backgroundExecutor());
+                        startLevel, variant -> !variant.cave() && style.map(name -> FortifiedVillageStructure
+                                .styleOf(variant).name().equals(name)).orElse(true)), Util.backgroundExecutor());
                 phase = Phase.LAYOUT;
                 return;
             }

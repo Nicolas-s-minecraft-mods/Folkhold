@@ -60,7 +60,8 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  *       reference. The logs above the logs of the segment ({@link PalisadeHeights#LOGS}, or
  *       {@link PalisadeHeights#LOW_LOGS} on the edge of a cliff) are not a part of it too.</li>
  *   <li>The area is the box of the village inside its palisade, the palisade included, from the lowest to the highest
- *       template piece. A village with no palisade pieces has no area. The pieces of the ring districts of a town, a
+ *       template piece. The area of a cave village is the box of its pieces (see {@link #caveArea}). Another village
+ *       with no palisade pieces has no area. The pieces of the ring districts of a town, a
  *       city or a capital (see {@link VillageRings#generatedPieces}) are a part of the reference: the area goes to
  *       the outer ring, and the repairs keep the rings.</li>
  *   <li>The plots are the places for a house along the streets, with and without a house (see
@@ -266,15 +267,40 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         if (!start.isValid()) {
             return Optional.empty();
         }
-        Optional<ResourceLocation> homes = start.getStructure() instanceof FortifiedVillageStructure village
-                ? village.variantOf(level, start.getPieces()).homes().unwrapKey().map(ResourceKey::location)
-                : Optional.empty();
+        Optional<FortifiedVillageStructure.Variant> variant = start.getStructure()
+                instanceof FortifiedVillageStructure village ? Optional.of(village.variantOf(level, start.getPieces()))
+                        : Optional.empty();
+        Optional<ResourceLocation> homes = variant.flatMap(found -> found.homes().unwrapKey())
+                .map(ResourceKey::location);
         List<StructurePiece> pieces = start.getPieces();
+        if (variant.map(FortifiedVillageStructure.Variant::cave).orElse(false)) {
+            Optional<BoundingBox> box = caveArea(pieces);
+            return of(level, pieces).map(reference -> box.map(reference::withArea).orElse(reference))
+                    .map(reference -> homes.map(reference::withHomes).orElse(reference));
+        }
         if (hasRings(level, start.getChunkPos())) {
             pieces = new ArrayList<>(pieces);
             pieces.addAll(VillageRings.generatedPieces(level, start.getChunkPos()));
         }
         return of(level, pieces).map(reference -> homes.map(reference::withHomes).orElse(reference));
+    }
+
+    /**
+     * The area of a cave village: the box of all its pieces. A cave village has no palisade: the rock is its wall (see
+     * {@link io.github.nicolasgoyon.folkhold.world.village.structure.CaveVillage}). Thus the spawn protection, the
+     * scan and the repairs cover its halls, its tunnels and its rooms.
+     *
+     * @param pieces the pieces of the village structure
+     * @return the box, or empty with no piece
+     */
+    public static Optional<BoundingBox> caveArea(List<StructurePiece> pieces) {
+        return BoundingBox.encapsulatingBoxes(pieces.stream().map(StructurePiece::getBoundingBox).toList());
+    }
+
+    /** The same reference with another area. */
+    public VillageReference withArea(BoundingBox box) {
+        return new VillageReference(pieces, palisades, Optional.of(box), plots, homes, piers, streetColumns, streets,
+                paths, gateFronts);
     }
 
     /**

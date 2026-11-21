@@ -6,6 +6,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTable;
+import io.github.nicolasgoyon.folkhold.core.sim.village.CaveSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotUses;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
@@ -102,7 +103,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>{@code variants}: the biome variants of the village (see {@link Variant}). The biome at the middle of the start
  *       piece selects the first variant with this biome. In the other biomes, the village uses the start pool, the
  *       wall and the homes of the structure: the base variant. A site on the coast selects a maritime variant (see
- *       {@link VillageSite.Result#MARITIME}).</li>
+ *       {@link VillageSite.Result#MARITIME}). A site that is too steep for a village can get the cave variant: a cave
+ *       village in the rock of a mountain (see {@link CaveVillage}).</li>
  * </ul>
  */
 public final class FortifiedVillageStructure extends Structure {
@@ -136,22 +138,31 @@ public final class FortifiedVillageStructure extends Structure {
      * @param culture   the id of the culture of the variant, or empty for a variant of all the cultures
      * @param maritime  true for a variant of a maritime village: a village on the coast or on an island. Only a
      *                  maritime site selects a maritime variant.
+     * @param cave      true for the variant of a cave village (see {@link CaveVillage}). Only a cave site selects it.
+     *                  With no cave variant in the structure, no cave village starts.
      */
     public record Variant(HolderSet<Biome> biomes, Holder<StructureTemplatePool> startPool, WallSettings wall,
-            Holder<StructureTemplatePool> homes, Optional<String> culture, boolean maritime) {
+            Holder<StructureTemplatePool> homes, Optional<String> culture, boolean maritime, boolean cave) {
         public static final Codec<Variant> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 RegistryCodecs.homogeneousList(Registries.BIOME).fieldOf("biomes").forGetter(Variant::biomes),
                 StructureTemplatePool.CODEC.fieldOf("start_pool").forGetter(Variant::startPool),
                 WallSettings.CODEC.fieldOf("wall").forGetter(Variant::wall),
                 StructureTemplatePool.CODEC.fieldOf("homes").forGetter(Variant::homes),
                 Codec.STRING.optionalFieldOf("culture").forGetter(Variant::culture),
-                Codec.BOOL.optionalFieldOf("maritime", false).forGetter(Variant::maritime))
+                Codec.BOOL.optionalFieldOf("maritime", false).forGetter(Variant::maritime),
+                Codec.BOOL.optionalFieldOf("cave", false).forGetter(Variant::cave))
                 .apply(instance, Variant::new));
+
+        /** A variant that is not a cave variant. */
+        public Variant(HolderSet<Biome> biomes, Holder<StructureTemplatePool> startPool, WallSettings wall,
+                Holder<StructureTemplatePool> homes, Optional<String> culture, boolean maritime) {
+            this(biomes, startPool, wall, homes, culture, maritime, false);
+        }
 
         /** A variant that is not maritime. */
         public Variant(HolderSet<Biome> biomes, Holder<StructureTemplatePool> startPool, WallSettings wall,
                 Holder<StructureTemplatePool> homes, Optional<String> culture) {
-            this(biomes, startPool, wall, homes, culture, false);
+            this(biomes, startPool, wall, homes, culture, false, false);
         }
 
         /** True if the variant is for a culture: a variant with no culture is for all the cultures. */
@@ -202,7 +213,8 @@ public final class FortifiedVillageStructure extends Structure {
             return Optional.empty();
         }
         Start village = start.get();
-        return Optional.of(new GenerationStub(village.center(), builder -> VillageRings.layout(this, context, village,
+        return Optional.of(new GenerationStub(village.biomePosition(), builder -> VillageRings.layout(this, context,
+                village,
                 Settlements.startLevel(context.seed(), context.chunkPos())).pieces().forEach(builder::addPiece)));
     }
 
@@ -215,7 +227,7 @@ public final class FortifiedVillageStructure extends Structure {
      * @return the start, or empty if no village starts there
      */
     Optional<Start> generatedStart(GenerationContext context) {
-        return start(context).filter(start -> context.validBiome().test(biomeAt(context, start.center())));
+        return start(context).filter(start -> context.validBiome().test(biomeAt(context, start.biomePosition())));
     }
 
     /**
@@ -246,6 +258,9 @@ public final class FortifiedVillageStructure extends Structure {
         }
         BlockPos middle = start.get().center();
         VillageSite.Result site = checkSite(terrain, middle, context.chunkGenerator().getSeaLevel());
+        if (site == VillageSite.Result.TOO_STEEP) {
+            return CaveVillage.start(this, context, terrain, middle);
+        }
         if (site != VillageSite.Result.ACCEPTED && site != VillageSite.Result.MARITIME) {
             return Optional.empty();
         }
@@ -295,9 +310,23 @@ public final class FortifiedVillageStructure extends Structure {
      * @param variant  the variant
      * @param maritime true for a maritime site
      * @param terrain  the terrain cache of the site check and of the layout
+     * @param cave     the frame of a cave village (see {@link CaveVillage}), or empty for another village
      */
     record Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
-            TerrainCache terrain) {
+            TerrainCache terrain, Optional<CaveVillage.Frame> cave) {
+        /** The start of a village that is not a cave village. */
+        Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
+                TerrainCache terrain) {
+            this(plaza, center, variant, maritime, terrain, Optional.empty());
+        }
+
+        /**
+         * The position of the check of the biome: the middle of the plaza, or the foot of the rock face of a cave
+         * village (the main hall is in the rock, where the biome can be a cave biome).
+         */
+        BlockPos biomePosition() {
+            return cave.map(CaveVillage.Frame::foot).orElse(center);
+        }
     }
 
     /**
@@ -315,7 +344,8 @@ public final class FortifiedVillageStructure extends Structure {
      * @param free     the number of free plots
      * @param posts    the job ids of the house-workshops, in the order of the posts
      * @param problems the pieces and the plots of the plan with no element of their pool: empty for valid pools
-     * @param firstWall the data of the first wall: the rings of the village go around it
+     * @param firstWall the data of the first wall: the rings of the village go around it. Null for a cave village: it
+     *                  has no wall and no ring (see {@link CaveVillage})
      */
     public record Layout(int level, VillageSize size, StreetStyle style, VillagePlan plan, BlockPos center,
             List<PoolElementStructurePiece> village, List<BoundingBox> reserved, List<StructurePiece> wall, int built,
@@ -441,6 +471,9 @@ public final class FortifiedVillageStructure extends Structure {
      * for each building of the level that needs one (see {@link PlotUses#withWide}).
      */
     Layout layout(GenerationContext context, Start start, int level) {
+        if (start.cave().isPresent()) {
+            return CaveVillage.layout(this, context, start, level);
+        }
         VillageSize size = VillageSizes.forLevel(level);
         VillagePlanPieces.Builder pieces = VillagePlanPieces.builder(context, start.terrain(), start.plaza(),
                 start.center(), start.variant().homes(), VillageBuildingTable.get().stream()
@@ -478,7 +511,7 @@ public final class FortifiedVillageStructure extends Structure {
      * The job posts of a village of a level: one for each job slot of the level, at most one for each job that the
      * level and the biome at the middle of the plaza allow. The culture of the region changes the weights of the jobs.
      */
-    private static VillagePlanPieces.Posts posts(GenerationContext context, BlockPos center, int level, long seed) {
+    static VillagePlanPieces.Posts posts(GenerationContext context, BlockPos center, int level, long seed) {
         CultureMap cultures = new CultureMap(context.seed(), context.biomeSource(), context.randomState().sampler());
         List<Job> eligible = Economies.eligibleJobs(biomeAt(context, center), level,
                 cultures.cultureAt(center.getX(), center.getZ()));
@@ -514,7 +547,7 @@ public final class FortifiedVillageStructure extends Structure {
      * The plot target of a size: the plots of the size, or the beds rule with the maximum population of the top level
      * of the tier and the places of the hall (see {@link VillageSize#plots(int, int)}).
      */
-    private static int plotTarget(VillageSize size) {
+    static int plotTarget(VillageSize size) {
         LevelTable levels = LevelTables.get();
         int population = levels.tiers().stream().filter(tier -> tier.id().equals(size.tier())).findFirst()
                 .map(tier -> levels.traits(tier.maxLevel()).maxPopulation()).orElse(0);
@@ -552,7 +585,7 @@ public final class FortifiedVillageStructure extends Structure {
      * search.
      */
     public Variant variantAt(Holder<Biome> biome) {
-        return variants.stream().filter(variant -> !variant.maritime())
+        return variants.stream().filter(variant -> !variant.maritime() && !variant.cave())
                 .filter(variant -> variant.culture().isEmpty() && variant.biomes().contains(biome))
                 .findFirst().orElse(base);
     }
@@ -572,7 +605,7 @@ public final class FortifiedVillageStructure extends Structure {
      * @return the variant
      */
     public Variant variantAt(String culture, Holder<Biome> biome) {
-        List<Variant> ofCulture = variants.stream().filter(variant -> !variant.maritime())
+        List<Variant> ofCulture = variants.stream().filter(variant -> !variant.maritime() && !variant.cave())
                 .filter(variant -> variant.culture().isPresent())
                 .filter(variant -> variant.isFor(culture)).toList();
         return ofCulture.stream().filter(variant -> variant.biomes().contains(biome)).findFirst()
@@ -690,5 +723,35 @@ public final class FortifiedVillageStructure extends Structure {
     /** The biome variants, with no base variant. */
     public List<Variant> variants() {
         return variants;
+    }
+
+    /** The cave variant: the first variant with {@code cave}, or empty if the structure has no cave village. */
+    public Optional<Variant> caveVariant() {
+        return variants.stream().filter(Variant::cave).findFirst();
+    }
+
+    /**
+     * The frame of the cave village at the start chunk of a context, as the generation makes it, with the check of the
+     * biome. The tests use it to find the cave villages.
+     *
+     * @param context the context of the generation
+     * @return the frame, or empty if no cave village starts there
+     */
+    public Optional<CaveVillage.Frame> caveFrame(GenerationContext context) {
+        return generatedStart(context).flatMap(Start::cave);
+    }
+
+    /**
+     * The layout of a cave village of a level at a cave site, with no check of the plan and of the rock: each plot of
+     * the plan is good. The tests use it to place a cave village in a block of rock.
+     *
+     * @param context the context of the generation
+     * @param site    the cave site: the foot, the direction into the rock and the floor level
+     * @param level   the start level
+     * @return the layout, or empty with no cave variant
+     */
+    public Optional<Layout> caveLayout(GenerationContext context, CaveSite.Site site, int level) {
+        return caveVariant().flatMap(variant -> CaveVillage.start(context, TerrainCache.of(context), variant, site))
+                .map(start -> CaveVillage.layout(this, context, start, level, false));
     }
 }
