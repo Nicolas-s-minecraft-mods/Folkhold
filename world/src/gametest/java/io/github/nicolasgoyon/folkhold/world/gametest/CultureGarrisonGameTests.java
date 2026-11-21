@@ -91,23 +91,29 @@ public final class CultureGarrisonGameTests {
                 .thenSucceed();
     }
 
-    /** A Sunreach town has one guard more than the level table gives (see {@code culture_garrison}). */
-    @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_sunreach_guard")
-    public static void sunreachTownHasAnExtraGuard(GameTestHelper helper) {
-        extraUnit(helper, Cultures.SUNREACH.id(), GarrisonRole.GUARD);
-    }
-
-    private static void extraUnit(GameTestHelper helper, String culture, GarrisonRole role) {
+    /**
+     * A Sunreach town has one guard and one healer more than the level table gives (see {@code culture_garrison}).
+     */
+    @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_sunreach_units")
+    public static void sunreachTownHasAnExtraGuardAndHealer(GameTestHelper helper) {
         VillageHeartBlockEntity[] heart = new VillageHeartBlockEntity[1];
-        thenGarrison(helper, heart, culture)
+        thenGarrison(helper, heart, Cultures.SUNREACH.id())
                 .thenExecute(() -> {
-                    long units = heart[0].getUnits().stream().filter(unit -> unit.role() == role).count();
-                    int table = LevelTables.get().traits(TOWN).garrison().count(role.serializedName());
+                    long guards = count(heart[0], GarrisonRole.GUARD);
+                    long healers = count(heart[0], GarrisonRole.HEALER);
+                    int tableGuards = LevelTables.get().traits(TOWN).garrison().count("guard");
+                    int tableHealers = LevelTables.get().traits(TOWN).garrison().count("healer");
                     removeVillage(helper, heart[0]);
-                    helper.assertTrue(units == table + 1,
-                            "The town must have " + (table + 1) + " units of the role " + role + ": " + units);
+                    helper.assertTrue(guards == tableGuards + 1, "The town must have " + (tableGuards + 1)
+                            + " guards: " + guards);
+                    helper.assertTrue(healers == tableHealers + 1, "The town must have " + (tableHealers + 1)
+                            + " healers: " + healers);
                 })
                 .thenSucceed();
+    }
+
+    private static long count(VillageHeartBlockEntity heart, GarrisonRole role) {
+        return heart.getUnits().stream().filter(unit -> unit.role() == role).count();
     }
 
     /**
