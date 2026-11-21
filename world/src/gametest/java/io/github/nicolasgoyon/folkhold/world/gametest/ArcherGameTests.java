@@ -269,7 +269,10 @@ public final class ArcherGameTests {
                 .thenSucceed();
     }
 
-    /** The tower of the palisade (template of the village pieces), with its lower corner at this position. */
+    /**
+     * The tower of the palisade (template of the village pieces), with its lower corner at this position. The tower is
+     * higher than the arena: the tests of the tower have access to the sky, with no roof of barriers on them.
+     */
     private static final BlockPos TOWER_ORIGIN = new BlockPos(2, 0, 4);
     /** The post of the tower: the position above the watch post, in the middle of the platform. */
     private static final BlockPos TOWER_POST = TOWER_ORIGIN.offset(2, 8, 2);
@@ -281,13 +284,13 @@ public final class ArcherGameTests {
      * husk from the post: the archer goes to the edge of the platform above the husk, and shoots down. It stays on
      * the platform. When the husk is dead, the archer goes back to its post.
      */
-    @GameTest(template = "arena", timeoutTicks = 600, batch = "archer_tower_foot")
+    @GameTest(template = "arena", timeoutTicks = 600, batch = "archer_tower_foot", skyAccess = true)
     public static void towerArcherHitsATargetAtTheFootOfTheTower(GameTestHelper helper) {
         towerFoot(helper, Items.BOW);
     }
 
     /** As {@link #towerArcherHitsATargetAtTheFootOfTheTower}, with a crossbow: the rule is the same for all weapons. */
-    @GameTest(template = "arena", timeoutTicks = 600, batch = "archer_tower_foot_crossbow")
+    @GameTest(template = "arena", timeoutTicks = 600, batch = "archer_tower_foot_crossbow", skyAccess = true)
     public static void crossbowTowerArcherHitsATargetAtTheFootOfTheTower(GameTestHelper helper) {
         towerFoot(helper, Items.CROSSBOW);
     }
@@ -321,7 +324,7 @@ public final class ArcherGameTests {
     }
 
     /** An archer on a tower of the palisade with no target stays at its post. */
-    @GameTest(template = "arena", timeoutTicks = 200, batch = "archer_tower_no_target")
+    @GameTest(template = "arena", timeoutTicks = 200, batch = "archer_tower_no_target", skyAccess = true)
     public static void towerArcherWithNoTargetStaysAtItsPost(GameTestHelper helper) {
         BlockPos post = placeTower(helper);
         ArcherEntity archer = towerArcher(helper, post, Items.BOW);
@@ -341,7 +344,7 @@ public final class ArcherGameTests {
      * No spot of the platform gives a line of sight to a husk in a closed box at the foot of the tower. The archer
      * stays at its post, and drops the husk.
      */
-    @GameTest(template = "arena", timeoutTicks = 400, batch = "archer_tower_hidden")
+    @GameTest(template = "arena", timeoutTicks = 400, batch = "archer_tower_hidden", skyAccess = true)
     public static void towerArcherKeepsItsPostWhenNoSpotSeesTheTarget(GameTestHelper helper) {
         BlockPos post = placeTower(helper);
         ArcherEntity archer = towerArcher(helper, post, Items.BOW);
