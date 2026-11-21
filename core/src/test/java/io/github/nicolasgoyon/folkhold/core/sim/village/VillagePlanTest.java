@@ -178,8 +178,8 @@ class VillagePlanTest {
         VillagePlan plan = plan(size, StreetStyle.BASE, VillagePlanTest::good, 3);
         // The homes with no role and no wide home are nearer than the spare plots.
         double home = plan.plots().stream().filter(p -> !p.spare() && !p.wide() && p.role() == PlotRole.HOME)
-                .mapToDouble(VillagePlanTest::distance).max().orElseThrow();
-        assertTrue(plan.plots().stream().filter(Plot::spare).allMatch(p -> distance(p) >= home));
+                .mapToDouble(p -> distance(plan, p)).max().orElseThrow();
+        assertTrue(plan.plots().stream().filter(Plot::spare).allMatch(p -> distance(plan, p) >= home));
         // A bad plot near the plaza: it is a spare plot, except a plot with a role (the bank).
         Predicate<Box> badNorth = box -> !box.overlaps(new Box(-30, -30, 30, -8));
         VillagePlan bad = plan(size, StreetStyle.BASE, badNorth, 3);
@@ -212,14 +212,16 @@ class VillagePlanTest {
                 + "foundation for " + missing.missingHomes() + " missing homes");
         // The nearest bad plots take the homes: the bad spare plots are farther.
         double farthestHome = full.plots().stream().filter(p -> !p.good() && !p.spare() && p.role() == PlotRole.HOME)
-                .mapToDouble(VillagePlanTest::distance).max().orElseThrow();
+                .mapToDouble(p -> distance(full, p)).max().orElseThrow();
         assertTrue(full.plots().stream().filter(p -> !p.good() && p.spare())
-                .allMatch(p -> distance(p) >= farthestHome));
+                .allMatch(p -> distance(full, p) >= farthestHome));
         assertEquals(plan(size, StreetStyle.BASE, VillagePlanTest::good, 4).plots(), land.plots());
     }
 
-    private static double distance(Plot plot) {
-        return Math.hypot(plot.x(), plot.z());
+    /** The distance of the choice of the plots: a plot of a side street counts at a part of its distance. */
+    private static double distance(VillagePlan plan, Plot plot) {
+        double weight = plan.onSideStreet(plot) ? Math.sqrt(VillagePlan.SIDE_PLOT_WEIGHT) : 1;
+        return Math.hypot(plot.x(), plot.z()) * weight;
     }
 
     /** A radius that is too small gives a plan with a shortfall, not an error. */

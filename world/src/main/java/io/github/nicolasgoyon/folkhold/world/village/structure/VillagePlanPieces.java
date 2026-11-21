@@ -313,8 +313,9 @@ final class VillagePlanPieces {
                     }
                     continue;
                 }
+                Piece piece = plan.pieces().get(plot.piece());
                 Site site = new Site(sizeTest(style, plot), street, connector.get(),
-                        area(plot.area(), connector.get().connector().getY()));
+                        area(plot.area(), connector.get().connector().getY()), offset(plot, piece.dir()));
                 boolean placed = switch (use.type()) {
                     case FREE -> false;
                     case BANK -> build(site, shuffled("bank", random), "the bank");
@@ -395,9 +396,17 @@ final class VillagePlanPieces {
          * @param street    the street piece of the plot
          * @param connector the connector of the plot
          * @param area      the box of the area of the plot
+         * @param offset    the move of the building from the connector of the plot: its setback from the street and
+         *                  its shift along the street (see {@link Plot#setback()})
          */
         private record Site(Predicate<Vec3i> fits, PoolElementStructurePiece street, VillagePlots.Plot connector,
-                BoundingBox area) {
+                BoundingBox area, BlockPos offset) {
+        }
+
+        /** The move of the building of a plot in the world: its setback and its shift, turned with the plan. */
+        private BlockPos offset(Plot plot, Dir along) {
+            return new BlockPos(plot.facing().dx() * plot.setback() + along.dx() * plot.shift(), 0,
+                    plot.facing().dz() * plot.setback() + along.dz() * plot.shift()).rotate(rotation);
         }
 
         /**
@@ -569,8 +578,11 @@ final class VillagePlanPieces {
                 if (!site.fits().test(element.getSize(templates, Rotation.NONE))) {
                     continue;
                 }
-                Optional<VillagePlots.Placement> placement = VillagePlots.place(templates, element, site.connector(),
+                Optional<VillagePlots.Placement> placed = VillagePlots.place(templates, element, site.connector(),
                         ground);
+                Optional<VillagePlots.Placement> placement = placed.map(value -> new VillagePlots.Placement(
+                        value.origin().offset(site.offset()), value.rotation(),
+                        value.box().moved(site.offset().getX(), 0, site.offset().getZ())));
                 if (placement.isEmpty() || !inside(placement.get().box(), site.area())) {
                     continue;
                 }

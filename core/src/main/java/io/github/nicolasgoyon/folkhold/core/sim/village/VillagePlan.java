@@ -19,9 +19,12 @@ import java.util.function.Predicate;
  *   <li>A street goes out of each side of the plaza: the 4 axis streets. The gates and the arms of the wall use them.
  *       The first piece of each axis street is a segment (see {@link Piece}), and its plots for the bank and the first
  *       jobs have a role ({@link PlotRole}).</li>
- *   <li>The plan adds the pieces one by one at the open end of a street that is nearest to the middle: a segment
+ *   <li>The plan adds the pieces one by one at the open end of a street with the highest priority: a segment
  *       ({@code street_next}) or a crossroad ({@code street_cross}, weight 1 against 2, from the seed). A side exit of
- *       a crossroad starts with the piece {@code street_side}. A piece goes only where its box, the box of a street end
+ *       a crossroad starts with the piece {@code street_side}: a side street, 2 levels at most (see
+ *       {@link Piece#level()}). The second piece of 2 opposite axis streets is a crossroad, and these open ends come
+ *       first. Then the priority is the distance to the middle, and an open end of a side street counts at a part of
+ *       its distance: a smaller part in a quarter with no plot of a side street. Thus the plan fills the 4 quarters. A piece goes only where its box, the box of a street end
  *       after each of its exits and its plots are inside the maximum radius and touch no other piece and no other plot.
  *       A plot that does not obey this is not a plot. Each open end gets a street end ({@code street_end}).</li>
  *   <li>The plan stops when it has the plot target, the homes on plots with good terrain and the wide plots. For the
@@ -31,7 +34,10 @@ import java.util.function.Predicate;
  *       (for example the 2 plots on a side of a Valeholm segment) when the plan keeps its target. A wide home goes
  *       past the end of its piece by {@link StreetStyle#endOverflow()} blocks at most, except before a street end.
  *       </li>
- *   <li>The homes take the plots with a role, the wide plots and the good plots nearest to the middle. When the good
+ *   <li>Each plot that is not wide gets a random setback from the street and a random shift along the street (see
+ *       {@link Plot#setback()}), when its area stays free: the homes are not in a straight line.</li>
+ *   <li>The homes take the plots with a role, the wide plots and the good plots nearest to the middle (a plot of a
+ *       side street counts at a part of its distance). When the good
  *       plots do not give the homes that the village needs, the missing homes take the bad plots that hold a home on
  *       its foundation (deep water, see the second terrain test), the nearest first. The spare plots are the bad plots
  *       first, then the farthest plots of the plan. The other plots are not in the plan.</li>
@@ -40,7 +46,8 @@ import java.util.function.Predicate;
  * </ul>
  *
  * <p>The plan tries 8 layouts from the seed and keeps the best: the smallest shortfall, then the fewest missing wide
- * plots, then the smallest radius. The same inputs and the same seed give the same plan.
+ * plots, then the fewest missing plots of side streets (see {@link #sideShortfall()}), then the smallest radius. The
+ * same inputs and the same seed give the same plan.
  *
  * @param pieces       the street pieces
  * @param plots        the plots: the homes, then the spare plots
@@ -178,8 +185,10 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      * @param parent the index of the piece before this piece, or -1 for the first piece of an axis street
      * @param exit   the exit of the piece before this piece: 0 for the next piece, 1 for the side exit at x = 0 and 2
      *               for the side exit at x = 4 of a crossroad, or -1 for the first piece of an axis street
+     * @param level  the level of the street of the piece: 0 for an axis street or a ring street, 1 for a side street
+     *               of an axis street, 2 for a side street of a side street
      */
-    public record Piece(Kind kind, int x, int z, Dir dir, int length, Box box, int parent, int exit) {
+    public record Piece(Kind kind, int x, int z, Dir dir, int length, Box box, int parent, int exit, int level) {
     }
 
     /**
@@ -212,19 +221,57 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      * @param good   true when the terrain of the plot is good
      * @param spare  true for a spare plot: it stays empty
      * @param piece  the index of the piece of the plot
+     * @param setback the blocks between the edge of the street and the front of the home, from 0 to
+     *                {@link #MAX_SETBACK}
+     * @param shift   the blocks from the middle of the plot to the middle of the home along the street, in the
+     *                direction of the piece, from -{@link #MAX_SHIFT} to {@link #MAX_SHIFT}
      */
     public record Plot(int x, int z, Dir facing, Box area, List<Home> homes, PlotRole role, boolean good,
-            boolean spare, int piece) {
+            boolean spare, int piece, int setback, int shift) {
         /** True when a wide home fits the plot. */
         public boolean wide() {
             return homes.size() > 1;
         }
     }
 
+    /** The share of the plots on side streets that the choice of the best layout looks for. */
+    public static final double SIDE_SHARE = 0.4;
+    /** The largest setback of a home from the edge of its street, in blocks. */
+    public static final int MAX_SETBACK = 2;
+    /** The largest shift of a home along its street, in blocks. */
+    public static final int MAX_SHIFT = 1;
+    /** The highest level of a side street: a side street of a side street. */
+    public static final int MAX_LEVEL = 2;
+
     public VillagePlan {
         pieces = List.copyOf(pieces);
         plots = List.copyOf(plots);
         missingWide = Map.copyOf(missingWide);
+    }
+
+    /**
+     * The plots on side streets under {@link #SIDE_SHARE} of the plots of the plan: 0 when the plan has this share or
+     * more, or when the plan has no crossroad (the plan of a band).
+     *
+     * @return the missing plots on side streets
+     */
+    public long sideShortfall() {
+        if (pieces.stream().noneMatch(piece -> piece.kind() == Kind.CROSS)) {
+            return 0;
+        }
+        long side = plots.stream().filter(this::onSideStreet).count();
+        return Math.max(0, (long) Math.ceil(plots.size() * SIDE_SHARE - 1e-9) - side);
+    }
+
+    /**
+     * True if a plot is on a side street: a street that starts at a crossroad of another street (see
+     * {@link Piece#level()}).
+     *
+     * @param plot a plot of this plan
+     * @return true for a plot of a piece of the level 1 or more
+     */
+    public boolean onSideStreet(Plot plot) {
+        return pieces.get(plot.piece()).level() > 0;
     }
 
     /**
@@ -254,11 +301,25 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      */
     public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
             Predicate<Box> terrain, Predicate<Box> foundation, long seed) {
+        return plan(size, target, style, plazaSize, starts, terrain, foundation, seed, true);
+    }
+
+    /**
+     * As {@link #plan(VillageSize, int, StreetStyle, int, List, Predicate, Predicate, long)}, with or with no setback
+     * and shift of the homes.
+     *
+     * @param stagger true for homes with a random setback and a random shift (see {@link Plot#setback()}). False for
+     *                homes at the edge of the street, in the middle of their plot: the rooms of a cave village open on
+     *                the wall of their tunnel
+     */
+    public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
+            Predicate<Box> terrain, Predicate<Box> foundation, long seed, boolean stagger) {
         int half = plazaSize / 2;
         Box plaza = new Box(-half, -half, plazaSize - 1 - half, plazaSize - 1 - half);
         long maxRadius = size.maxRadius();
         return best(seed, random -> new Planner(target, target - size.sparePlots(target), style,
-                box -> box.reach() <= maxRadius, List.of(plaza), true, terrain, foundation, random).plan(starts));
+                box -> box.reach() <= maxRadius, List.of(plaza), true, stagger, terrain, foundation, random)
+                .plan(starts));
     }
 
     /** The best plan of {@link #ATTEMPTS} layouts from a seed. */
@@ -342,8 +403,37 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 new Start(inner.maxX() + middle, first, Dir.SOUTH), new Start(inner.maxX() + middle, -first, Dir.NORTH),
                 new Start(first, inner.maxZ() + middle, Dir.EAST), new Start(-first, inner.maxZ() + middle, Dir.WEST),
                 new Start(inner.minX() - middle, first, Dir.SOUTH), new Start(inner.minX() - middle, -first, Dir.NORTH));
-        return best(seed, random -> new Planner(target, target - size.sparePlots(target), plain, region, axes, false,
+        return best(seed, random -> new Planner(target, target - size.sparePlots(target), plain, region, axes, false, true,
                 terrain, foundation, random).plan(starts));
+    }
+
+    /** An axis street gets a crossroad with the chance 1 in this number, when a crossroad fits. */
+    private static final int AXIS_CROSS_ODDS = 3;
+    /** A side street gets a crossroad with the chance 1 in this number, when a crossroad fits. */
+    private static final int SIDE_CROSS_ODDS = 3;
+    /** The open end of a side street comes before an open end of an axis street at this share of its distance. */
+    private static final double SIDE_WEIGHT = 0.4;
+    /** A plot of a side street comes before a plot of an axis street at this share of its squared distance. */
+    static final double SIDE_PLOT_WEIGHT = 0.5;
+    /** The share of the distance of the open end of a side street in a quarter with no plot of a side street. */
+    private static final double EMPTY_QUARTER_WEIGHT = 0.25;
+
+    /**
+     * The quarter of a position: 0 to 3 for the north-east, the south-east, the south-west and the north-west of the
+     * middle. A position on an axis goes to the quarter clockwise after the axis.
+     *
+     * @param x the block X
+     * @param z the block Z
+     * @return the quarter
+     */
+    public static int quarter(int x, int z) {
+        if (x >= 0 && z < 0) {
+            return 0;
+        }
+        if (x > 0) {
+            return 1;
+        }
+        return z > 0 ? 2 : 3;
     }
 
     /** The number of layouts that the plan tries. It keeps the best one. */
@@ -352,18 +442,19 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
     private static final int WIDE_PIECES = 4;
     /**
      * The best plan: the fewest missing plots and homes, then the fewest homes on bad plots, then the fewest missing
-     * wide plots, then the smallest.
+     * wide plots, then the fewest missing plots of side streets, then the smallest.
      */
     private static final Comparator<VillagePlan> BETTER = Comparator
             .comparingInt((VillagePlan plan) -> plan.missingPlots() + plan.missingHomes())
             .thenComparingLong(plan -> plan.plots().stream()
                     .filter(plot -> !plot.good() && !plot.spare() && plot.role() == PlotRole.HOME).count())
             .thenComparingInt(plan -> plan.missingWide().values().stream().mapToInt(Integer::intValue).sum())
+            .thenComparingLong(VillagePlan::sideShortfall)
             .thenComparingDouble(VillagePlan::radius);
 
     /** A plot before the choice of the homes. */
     private record Slot(int x, int z, Dir facing, int piece, int along, boolean east, Box area, PlotRole role,
-            boolean good, boolean foundation) {
+            boolean good, boolean foundation, int setback, int shift) {
         /** True for a plot of a building of the first pieces: it is never wide and never spare. */
         boolean reserved() {
             return role != PlotRole.HOME;
@@ -375,7 +466,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
     }
 
     /** An open end of a street: the place of the next piece, with the box of its street end. */
-    private record Tail(Start start, boolean side, int parent, int exit, Box end) {
+    private record Tail(Start start, boolean side, int parent, int exit, Box end, int level) {
     }
 
     private static final class Planner {
@@ -391,6 +482,10 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final List<Box> blocked;
         /** True for the plan of the core: the 4 axis streets, the roles of their first plots and the crossroads. */
         private final boolean axis;
+        /** True when the first crossroads are on the axis streets to the north and to the south, else east and west. */
+        private boolean crossNorthSouth;
+        /** True when the homes get a random setback and a random shift (see {@link Plot#setback()}). */
+        private final boolean stagger;
         private final List<Piece> pieces = new ArrayList<>();
         private final List<Slot> slots = new ArrayList<>();
         private final List<Tail> tails = new ArrayList<>();
@@ -398,7 +493,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final List<Tail> closed = new ArrayList<>();
 
         Planner(int target, int needed, StreetStyle style, Predicate<Box> region, List<Box> blocked, boolean axis,
-                Predicate<Box> terrain, Predicate<Box> foundation, Random random) {
+                boolean stagger, Predicate<Box> terrain, Predicate<Box> foundation, Random random) {
             this.target = target;
             this.needed = needed;
             this.style = style;
@@ -408,6 +503,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             this.region = region;
             this.blocked = List.copyOf(blocked);
             this.axis = axis;
+            this.stagger = stagger;
         }
 
         VillagePlan plan(List<Start> starts) {
@@ -417,13 +513,14 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 ordered.sort(Comparator.comparing(start -> start.dir() != Dir.NORTH && start.dir() != Dir.SOUTH));
             }
             for (Start start : ordered) {
-                Tail tail = new Tail(start, false, -1, -1, box(start, StreetStyle.END));
+                Tail tail = new Tail(start, false, -1, -1, box(start, StreetStyle.END), 0);
                 if (fits(tail, Kind.SEGMENT)) {
                     add(tail, Kind.SEGMENT);
                 } else {
                     closed.add(tail);
                 }
             }
+            crossNorthSouth = random.nextBoolean();
             int widePieces = 0;
             while (!tails.isEmpty()) {
                 if (enough()) {
@@ -432,10 +529,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                         break;
                     }
                 }
-                Tail tail = tails.stream().min(Comparator.comparingLong(t -> distance(t.start()))).orElseThrow();
+                Tail tail = tails.stream().min(Comparator.comparingDouble(this::priority)).orElseThrow();
                 tails.remove(tail);
                 List<Kind> kinds = new ArrayList<>(tail.side() ? List.of(Kind.SIDE)
-                        : axis ? List.of(Kind.SEGMENT, Kind.CROSS) : List.of(Kind.SEGMENT));
+                        : axis && tail.level() < MAX_LEVEL ? List.of(Kind.SEGMENT, Kind.CROSS)
+                                : List.of(Kind.SEGMENT));
                 kinds.removeIf(kind -> !fits(tail, kind));
                 if (kinds.isEmpty()) {
                     closed.add(tail);
@@ -445,7 +543,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     Tail next = tails.remove(tails.size() - 1);
                     add(next, Kind.SEGMENT);
                 } else {
-                    add(tail, kinds.size() > 1 && random.nextInt(3) == 0 ? Kind.CROSS : kinds.get(0));
+                    // The second piece of 2 opposite axis streets is a crossroad: their side streets go into the 4
+                    // quarters. Then an axis street opens side streets more often than a side street.
+                    boolean second = firstCross(tail);
+                    int odds = tail.level() == 0 ? AXIS_CROSS_ODDS : SIDE_CROSS_ODDS;
+                    add(tail, kinds.size() > 1 && (second || random.nextInt(odds) == 0) ? Kind.CROSS : kinds.get(0));
                 }
             }
             tails.addAll(closed);
@@ -453,7 +555,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             Choice choice = choose();
             for (Tail tail : tails) {
                 pieces.add(new Piece(Kind.END, tail.start().x(), tail.start().z(), tail.start().dir(), StreetStyle.END,
-                        tail.end(), tail.parent(), tail.exit()));
+                        tail.end(), tail.parent(), tail.exit(), tail.level()));
             }
             double radius = 0;
             for (Piece piece : pieces) {
@@ -464,6 +566,33 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             }
             return new VillagePlan(pieces, choice.plots(), target, choice.missingPlots(), choice.missingHomes(),
                     choice.missingWide(), radius);
+        }
+
+        /**
+         * The priority of an open end: its distance to the middle, smaller for a side street. A side street in a
+         * quarter with no plot of a side street comes first: the plan fills the quarters, not only the axes.
+         */
+        private double priority(Tail tail) {
+            double distance = Math.sqrt((double) distance(tail.start()));
+            if (axis && firstCross(tail)) {
+                return -1;
+            }
+            if (!axis || (tail.level() == 0 && !tail.side())) {
+                return distance;
+            }
+            boolean empty = slots.stream().noneMatch(slot -> pieces.get(slot.piece()).level() > 0
+                    && quarter(slot.x(), slot.z()) == quarter(tail.start().x(), tail.start().z()));
+            return distance * (empty ? EMPTY_QUARTER_WEIGHT : SIDE_WEIGHT);
+        }
+
+        /**
+         * True for the open end after the first piece of an axis street of the first crossroads: the 2 opposite axis
+         * streets of {@link #crossNorthSouth}. These ends come before the other ends.
+         */
+        private boolean firstCross(Tail tail) {
+            return tail.level() == 0 && !tail.side() && tail.exit() == 0 && tail.parent() >= 0
+                    && pieces.get(tail.parent()).parent() < 0
+                    && (tail.start().dir().dx() == 0) == crossNorthSouth;
         }
 
         private boolean enough() {
@@ -540,7 +669,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 // The segment after the side piece must also fit.
                 Start next = exits(start, kind).get(0);
                 Box side = box(start, length(kind));
-                return free(side) && fits(new Tail(next, false, -1, 0, side), Kind.SEGMENT);
+                return free(side) && fits(new Tail(next, false, -1, 0, side, tail.level()), Kind.SEGMENT);
             }
             if (!free(box(start, length(kind)))) {
                 return false;
@@ -552,18 +681,29 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             Start start = tail.start();
             int index = pieces.size();
             pieces.add(new Piece(kind, start.x(), start.z(), start.dir(), length(kind), box(start, length(kind)),
-                    tail.parent(), tail.exit()));
+                    tail.parent(), tail.exit(), tail.level()));
             List<Start> exits = exits(start, kind);
             for (int i = 0; i < exits.size(); i++) {
                 Start exit = exits.get(i);
-                tails.add(new Tail(exit, kind == Kind.CROSS && i > 0, index, i, box(exit, StreetStyle.END)));
+                boolean side = kind == Kind.CROSS && i > 0;
+                tails.add(new Tail(exit, side, index, i, box(exit, StreetStyle.END),
+                        side ? tail.level() + 1 : tail.level()));
             }
             List<Integer> plotZ = kind == Kind.SEGMENT ? style.segmentPlots()
                     : kind == Kind.CROSS ? style.crossPlots() : List.of();
             for (int row = 0; row < plotZ.size(); row++) {
                 int along = plotZ.get(row);
                 for (boolean east : new boolean[] {false, true}) {
-                    Box area = area(start, along, east, style.home());
+                    // A small setback and a small shift: the homes are not in a straight line and do not face the
+                    // homes across the street exactly. With no free space for them, the home stays on the plot.
+                    int setback = stagger ? random.nextInt(MAX_SETBACK + 1) : 0;
+                    int shift = stagger ? (east ? 1 : -1) * random.nextInt(MAX_SHIFT + 1) : 0;
+                    Box area = area(start, along, east, style.home(), setback, shift);
+                    if (!free(area)) {
+                        setback = 0;
+                        shift = 0;
+                        area = area(start, along, east, style.home());
+                    }
                     if (free(area)) {
                         int[] connector = at(start, east ? StreetStyle.WIDTH - 1 : 0, along);
                         Dir side = start.dir().counterclockwise();
@@ -572,7 +712,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                                 : PlotRole.HOME;
                         boolean good = terrain.test(area);
                         slots.add(new Slot(connector[0], connector[1], facing, index, along, east, area, role, good,
-                                !good && foundation.test(area)));
+                                !good && foundation.test(area), setback, shift));
                     }
                 }
             }
@@ -591,10 +731,18 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
 
         /** The box of a home on a plot: centered on the plot along the street, outside the box of the piece. */
         private static Box area(Start start, int along, boolean east, Home home) {
+            return area(start, along, east, home, 0, 0);
+        }
+
+        /**
+         * The box of a home on a plot with a setback and a shift: from the edge of the piece to the back of the home,
+         * which is the setback away from the street, and centered on the plot moved by the shift along the street.
+         */
+        private static Box area(Start start, int along, boolean east, Home home, int setback, int shift) {
             int half = home.frontage() / 2;
             int near = east ? StreetStyle.WIDTH : -1;
-            int far = east ? StreetStyle.WIDTH - 1 + home.depth() : -home.depth();
-            return boxOf(start, near, along - half, far, along + home.frontage() - 1 - half);
+            int far = east ? StreetStyle.WIDTH - 1 + home.depth() + setback : -home.depth() - setback;
+            return boxOf(start, near, along + shift - half, far, along + shift + home.frontage() - 1 - half);
         }
 
         /**
@@ -605,7 +753,9 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
          */
         private Choice choose() {
             List<Slot> order = new ArrayList<>(slots);
-            order.sort(Comparator.comparingLong(Slot::distance));
+            // A plot of a side street counts at a part of its distance, as its open end (see #priority).
+            order.sort(Comparator.comparingDouble(slot -> pieces.get(slot.piece()).level() > 0
+                    ? slot.distance() * SIDE_PLOT_WEIGHT : (double) slot.distance()));
             Map<Slot, Home> wideOf = new LinkedHashMap<>();
             Map<Slot, Box> areas = new HashMap<>();
             Map<String, Integer> missingWide = new LinkedHashMap<>();
@@ -669,8 +819,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
 
         private Plot plot(Slot slot, Home wide, Map<Slot, Box> areas, boolean spare) {
             List<Home> homes = wide == null ? List.of(style.home()) : List.of(style.home(), wide);
+            // A wide home stands at the edge of the street, in the middle of its plot.
+            boolean plain = wide == null;
             return new Plot(slot.x(), slot.z(), slot.facing(), areas.getOrDefault(slot, slot.area()), homes,
-                    slot.role(), slot.good(), spare, slot.piece());
+                    slot.role(), slot.good(), spare, slot.piece(), plain ? slot.setback() : 0,
+                    plain ? slot.shift() : 0);
         }
 
         /**

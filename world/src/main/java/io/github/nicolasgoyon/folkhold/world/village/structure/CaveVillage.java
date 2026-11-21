@@ -364,7 +364,8 @@ public final class CaveVillage {
                 .filter(street -> street.dir() != Dir.WEST).toList();
         int floor = start.cave().orElseThrow().floor();
         return VillagePlan.plan(limited, FortifiedVillageStructure.plotTarget(size), style, plazaSize, starts,
-                box -> height == null || roof(height, floor, world(box, start)) >= ROOM_ROOF, seed);
+                box -> height == null || roof(height, floor, world(box, start)) >= ROOM_ROOF, box -> false, seed,
+                false);
     }
 
     /**
