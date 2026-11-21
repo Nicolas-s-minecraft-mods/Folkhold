@@ -50,4 +50,32 @@ class VillageBuildingTableTest {
             }
         }
     }
+
+    /**
+     * The data file of the mod gives the land outside the palisade: a field from the level 5, a mill from the level 9.
+     * Each kind has a piece in the base variant of the village.
+     */
+    @Test
+    void dataFileHasTheLandOfTheLevels() throws IOException {
+        try (InputStream stream = VillageBuildingTableTest.class.getResourceAsStream(
+                "/data/folkhold_world/folkhold/village_buildings.json");
+                Reader reader = new InputStreamReader(Objects.requireNonNull(stream), StandardCharsets.UTF_8)) {
+            List<Requirement> land = VillageBuildingTable.parseLand(JsonParser.parseReader(reader).getAsJsonObject());
+
+            assertEquals(new Requirement(VillageLand.FIELD, 5), land.get(0));
+            assertEquals(new Requirement(VillageLand.MILL, 9), land.get(1));
+            for (Requirement requirement : land) {
+                String piece = requirement.kind().equals(VillageLand.FIELD) ? "field_small" : requirement.kind();
+                assertTrue(VillageBuildingTableTest.class.getResource("/data/folkhold_world/structure/village/"
+                        + piece + ".nbt") != null, "No piece for " + requirement);
+            }
+        }
+    }
+
+    /** A file with no land gives no land requirement. */
+    @Test
+    void fileWithNoLandGivesNoLand() {
+        assertEquals(List.of(), VillageBuildingTable.parseLand(JsonParser.parseString("{\"buildings\": []}")
+                .getAsJsonObject()));
+    }
 }

@@ -5,5 +5,11 @@
     {"kind": "storehouse", "min_level": 9},
     {"kind": "barracks", "min_level": 17},
     {"kind": "market", "min_level": 5}
+  ],
+  "land": [
+    {"kind": "field", "min_level": 5},
+    {"kind": "mill", "min_level": 9},
+    {"kind": "field", "min_level": 9},
+    {"kind": "field", "min_level": 13}
   ]
 }
