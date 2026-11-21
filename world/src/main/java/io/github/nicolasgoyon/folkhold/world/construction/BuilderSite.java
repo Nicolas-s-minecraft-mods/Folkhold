@@ -26,6 +26,7 @@ import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
+import io.github.nicolasgoyon.folkhold.world.village.VillageClearing;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
@@ -88,6 +89,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * template block by block (see {@link BuilderWorker}).
  *
  * <ol>
+ *   <li>Clearing: the site removes the trees of its work zone, with their full trunks and their leaves (see
+ *       {@link VillageClearing#clearSite}).</li>
  *   <li>Fences: the builders put a ring of fences around the work zone (see {@link WorkZone}), with an opening on the
  *       side of the village.</li>
  *   <li>Construction: the builders apply the steps of the plan of the structure (see {@link ConstructionPlanner}), in
@@ -235,6 +238,8 @@ public final class BuilderSite {
     private final Set<BlockPos> repairPositions;
     private Phase phase = Phase.FENCES;
     private boolean stopping;
+    /** True after the site removed the trees of its work zone (see {@link #clearTrees}). */
+    private boolean treesCleared;
     /** The steps of the work of the builders while the chunks of the site are not loaded. */
     private double pendingSteps;
     /** The fences that the site put in the level. */
@@ -452,6 +457,10 @@ public final class BuilderSite {
         }
         if (!first) {
             pause(level, Status.QUEUED);
+            return false;
+        }
+        if (!treesCleared && !clearTrees(level, village)) {
+            pause(level, Status.NOT_LOADED);
             return false;
         }
         if (pendingSteps >= 1.0) {
@@ -807,6 +816,31 @@ public final class BuilderSite {
             }
         }
         return best;
+    }
+
+    /**
+     * Removes the trees of the work zone once, before the fences: the box, the band of the builders and the ring of
+     * fences, from {@link WorkZone#BELOW} layers below the box to {@link WorkZone#ABOVE} layers above it (see
+     * {@link VillageClearing#clearSite}). The trees of a free plot stay until a site uses the plot. A repair site and a
+     * site after its fences remove no tree.
+     *
+     * @return false while a chunk of the clearing is not ready
+     */
+    private boolean clearTrees(ServerLevel level, VillageHeartBlockEntity village) {
+        WorkZone current = zone;
+        if (!isRepair() && phase == Phase.FENCES && current != null) {
+            BoundingBox ring = new BoundingBox(current.ringMinX(), current.minY() - WorkZone.BELOW, current.ringMinZ(),
+                    current.ringMaxX(), current.maxY() + WorkZone.ABOVE, current.ringMaxZ());
+            Optional<Integer> removed = VillageClearing.clearSite(level, heart,
+                    village.repairReference(level).orElse(null), ring);
+            if (removed.isEmpty()) {
+                return false;
+            }
+            FolkholdWorld.LOGGER.debug("Builder site {}: {} blocks of trees removed", id, removed.get());
+        }
+        treesCleared = true;
+        dirty = true;
+        return true;
     }
 
     /** Makes the steps of the current phase. */
@@ -1694,6 +1728,7 @@ public final class BuilderSite {
         }
         tag.putString("Phase", phase.serializedName());
         tag.putBoolean("Stopping", stopping);
+        tag.putBoolean("TreesCleared", treesCleared);
         if (pendingSteps > 0.0) {
             tag.putDouble("PendingSteps", pendingSteps);
         }
@@ -1742,6 +1777,8 @@ public final class BuilderSite {
                 rotation.get(), mirror.get(), BlockPos.of(tag.getLong("Heart")), operator, reference, positions);
         site.phase = phase.get();
         site.stopping = tag.getBoolean("Stopping");
+        // With no flag in the data, the site clears its trees only before its fences.
+        site.treesCleared = tag.contains("TreesCleared") ? tag.getBoolean("TreesCleared") : site.phase != Phase.FENCES;
         site.pendingSteps = Math.clamp(tag.getDouble("PendingSteps"), 0.0, MAX_PENDING_STEPS);
         for (long pos : tag.getLongArray("Fences")) {
             site.fences.add(BlockPos.of(pos));

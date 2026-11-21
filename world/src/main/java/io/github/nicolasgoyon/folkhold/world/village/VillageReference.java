@@ -8,6 +8,8 @@ import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -66,6 +68,10 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  *   <li>The homes are the pool of the homes that the builders build on the free plots (see {@link VillageGrowth}).</li>
  *   <li>The piers are the boxes of the piers at the water gates (see {@link PierPiece}): the deck, the rails and the
  *       posts down to the floor of the water.</li>
+ *   <li>The paths are the boxes of the paths from the gates to the plaza and across the bands of the rings (see
+ *       {@link VillagePathPiece}). The gate fronts are the boxes of the flat terrain that clears its space in front of
+ *       and behind each gate (see {@link TerrainPiece#clears()}). The clearing of the trees uses them (see
+ *       {@link VillageClearing}). The saved data of a reference does not keep them.</li>
  * </ul>
  *
  * @param pieces    the template pieces of the village
@@ -77,10 +83,13 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  * @param streetColumns the columns of the streets (Y 0): the columns of the street pieces of the structure. The
  *                  saved data of a reference does not keep them.
  * @param streets   the surface blocks of the streets that the repairs keep (see {@link StreetBlocks})
+ * @param paths     the boxes of the paths of the gates
+ * @param gateFronts the boxes of the flat terrain of the gates
  */
 public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Optional<BoundingBox> area,
         List<VillagePlots.Plot> plots, Optional<ResourceLocation> homes, List<BoundingBox> piers,
-        List<BlockPos> streetColumns, Map<BlockPos, BlockState> streets) {
+        List<BlockPos> streetColumns, Map<BlockPos, BlockState> streets, List<BoundingBox> paths,
+        List<BoundingBox> gateFronts) {
     /**
      * A structure piece of a village.
      *
@@ -151,6 +160,15 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         piers = List.copyOf(piers);
         streetColumns = List.copyOf(streetColumns);
         streets = Map.copyOf(streets);
+        paths = List.copyOf(paths);
+        gateFronts = List.copyOf(gateFronts);
+    }
+
+    /** A reference with no paths and no gate fronts. */
+    public VillageReference(List<Piece> pieces, List<Palisade> palisades, Optional<BoundingBox> area,
+            List<VillagePlots.Plot> plots, Optional<ResourceLocation> homes, List<BoundingBox> piers,
+            List<BlockPos> streetColumns, Map<BlockPos, BlockState> streets) {
+        this(pieces, palisades, area, plots, homes, piers, streetColumns, streets, List.of(), List.of());
     }
 
     /** A reference with no streets. */
@@ -177,7 +195,8 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
 
     /** This reference with a pool of homes. */
     public VillageReference withHomes(ResourceLocation pool) {
-        return new VillageReference(pieces, palisades, area, plots, Optional.of(pool), piers, streetColumns, streets);
+        return new VillageReference(pieces, palisades, area, plots, Optional.of(pool), piers, streetColumns, streets,
+                paths, gateFronts);
     }
 
     /**
@@ -193,12 +212,20 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         }
         List<Piece> all = new ArrayList<>(pieces);
         all.addAll(more);
-        return new VillageReference(all, palisades, area, plots, homes, piers, streetColumns, streets);
+        return new VillageReference(all, palisades, area, plots, homes, piers, streetColumns, streets, paths,
+                gateFronts);
     }
 
     /** This reference with the surface blocks of its streets. */
     public VillageReference withStreets(Map<BlockPos, BlockState> blocks) {
-        return new VillageReference(pieces, palisades, area, plots, homes, piers, streetColumns, blocks);
+        return new VillageReference(pieces, palisades, area, plots, homes, piers, streetColumns, blocks, paths,
+                gateFronts);
+    }
+
+    /** This reference with other boxes of piers. */
+    public VillageReference withPiers(List<BoundingBox> boxes) {
+        return new VillageReference(pieces, palisades, area, plots, homes, boxes, streetColumns, streets, paths,
+                gateFronts);
     }
 
     /** The blocks of all the palisades, in the order of the palisades. */
@@ -277,6 +304,8 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         List<BoundingBox> palisadeBoxes = new ArrayList<>();
         List<BoundingBox> piers = new ArrayList<>();
         Set<BlockPos> streetColumns = new LinkedHashSet<>();
+        List<BoundingBox> paths = new ArrayList<>();
+        List<BoundingBox> gateFronts = new ArrayList<>();
         for (StructurePiece piece : pieces) {
             if (piece instanceof PoolElementStructurePiece pool
                     && pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID) {
@@ -298,6 +327,10 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                 palisadeBoxes.add(palisade.getBoundingBox());
             } else if (piece instanceof PierPiece pier) {
                 piers.add(pier.getBoundingBox());
+            } else if (piece instanceof VillagePathPiece path) {
+                paths.add(path.getBoundingBox());
+            } else if (piece instanceof TerrainPiece terrain && terrain.clears()) {
+                gateFronts.add(terrain.getBoundingBox());
             }
         }
         if (templates.isEmpty()) {
@@ -309,7 +342,7 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                         templateBox.maxY(), box.maxZ()));
         return Optional.of(new VillageReference(templates, palisades, area,
                 VillagePlots.of(level.getStructureManager(), pieces), Optional.empty(), piers,
-                List.copyOf(streetColumns), Map.of()));
+                List.copyOf(streetColumns), Map.of(), paths, gateFronts));
     }
 
     /**
