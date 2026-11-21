@@ -181,6 +181,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue CONSTRUCTION_REPAIR_CHECK_SECONDS;
     public static final ModConfigSpec.IntValue CONSTRUCTION_CATCH_UP_STEPS;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_GROWTH;
+    public static final ModConfigSpec.BooleanValue CONSTRUCTION_LAND;
 
     public static final UnitStats GUARD;
     public static final UnitStats ARCHER;
@@ -1009,6 +1010,12 @@ public final class WorldConfig {
                         "broken market on its plot, still come back.")
                 .translation(KEY_PREFIX + "constructionGrowth")
                 .define("growth", false);
+        CONSTRUCTION_LAND = builder
+                .comment("True: the builders of a village build the fields and the mills of its level outside its",
+                        "palisade, in the territory of the village. The village looks for a site after the check of",
+                        "the repairs and the growth on the plots.")
+                .translation(KEY_PREFIX + "constructionLand")
+                .define("land", true);
         builder.pop();
 
         builder.comment("Base values of each unit type.")

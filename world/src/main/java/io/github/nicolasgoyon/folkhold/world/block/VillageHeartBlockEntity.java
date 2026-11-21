@@ -42,6 +42,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageGrowth;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHomes;
+import io.github.nicolasgoyon.folkhold.world.village.VillageLand;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import io.github.nicolasgoyon.folkhold.world.village.VillageMarket;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePens;
@@ -50,6 +51,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -144,6 +146,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String FACTION_TAG = "Faction";
     private static final String NAME_TAG = "Name";
     private static final String MARKET_PLOT_TAG = "MarketPlot";
+    private static final String LAND_TAG = "LandPieces";
 
     /** Name of the village, or null before the village has a faction. */
     @Nullable
@@ -177,6 +180,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     /** The plot of the market of the village, or null before the growth starts the market. */
     @Nullable
     private VillageMarket.Plot marketPlot;
+    /** The fields and the mills that the builders of the village started outside the palisade (see {@link VillageLand}). */
+    private final List<VillageReference.Piece> landPieces = new ArrayList<>();
     /** The positions of the last repairs, with the game time of their end. Not saved. */
     private final Map<BlockPos, Long> repaired = new HashMap<>();
     /** True when the stairs of the gates are built (see {@link VillageExits}). */
@@ -1102,6 +1107,26 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
+     * The fields and the mills that the builders of the village started outside the palisade (see
+     * {@link VillageLand}), in the order of their start.
+     *
+     * @return the land pieces
+     */
+    public List<VillageReference.Piece> landPieces() {
+        return Collections.unmodifiableList(landPieces);
+    }
+
+    /**
+     * Records a field or a mill that the builders of the village start (see {@link VillageLand}).
+     *
+     * @param piece the land piece
+     */
+    public void addLandPiece(VillageReference.Piece piece) {
+        landPieces.add(piece);
+        setChanged();
+    }
+
+    /**
      * Sets the plot of the market of the village (see {@link VillageGrowth}).
      *
      * @param plot the plot, or null for no plot
@@ -1415,8 +1440,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
             }
             long repairTicks = WorldConfig.CONSTRUCTION_REPAIR_CHECK_SECONDS.get() * 20L;
             if (heart.alertState == AlertState.CALM && time % repairTicks < CHECK_INTERVAL
-                    && VillageRepairs.check(serverLevel, heart).isEmpty()) {
-                VillageGrowth.check(serverLevel, heart);
+                    && VillageRepairs.check(serverLevel, heart).isEmpty()
+                    && VillageGrowth.check(serverLevel, heart).isEmpty()) {
+                VillageLand.check(serverLevel, heart);
             }
         }
         long calmDelayTicks = WorldConfig.CALM_DELAY_SECONDS.get() * 20L;
@@ -1485,6 +1511,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (marketPlot != null) {
             tag.put(MARKET_PLOT_TAG, marketPlot.save());
         }
+        if (!landPieces.isEmpty()) {
+            tag.put(LAND_TAG, VillageLand.save(landPieces));
+        }
     }
 
     @Override
@@ -1519,5 +1548,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         marketPlot = tag.contains(MARKET_PLOT_TAG, Tag.TAG_COMPOUND)
                 ? VillageMarket.Plot.load(tag.getCompound(MARKET_PLOT_TAG)).orElse(null)
                 : null;
+        landPieces.clear();
+        landPieces.addAll(VillageLand.load(tag.getList(LAND_TAG, Tag.TAG_COMPOUND)));
     }
 }
