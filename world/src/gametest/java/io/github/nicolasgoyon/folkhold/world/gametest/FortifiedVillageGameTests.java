@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -51,6 +52,7 @@ import net.minecraft.world.level.biome.FixedBiomeSource;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -101,6 +103,16 @@ public final class FortifiedVillageGameTests {
     private static final int OLD_SAVE_FIRST_CHUNK = SNOW_FIRST_CHUNK + 40;
     /** The first candidate chunk on the Z axis of the village of the area test. */
     private static final int AREA_FIRST_CHUNK = OLD_SAVE_FIRST_CHUNK + 40;
+    /** The first candidate chunk on the Z axis of the village of the test of the trees. */
+    private static final int TREES_FIRST_CHUNK = AREA_FIRST_CHUNK + 40;
+    /** The number of logs of the trunk of a test tree. */
+    private static final int TRUNK = 5;
+    /** The leaves of a test tree go this number of blocks around its trunk. */
+    private static final int CROWN = 2;
+    /** A tree that stays has its trunk farther than this number of blocks from a zone of the clearing. */
+    private static final int FREE_DISTANCE = 8;
+    /** A natural leaves block has a log at this number of steps or less (the distance of the leaves of the game). */
+    private static final int LEAVES_REACH = 6;
     /** The powder snow goes this number of blocks around the box of the village: out of the band of the heart. */
     private static final int SNOW_MARGIN = VillageClearing.SNOW_BAND + 6;
     /** The depth of the powder snow on the terrain. */
@@ -501,11 +513,12 @@ public final class FortifiedVillageGameTests {
     }
 
     /**
-     * The heart removes the trees of its village: the logs and the leaves between the buildings and in the band around
-     * the area, the roots of the mangroves and the cacti. Waterlogged leaves leave their water. The heart keeps the
-     * blocks of the structure pieces, the columns of the palisade, the blocks of the players and the trees out of the
-     * band. It also keeps a stilt under a template piece and a post of a pier, and it removes a log next to the pier.
-     * A layer of snow on removed leaves goes away, and a layer of snow on the ground stays.
+     * The heart removes the trees in the zones of the clearing of its village: the leaves above the plaza, a mangrove on
+     * the flat terrain in front of a gate (its log, its roots and its leaves) and a cactus there. Waterlogged leaves
+     * leave their water. The heart keeps the blocks of the structure pieces, the columns of the palisade, the blocks of
+     * the players and the trees out of the box of the clearing. It also keeps a stilt under a template piece and a post
+     * of a pier, and it removes a tree next to the pier. A layer of snow on removed leaves goes away, and a layer of
+     * snow on the ground stays.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "fortified_village_clearing")
     public static void heartClearsTheTreesOfTheVillage(GameTestHelper helper) {
@@ -517,8 +530,7 @@ public final class FortifiedVillageGameTests {
         // The GameTest world has no water: the reference gets the box of a pier in the band around the area.
         BoundingBox pier = new BoundingBox(generatedArea.maxX() + 1, heartPos.getY() - 4, heartPos.getZ() + 8,
                 generatedArea.maxX() + 5, heartPos.getY() + 1, heartPos.getZ() + 10);
-        VillageReference reference = new VillageReference(generated.pieces(), generated.palisades(),
-                generated.area(), generated.plots(), generated.homes(), List.of(pier));
+        VillageReference reference = generated.withPiers(List.of(pier));
         VillageHeartBlockEntity heart = (VillageHeartBlockEntity) level.getBlockEntity(village.heart());
         heart.setRepairReference(reference);
         BoundingBox clearing = VillageClearing.box(reference).orElseThrow();
@@ -557,6 +569,9 @@ public final class FortifiedVillageGameTests {
         level.setBlock(stilt, log, Block.UPDATE_CLIENTS);
         level.setBlock(post, log, Block.UPDATE_CLIENTS);
         level.setBlock(besidePier, log, Block.UPDATE_CLIENTS);
+        // Natural leaves on the log: the log is a tree.
+        BlockPos besidePierLeaves = besidePier.above();
+        level.setBlock(besidePierLeaves, leaves, Block.UPDATE_CLIENTS);
 
         // Snow on the leaves of a tree, and snow on the ground out of the pieces.
         BlockPos snowOnLeaves = aboveHeart.above();
@@ -570,7 +585,7 @@ public final class FortifiedVillageGameTests {
         helper.assertTrue(level.getBlockState(snowOnLeaves).isAir(), "The snow on removed leaves must go");
         helper.assertTrue(level.getBlockState(snowOnGround).is(Blocks.SNOW), "The snow on the ground must stay");
         helper.assertTrue(level.getBlockState(aboveHeart).isAir(), "The leaves above the plaza must go");
-        helper.assertTrue(level.getBlockState(inBand).isAir(), "A log in the band around the area must go");
+        helper.assertTrue(level.getBlockState(inBand).isAir(), "A log in front of a gate must go");
         helper.assertTrue(level.getBlockState(roots).isAir(), "The roots of a mangrove must go");
         helper.assertTrue(level.getBlockState(wetLeaves).is(Blocks.WATER), "Waterlogged leaves must leave water");
         helper.assertTrue(level.getBlockState(cactus).isAir(), "A cactus must go");
@@ -582,8 +597,226 @@ public final class FortifiedVillageGameTests {
                 "A log of a template must stay: " + templateLog.getKey());
         helper.assertTrue(level.getBlockState(stilt).is(Blocks.OAK_LOG), "A stilt under a template piece must stay");
         helper.assertTrue(level.getBlockState(post).is(Blocks.OAK_LOG), "A post of a pier must stay");
-        helper.assertTrue(level.getBlockState(besidePier).isAir(), "A log next to a pier must go");
+        helper.assertTrue(level.getBlockState(besidePier).isAir(), "A tree next to a pier must go");
+        helper.assertTrue(level.getBlockState(besidePierLeaves).isAir(), "The leaves of a tree next to a pier must go");
         helper.succeed();
+    }
+
+    /**
+     * The heart removes only the trees that are in the way, and it removes them with their leaves. The test puts a tree
+     * on a street, a tree against a house, a tree against the palisade, a tree on the approach of a gate, and a tree in
+     * a free part of the village, far from the houses, the streets and the wall. After the clearing:
+     *
+     * <ul>
+     *   <li>the tree in the free part stays, with all its leaves.</li>
+     *   <li>the other trees go, with all their leaves.</li>
+     *   <li>no natural leaves stay with no log at {@link #LEAVES_REACH} blocks or less.</li>
+     *   <li>with the gates open, a walk on the ground from the heart goes to the approach of each gate.</li>
+     * </ul>
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "fortified_village_trees")
+    public static void heartClearsOnlyTheTreesInTheWay(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Village village = generate(helper, level, TREES_FIRST_CHUNK,
+                level.getChunkSource().getGenerator().getBiomeSource(), box -> {
+                });
+        VillageReference reference = VillageReference.of(level, village.start().getPieces()).orElseThrow();
+        BoundingBox area = reference.area().orElseThrow();
+        BoundingBox clearing = VillageClearing.box(reference).orElseThrow();
+        for (int x = clearing.minX() >> 4; x <= clearing.maxX() >> 4; x++) {
+            for (int z = clearing.minZ() >> 4; z <= clearing.maxZ() >> 4; z++) {
+                level.getChunk(x, z);
+            }
+        }
+        VillageHeartBlockEntity heart = (VillageHeartBlockEntity) level.getBlockEntity(village.heart());
+        heart.setRepairReference(reference);
+        List<BoundingBox> pieces = reference.pieces().stream().map(piece -> level.getStructureManager()
+                .getOrCreate(piece.template()).getBoundingBox(new StructurePlaceSettings()
+                        .setRotation(piece.rotation()), piece.origin())).toList();
+        Set<Long> streets = new HashSet<>();
+        reference.streetColumns().forEach(column -> streets.add(ChunkPos.asLong(column.getX(), column.getZ())));
+        for (BoundingBox path : reference.paths()) {
+            addColumns(streets, path, 0);
+        }
+        Set<Long> palisade = new HashSet<>();
+        reference.palisadeBlocks().keySet().forEach(pos -> palisade.add(ChunkPos.asLong(pos.getX(), pos.getZ())));
+
+        // The free part: far from the pieces, the streets, the palisade and the flat terrain of the gates.
+        Set<Long> near = new HashSet<>();
+        pieces.forEach(box -> addColumns(near, box, FREE_DISTANCE));
+        reference.gateFronts().forEach(box -> addColumns(near, box, FREE_DISTANCE));
+        for (Set<Long> columns : List.of(streets, palisade)) {
+            for (long column : columns) {
+                addColumns(near, new BoundingBox(ChunkPos.getX(column), 0, ChunkPos.getZ(column),
+                        ChunkPos.getX(column), 0, ChunkPos.getZ(column)), FREE_DISTANCE);
+            }
+        }
+        BlockPos free = findColumn(level, area, (x, z) -> !near.contains(ChunkPos.asLong(x, z)))
+                .orElseThrow(() -> new IllegalStateException("The village must have a free part"));
+        // A street column, out of the pieces and far from the palisade.
+        Set<Long> nearPieces = new HashSet<>();
+        pieces.forEach(box -> addColumns(nearPieces, box, CROWN + 2));
+        Set<Long> nearWall = new HashSet<>();
+        palisade.forEach(column -> addColumns(nearWall, new BoundingBox(ChunkPos.getX(column), 0,
+                ChunkPos.getZ(column), ChunkPos.getX(column), 0, ChunkPos.getZ(column)), CROWN + 4));
+        BlockPos street = findColumn(level, area, (x, z) -> streets.contains(ChunkPos.asLong(x, z))
+                && !nearPieces.contains(ChunkPos.asLong(x, z)) && !nearWall.contains(ChunkPos.asLong(x, z)))
+                .orElseThrow(() -> new IllegalStateException("The village must have a street out of the pieces"));
+        // A column next to a house: out of the pieces, the streets and the palisade.
+        Set<Long> nearStreets = new HashSet<>();
+        for (long column : streets) {
+            addColumns(nearStreets, new BoundingBox(ChunkPos.getX(column), 0, ChunkPos.getZ(column),
+                    ChunkPos.getX(column), 0, ChunkPos.getZ(column)), 1);
+        }
+        BlockPos house = null;
+        for (int i = 0; i < reference.pieces().size() && house == null; i++) {
+            if (!HOUSES.contains(name(reference.pieces().get(i).template()))) {
+                continue;
+            }
+            BoundingBox box = pieces.get(i);
+            int midX = (box.minX() + box.maxX()) / 2;
+            int midZ = (box.minZ() + box.maxZ()) / 2;
+            for (BlockPos side : List.of(new BlockPos(box.minX() - 1, 0, midZ), new BlockPos(box.maxX() + 1, 0, midZ),
+                    new BlockPos(midX, 0, box.minZ() - 1), new BlockPos(midX, 0, box.maxZ() + 1))) {
+                long column = ChunkPos.asLong(side.getX(), side.getZ());
+                if (house == null && pieces.stream().noneMatch(other -> isInColumns(other, side))
+                        && !nearStreets.contains(column) && !nearWall.contains(column)
+                        && level.getBlockState(ground(level, side)).isAir()) {
+                    house = ground(level, side);
+                }
+            }
+        }
+        helper.assertTrue(house != null, "A house must have a free column next to it");
+        // A column 2 blocks out of the palisade, out of the pieces and of the flat terrain of the gates.
+        Set<Long> fronts = new HashSet<>();
+        reference.gateFronts().forEach(box -> addColumns(fronts, box, VillageClearing.GATE_MARGIN + CROWN));
+        BlockPos wall = null;
+        for (VillageReference.Palisade segment : reference.palisades()) {
+            for (int i = 0; i < segment.bases().size() && wall == null; i++) {
+                BlockPos column = segment.start().offset(segment.stepX() * i, 0, segment.stepZ() * i);
+                BlockPos out = column.offset(segment.stepZ() * 2, 0, segment.stepX() * 2);
+                if (out.distSqr(village.heart().atY(0)) < column.distSqr(village.heart().atY(0))) {
+                    out = column.offset(-segment.stepZ() * 2, 0, -segment.stepX() * 2);
+                }
+                long key = ChunkPos.asLong(out.getX(), out.getZ());
+                BlockPos base = ground(level, out);
+                if (!nearPieces.contains(key) && !fronts.contains(key) && level.getBlockState(base).isAir()) {
+                    wall = base;
+                }
+            }
+        }
+        helper.assertTrue(wall != null, "The palisade must have a free column out of it");
+        List<BlockPos> fenceGates = wallFenceGates(level, reference);
+        helper.assertTrue(!fenceGates.isEmpty(), "The village must have gates");
+        BlockPos approach = ground(level, approachOf(fenceGates.get(0), area));
+
+        List<BlockPos> freeTree = tree(level, free);
+        Map<String, List<BlockPos>> inTheWay = Map.of("street", tree(level, street), "house", tree(level, house),
+                "palisade", tree(level, wall), "approach", tree(level, approach));
+
+        heart.clearTrees(level);
+
+        List<BlockPos> lost = freeTree.stream().filter(pos -> level.getBlockState(pos).isAir()).toList();
+        helper.assertTrue(lost.isEmpty(), "The tree in the free part " + free + " must stay: " + lost);
+        inTheWay.forEach((zone, blocks) -> {
+            List<BlockPos> left = blocks.stream().filter(pos -> !level.getBlockState(pos).isAir()).toList();
+            helper.assertTrue(left.isEmpty(), "The tree in the way (" + zone + ") must go with its leaves: " + left);
+        });
+        Map<BlockPos, BlockState> expected = VillageRepairs.expectedBlocks(level, reference);
+        List<BlockPos> leaves = blocksIn(level, clearing, state -> state.is(BlockTags.LEAVES)
+                && !state.getValue(LeavesBlock.PERSISTENT));
+        List<BlockPos> alone = leaves.stream().filter(pos -> !expected.containsKey(pos) && !hasLogNear(level, pos))
+                .toList();
+        helper.assertTrue(alone.isEmpty(), "No leaves must stay with no log near them: " + alone);
+
+        for (BlockPos gate : fenceGates) {
+            level.setBlock(gate, level.getBlockState(gate).setValue(FenceGateBlock.OPEN, true), Block.UPDATE_CLIENTS);
+        }
+        Set<Long> reached = reachedColumns(level, village.heart(), clearing);
+        for (BlockPos gate : fenceGates) {
+            BlockPos point = approachOf(gate, area);
+            helper.assertTrue(reached.contains(ChunkPos.asLong(point.getX(), point.getZ())),
+                    "A walk from the heart must go to the approach of the gate " + gate + ": " + point);
+        }
+        helper.succeed();
+    }
+
+    /** Adds the columns of a box, larger by a margin, as {@link ChunkPos#asLong} of their X and Z. */
+    private static void addColumns(Set<Long> columns, BoundingBox box, int margin) {
+        for (int x = box.minX() - margin; x <= box.maxX() + margin; x++) {
+            for (int z = box.minZ() - margin; z <= box.maxZ() + margin; z++) {
+                columns.add(ChunkPos.asLong(x, z));
+            }
+        }
+    }
+
+    /** True if a column is in a box on the horizontal plane. */
+    private static boolean isInColumns(BoundingBox box, BlockPos column) {
+        return column.getX() >= box.minX() && column.getX() <= box.maxX() && column.getZ() >= box.minZ()
+                && column.getZ() <= box.maxZ();
+    }
+
+    /** The first free position above the ground of a column. */
+    private static BlockPos ground(ServerLevel level, BlockPos column) {
+        return new BlockPos(column.getX(), level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, column.getX(),
+                column.getZ()), column.getZ());
+    }
+
+    /** The first column of an area that passes a test, with air on its ground: the base of a tree. */
+    private static Optional<BlockPos> findColumn(ServerLevel level, BoundingBox area,
+            BiPredicate<Integer, Integer> test) {
+        for (int x = area.minX(); x <= area.maxX(); x++) {
+            for (int z = area.minZ(); z <= area.maxZ(); z++) {
+                if (test.test(x, z)) {
+                    BlockPos base = ground(level, new BlockPos(x, 0, z));
+                    if (level.getBlockState(base).isAir()) {
+                        return Optional.of(base);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Puts a tree on a base: a trunk of {@link #TRUNK} logs, and natural leaves around its top. The tree takes only the
+     * positions with air.
+     *
+     * @return the positions of the blocks of the tree
+     */
+    private static List<BlockPos> tree(ServerLevel level, BlockPos base) {
+        List<BlockPos> blocks = new ArrayList<>();
+        for (int y = 0; y < TRUNK; y++) {
+            BlockPos pos = base.above(y);
+            if (level.getBlockState(pos).isAir()) {
+                level.setBlock(pos, Blocks.OAK_LOG.defaultBlockState(), Block.UPDATE_CLIENTS);
+                blocks.add(pos);
+            }
+        }
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1);
+        BlockPos top = base.above(TRUNK - 1);
+        for (BlockPos pos : BlockPos.betweenClosed(top.offset(-CROWN, -1, -CROWN), top.offset(CROWN, 1, CROWN))) {
+            if (level.getBlockState(pos).isAir()) {
+                level.setBlock(pos, leaves, Block.UPDATE_CLIENTS);
+                blocks.add(pos.immutable());
+            }
+        }
+        BlockPos crest = top.above(2);
+        if (level.getBlockState(crest).isAir()) {
+            level.setBlock(crest, leaves, Block.UPDATE_CLIENTS);
+            blocks.add(crest);
+        }
+        return blocks;
+    }
+
+    /** True if a log is at {@link #LEAVES_REACH} steps or less from a position. */
+    private static boolean hasLogNear(ServerLevel level, BlockPos pos) {
+        for (BlockPos near : BlockPos.withinManhattan(pos, LEAVES_REACH, LEAVES_REACH, LEAVES_REACH)) {
+            if (near.distManhattan(pos) <= LEAVES_REACH && level.getBlockState(near).is(BlockTags.LOGS)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
