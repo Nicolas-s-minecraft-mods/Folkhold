@@ -401,6 +401,30 @@ public final class VillageStructureGameTests {
         helper.succeed();
     }
 
+    /** The small field has the farm sign. */
+    @GameTest(template = "village/field_small", timeoutTicks = 20, batch = "village_land_signs")
+    public static void smallFieldHasTheFarmSign(GameTestHelper helper) {
+        List<BuildingSignKind> signs = signsIn(helper);
+        helper.assertTrue(signs.equals(List.of(BuildingSignKind.FARM)), "Expected 1 farm sign, found " + signs);
+        helper.succeed();
+    }
+
+    /** The large field has the farm sign. */
+    @GameTest(template = "village/field_large", timeoutTicks = 20, batch = "village_land_signs")
+    public static void largeFieldHasTheFarmSign(GameTestHelper helper) {
+        List<BuildingSignKind> signs = signsIn(helper);
+        helper.assertTrue(signs.equals(List.of(BuildingSignKind.FARM)), "Expected 1 farm sign, found " + signs);
+        helper.succeed();
+    }
+
+    /** The windmill has the mill sign. */
+    @GameTest(template = "village/mill", timeoutTicks = 20, batch = "village_land_signs")
+    public static void windmillHasTheMillSign(GameTestHelper helper) {
+        List<BuildingSignKind> signs = signsIn(helper);
+        helper.assertTrue(signs.equals(List.of(BuildingSignKind.MILL)), "Expected 1 mill sign, found " + signs);
+        helper.succeed();
+    }
+
     /** The bank has its sign, the 4 bank chests, and its walls are bank walls. */
     @GameTest(template = "village/bank", timeoutTicks = 20, batch = "village_bank_building")
     public static void bankHasItsSignAndItsVault(GameTestHelper helper) {

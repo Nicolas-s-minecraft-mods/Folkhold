@@ -22,7 +22,9 @@ public enum BuildingSignKind {
     /** A farm. */
     FARM,
     /** A market. */
-    MARKET;
+    MARKET,
+    /** A windmill, outside the palisade. */
+    MILL;
 
     /** The name in the block id, for example {@code house}. */
     public String serializedName() {

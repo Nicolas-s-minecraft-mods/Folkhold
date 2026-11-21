@@ -35,8 +35,11 @@ public final class VillageTemplateGameTests {
             * JobBuildingTemplateGameTests.VARIANTS.size();
     /** The number of jobs with a house-workshop piece in each variant. */
     private static final int JOBS = 34;
-    /** The number of the other rigid pieces of each variant: the plaza, the bank, the market, the tower, the gate. */
-    private static final int OTHER_PIECES = 5;
+    /**
+     * The number of the other rigid pieces of each variant: the plaza, the bank, the market, the tower, the gate, the
+     * 2 fields and the mill.
+     */
+    private static final int OTHER_PIECES = 8;
     /**
      * The number of the street pieces of each variant: {@code street}, {@code street_bank} and
      * {@code street_end}, and the planned streets {@code street_next}, {@code street_cross} and {@code street_side}
@@ -99,7 +102,7 @@ public final class VillageTemplateGameTests {
      * <ul>
      *   <li>The builders build the pieces of the pools of the growth (see
      *       {@link io.github.nicolasgoyon.folkhold.world.village.VillageGrowth#pools}): the house-workshops, the
-     *       buildings of the levels and the market.</li>
+     *       buildings of the levels, the market, the fields and the mills.</li>
      *   <li>The builders repair each rigid piece of the generation (see
      *       {@link io.github.nicolasgoyon.folkhold.world.village.VillageReference}): the plaza, the bank, the homes,
      *       the house-workshops, the market, the towers and the gates.</li>

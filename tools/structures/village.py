@@ -3601,6 +3601,217 @@ def market(layout):
     return t
 
 
+# ---------------------------------------------------------------- fields and mills
+
+# The pieces of the land outside the palisade: the fields and the windmill. The growth builds them outside the palisade
+# (pools village/fields and village/mills of each variant). The front of a piece is z = 0: a row of ground with the
+# building sign, the gate and the door. The pieces have no jigsaw connector.
+
+
+@dataclasses.dataclass(frozen=True)
+class LandStyle:
+    """The materials of the fields and of the windmill of a culture (see LAND). The biome variants replace these
+    blocks as in the other pieces (see Variant).
+
+    - fence, gate: the fence around a field and the fence gate on its front side.
+    - path: the ground of the front row and of the paths of a field.
+    - base(rng): a block of the base course of the windmill.
+    - wall, corner: the walls of the windmill and its corner logs (axis y).
+    - roof: the stairs of the roof of the windmill. The top of the roof is a slab of the same wood.
+    - frame, cloth: the arms of the sails (a fence block) and the cloth of the sails.
+    """
+    fence: str
+    gate: str
+    path: str
+    base: Callable[[random.Random], str]
+    wall: str
+    corner: str
+    roof: str
+    roof_slab: str
+    frame: str
+    cloth: str
+
+
+LAND = LandStyle(
+    fence="minecraft:spruce_fence",
+    gate="minecraft:spruce_fence_gate",
+    path="minecraft:coarse_dirt",
+    base=cobble,
+    wall="minecraft:spruce_planks",
+    corner="minecraft:spruce_log",
+    roof="minecraft:dark_oak_stairs",
+    roof_slab="minecraft:dark_oak_slab",
+    frame="minecraft:spruce_fence",
+    cloth="minecraft:white_wool",
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldLayout:
+    """The size of a field, the places of its water and of its paths.
+
+    - width: the size along the front side, with the fence.
+    - waters: the x of each block of water, on the middle row of the field. Each block of farmland is 4 blocks or less
+      from a block of water on the X axis and on the Z axis: the farmland stays wet.
+    - paths: the x of each path from the front to the back of the field. Each crop is 2 blocks or less from a path or
+      from the outside of the fence on the X axis: a builder reaches it (see Reach.DEFAULT in the core mod).
+    - rows: the crop of each x of the field, from x = 1. A row of beetroots has the top age 3.
+    """
+    width: int
+    waters: tuple[int, ...]
+    paths: tuple[int, ...]
+    rows: tuple[str, ...]
+
+
+# The depth of a field: the front row (z = 0), the fence (z = 1 and z = FIELD_DEPTH - 1) and 9 rows of farmland. The
+# middle row has the water. The first row inside the fence is a path from the gate to the paths of the field.
+FIELD_DEPTH = 12
+FIELD_MIDDLE = 6
+FIELD_FIRST_ROW = 2
+FIELD_HEIGHT = 3
+FIELDS = {
+    "small": FieldLayout(11, (5,), (3, 7), ("wheat", "wheat", "wheat", "carrots", "carrots", "carrots", "wheat",
+                                            "potatoes", "potatoes")),
+    "large": FieldLayout(17, (4, 12), (3, 8, 13), ("wheat", "wheat", "wheat", "wheat", "wheat", "beetroots",
+                                                   "wheat", "wheat", "wheat", "carrots", "wheat", "wheat", "wheat",
+                                                   "wheat", "wheat")),
+}
+
+
+def field(style, size):
+    """A field of wheat and other crops (see FIELDS), with a fence around it.
+
+    - The front row (z = 0): the ground of the style, the farm sign next to the gate.
+    - The fence: on the edges of the field (z = 1 to FIELD_DEPTH - 1), with a fence gate in the middle of the front
+      side and a lantern on each corner post.
+    - The farmland: the crops of the rows of the layout, near the end of their growth. The water of each column of
+      water is a waterlogged slab in the middle row (see WATER_SLAB).
+    - The paths: the first row inside the fence goes from the gate to each path of the layout, and each path goes to
+      the back fence. A builder stands on a path to place the crops and the water, and a player walks along the paths.
+    """
+    spec = FIELDS[size]
+    width = spec.width
+    if len(spec.rows) != width - 2:
+        raise SystemExit(f"The field {size} needs a crop for each of its {width - 2} columns")
+    rng = random.Random(91 + width)
+    mid = width // 2
+    t = Template(width, FIELD_HEIGHT, FIELD_DEPTH)
+    t.fill(0, 1, 0, width - 1, FIELD_HEIGHT - 1, FIELD_DEPTH - 1, "minecraft:air")
+    waters = {(x, FIELD_MIDDLE) for x in spec.waters}
+    first = range(min(spec.paths + (mid,)), max(spec.paths + (mid,)) + 1)
+    for x in range(width):
+        t.set(x, 0, 0, style.path if x == mid else GRASS[0], None if x == mid else GRASS[1])
+        for z in range(1, FIELD_DEPTH):
+            edge = x in (0, width - 1) or z in (1, FIELD_DEPTH - 1)
+            if edge:
+                t.set(x, 0, z, *GRASS)
+                t.set(x, 1, z, style.fence)
+            elif (x, z) in waters:
+                t.set(x, 0, z, *WATER_SLAB)
+            elif x in spec.paths or (z == FIELD_FIRST_ROW and x in first):
+                t.set(x, 0, z, style.path)
+            else:
+                t.set(x, 0, z, *FARMLAND)
+                name = spec.rows[x - 1]
+                t.set(x, 1, z, *crop(f"minecraft:{name}", rng, 3 if name == "beetroots" else 7))
+    t.set(mid, 1, 1, style.gate, {"facing": "north", "in_wall": "false", "open": "false", "powered": "false"})
+    for x in (0, width - 1):
+        for z in (1, FIELD_DEPTH - 1):
+            lantern(t, x, 2, z)
+    building_sign(t, mid + 2, 1, 0, "farm")
+    return t
+
+
+# The windmill: a tower of MILL_BODY x MILL_BODY blocks behind the front row, with its sails on the front side.
+MILL_WIDTH = 9
+MILL_BODY = 7
+MILL_DEPTH = MILL_BODY + 1
+# The top layer of the walls, the layer of the hub of the sails, and the length of an arm of the sails.
+MILL_WALL_TOP = 9
+MILL_HUB_Y = 9
+MILL_ARM = 4
+MILL_HEIGHT = MILL_WALL_TOP + 5
+
+
+def windmill(style):
+    """The windmill: the mill of the grain of the fields.
+
+    - The tower: a base course of the style, walls of planks with a log at each corner, a door in the middle of the
+      front wall, windows on the sides and a pyramid roof (see roof_stairs) with a slab in its top ring.
+    - The room: the grindstone of the miller on the floor, barrels of flour and hay bales, and a lantern on a barrel.
+    - The sails: 4 arms of fences around the hub (a log on the front wall, axis z), in the front row. Each arm has a
+      cloth of 3 blocks on one side, as the blades of a windmill. The lowest arm ends above the door.
+    - The mill sign stands on the front row, east of the door.
+    """
+    rng = random.Random(97)
+    mid = MILL_WIDTH // 2
+    t = Template(MILL_WIDTH, MILL_HEIGHT, MILL_DEPTH)
+    t.fill(0, 1, 0, MILL_WIDTH - 1, MILL_HEIGHT - 1, MILL_DEPTH - 1, "minecraft:air")
+    x0, x1 = 1, MILL_WIDTH - 2
+    z0, z1 = 1, MILL_DEPTH - 1
+    for x in range(MILL_WIDTH):
+        t.set(x, 0, 0, style.path if x == mid else GRASS[0], None if x == mid else GRASS[1])
+        for z in range(z0, z1 + 1):
+            inside = x0 < x < x1 and z0 < z < z1
+            if not x0 <= x <= x1:
+                t.set(x, 0, z, *GRASS)
+                continue
+            t.set(x, 0, z, style.wall if inside else style.base(rng))
+            if inside:
+                continue
+            corner = x in (x0, x1) and z in (z0, z1)
+            for y in range(1, MILL_WALL_TOP + 1):
+                if corner:
+                    t.set(x, y, z, style.corner, LOG_Y)
+                elif y == 1:
+                    t.set(x, y, z, style.base(rng))
+                else:
+                    t.set(x, y, z, style.wall)
+    # The roof: rings of stairs from the top of the walls, and a slab on the top.
+    for ring in range(MILL_BODY // 2):
+        y = MILL_WALL_TOP + 1 + ring
+        low, high = ring, MILL_BODY - 1 - ring
+        for dx in range(low, high + 1):
+            for dz in range(low, high + 1):
+                if dx in (low, high) or dz in (low, high):
+                    t.set(x0 + dx, y, z0 + dz, style.roof, roof_stairs(dx, dz, low, high)[1])
+    # The slab is in the middle of the top ring, not above it: a builder on a scaffolding in the room reaches it.
+    t.set(mid, MILL_WALL_TOP + MILL_BODY // 2, z0 + MILL_BODY // 2, style.roof_slab,
+          {"type": "bottom", "waterlogged": "false"})
+    # The door, and the windows on the sides and at the back.
+    for y, half in ((1, "lower"), (2, "upper")):
+        t.set(mid, y, z0, "minecraft:spruce_door",
+              {"facing": "north", "half": half, "hinge": "left", "open": "false", "powered": "false"})
+    for y in (3, 6):
+        for z in (z0 + 2, z1 - 2):
+            t.set(x0, y, z, "minecraft:glass_pane")
+            t.set(x1, y, z, "minecraft:glass_pane")
+        t.set(mid, y, z1, "minecraft:glass_pane")
+    # The room: the grindstone, the flour and the grain.
+    # The middle of the room stays free for the scaffolding of the builders under the top of the roof.
+    t.set(mid - 2, 1, z0 + 3, "minecraft:grindstone", {"face": "floor", "facing": "east"})
+    t.set(x0 + 1, 1, z1 - 1, *BARREL)
+    t.set(x0 + 1, 1, z1 - 2, *BARREL)
+    t.set(x1 - 1, 1, z1 - 1, "minecraft:hay_block", LOG_Y)
+    t.set(x1 - 1, 2, z1 - 1, "minecraft:hay_block", LOG_Y)
+    t.set(x1 - 1, 1, z1 - 2, "minecraft:hay_block", LOG_Y)
+    lantern(t, x0 + 1, 2, z1 - 1)
+    # The sails: the hub, the arms and the cloth. Each cloth is on the side of its arm in the order of the rotation.
+    t.set(mid, MILL_HUB_Y, 0, "minecraft:stripped_spruce_log", {"axis": "z"})
+    for step in range(1, MILL_ARM + 1):
+        t.set(mid, MILL_HUB_Y + step, 0, style.frame)
+        t.set(mid, MILL_HUB_Y - step, 0, style.frame)
+        t.set(mid + step, MILL_HUB_Y, 0, style.frame)
+        t.set(mid - step, MILL_HUB_Y, 0, style.frame)
+        if step > 1:
+            t.set(mid + 1, MILL_HUB_Y + step, 0, style.cloth)
+            t.set(mid - 1, MILL_HUB_Y - step, 0, style.cloth)
+            t.set(mid + step, MILL_HUB_Y - 1, 0, style.cloth)
+            t.set(mid - step, MILL_HUB_Y + 1, 0, style.cloth)
+    building_sign(t, mid + 2, 1, 0, "mill")
+    return t
+
+
 # The job buildings: the piece job_<id> of each job, in the pool village/jobs of each variant. The id is the name of
 # the job file.
 JOBS = {
@@ -3667,6 +3878,8 @@ PIECES = {
     "bank": bank,
     "market": functools.partial(market, "wide"),
     **{f"job_{job}": build for job, build in JOBS.items()},
+    **{f"field_{size}": functools.partial(field, LAND, size) for size in FIELDS},
+    "mill": functools.partial(windmill, LAND),
 }
 
 
@@ -3910,6 +4123,8 @@ def pools(v):
         "bank": pool([(1, house("bank"))]),
         "jobs": pool([(1, house(f"job_{job}")) for job in JOBS]),
         "market": pool([(1, house("market"))]),
+        "fields": pool([(1, house(f"field_{size}")) for size in FIELDS]),
+        "mills": pool([(1, house("mill"))]),
         "streets_first": pool([(1, street("street"))], v.id("street_ends")),
         "streets_bank": pool([(1, street("street_bank"))], v.id("street_ends")),
         "street_ends": pool([(1, street("street_end"))]),
