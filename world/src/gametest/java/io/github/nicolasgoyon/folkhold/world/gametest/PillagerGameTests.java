@@ -47,12 +47,12 @@ public final class PillagerGameTests {
     private PillagerGameTests() {
     }
 
-    /** Records a camp at the middle of the arena, with a territory of 2 chunks. The camp goes away at the end. */
+    /** Records a camp at the middle of the arena, with a territory of 3 chunks. The camp goes away at the end. */
     private static PillagerCamp placeCamp(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
         BlockPos middle = helper.absolutePos(MIDDLE);
         PillagerCamp camp = new PillagerCamp("camp_test_" + middle.getX() + "_" + middle.getZ(), middle.getX(),
-                middle.getY(), middle.getZ(), 2);
+                middle.getY(), middle.getZ(), 3);
         MinecraftServer server = helper.getLevel().getServer();
         PillagerData.get(server).addCamp(camp);
         TestSupport.atTestEnd(helper, () -> PillagerData.get(server).removeCamp(camp.id()));
@@ -79,26 +79,28 @@ public final class PillagerGameTests {
 
     /** The state of a patrol at the tick of its spawn, before the AI of its members moves them. */
     private record Snapshot(long arrival, int members, long leaders, boolean tagged, boolean toPlayer,
-            boolean atCamp) {
+            boolean atSpawn) {
     }
 
     /**
      * A player who stays in a pillager territory gets a patrol after the configured delay: 3 pillagers with the tag of
-     * the patrols, one of them a patrol leader, and the player as the target of the patrol. The player is nearer to
-     * the camp than the spawn distance, so the patrol spawns at the camp. The player discovers the camp.
+     * the patrols, one of them a patrol leader, and the player as the target of the patrol. The player is 20 blocks
+     * from the camp, so the patrol spawns 16 blocks from the player (the spawn distance), in the direction of the camp.
+     * The player discovers the camp.
      *
-     * <p>The test reads the patrol at the tick of its spawn. After this tick, the vanilla patrol goal gives a random
-     * target to a leader that is 10 blocks or less from its target.
+     * <p>The vanilla patrol goal gives a random target to a leader that is 10 blocks or less from its target: the
+     * spawn distance of the test is more than 10 blocks.
      */
     @GameTest(template = "arena", batch = "pillager_patrol", timeoutTicks = 400)
     public static void aPlayerInThePillagerTerritoryGetsAPatrol(GameTestHelper helper) {
         TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_PATROL_DELAY_SECONDS, DELAY_SECONDS);
         TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_PATROL_COOLDOWN_SECONDS, 600);
         TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_PATROL_SIZE, PATROL_SIZE);
-        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_SPAWN_DISTANCE, 8);
+        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_SPAWN_DISTANCE, 16);
         ServerLevel level = helper.getLevel();
         PillagerCamp camp = placeCamp(helper);
-        ServerPlayer player = playerAt(helper, MIDDLE.offset(4, 0, 0));
+        ServerPlayer player = playerAt(helper, MIDDLE.offset(20, 0, 0));
+        BlockPos spawn = helper.absolutePos(MIDDLE.offset(4, 0, 0));
         TestSupport.atTestEnd(helper, () -> removePatrol(level, player.getUUID()));
         long start = level.getGameTime();
         Snapshot[] snapshot = {null};
@@ -117,8 +119,8 @@ public final class PillagerGameTests {
                     members.stream().allMatch(member -> member.getTags().contains(PillagerPatrols.MEMBER_TAG)),
                     members.stream().allMatch(member -> member.hasPatrolTarget()
                             && member.getPatrolTarget().equals(player.blockPosition())),
-                    members.stream().allMatch(member -> Math.abs(member.getBlockX() - camp.x()) <= 2
-                            && Math.abs(member.getBlockZ() - camp.z()) <= 2));
+                    members.stream().allMatch(member -> Math.abs(member.getBlockX() - spawn.getX()) <= 2
+                            && Math.abs(member.getBlockZ() - spawn.getZ()) <= 2));
         });
 
         helper.succeedWhen(() -> {
@@ -135,7 +137,8 @@ public final class PillagerGameTests {
             helper.assertTrue(found.leaders() == 1, "The patrol must have 1 leader: " + found.leaders());
             helper.assertTrue(found.tagged(), "The members must have the tag of the patrols");
             helper.assertTrue(found.toPlayer(), "The members must walk to the player");
-            helper.assertTrue(found.atCamp(), "The patrol must spawn at the camp (2 blocks or less on each axis)");
+            helper.assertTrue(found.atSpawn(), "The patrol must spawn 16 blocks from the player, in the direction of "
+                    + "the camp (2 blocks or less on each axis)");
             helper.assertTrue(discovered, "The player must discover the camp");
         });
     }
