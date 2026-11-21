@@ -259,12 +259,11 @@ public final class VillageRings {
             return Map.of();
         }
         FortifiedVillageStructure.Start site = found.get();
-        List<Neighbor> neighbors = neighbors(village, set, anchor, start, level);
+        Neighbors neighbors = neighbors(village, set, anchor, start, level);
         FortifiedVillageStructure.Layout layout = layout(village, context, site, level);
         List<VillageWall.Wall> rings = VillageWall.rings(context, site.terrain(), layout.firstWall(), size.rings(),
                 BAND, site.variant().wall(), site.maritime(), start);
-        int kept = RingDistricts.keptRings(rings.stream().map(ring -> ring.layout().outline().grow(RING_MARGIN))
-                .toList(), neighbors);
+        int kept = RingDistricts.keptRings(boxes(rings), neighbors.all());
         Map<District, List<StructurePiece>> districts = VillageWall.districts(rings.subList(0, kept), start);
         if (districts.keySet().removeIf(district -> !district.exists())) {
             FolkholdWorld.LOGGER.warn("The rings of the village in the start chunk {} go out of the districts", start);
@@ -272,22 +271,81 @@ public final class VillageRings {
         return districts;
     }
 
+    /** The boxes of rings for the rule of the near villages: each outline with its flat terrain and its piers. */
+    private static List<WallLayout.Box> boxes(List<VillageWall.Wall> rings) {
+        return rings.stream().map(ring -> ring.layout().outline().grow(RING_MARGIN)).toList();
+    }
+
+    /**
+     * The rings of a natural village, for the measure of the generated villages.
+     *
+     * @param rings        the number of rings of the tier of the start level
+     * @param kept         the number of rings that the village keeps near all its near villages
+     * @param keptFactions the number of rings that the village keeps near the faction villages only
+     * @param keptVanilla  the number of rings that the village keeps near the possible vanilla villages only
+     */
+    public record RingCount(int rings, int kept, int keptFactions, int keptVanilla) {
+    }
+
+    /**
+     * Counts the rings of the natural village of a start chunk, with the start level of the chunk.
+     *
+     * @param village the village structure
+     * @param set     the structure set of the faction villages
+     * @param anchor  a context of the generation: the method reads its generator, its random state and its seed
+     * @param start   the start chunk of the village
+     * @return the count, or empty if no village starts in the chunk or if its tier has no ring
+     */
+    public static Optional<RingCount> count(FortifiedVillageStructure village, Holder<StructureSet> set,
+            Structure.GenerationContext anchor, ChunkPos start) {
+        int level = Settlements.startLevel(anchor.seed(), start);
+        VillageSize size = VillageSizes.forLevel(level);
+        if (size.rings() == 0) {
+            return Optional.empty();
+        }
+        Structure.GenerationContext context = context(village, anchor, start);
+        return village.generatedStart(context).map(site -> {
+            FortifiedVillageStructure.Layout layout = village.layout(context, site, level);
+            List<WallLayout.Box> rings = boxes(VillageWall.rings(context, site.terrain(), layout.firstWall(),
+                    size.rings(), BAND, site.variant().wall(), site.maritime(), start));
+            Neighbors neighbors = neighbors(village, set, anchor, start, level);
+            return new RingCount(size.rings(), RingDistricts.keptRings(rings, neighbors.all()),
+                    RingDistricts.keptRings(rings, neighbors.factions()),
+                    RingDistricts.keptRings(rings, neighbors.vanilla()));
+        });
+    }
+
+    /**
+     * The near villages of a village.
+     *
+     * @param factions the faction villages that start
+     * @param vanilla  the possible starts of the vanilla villages
+     */
+    private record Neighbors(List<Neighbor> factions, List<Neighbor> vanilla) {
+        List<Neighbor> all() {
+            List<Neighbor> all = new ArrayList<>(factions);
+            all.addAll(vanilla);
+            return all;
+        }
+    }
+
     /**
      * The near villages of a village: the faction villages that start, and the possible starts of the vanilla villages.
      */
-    private static List<Neighbor> neighbors(FortifiedVillageStructure village, Holder<StructureSet> set,
+    private static Neighbors neighbors(FortifiedVillageStructure village, Holder<StructureSet> set,
             Structure.GenerationContext anchor, ChunkPos start, int level) {
         ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForFlat(anchor.randomState(),
                 anchor.seed(), anchor.biomeSource(), Stream.of(set));
         HolderLookup.RegistryLookup<StructureSet> sets = anchor.registryAccess().lookupOrThrow(Registries.STRUCTURE_SET);
         Optional<Holder.Reference<StructureSet>> vanilla = sets.get(BuiltinStructureSets.VILLAGES);
-        List<Neighbor> neighbors = new ArrayList<>();
+        List<Neighbor> factions = new ArrayList<>();
+        List<Neighbor> vanillaStarts = new ArrayList<>();
         for (int dx = -NEIGHBOR_RANGE; dx <= NEIGHBOR_RANGE; dx++) {
             for (int dz = -NEIGHBOR_RANGE; dz <= NEIGHBOR_RANGE; dz++) {
                 ChunkPos chunk = new ChunkPos(start.x + dx, start.z + dz);
                 if (!chunk.equals(start) && set.value().placement().isStructureChunk(state, chunk.x, chunk.z)) {
                     int otherLevel = Settlements.startLevel(anchor.seed(), chunk);
-                    village.generatedStart(context(village, anchor, chunk)).ifPresent(other -> neighbors.add(
+                    village.generatedStart(context(village, anchor, chunk)).ifPresent(other -> factions.add(
                             RingDistricts.neighbor(around(other.center(), village.coreReach(otherLevel)),
                                     VillageSizes.forLevel(otherLevel).rings(), BAND, RING_MARGIN,
                                     RingDistricts.hasPriority(otherLevel, chunk.x, chunk.z, level, start.x,
@@ -296,11 +354,11 @@ public final class VillageRings {
                 if (vanilla.isPresent() && vanilla.get().value().placement().isStructureChunk(state, chunk.x, chunk.z)
                         && vanillaBiome(vanilla.get().value(), anchor, chunk)) {
                     WallLayout.Box box = around(chunk.getMiddleBlockPosition(0), VANILLA_REACH);
-                    neighbors.add(new Neighbor(box, box, false));
+                    vanillaStarts.add(new Neighbor(box, box, false));
                 }
             }
         }
-        return neighbors;
+        return new Neighbors(factions, vanillaStarts);
     }
 
     /**
