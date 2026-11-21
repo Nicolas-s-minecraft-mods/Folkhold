@@ -121,6 +121,22 @@ final class SiteMaterials {
     }
 
     /**
+     * True if the stock of the village has the materials of a block now. The method records nothing: the site does not
+     * wait for the missing materials.
+     *
+     * @param materials  the materials of the block: one material for each item (see {@link BuilderMaterials#placement})
+     * @param settlement the village, or null
+     * @return true for a block with no materials, a village with no economy, or a stock with all the materials
+     */
+    boolean inStock(List<Material> materials, @Nullable Settlement settlement) {
+        if (materials.isEmpty() || settlement == null) {
+            return true;
+        }
+        Stock stock = settlement.economy().stock();
+        return units(materials).entrySet().stream().allMatch(entry -> stock.count(entry.getKey()) >= entry.getValue());
+    }
+
+    /**
      * True if the stock of the village has the materials of a block. A block with no materials, or a village with no
      * economy, needs no materials.
      *

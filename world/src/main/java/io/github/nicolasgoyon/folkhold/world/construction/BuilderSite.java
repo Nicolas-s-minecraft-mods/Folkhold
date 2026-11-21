@@ -566,7 +566,8 @@ public final class BuilderSite {
 
     /**
      * The materials of a step: the items of the block state of a placement of the plan (see
-     * {@link BuilderMaterials#placement}). The other steps use no materials. The block in place counts only when no
+     * {@link BuilderMaterials#placement}). The other steps use no materials. A repair that replants a crop with no seeds
+     * in the stock uses no materials when the setting allows it (see {@link VillageRepairs#isFreeReplant}). The block in place counts only when no
      * removal step of the plan removes it before the placement: else the placement goes on air.
      *
      * @param level    the level
@@ -584,8 +585,11 @@ public final class BuilderSite {
         Integer removal = removals.get(pos);
         boolean removed = absolute || (removal != null && removal < index && !schedule().isApplied(removal));
         BlockState current = removed ? Blocks.AIR.defaultBlockState() : level.getBlockState(pos);
-        return plan.state(step.state()).map(state -> BuilderMaterials.placement(level, pos, state, current))
-                .orElse(List.of());
+        return plan.state(step.state()).map(state -> {
+            List<BuilderMaterials.Material> list = BuilderMaterials.placement(level, pos, state, current);
+            return isRepair() && VillageRepairs.isFreeReplant(state, materials.inStock(list, settlement))
+                    ? List.<BuilderMaterials.Material>of() : list;
+        }).orElse(List.of());
     }
 
     /**
@@ -911,15 +915,15 @@ public final class BuilderSite {
     /**
      * The target of a repair site: the blocks of the structure pieces of the village at the damaged positions. A piece
      * replaces the blocks of the pieces before it. The palisades come after the template pieces, and the surface of
-     * the streets last.
+     * the streets last. A crop is a young crop (see {@link VillageRepairs#replanted}).
      */
     private Target repairTarget(ServerLevel level, VillageReference reference) {
         Map<BuildPos, BuildBlock> blocks = new HashMap<>();
         for (VillageReference.Piece piece : reference.pieces()) {
             level.getStructureManager().get(piece.template()).ifPresent(found -> blocks.putAll(
                     ConstructionTargets.fromTemplate(level, found, piece.origin(),
-                            GhostPlacement.settings(piece.rotation(), Mirror.NONE), repairPositions::contains)
-                            .blocks()));
+                            GhostPlacement.settings(piece.rotation(), Mirror.NONE), repairPositions::contains,
+                            VillageRepairs::replanted).blocks()));
         }
         reference.palisadeBlocks().forEach((pos, state) -> {
             if (repairPositions.contains(pos)) {

@@ -178,6 +178,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue CONSTRUCTION_MATERIAL_QUEST_MINUTES;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_REPAIRS;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_FREE_REPAIRS;
+    public static final ModConfigSpec.BooleanValue CONSTRUCTION_FREE_REPLANT;
     public static final ModConfigSpec.IntValue CONSTRUCTION_REPAIR_CHECK_SECONDS;
     public static final ModConfigSpec.IntValue CONSTRUCTION_CATCH_UP_STEPS;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_GROWTH;
@@ -991,6 +992,11 @@ public final class WorldConfig {
                         "from the stock of the village, as the construction sites.")
                 .translation(KEY_PREFIX + "constructionFreeRepairs")
                 .define("freeRepairs", false);
+        CONSTRUCTION_FREE_REPLANT = builder
+                .comment("True: a repair that replants a crop takes the seeds from the stock of the village, and with",
+                        "no seeds in the stock, it replants the crop for free. False: the repair waits for the seeds.")
+                .translation(KEY_PREFIX + "constructionFreeReplant")
+                .define("freeReplant", true);
         CONSTRUCTION_REPAIR_CHECK_SECONDS = builder
                 .comment("A loaded village with builders looks for its damaged blocks every this number of seconds.")
                 .translation(KEY_PREFIX + "constructionRepairCheckSeconds")

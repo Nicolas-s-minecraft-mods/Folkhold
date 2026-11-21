@@ -180,6 +180,22 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         return new VillageReference(pieces, palisades, area, plots, Optional.of(pool), piers, streetColumns, streets);
     }
 
+    /**
+     * This reference with more template pieces after its pieces, for example the fields and the mills outside the
+     * palisade (see {@link VillageLand}).
+     *
+     * @param more the pieces to add
+     * @return the reference
+     */
+    public VillageReference withPieces(List<Piece> more) {
+        if (more.isEmpty()) {
+            return this;
+        }
+        List<Piece> all = new ArrayList<>(pieces);
+        all.addAll(more);
+        return new VillageReference(all, palisades, area, plots, homes, piers, streetColumns, streets);
+    }
+
     /** This reference with the surface blocks of its streets. */
     public VillageReference withStreets(Map<BlockPos, BlockState> blocks) {
         return new VillageReference(pieces, palisades, area, plots, homes, piers, streetColumns, blocks);

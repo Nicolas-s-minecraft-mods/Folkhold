@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.BannerBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
+import net.minecraft.world.level.block.FarmBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -44,6 +45,10 @@ import net.minecraft.world.level.block.state.properties.Property;
  *
  * <p>A player action that gives another block is damage, because the template block is not there: a candle cake that
  * becomes a cake, a chipped anvil, a flower pot with a plant.
+ *
+ * <p>A farmland of a template is damaged when the block of the level is not a farmland (a block with no
+ * {@code moisture}): a player or a mob tramples it into dirt, and the crop on it breaks. The group {@code soil} does not
+ * apply to it. A farmland of another mod (a block with {@code moisture}) stays a farmland.
  */
 public final class RepairRules {
     /** The blocks that the weather and the plants add on an empty position. A repair does not remove them. */
@@ -106,6 +111,9 @@ public final class RepairRules {
         }
         if (expected.isAir()) {
             return !actual.isAir() && !actual.is(NATURAL);
+        }
+        if (expected.getBlock() instanceof FarmBlock && !actual.hasProperty(BlockStateProperties.MOISTURE)) {
+            return true;
         }
         if (expected.is(WILD_PLANTS) && (actual.isAir() || actual.is(NATURAL))) {
             return false;

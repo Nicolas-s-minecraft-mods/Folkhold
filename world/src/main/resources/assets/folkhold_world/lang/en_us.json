@@ -270,6 +270,7 @@
   "folkhold_world.configuration.constructionMaterialQuestMinutes": "Wait before a quest for a common material (minutes)",
   "folkhold_world.configuration.constructionRepairs": "Repairs of the villages",
   "folkhold_world.configuration.constructionFreeRepairs": "Free repairs",
+  "folkhold_world.configuration.constructionFreeReplant": "Free replanting of the crops",
   "folkhold_world.configuration.constructionRepairCheckSeconds": "Check of the damaged blocks (seconds)",
   "folkhold_world.configuration.constructionCatchUpSteps": "Steps for each tick after a load of the chunks",
   "folkhold_world.configuration.constructionGrowth": "Growth of the villages",
