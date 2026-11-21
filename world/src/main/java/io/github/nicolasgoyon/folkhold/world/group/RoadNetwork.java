@@ -3,7 +3,6 @@ package io.github.nicolasgoyon.folkhold.world.group;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
 import io.github.nicolasgoyon.folkhold.core.sim.group.RouteFinder;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
-import io.github.nicolasgoyon.folkhold.world.mixin.RoadChunk;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;

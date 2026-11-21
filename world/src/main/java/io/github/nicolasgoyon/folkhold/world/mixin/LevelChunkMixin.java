@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.mixin;
 
+import io.github.nicolasgoyon.folkhold.world.group.RoadChunk;
 import io.github.nicolasgoyon.folkhold.world.group.RoadNetwork;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
