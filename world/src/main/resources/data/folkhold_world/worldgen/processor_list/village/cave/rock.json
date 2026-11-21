@@ -1,0 +1,76 @@
+{
+  "processors": [
+    {
+      "processor_type": "folkhold_world:rock_shell",
+      "rock": {
+        "Name": "minecraft:cobblestone"
+      },
+      "deep_rock": {
+        "Name": "minecraft:cobbled_deepslate"
+      },
+      "deep_below": 0,
+      "replacements": [
+        {
+          "input": "minecraft:stone",
+          "output": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        {
+          "input": "minecraft:deepslate",
+          "output": {
+            "Name": "minecraft:cobbled_deepslate"
+          }
+        },
+        {
+          "input": "minecraft:granite",
+          "output": {
+            "Name": "minecraft:polished_granite"
+          }
+        },
+        {
+          "input": "minecraft:diorite",
+          "output": {
+            "Name": "minecraft:polished_diorite"
+          }
+        },
+        {
+          "input": "minecraft:andesite",
+          "output": {
+            "Name": "minecraft:polished_andesite"
+          }
+        },
+        {
+          "input": "minecraft:tuff",
+          "output": {
+            "Name": "minecraft:polished_tuff"
+          }
+        },
+        {
+          "input": "minecraft:calcite",
+          "output": {
+            "Name": "minecraft:polished_diorite"
+          }
+        },
+        {
+          "input": "minecraft:dirt",
+          "output": {
+            "Name": "minecraft:coarse_dirt"
+          }
+        },
+        {
+          "input": "minecraft:snow_block",
+          "output": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        {
+          "input": "minecraft:packed_ice",
+          "output": {
+            "Name": "minecraft:cobblestone"
+          }
+        }
+      ]
+    }
+  ]
+}

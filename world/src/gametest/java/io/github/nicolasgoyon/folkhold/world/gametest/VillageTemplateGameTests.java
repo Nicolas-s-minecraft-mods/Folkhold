@@ -46,12 +46,22 @@ public final class VillageTemplateGameTests {
      * (see {@link VillagePieces#PLANNED_STREETS}).
      */
     private static final int STREET_PIECES = 6;
+    /**
+     * The number of the pieces of the cave village that are not homes: a room for each job, the main hall, the bank,
+     * the market, the 6 pieces of the tunnels of the streets, the tunnel and the gate of the entrance, and the seal.
+     * All the cave pieces are rigid.
+     */
+    private static final int CAVE_PIECES = JOBS + 3 + STREET_PIECES + 3;
     /** The number of the pieces that the plan test checks: all the rigid pieces of all the variants. */
-    private static final int PLAN_PIECES = (JOBS + OTHER_PIECES) * VARIANTS + HomeTemplateGameTests.HOME_PIECES;
+    private static final int PLAN_PIECES = (JOBS + OTHER_PIECES) * VARIANTS + HomeTemplateGameTests.HOME_PIECES
+            + CAVE_PIECES;
     /** The number of the pieces that the plan test does not check: the streets of all the variants. */
     private static final int SKIPPED_PIECES = STREET_PIECES * VARIANTS;
-    /** The size of the floor of the plan test, in blocks: a long house (17 blocks deep) and a margin around it. */
-    private static final int PLAN_FLOOR = 24;
+    /**
+     * The size of the floor of the plan test, in blocks: the crossroad of the cave village (27 blocks long, a rigid
+     * piece) and a margin around it.
+     */
+    private static final int PLAN_FLOOR = 33;
     /** The origin of the template of the plan test: the floor goes around the piece on each side. */
     private static final BlockPos PLAN_ORIGIN = new BlockPos(3, 1, 3);
 

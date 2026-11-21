@@ -1,0 +1,311 @@
+{
+  "fallback": "minecraft:empty",
+  "elements": [
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_farmer",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_gardener",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_gardener_jungle",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_forager",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_beekeeper",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_baker",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_pastry_cook",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_rancher",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_butcher",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_fisher",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack_acacia",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack_birch",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack_cherry",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack_dark_oak",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack_jungle",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack_mangrove",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_lumberjack_spruce",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_sawyer",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_sawyer_spruce",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_miner",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_digger",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_mason",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_smelter",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_gold_smelter",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_blacksmith",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_tinker",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_fletcher",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_carpenter",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_tanner",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_shepherd",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_weaver",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_dyer",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/job_papermaker",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    }
+  ]
+}

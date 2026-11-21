@@ -26,9 +26,9 @@ public final class HomeTemplateGameTests {
     private static final List<String> HOME_POOLS = List.of("homes", "houses");
     /**
      * The number of home pieces: 4 homes of all the cultures, 6 Valeholm homes, 5 Sunreach homes and 7 maritime
-     * homes, in each of the 6 variants.
+     * homes, in each of the 6 variants, and the 4 carved homes of the cave village.
      */
-    static final int HOME_PIECES = (4 + 6 + 5 + 7) * 6;
+    static final int HOME_PIECES = (4 + 6 + 5 + 7) * 6 + 4;
 
     private HomeTemplateGameTests() {
     }
