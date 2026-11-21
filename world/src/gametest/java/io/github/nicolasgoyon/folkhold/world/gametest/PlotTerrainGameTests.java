@@ -11,17 +11,22 @@ import io.github.nicolasgoyon.folkhold.world.faction.CultureMap;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainColumns;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
+import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
+import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PlotTerrains;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
@@ -38,12 +43,14 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -85,6 +92,10 @@ public final class PlotTerrainGameTests {
     private static final int TOWN_LEVEL = 12;
     /** The environment variable that adds the village, city and capital tiers to the measure of the tiers. */
     static final String MEASURE_VARIABLE = "FOLKHOLD_VILLAGE_MEASURE";
+    /** The number of villages of the measure of the rings. */
+    private static final int RING_VILLAGES = 40;
+    /** The measure of the rings looks for its villages in a square of this number of chunks. */
+    private static final int RING_SEARCH = 2000;
     /** The tiers of the measure with no environment variable {@link #MEASURE_VARIABLE}. */
     private static final List<String> DEFAULT_TIERS = List.of("hamlet", "town");
     /** The maritime measure also has the capital with no environment variable: the coast plots are the hard case. */
@@ -242,6 +253,62 @@ public final class PlotTerrainGameTests {
                     plan.plots().stream().filter(plot -> plot.spare() && !plot.good()).count(), time);
         }
         measure.end(helper, tiers.size(), tiers.size(), problems);
+    }
+
+    /**
+     * The measure of the rings of the natural villages: the first {@link #RING_VILLAGES} towns, cities and capitals of
+     * the placement of the faction villages, from the chunk (0, 0), with the start level of their chunk. For each
+     * village, the measure counts the rings of its tier, the rings that it keeps near the other villages, and the
+     * cause of the lost rings (see {@link VillageRings#count}). The test runs only with the environment variable
+     * {@link #MEASURE_VARIABLE}: a layout on noise terrain takes seconds.
+     *
+     * <p>The log has a line {@code Village ring measure |} for each tier: the villages, the villages with all their
+     * rings, the villages that lose a ring to a faction village, and the villages that lose a ring to a possible
+     * vanilla village. A village can lose rings to the two causes.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_rings", required = false)
+    public static void measureRings(GameTestHelper helper) {
+        if (System.getenv(MEASURE_VARIABLE) == null) {
+            helper.succeed();
+            return;
+        }
+        Measure measure = new Measure(helper.getLevel());
+        Holder<StructureSet> set = measure.registries.registryOrThrow(Registries.STRUCTURE_SET)
+                .getHolderOrThrow(SettlementDiscovery.VILLAGE_SET);
+        ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForFlat(measure.random, SEED,
+                measure.generator.getBiomeSource(), Stream.of(set));
+        Structure.GenerationContext anchor = measure.context(ChunkPos.ZERO);
+        // For each tier: the villages, the villages with all their rings, the losses to factions and to vanilla.
+        Map<String, int[]> counts = new TreeMap<>();
+        int villages = 0;
+        for (int x = 0; x < RING_SEARCH && villages < RING_VILLAGES; x++) {
+            for (int z = 0; z < RING_SEARCH && villages < RING_VILLAGES; z++) {
+                if (!set.value().placement().isStructureChunk(state, x, z)) {
+                    continue;
+                }
+                ChunkPos start = new ChunkPos(x, z);
+                Optional<VillageRings.RingCount> count = VillageRings.count(measure.structure, set, anchor, start);
+                if (count.isEmpty()) {
+                    continue;
+                }
+                villages++;
+                VillageRings.RingCount rings = count.get();
+                String tier = VillageSizes.forLevel(Settlements.startLevel(SEED, start)).tier();
+                int[] row = counts.computeIfAbsent(tier, key -> new int[4]);
+                row[0]++;
+                row[1] += rings.kept() == rings.rings() ? 1 : 0;
+                row[2] += rings.keptFactions() < rings.rings() ? 1 : 0;
+                row[3] += rings.keptVanilla() < rings.rings() ? 1 : 0;
+                FolkholdWorld.LOGGER.info("Village ring measure: chunk {} {} keeps {} of {} rings (faction villages:"
+                        + " {}, vanilla villages: {})", start, tier, rings.kept(), rings.rings(),
+                        rings.keptFactions(), rings.keptVanilla());
+            }
+        }
+        int total = villages;
+        counts.forEach((tier, row) -> FolkholdWorld.LOGGER.info("Village ring measure | {} | {} | {} | {} | {} |",
+                tier, row[0], row[1], row[2], row[3]));
+        helper.assertTrue(total > 0, "The measure must find a village with rings");
+        helper.succeed();
     }
 
     /**
