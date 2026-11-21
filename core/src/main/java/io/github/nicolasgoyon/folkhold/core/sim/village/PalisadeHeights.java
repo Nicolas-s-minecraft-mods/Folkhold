@@ -4,7 +4,8 @@ package io.github.nicolasgoyon.folkhold.core.sim.village;
  * The heights of the columns of a palisade on the ring of a wall (see {@link WallLayout#ringSize()}).
  *
  * <p>The base of a column is the block under its logs: the top of its foundation. A column has {@link #LOGS} logs above
- * its base. The bases obey these rules:
+ * its base. On the edge of a cliff, a column has {@link #LOW_LOGS} logs (see {@link CliffSide}). The bases obey these
+ * rules:
  *
  * <ul>
  *   <li>A base is not lower than the terrain of its block: the terrain does not cover the palisade.</li>
@@ -17,6 +18,11 @@ package io.github.nicolasgoyon.folkhold.core.sim.village;
 public final class PalisadeHeights {
     /** The number of logs of a column, above its base. */
     public static final int LOGS = 4;
+    /**
+     * The number of logs of a column on the edge of a cliff (see {@link CliffSide}). The flat terrain along the
+     * palisade is at the level of the base: a mob on it cannot jump over 2 logs.
+     */
+    public static final int LOW_LOGS = 2;
     /** The largest difference between a base and the terrain near its block, when the terrain is higher. */
     public static final int NEAR_DROP = 1;
     /** The largest difference between the bases of 2 columns side by side. */

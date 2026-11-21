@@ -355,6 +355,25 @@ class WallLayoutTest {
         return a.minX() <= b.maxX() && a.maxX() >= b.minX() && a.minZ() <= b.maxZ() && a.maxZ() >= b.minZ();
     }
 
+    /**
+     * A wall with other gates keeps its outline. A side with no gate gets the palisade in place of the gate, and a
+     * gate at a new position moves the towers of its side.
+     */
+    @Test
+    void wallWithOtherGatesKeepsItsOutline() {
+        WallLayout wall = WallLayout.plan(List.of(new Box(-25, -25, 25, 25)), MARGIN, SPACING, gatesAtTheMiddle(0, 0));
+
+        assertEquals(wall.towers(), wall.withGates(wall.gates()).towers());
+        assertEquals(wall.segments(), wall.withGates(wall.gates()).segments());
+        List<Gate> fewer = List.of(new Gate(Side.EAST, 0), new Gate(Side.SOUTH, 2), new Gate(Side.WEST, 0));
+        WallLayout other = wall.withGates(fewer);
+
+        assertEquals(wall.outline(), other.outline());
+        assertEquals(fewer, other.gates());
+        assertTrue(other.sides().get(0).gate().isEmpty(), "The north side has no gate");
+        assertClosed(other);
+    }
+
     private static List<Gate> gatesAtTheMiddle(int x, int z) {
         return List.of(new Gate(Side.NORTH, x), new Gate(Side.EAST, z), new Gate(Side.SOUTH, x),
                 new Gate(Side.WEST, z));

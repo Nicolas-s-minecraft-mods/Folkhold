@@ -1,11 +1,13 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.core.sim.level.Tier;
+import io.github.nicolasgoyon.folkhold.core.sim.village.CliffSide;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotTerrain;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSite;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.faction.CultureMap;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
@@ -16,14 +18,20 @@ import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PlotTerrains;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.function.IntBinaryOperator;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -50,6 +58,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
@@ -103,6 +112,8 @@ public final class PlotTerrainGameTests {
     /** The smallest and the largest share of the spare plots, from the plots that the village needs. */
     private static final double MIN_SPARE_SHARE = 0.10;
     private static final double MAX_SPARE_SHARE = 0.20;
+    /** The number of mountain sites of the test of the cliff side. */
+    private static final int MOUNTAIN_SITES = 6;
 
     private PlotTerrainGameTests() {
     }
@@ -339,6 +350,143 @@ public final class PlotTerrainGameTests {
         helper.succeed();
     }
 
+    /**
+     * The cliff side of the walls at the first mountain sites: a biome of the tags {@code is_mountain} or
+     * {@code is_hill} at the middle of the start chunk, and a site that the check accepts. Each site gets a town: its
+     * first wall and its ring. The test reads the heights of the terrain as the wall reads them (see
+     * {@link VillageWall#heights}), and the drops from the level of each gate (see {@link CliffSide}).
+     *
+     * <ul>
+     *   <li>Each wall keeps one gate or more.</li>
+     *   <li>No gate opens on a drop: no block of a gate is a cliff block, and the terrain in front of each block of a
+     *       gate is never {@link CliffSide#DROP} blocks or more under the level of the gate.</li>
+     *   <li>Each gate is reachable from the inside: a path starts behind it, 2 blocks inside the line (the arm of a
+     *       gate of the first wall, the path across the band of a gate of a ring). A water gate, and a gate of a ring
+     *       in front of a water gate of the inner wall, need no path.</li>
+     *   <li>Each column of the palisade on a cliff block has the low palisade, and each other column the full
+     *       palisade.</li>
+     *   <li>One wall at least has cliff blocks: the test sees the cliff side.</li>
+     * </ul>
+     *
+     * <p>The test places no block: a walk on the blocks of the generated village is not possible on the flat world of
+     * the GameTest server.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_cliff")
+    public static void mountainWallsHaveNoGateOnACliff(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        List<String> problems = new ArrayList<>();
+        int sites = 0;
+        int cliffWalls = 0;
+        for (int i = 0; i < TRIES && sites < MOUNTAIN_SITES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.isMountain(context)
+                    || !structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            sites++;
+            FortifiedVillageStructure.Variant variant = measure.variant(context, false);
+            FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, TOWN_LEVEL)
+                    .orElseThrow();
+            TerrainCache terrain = TerrainCache.of(context);
+            List<VillageWall.Wall> walls = new ArrayList<>(List.of(layout.firstWall()));
+            walls.addAll(VillageWall.rings(context, terrain, layout.firstWall(), layout.size().rings(),
+                    VillageRings.BAND, variant.wall(), false, context.chunkPos()));
+            for (int w = 0; w < walls.size(); w++) {
+                String name = "chunk " + context.chunkPos() + " wall " + w;
+                Optional<VillageWall.Wall> inner = w == 0 ? Optional.empty() : Optional.of(walls.get(w - 1));
+                if (checkCliffSide(name, walls.get(w), inner, VillageWall.heights(terrain), problems)) {
+                    cliffWalls++;
+                }
+            }
+        }
+        FolkholdWorld.LOGGER.info("Cliff side: {} mountain sites, {} walls with cliff blocks, problems {}", sites,
+                cliffWalls, problems);
+        helper.assertTrue(sites == MOUNTAIN_SITES, "Only " + sites + " mountain sites of " + MOUNTAIN_SITES);
+        helper.assertTrue(cliffWalls > 0, "No wall of the mountain sites has cliff blocks");
+        helper.assertTrue(problems.isEmpty(), "Problems of the cliff side: " + problems);
+        helper.succeed();
+    }
+
+    /**
+     * Checks the cliff side of a wall (see {@link #mountainWallsHaveNoGateOnACliff}), adds its problems, and logs the
+     * gates and the cliff blocks.
+     *
+     * @return true if the wall has cliff blocks
+     */
+    private static boolean checkCliffSide(String name, VillageWall.Wall wall, Optional<VillageWall.Wall> inner,
+            IntBinaryOperator height, List<String> problems) {
+        WallLayout layout = wall.layout();
+        int[] drops = CliffSide.drops(layout, height);
+        // The bases of the columns are the levels of the drops of the wall: the drops of the pieces.
+        Map<Long, Integer> bases = new HashMap<>();
+        for (StructurePiece piece : wall.pieces()) {
+            if (piece instanceof PalisadePiece palisade) {
+                int[] columns = palisade.bases();
+                for (int i = 0; i < columns.length; i++) {
+                    bases.put(ChunkPos.asLong(palisade.startX() + palisade.stepX() * i,
+                            palisade.startZ() + palisade.stepZ() * i), columns[i]);
+                }
+            }
+        }
+        int[] levels = new int[layout.ringSize()];
+        for (int i = 0; i < levels.length; i++) {
+            WallLayout.Cell cell = layout.ringCell(i);
+            levels[i] = bases.getOrDefault(ChunkPos.asLong(cell.x(), cell.z()), height.applyAsInt(cell.x(), cell.z()));
+        }
+        int[] baseDrops = CliffSide.drops(layout, levels, height);
+        Map<Long, Boolean> cliffs = new HashMap<>();
+        int count = 0;
+        for (int i = 0; i < baseDrops.length; i++) {
+            WallLayout.Cell cell = layout.ringCell(i);
+            cliffs.put(ChunkPos.asLong(cell.x(), cell.z()), CliffSide.isCliff(baseDrops[i]));
+            count += CliffSide.isCliff(baseDrops[i]) ? 1 : 0;
+        }
+        if (wall.gateLevels().isEmpty()) {
+            problems.add(name + ": no gate");
+        }
+        for (Map.Entry<WallLayout.Gate, Integer> entry : wall.gateLevels().entrySet()) {
+            WallLayout.Gate gate = entry.getKey();
+            WallLayout.Side side = gate.side();
+            int middle = layout.along(gate);
+            int lowest = CliffSide.lowestInFront(layout, side, middle, height);
+            if (CliffSide.isCliff(entry.getValue() - lowest)) {
+                problems.add(name + ": the gate " + gate + " at the level " + entry.getValue()
+                        + " opens on a drop to " + lowest);
+            }
+            WallLayout.Cell cell = layout.cell(side, middle);
+            int x = cell.x() + 2 * side.insideX();
+            int z = cell.z() + 2 * side.insideZ();
+            boolean path = wall.pieces().stream().anyMatch(piece -> piece instanceof VillagePathPiece
+                    && piece.getBoundingBox().minX() <= x && piece.getBoundingBox().maxX() >= x
+                    && piece.getBoundingBox().minZ() <= z && piece.getBoundingBox().maxZ() >= z);
+            // An inner gate on water gives no path across the band (see VillageWall#bandArm).
+            boolean water = wall.waterGates().contains(gate) || inner.stream().flatMap(value -> value.waterGates()
+                    .stream()).anyMatch(innerGate -> innerGate.side() == side);
+            if (!path && !water) {
+                problems.add(name + ": the gate " + gate + " has no path behind it");
+            }
+        }
+        for (StructurePiece piece : wall.pieces()) {
+            if (piece instanceof PalisadePiece palisade) {
+                for (int i = 0; i < palisade.bases().length; i++) {
+                    long column = ChunkPos.asLong(palisade.startX() + palisade.stepX() * i,
+                            palisade.startZ() + palisade.stepZ() * i);
+                    boolean cliff = cliffs.getOrDefault(column, false);
+                    if (palisade.logs() != CliffSide.logs(cliff)) {
+                        problems.add(name + ": the column " + ChunkPos.getX(column) + " " + ChunkPos.getZ(column)
+                                + " has " + palisade.logs() + " logs, cliff " + cliff);
+                    }
+                }
+            }
+        }
+        FolkholdWorld.LOGGER.info("Cliff side {}: {} cliff blocks of {} (from the terrain of the line: {}), gates {}",
+                name, count, levels.length, Arrays.stream(drops).filter(CliffSide::isCliff).count(),
+                wall.gateLevels());
+        return count > 0;
+    }
+
     /** The noise terrain of the measure, and the counts of the villages. */
     private static final class Measure {
         private final ServerLevel level;
@@ -383,6 +531,14 @@ public final class PlotTerrainGameTests {
             Holder<Biome> biome = generator.getBiomeSource().getNoiseBiome(QuartPos.fromBlock(middle.getX()),
                     QuartPos.fromBlock(middle.getY()), QuartPos.fromBlock(middle.getZ()), random.sampler());
             return structure.variantAt(culture, biome, maritime);
+        }
+
+        /** True if the biome at the middle of the start chunk of a context is a mountain or a hill. */
+        boolean isMountain(Structure.GenerationContext context) {
+            BlockPos middle = context.chunkPos().getMiddleBlockPosition(generator.getSeaLevel());
+            Holder<Biome> biome = generator.getBiomeSource().getNoiseBiome(QuartPos.fromBlock(middle.getX()),
+                    QuartPos.fromBlock(middle.getY()), QuartPos.fromBlock(middle.getZ()), random.sampler());
+            return biome.is(BiomeTags.IS_MOUNTAIN) || biome.is(BiomeTags.IS_HILL);
         }
 
         Structure.GenerationContext context(ChunkPos chunk) {
