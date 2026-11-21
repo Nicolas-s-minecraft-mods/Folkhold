@@ -20,6 +20,8 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -27,11 +29,13 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructureSets;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -76,6 +80,9 @@ public final class VillageRings {
     /** The number of villages in the cache. */
     private static final int CACHE_SIZE = 64;
     private static final String FILE_ID = "folkhold_village_rings";
+    /** The structure of a ring district. */
+    public static final ResourceKey<Structure> STRUCTURE = ResourceKey.create(Registries.STRUCTURE,
+            ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village_ring"));
 
     /** True when the overworld of the server has the flag of the rings. Written on the server thread. */
     private static volatile boolean enabled;
@@ -214,6 +221,32 @@ public final class VillageRings {
     public static int reach(int level) {
         int rings = VillageSizes.forLevel(level).rings();
         return rings == 0 ? 0 : rings * BAND + RING_MARGIN;
+    }
+
+    /**
+     * The pieces of the rings of a village in the world: the pieces of the structure start of each ring district, in
+     * the anchor chunk of the district. The method reads each anchor chunk at the status {@code STRUCTURE_STARTS}. An
+     * anchor chunk that the world does not have yet gets this status: its district then calculates the plan of the
+     * rings, as at the generation.
+     *
+     * @param level the level
+     * @param start the start chunk of the village
+     * @return the pieces, empty for a village with no ring district in the world
+     */
+    public static List<StructurePiece> generatedPieces(ServerLevel level, ChunkPos start) {
+        Structure structure = level.registryAccess().registryOrThrow(Registries.STRUCTURE).get(STRUCTURE);
+        if (structure == null) {
+            return List.of();
+        }
+        List<StructurePiece> pieces = new ArrayList<>();
+        for (District district : RingDistricts.all()) {
+            StructureStart ring = level.getChunk(district.anchorX(start.x), district.anchorZ(start.z),
+                    ChunkStatus.STRUCTURE_STARTS).getStartForStructure(structure);
+            if (ring != null && ring.isValid()) {
+                pieces.addAll(ring.getPieces());
+            }
+        }
+        return pieces;
     }
 
     /** Calculates the pieces of the rings of a village in each district. */
