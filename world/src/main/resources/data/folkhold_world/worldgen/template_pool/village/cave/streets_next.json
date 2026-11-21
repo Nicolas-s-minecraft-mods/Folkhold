@@ -1,0 +1,23 @@
+{
+  "fallback": "folkhold_world:village/cave/street_ends",
+  "elements": [
+    {
+      "weight": 2,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/street_next",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/cave/street_cross",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/cave/rock"
+      }
+    }
+  ]
+}

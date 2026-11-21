@@ -35,6 +35,9 @@ them. The jigsaw connectors give the positions of the plots and the pools of the
   and to the north: the shape of a corner tower. The towers between the corners use the same template.
 - gate.nbt: a gate of 3 blocks in the palisade. The outside of the template is to the north.
 The palisade comes from code: it follows the terrain.
+- cave/*.nbt: the pieces of the cave village (see CAVE_PIECES): the main hall (plaza.nbt), the tunnels of the
+  streets, the tunnel and the gate of the entrance, the seal of a free plot, and a carved room for each building.
+  The shell of rock of a cave piece comes from the processor folkhold_world:rock_shell (see ROCK_SHELL).
 
 The compound of the GameTests (center.nbt) is a village in one piece: palisade, 4 corner towers, 2 gates, paths, a
 plaza with the village heart and 4 house plots.
@@ -309,11 +312,14 @@ def connects(block, other, side):
 
 def state_at(t, x, y, z):
     """The name and the properties of a block of the template, as in the generation: a position with no block is air,
-    and a jigsaw block is its final state."""
+    and a jigsaw block is its final state. A structure void (the shell of a cave piece, see ROCK_SHELL) is air: the
+    builders and the tests of the shapes skip it."""
     entry = t.blocks.get((x, y, z))
     if not entry:
         return AIR
     (name, props), nbt = entry
+    if name == "minecraft:structure_void":
+        return AIR
     if name == "minecraft:jigsaw":
         final, _, rest = nbt["final_state"].partition("[")
         return final, dict(part.split("=") for part in rest.rstrip("]").split(",") if part)
@@ -3948,6 +3954,467 @@ TEST_PIECES = {
 }
 
 
+# ---------------------------------------------------------------- cave village
+
+# The pieces of the cave village (folder village/cave): a village in the rock of a mountain. The main hall is the plaza
+# with the village heart, the tunnels are the streets and the carved rooms are the buildings on the plots. The cave
+# pieces have one style for all the cultures and all the biomes.
+#
+# A carved piece has 3 kinds of positions:
+# - air: the generation removes the rock there (the carved space).
+# - the shell (ROCK_SHELL): each position next to the carved space where the piece has no block. The processor
+#   folkhold_world:rock_shell (list village/cave/rock) gives each one the rock of the place: a dressed block for the
+#   rock of the world (cobblestone for stone, polished granite for granite, see DRESSED_ROCK), the block of the world
+#   for another solid block (an ore), and cobblestone (cobbled deepslate under Y 0) for a hole: air, water or lava. The
+#   shell is not a block of the piece for the builders and the repairs (ConstructionTargets skips the structure voids).
+#   The springs of the game do not open in a dressed block: no spring of water or lava opens in a wall of a hall.
+# - no block: the world stays.
+#
+# Each block on a floor of the carved space has a block light of 1 or more: no monster spawns in the dark (see
+# cave_lit). The lanterns hang from blocks of the piece, not from the shell: the builders need a block to hold them.
+ROCK_SHELL = "minecraft:structure_void"
+# The dressed blocks of the rocks of the world in the shell. The other solid blocks stay (see RockShellProcessor).
+DRESSED_ROCK = {
+    "minecraft:stone": "minecraft:cobblestone",
+    "minecraft:deepslate": "minecraft:cobbled_deepslate",
+    "minecraft:granite": "minecraft:polished_granite",
+    "minecraft:diorite": "minecraft:polished_diorite",
+    "minecraft:andesite": "minecraft:polished_andesite",
+    "minecraft:tuff": "minecraft:polished_tuff",
+    "minecraft:calcite": "minecraft:polished_diorite",
+    "minecraft:dirt": "minecraft:coarse_dirt",
+    "minecraft:snow_block": "minecraft:cobblestone",
+    "minecraft:packed_ice": "minecraft:cobblestone",
+}
+CAVE_ROCK = "minecraft:cobblestone"
+CAVE_DEEP_ROCK = "minecraft:cobbled_deepslate"
+# The height of the main hall (CaveSite.HALL): the air is y = 1..CAVE_HALL, and the shell is at y = CAVE_HALL + 1.
+CAVE_HALL = 6
+# The height of a tunnel: the air is y = 1..TUNNEL_HEIGHT.
+TUNNEL_HEIGHT = 4
+# The carved height of the front row of a room (z = 0) and of an open part of a room, in blocks above the floor. The
+# opening of a plot in the wall of a tunnel has this height.
+CAVE_PORCH = 3
+# The length of the tunnel of the entrance, of the gate piece and the width of the gate piece.
+TUNNEL_LENGTH = 6
+CAVE_GATE_WIDTH = 9
+CAVE_GATE_DEPTH = 4
+CAVE_GATE_HEIGHT = 7
+# The block that holds a hanging lantern under the shell of a ceiling.
+LANTERN_HOLDER = "minecraft:chiseled_stone_bricks"
+TUNNELS_POOL = f"{NS}:village/tunnels"
+
+# The light of the blocks that give light (Block.lightEmission): the blocks of the pieces.
+LIGHTS = {"minecraft:lantern": 15, "minecraft:torch": 14, "minecraft:wall_torch": 14, "minecraft:soul_lantern": 10,
+          "minecraft:glowstone": 15, "minecraft:sea_lantern": 15, "minecraft:jack_o_lantern": 15}
+# The blocks that stop the light in the check of the pieces, with the full blocks: the slabs and the stairs stop it on
+# some faces, and the check takes no risk.
+DARK_BLOCKS = ("minecraft:farmland", "minecraft:dirt_path")
+
+
+def cave_state(t, x, y, z):
+    """The block of a position for the light and the spawns: the shell and a position with no block are the rock of
+    the world, a full block."""
+    entry = t.blocks.get((x, y, z))
+    if not entry or entry[0][0] == ROCK_SHELL:
+        return "minecraft:stone", {}
+    return state_at(t, x, y, z)
+
+
+def lets_light(state):
+    name, props = state
+    return (collision(name, props) != FULL and name not in DARK_BLOCKS and not name.endswith("_slab")
+            and not name.endswith("_stairs"))
+
+
+def light_of(state):
+    name, props = state
+    if name.endswith("campfire") and props.get("lit") == "true":
+        return 15
+    return LIGHTS.get(name, 0)
+
+
+def block_light(t):
+    """The block light at each position of a template, from the lights of the template only (a flood fill of 1 level
+    for each block)."""
+    sx, sy, sz = t.size
+    light = {}
+    queue = []
+    for (x, y, z) in t.blocks:
+        level = light_of(cave_state(t, x, y, z))
+        if level > 0:
+            light[(x, y, z)] = level
+            queue.append((x, y, z))
+    while queue:
+        nxt = []
+        for (x, y, z) in queue:
+            level = light[(x, y, z)] - 1
+            if level <= 0:
+                continue
+            for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+                n = (x + dx, y + dy, z + dz)
+                if not t.inside(*n) or light.get(n, 0) >= level or not lets_light(cave_state(t, *n)):
+                    continue
+                light[n] = level
+                nxt.append(n)
+        queue = nxt
+    return light
+
+
+def top_is_full(state):
+    """True if the top face of a block is full: a monster can stand on it."""
+    cells = set()
+    for x1, _, z1, x2, y2, z2 in collision(*state):
+        if y2 >= 16:
+            cells.update((x, z) for x in range(x1, x2) for z in range(z1, z2))
+    return len(cells) == 16 * 16
+
+
+def spawn_places(t):
+    """The positions of the template where a monster can spawn: a free position (air or a block with no collision)
+    in the piece, on a block with a full top face. The shell and the positions with no block are rock."""
+    places = []
+    for (x, y, z), ((name, _), _) in t.blocks.items():
+        if y == 0 or name == ROCK_SHELL:
+            continue
+        state = cave_state(t, x, y, z)
+        if collision(*state) == () and not light_of(state) and top_is_full(cave_state(t, x, y - 1, z)):
+            places.append((x, y, z))
+    return sorted(places)
+
+
+def hanging_lantern(t, x, y, z):
+    """A lantern that hangs from the block above it. A shell or a position with no block above gets LANTERN_HOLDER."""
+    entry = t.blocks.get((x, y + 1, z))
+    if not entry or entry[0][0] == ROCK_SHELL:
+        t.set(x, y + 1, z, LANTERN_HOLDER)
+    t.set(x, y, z, "minecraft:lantern", {"hanging": "true", "waterlogged": "false"})
+
+
+def lantern_place(t, x, y, z):
+    """The place of a hanging lantern for a dark position: the highest free position of the column at 2 blocks or more
+    above the position, with no block between them, in the column or in a column next to it. None if there is
+    none."""
+    sx, sy, sz = t.size
+    for dx, dz in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+        cx, cz = x + dx, z + dz
+        if not t.inside(cx, y, cz) or (cx, y, cz) not in t.blocks or collision(*cave_state(t, cx, y, cz)) != ():
+            continue
+        best = None
+        for cy in range(y + 1, sy - 1):
+            if (cx, cy, cz) not in t.blocks or cave_state(t, cx, cy, cz)[0] != "minecraft:air":
+                break
+            above = t.blocks.get((cx, cy + 1, cz))
+            if cy >= y + 2 and (not above or above[0][0] == ROCK_SHELL or is_sturdy(cave_state(t, cx, cy + 1, cz),
+                                                                                  "down")):
+                best = cy
+        if best is not None:
+            return cx, best, cz
+    return None
+
+
+def cave_lit(t, name):
+    """Adds hanging lanterns until each spawn place of the template has a block light of 1 or more (see
+    spawn_places). Stops the script when a dark place has no place for a lantern."""
+    while True:
+        light = block_light(t)
+        dark = [p for p in spawn_places(t) if light.get(p, 0) < 1]
+        if not dark:
+            return t
+        place = lantern_place(t, *dark[0])
+        if place is None:
+            raise SystemExit(f"The cave piece {name} has a dark place with no place for a lantern: {dark[0]}")
+        hanging_lantern(t, *place)
+
+
+def rock_shell(t, carved):
+    """Adds the shell around the open positions: each position with no block next to an open position, in the
+    template. An open position is a carved position, or a block with no collision (a torch, a sign, a crop): a mob or
+    the water goes through it."""
+    open_places = set(carved) | {pos for pos, ((name, props), _) in t.blocks.items()
+                                 if name != ROCK_SHELL and collision(*state_at(t, *pos)) == ()}
+    for (x, y, z) in open_places:
+        for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+            n = (x + dx, y + dy, z + dz)
+            if t.inside(*n) and n not in open_places and n not in t.blocks:
+                t.set(*n, ROCK_SHELL)
+    return t
+
+
+def is_free(t, x, y, z):
+    return state_at(t, x, y, z)[0] == "minecraft:air"
+
+
+def carve(t):
+    """The carved room of a building template (a house, a house-workshop, the bank, the market): the blocks of the
+    building, the carved air around them and the shell.
+
+    - The carved air: each air position of the template under the highest block of its column, or CAVE_PORCH blocks
+      or less above the floor (a yard, the square of the market). The front row (z = 0) has CAVE_PORCH blocks of air:
+      the height of the opening of the plot in the wall of the tunnel.
+    - The sides (x = 0, the last x), the back (the last z) and the top layer have no carved air: the shell there
+      closes the room. The front row opens on the tunnel.
+    - The other air positions of the template have no block: the rock of the world stays above the roof.
+    """
+    sx, sy, sz = t.size
+    out = Template(sx, sy, sz)
+    out.fixed = set(t.fixed)
+    carved = set()
+    for x in range(sx):
+        for z in range(sz):
+            top = max((y for y in range(sy) if not is_free(t, x, y, z)), default=0)
+            limit = CAVE_PORCH if z == 0 else max(top - 1, CAVE_PORCH)
+            for y in range(1, min(limit, sy - 2) + 1):
+                if is_free(t, x, y, z) and x not in (0, sx - 1) and z != sz - 1:
+                    carved.add((x, y, z))
+    for pos, entry in t.blocks.items():
+        if entry[0][0] != "minecraft:air":
+            out.blocks[pos] = entry
+    for pos in carved:
+        if pos not in out.blocks:
+            out.set(*pos, "minecraft:air")
+    return rock_shell(out, carved)
+
+
+def carved(t):
+    """The carved positions of a hand-made cave piece: its air and its jigsaw blocks with air as the final state."""
+    return {pos for pos in t.blocks if is_free(t, *pos) and t.blocks[pos][0][0] != ROCK_SHELL}
+
+
+def cave_floor(rng):
+    roll = rng.random()
+    if roll < 0.15:
+        return "minecraft:cracked_stone_bricks"
+    if roll < 0.35:
+        return "minecraft:cobblestone"
+    return "minecraft:stone_bricks"
+
+
+def cave_hall():
+    """The main hall: the plaza of the cave village, with the village heart, the braziers, the alarm bell, the hall sign,
+    the quest board and the lanterns, as the plaza. The hall is PLAZA x PLAZA blocks and CAVE_HALL blocks high. An
+    opening of a tunnel is in the middle of each side: the tunnel of the entrance to the west, the streets of the plan
+    to the north, the south and the east."""
+    rng = random.Random(91)
+    t = Template(PLAZA, CAVE_HALL + 2, PLAZA)
+    mid, last = PLAZA_MID, PLAZA - 1
+    lo, hi = 2, PLAZA - 3
+    for x in range(PLAZA):
+        for z in range(PLAZA):
+            if lo <= x <= hi and lo <= z <= hi:
+                border = x in (lo, hi) or z in (lo, hi)
+                t.set(x, 0, z, "minecraft:stone_bricks" if border else cobble(rng))
+            elif abs(x - mid) <= 1 or abs(z - mid) <= 1:
+                t.set(x, 0, z, cave_floor(rng))
+            else:
+                t.set(x, 0, z, "minecraft:polished_andesite")
+    t.fill(1, 1, 1, last - 1, CAVE_HALL, last - 1, "minecraft:air")
+    for a in range(mid - 1, mid + 2):
+        for y in range(1, TUNNEL_HEIGHT + 1):
+            for x, z in ((a, 0), (a, last), (0, a), (last, a)):
+                t.set(x, y, z, "minecraft:air")
+    t.set(mid, 0, mid, "minecraft:chiseled_stone_bricks")
+    t.set(mid, 1, mid, HEART)
+    t.set(mid - 4, 0, mid - 2, "minecraft:stone_bricks")
+    t.set(mid - 4, 1, mid - 2, "minecraft:bell", {"attachment": "floor", "facing": "north", "powered": "false"})
+    for dx in (-3, 3):
+        for dz in (-3, 3):
+            t.set(mid + dx, 0, mid + dz, "minecraft:stone_bricks")
+            t.set(mid + dx, 1, mid + dz, f"{BLOCKS}:brazier", {"lit": "false"})
+    building_sign(t, mid + 2, 1, mid - 4, "hall")
+    for column in range(3):
+        for row in range(3):
+            t.set(hi, 1 + row, hi - column, f"{BLOCKS}:quest_board",
+                  {"facing": "west", "column": str(column), "row": str(row), "papers": "0"})
+    for (x, z) in ((1, 1), (last - 1, 1), (1, last - 1)):
+        lamp_post(t, x, z)
+    for (x, z) in ((mid, 3), (mid, last - 3), (3, mid), (last - 3, mid)):
+        hanging_lantern(t, x, CAVE_HALL, z)
+    t.jigsaw(mid, 0, 0, "north_up", PLAZA_EXIT, STREET, BANK_STREETS_POOL, "minecraft:stone_bricks")
+    t.jigsaw(mid, 0, last, "south_up", PLAZA_EXIT, STREET, FIRST_STREETS_POOL, "minecraft:stone_bricks")
+    t.jigsaw(0, 0, mid, "west_up", PLAZA_EXIT, STREET, TUNNELS_POOL, "minecraft:stone_bricks")
+    t.jigsaw(last, 0, mid, "east_up", PLAZA_EXIT, STREET, FIRST_STREETS_POOL, "minecraft:stone_bricks")
+    return rock_shell(t, carved(t))
+
+
+def cave_tunnel(length, rng, plots=(), exits=(), closed=False):
+    """A tunnel along z: STREET_WIDTH blocks wide, with a floor, the air of 3 blocks between 2 walls of shell, and the
+    shell of the ceiling at y = TUNNEL_HEIGHT + 1.
+
+    - plots: the z of each plot. The wall on each side has an opening of the porch of a room there: W - 2 blocks wide
+      and CAVE_PORCH blocks high.
+    - exits: the first z of each side exit. The walls have an opening of 3 blocks there, with the height of the tunnel.
+    - closed: the last row (z = length - 1) is a wall of shell: the end of a street.
+    """
+    t = Template(STREET_WIDTH, TUNNEL_HEIGHT + 2, length)
+    last = STREET_WIDTH - 1
+    for z in range(length):
+        for x in range(STREET_WIDTH):
+            t.set(x, 0, z, cave_floor(rng) if 0 < x < last else "minecraft:stone_bricks")
+    t.fill(1, 1, 0, last - 1, TUNNEL_HEIGHT, length - (2 if closed else 1), "minecraft:air")
+    half = (W - 2) // 2
+    for plot in plots:
+        for z in range(plot - half, plot + half + 1):
+            for x in (0, last):
+                for y in range(1, CAVE_PORCH + 1):
+                    t.set(x, y, z, "minecraft:air")
+    for first in exits:
+        for z in range(first, first + 3):
+            for x in (0, last):
+                for y in range(1, TUNNEL_HEIGHT + 1):
+                    t.set(x, y, z, "minecraft:air")
+    return t
+
+
+def cave_lanterns(t, *rows):
+    for z in rows:
+        hanging_lantern(t, STREET_WIDTH // 2, TUNNEL_HEIGHT, z)
+
+
+def cave_street(bank=False, next_street=False):
+    """A tunnel segment with a plot on each side: the tunnel of street (see street). The plan places the rooms on the
+    plots."""
+    rng = random.Random(92 if bank else 93)
+    plot_z = STREET_LENGTH - 1 - HOUSE_HALF_WIDTH
+    t = cave_tunnel(STREET_LENGTH, rng, plots=(plot_z,))
+    mid = STREET_WIDTH // 2
+    t.jigsaw(mid, 0, 0, "north_up", STREET, "minecraft:empty", "minecraft:empty", "minecraft:stone_bricks")
+    t.jigsaw(mid, 0, STREET_LENGTH - 1, "south_up", STREET_NEXT, STREET,
+             NEXT_STREETS_POOL if next_street else STREET_ENDS_POOL, "minecraft:stone_bricks")
+    t.jigsaw(0, 1, plot_z, "west_up", PLOT, HOUSE_FRONT, BANK_POOL if bank else HOUSE_POOL, "minecraft:air")
+    t.jigsaw(STREET_WIDTH - 1, 1, plot_z, "east_up", PLOT, HOUSE_FRONT, HOUSE_POOL, "minecraft:air")
+    cave_lanterns(t, 3, STREET_LENGTH - 4)
+    return rock_shell(t, carved(t))
+
+
+def cave_street_cross():
+    """A crossroad of tunnels: the tunnel of street_cross, with a side exit to the west and to the east and a plot in
+    each corner."""
+    frontage = W
+    arm = frontage + PLOT_MARGIN
+    length = 2 * arm + STREET_WIDTH
+    rng = random.Random(94)
+    plots = (arm - 1 - frontage // 2, arm + STREET_WIDTH + frontage // 2)
+    t = cave_tunnel(length, rng, plots=plots, exits=(arm + 1,))
+    mid = STREET_WIDTH // 2
+    t.jigsaw(mid, 0, 0, "north_up", STREET, "minecraft:empty", "minecraft:empty", "minecraft:stone_bricks")
+    t.jigsaw(mid, 0, length - 1, "south_up", STREET_NEXT, STREET, NEXT_STREETS_POOL, "minecraft:stone_bricks")
+    t.jigsaw(0, 0, arm + mid, "west_up", STREET_NEXT, STREET, SIDE_STREETS_POOL, "minecraft:stone_bricks")
+    t.jigsaw(STREET_WIDTH - 1, 0, arm + mid, "east_up", STREET_NEXT, STREET, SIDE_STREETS_POOL,
+             "minecraft:stone_bricks")
+    for z in plots:
+        t.jigsaw(0, 1, z, "west_up", PLOT, HOUSE_FRONT, HOUSE_POOL, "minecraft:air")
+        t.jigsaw(STREET_WIDTH - 1, 1, z, "east_up", PLOT, HOUSE_FRONT, HOUSE_POOL, "minecraft:air")
+    cave_lanterns(t, 4, arm + mid, length - 5)
+    return rock_shell(t, carved(t))
+
+
+def cave_street_side():
+    """The start of a side tunnel, from a side of a crossroad: the tunnel of street_side, with no plot."""
+    rng = random.Random(95)
+    length = D + PLOT_MARGIN
+    t = cave_tunnel(length, rng)
+    mid = STREET_WIDTH // 2
+    t.jigsaw(mid, 0, 0, "north_up", STREET, "minecraft:empty", "minecraft:empty", "minecraft:stone_bricks")
+    t.jigsaw(mid, 0, length - 1, "south_up", STREET_NEXT, STREET, NEXT_STREETS_POOL, "minecraft:stone_bricks")
+    cave_lanterns(t, length // 2)
+    return rock_shell(t, carved(t))
+
+
+def cave_street_end():
+    """The end of a tunnel: STREET_END_LENGTH blocks, closed by a wall of shell."""
+    rng = random.Random(96)
+    t = cave_tunnel(STREET_END_LENGTH, rng, closed=True)
+    t.jigsaw(STREET_WIDTH // 2, 0, 0, "north_up", STREET, "minecraft:empty", "minecraft:empty",
+             "minecraft:stone_bricks")
+    cave_lanterns(t, 1)
+    return rock_shell(t, carved(t))
+
+
+def cave_entrance_tunnel():
+    """A segment of the tunnel of the entrance: TUNNEL_LENGTH blocks with no plot, from the gate to the main hall."""
+    rng = random.Random(97)
+    t = cave_tunnel(TUNNEL_LENGTH, rng)
+    mid = STREET_WIDTH // 2
+    t.jigsaw(mid, 0, 0, "north_up", STREET, "minecraft:empty", "minecraft:empty", "minecraft:stone_bricks")
+    t.jigsaw(mid, 0, TUNNEL_LENGTH - 1, "south_up", STREET_NEXT, STREET, TUNNELS_POOL, "minecraft:stone_bricks")
+    cave_lanterns(t, TUNNEL_LENGTH // 2)
+    return rock_shell(t, carved(t))
+
+
+def cave_gate():
+    """The entrance gate of the cave village, in the rock face. The outside is to the north (z = 0).
+
+    - z = 0: the porch, a niche of 7 x 4 blocks in the rock face with a lamp post on each side.
+    - z = 1: the facade of stone bricks, with the gate of 3 fence gates in the middle and the banner above it. The
+      fence gates are the gate of the village for the raids, as the gate of a palisade.
+    - z = 2..3: the start of the tunnel to the main hall: the connector at the back targets the tunnels.
+    """
+    rng = random.Random(98)
+    t = Template(CAVE_GATE_WIDTH, CAVE_GATE_HEIGHT, CAVE_GATE_DEPTH)
+    mid = CAVE_GATE_WIDTH // 2
+    last = CAVE_GATE_WIDTH - 1
+    for x in range(CAVE_GATE_WIDTH):
+        t.set(x, 0, 0, "minecraft:stone_bricks")
+    t.fill(1, 1, 0, last - 1, TUNNEL_HEIGHT, 0, "minecraft:air")
+    for x in (1, last - 1):
+        lamp_post(t, x, 0)
+    for x in range(1, last):
+        for y in range(0, CAVE_GATE_HEIGHT - 1):
+            corner = x in (1, last - 1) or y == CAVE_GATE_HEIGHT - 2
+            t.set(x, y, 1, "minecraft:chiseled_stone_bricks" if corner and y % 2 == 1 else "minecraft:stone_bricks")
+    for x in range(mid - 1, mid + 2):
+        t.set(x, 0, 1, "minecraft:stone_bricks")
+        t.set(x, 1, 1, "minecraft:spruce_fence_gate",
+              {"facing": "north", "in_wall": "false", "open": "false", "powered": "false"})
+        for y in (2, 3):
+            t.set(x, y, 1, "minecraft:air")
+    t.set(mid, 4, 0, WALL_BANNER, {"facing": "north"})
+    for z in (2, 3):
+        for x in range(mid - 2, mid + 3):
+            t.set(x, 0, z, cave_floor(rng) if abs(x - mid) <= 1 else "minecraft:stone_bricks")
+        t.fill(mid - 1, 1, z, mid + 1, TUNNEL_HEIGHT, z, "minecraft:air")
+    hanging_lantern(t, mid, TUNNEL_HEIGHT, 2)
+    t.jigsaw(mid, 0, CAVE_GATE_DEPTH - 1, "south_up", STREET_NEXT, STREET, TUNNELS_POOL, "minecraft:stone_bricks")
+    return rock_shell(t, carved(t))
+
+
+def cave_seal():
+    """The seal of a free plot: the shell in front of the opening of the plot in the wall of the tunnel. A free plot
+    has no room behind the opening: the seal closes a hole of the world there (a cave, water). The builders of the
+    village remove it when they build a room on the plot."""
+    t = Template(W, CAVE_PORCH + 1, 1)
+    for x in range(1, W - 1):
+        for y in range(1, CAVE_PORCH + 1):
+            t.set(x, y, 0, ROCK_SHELL)
+    t.jigsaw(W // 2, 1, 0, "north_up", HOUSE_FRONT, "minecraft:empty", "minecraft:empty", ROCK_SHELL)
+    return t
+
+
+def cave_room(build):
+    """The carved room of a building of PIECES (see carve)."""
+    return carve(build())
+
+
+# The pieces of the cave village: the hand-made pieces, and a carved room for each building of PIECES (the houses, the
+# bank, the market and the house-workshops).
+CAVE_PIECES = {
+    "plaza": cave_hall,
+    "street": cave_street,
+    "street_bank": lambda: cave_street(bank=True),
+    "street_end": cave_street_end,
+    "street_next": lambda: cave_street(next_street=True),
+    "street_cross": cave_street_cross,
+    "street_side": cave_street_side,
+    "tunnel": cave_entrance_tunnel,
+    "gate": cave_gate,
+    "seal": cave_seal,
+    **{name: functools.partial(cave_room, PIECES[name])
+       for name in ("house_cottage", "house_barracks", "house_forge", "house_storehouse", "bank", "market")},
+    **{f"job_{job}": functools.partial(cave_room, PIECES[f"job_{job}"]) for job in JOBS},
+}
+
+
 # ---------------------------------------------------------------- biome variants
 
 # The blocks of a wood that the pieces use.
@@ -4003,12 +4470,13 @@ class Variant:
     (see plain).
     """
 
-    def __init__(self, name, biomes, blocks, culture=None, maritime=False):
+    def __init__(self, name, biomes, blocks, culture=None, maritime=False, cave=False):
         self.name = name
         self.biomes = biomes
         self.blocks = blocks
         self.culture = culture
         self.maritime = maritime
+        self.cave = cave
 
     @property
     def base(self):
@@ -4024,18 +4492,23 @@ class Variant:
 
     @property
     def pieces(self):
-        """The pieces of the variant: the pieces of PIECES, with the pieces of its style."""
+        """The pieces of the variant: the pieces of PIECES, with the pieces of its style. The cave variant has the cave
+        pieces only (see CAVE_PIECES)."""
+        if self.cave:
+            return CAVE_PIECES
         return {**PIECES, **(MARITIME if self.maritime else STYLES.get(self.culture, {}))}
 
     def path(self, name):
         """The path of a file of the village for this variant, with no namespace and no extension. The files of the
         style of a culture are in a folder with the name of the culture, and the files of a maritime village are in the
-        folder "maritime"."""
+        folder "maritime". The files of the cave village are in the folder "cave"."""
         parts = ["village"]
         if self.culture:
             parts.append(self.culture)
         if self.maritime:
             parts.append("maritime")
+        if self.cave:
+            parts.append("cave")
         if not self.base:
             parts.append(self.name)
         return "/".join(parts + [name])
@@ -4089,6 +4562,9 @@ VARIANTS = (
     Variant("swamp", ["minecraft:swamp", "minecraft:mangrove_swamp"], SWAMP),
 )
 
+# The cave village: the cave pieces, in all the biomes and the cultures (see CAVE_PIECES).
+CAVE = Variant("cave", [], {}, cave=True)
+
 LOG_UP = {"axis": "y"}
 
 
@@ -4107,6 +4583,9 @@ def pool(elements, fallback="minecraft:empty"):
 
 def pools(v):
     """The template pools of a variant, by name."""
+    if v.cave:
+        return cave_pools(v)
+
     def house(piece):
         return element(v, piece, "rigid", "foundation")
 
@@ -4133,8 +4612,46 @@ def pools(v):
     }
 
 
+def cave_pools(v):
+    """The template pools of the cave village, by name: the pools of a variant, with the cave pieces. All the pieces
+    are rigid, with the processor list rock (see ROCK_SHELL). The pools of the land (fields, mills) are empty: a cave
+    village has no land outside a palisade. The pool tunnels has the segments of the tunnel of the entrance, the pool
+    gates the entrance gate, and the pool seals the seal of a free plot."""
+    def piece(name):
+        return element(v, name, "rigid", "rock")
+
+    return {
+        "plaza": pool([(1, piece("plaza"))]),
+        "houses": pool([(weight, piece(name)) for weight, name in HOUSES]
+                       + [(1, {"element_type": "minecraft:empty_pool_element"})]),
+        "homes": pool([(1, piece("house_cottage"))]),
+        "bank": pool([(1, piece("bank"))]),
+        "jobs": pool([(1, piece(f"job_{job}")) for job in JOBS]),
+        "market": pool([(1, piece("market"))]),
+        "fields": pool([]),
+        "mills": pool([]),
+        "streets_first": pool([(1, piece("street"))], v.id("street_ends")),
+        "streets_bank": pool([(1, piece("street_bank"))], v.id("street_ends")),
+        "street_ends": pool([(1, piece("street_end"))]),
+        "streets_next": pool([(2, piece("street_next")), (1, piece("street_cross"))], v.id("street_ends")),
+        "streets_side": pool([(1, piece("street_side"))], v.id("street_ends")),
+        "tunnels": pool([(1, piece("tunnel"))], v.id("street_ends")),
+        "gates": pool([(1, piece("gate"))]),
+        "seals": pool([(1, piece("seal"))]),
+    }
+
+
 def processor_lists(v):
-    """The processor lists of a variant, by name: the foundation of the buildings, and the streets."""
+    """The processor lists of a variant, by name: the foundation of the buildings, and the streets. The cave village
+    has the list rock: the shell of the cave pieces (see ROCK_SHELL)."""
+    if v.cave:
+        return {"rock": {"processors": [{
+            "processor_type": f"{NS}:rock_shell",
+            "rock": {"Name": CAVE_ROCK},
+            "deep_rock": {"Name": CAVE_DEEP_ROCK},
+            "deep_below": 0,
+            "replacements": [{"input": rock, "output": {"Name": dressed}} for rock, dressed in DRESSED_ROCK.items()],
+        }]}}
     planks = v.state("minecraft:spruce_planks")
     street_rules = [{
         "input_predicate": {"predicate_type": "minecraft:block_match", "block": path},
@@ -4231,12 +4748,13 @@ def write_json(path, data):
 
 
 def main():
-    for v in all_variants():
+    for v in all_variants() + [CAVE]:
         folder = os.path.join(DATA, "structure", *v.path("").split("/"))
         os.makedirs(folder, exist_ok=True)
         for name, build in v.pieces.items():
             path = os.path.join(folder, name + ".nbt")
-            v.apply(build()).write(path)
+            t = build()
+            v.apply(cave_lit(t, name) if v.cave else t).write(path)
             print("wrote", os.path.normpath(path))
         for name, data in pools(v).items():
             write_json(os.path.join(WORLDGEN, "template_pool", *v.path(name).split("/")) + ".json", data)

@@ -7,6 +7,7 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.GroundFillPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.OptionalReplaceProcessor;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.RockShellProcessor;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRingStructure;
@@ -64,6 +65,10 @@ public final class ModStructures {
     /** The blocks of an optional mod in a template ({@link OptionalReplaceProcessor}). */
     public static final DeferredHolder<StructureProcessorType<?>, StructureProcessorType<OptionalReplaceProcessor>>
             OPTIONAL_REPLACE = PROCESSORS.register("optional_replace", () -> () -> OptionalReplaceProcessor.CODEC);
+
+    /** The shell of rock of a carved piece of a cave village ({@link RockShellProcessor}). */
+    public static final DeferredHolder<StructureProcessorType<?>, StructureProcessorType<RockShellProcessor>>
+            ROCK_SHELL = PROCESSORS.register("rock_shell", () -> () -> RockShellProcessor.CODEC);
 
     private ModStructures() {
     }

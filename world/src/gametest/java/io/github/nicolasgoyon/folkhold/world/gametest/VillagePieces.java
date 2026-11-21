@@ -42,6 +42,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       homes. No connector of the other pools targets them.</li>
  *   <li>The pieces of the wall of a variant: the template of the tower and the template of the gate. The wall places
  *       them as rigid pieces.</li>
+ *   <li>The pools of the cave village (folder {@code village/cave}, see {@link #CAVE_HOMES}): the pools of a variant,
+ *       with the pools of the gate of the entrance and of the seals of the free plots. The structure has no variant
+ *       of the cave village: these pools are the roots of its pieces.</li>
  * </ul>
  */
 final class VillagePieces {
@@ -52,6 +55,11 @@ final class VillagePieces {
      * and the start of a side street.
      */
     static final List<String> PLANNED_STREETS = List.of("streets_next", "streets_side");
+    /** The pool of the homes of the cave village: the other pools of the cave village are in its folder. */
+    static final ResourceLocation CAVE_HOMES = ResourceLocation.fromNamespaceAndPath("folkhold_world",
+            "village/cave/homes");
+    /** The pools of the cave village with no connector to them: the plaza, the entrance gate and the seals. */
+    static final List<String> CAVE_ROOTS = List.of("plaza", "gates", "seals");
 
     private VillagePieces() {
     }
@@ -109,6 +117,10 @@ final class VillagePieces {
             add(pieces, new Piece(variant.wall().gate(), Optional.empty(),
                     StructureTemplatePool.Projection.RIGID), problems);
         }
+        open.add(CAVE_HOMES);
+        open.addAll(VillageGrowth.pools(CAVE_HOMES));
+        PLANNED_STREETS.forEach(name -> open.add(VillagePlots.sibling(CAVE_HOMES, name)));
+        CAVE_ROOTS.forEach(name -> open.add(VillagePlots.sibling(CAVE_HOMES, name)));
         // The pools in sorted order: the pool of a piece is the same in each run.
         List<ResourceLocation> found = new ArrayList<>();
         while (!open.isEmpty()) {
