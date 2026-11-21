@@ -10,7 +10,14 @@ import io.github.nicolasgoyon.folkhold.world.command.VillageGeneration;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.settlement.Territories;
+import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
+import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
+import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
+import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -34,6 +41,7 @@ import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -125,7 +133,8 @@ public final class VillageGenerateCommandGameTests {
     /**
      * The command places a city with its 2 rings. Each ring district with pieces is a structure start of the ring
      * structure in its anchor chunk. The districts have the 4 gates of each ring, and each gate has its fence gates
-     * in the world. The origin of this test is far from the origin of the other tests: their villages do not take
+     * in the world. The area of the village, its scan area and its territory contain each ring gate (see
+     * {@link #checkAreaOfTheRings}). The origin of this test is far from the origin of the other tests: their villages do not take
      * the space of the rings.
      */
     @GameTest(template = "empty", timeoutTicks = TestSupport.WORKER_TICKS, batch = "village_generate_command_rings")
@@ -146,6 +155,7 @@ public final class VillageGenerateCommandGameTests {
                     String gate = structure.variantOf(level, city.getPieces()).wall().gate().toString();
                     ChunkPos start = city.getChunkPos();
                     int gates = 0;
+                    List<BlockPos> ringGates = new ArrayList<>();
                     for (RingDistricts.District district : RingDistricts.all()) {
                         StructureStart ring = level.getChunk(district.anchorX(start.x), district.anchorZ(start.z))
                                 .getStartForStructure(ringStructure);
@@ -156,6 +166,7 @@ public final class VillageGenerateCommandGameTests {
                             if (piece instanceof PoolElementStructurePiece template
                                     && template.getElement().toString().contains(gate)) {
                                 gates++;
+                                ringGates.add(piece.getBoundingBox().getCenter());
                                 helper.assertTrue(BlockPos.betweenClosedStream(piece.getBoundingBox())
                                         .anyMatch(pos -> level.getBlockState(pos).getBlock() instanceof FenceGateBlock),
                                         "The ring gate at " + piece.getBoundingBox() + " must have its fence gates");
@@ -164,6 +175,7 @@ public final class VillageGenerateCommandGameTests {
                     }
                     helper.assertTrue(gates == 2 * 4, "The 2 rings of the city must have 4 gates each, not " + gates
                             + " gates");
+                    checkAreaOfTheRings(helper, city, ringGates);
                 })
                 .thenSucceed();
     }
@@ -190,6 +202,48 @@ public final class VillageGenerateCommandGameTests {
     private static CommandSourceStack source(ServerLevel level) {
         return level.getServer().createCommandSourceStack().withLevel(level)
                 .withPosition(Vec3.atBottomCenterOf(ORIGIN)).withPermission(2).withSuppressedOutput();
+    }
+
+    /**
+     * Checks that a village keeps its rings: the area of its reference, the area of its heart, its scan area and the
+     * territory of its settlement contain each ring gate. The claim radius of each tier contains the outer ring of
+     * the tier.
+     */
+    private static void checkAreaOfTheRings(GameTestHelper helper, StructureStart village, List<BlockPos> ringGates) {
+        ServerLevel level = helper.getLevel();
+        BlockPos heart = BlockPos.betweenClosedStream(village.getPieces().get(0).getBoundingBox())
+                .filter(pos -> level.getBlockEntity(pos) instanceof VillageHeartBlockEntity).map(BlockPos::immutable)
+                .findFirst().orElseThrow();
+        VillageReference reference = VillageReference.find(level, heart).orElseThrow();
+        Settlement settlement = Settlements.of(level.getServer(),
+                (VillageHeartBlockEntity) level.getBlockEntity(heart)).orElseThrow();
+        // The heart keeps the reference of its first search: the test registers the area of the current reference.
+        VillageHearts.register(level, heart, reference.area());
+        AABB area = VillageHearts.area(level, heart);
+        BoundingBox scan = VillageLayout.area(heart, reference);
+        for (BlockPos gate : ringGates) {
+            helper.assertTrue(reference.isInArea(gate), "The area of the reference must contain the ring gate " + gate);
+            helper.assertTrue(area.contains(gate.getX(), heart.getY(), gate.getZ()),
+                    "The area of the village must contain the ring gate " + gate);
+            helper.assertTrue(scan.isInside(gate.getX(), scan.minY(), gate.getZ()),
+                    "The scan area must contain the ring gate " + gate);
+            helper.assertTrue(VillageHearts.findAt(level, gate.atY(heart.getY())).filter(heart::equals).isPresent(),
+                    "The ring gate " + gate + " must be in the village of the heart");
+            helper.assertTrue(Territories.settlementAt(level.getServer(), gate).filter(settlement::equals)
+                    .isPresent(), "The territory of the settlement must contain the ring gate " + gate);
+        }
+        helper.assertTrue(reference.palisades().size() > village.getPieces().stream()
+                .filter(PalisadePiece.class::isInstance).count(),
+                "The reference must have the palisades of the rings for the repairs");
+        FortifiedVillageStructure structure = (FortifiedVillageStructure) village.getStructure();
+        for (Tier tier : LevelTables.get().tiers()) {
+            int top = tier.maxLevel();
+            int outer = Math.min(VillageSizes.forLevel(top).maxRadius(), structure.maxDistanceFromCenter())
+                    + structure.wall().margin() + VillageRings.reach(top);
+            helper.assertTrue(SettlementData.claimRadius(top) * 16 >= outer, "The claim radius of the tier "
+                    + tier.id() + " must contain its outer ring: " + SettlementData.claimRadius(top)
+                    + " chunks for " + outer + " blocks");
+        }
     }
 
     /** Runs a command. Returns its result, or 0 for a command that is not valid. */

@@ -1,11 +1,14 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
+import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -29,6 +32,7 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -53,7 +57,9 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  *       {@link PalisadePiece}). The point on top of a column and the foundation under it are not a part of the
  *       reference. The logs above the first {@link PalisadeHeights#LOGS} logs are not a part of it too.</li>
  *   <li>The area is the box of the village inside its palisade, the palisade included, from the lowest to the highest
- *       template piece. A village with no palisade pieces has no area.</li>
+ *       template piece. A village with no palisade pieces has no area. The pieces of the ring districts of a town, a
+ *       city or a capital (see {@link VillageRings#generatedPieces}) are a part of the reference: the area goes to
+ *       the outer ring, and the repairs keep the rings.</li>
  *   <li>The plots are the places for a house along the streets, with and without a house (see
  *       {@link VillagePlots}).</li>
  *   <li>The homes are the pool of the homes that the builders build on the free plots (see {@link VillageGrowth}).</li>
@@ -194,7 +200,7 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
 
     /**
      * The reference of the village at a position: the pieces of the Folkhold village structure that contains the
-     * position. A piece that is not a structure template on the terrain or a palisade does not count.
+     * position, and the pieces of its ring districts. A piece that is not a structure template on the terrain or a palisade does not count.
      *
      * @param level the level
      * @param heart the position of the village heart
@@ -213,7 +219,24 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         Optional<ResourceLocation> homes = start.getStructure() instanceof FortifiedVillageStructure village
                 ? village.variantOf(level, start.getPieces()).homes().unwrapKey().map(ResourceKey::location)
                 : Optional.empty();
-        return of(level, start.getPieces()).map(reference -> homes.map(reference::withHomes).orElse(reference));
+        List<StructurePiece> pieces = start.getPieces();
+        if (hasRings(level, start.getChunkPos())) {
+            pieces = new ArrayList<>(pieces);
+            pieces.addAll(VillageRings.generatedPieces(level, start.getChunkPos()));
+        }
+        return of(level, pieces).map(reference -> homes.map(reference::withHomes).orElse(reference));
+    }
+
+    /**
+     * True if the village of a start chunk can have ring districts in the world: the tier of its start level, or of
+     * the level of a settlement of the start chunk, has rings. The other villages do not read the anchor chunks.
+     */
+    private static boolean hasRings(ServerLevel level, ChunkPos start) {
+        int top = Settlements.startLevel(level.getSeed(), start);
+        for (Settlement settlement : SettlementData.get(level.getServer()).registry().byStart(start.x, start.z)) {
+            top = Math.max(top, settlement.level());
+        }
+        return VillageSizes.forLevel(top).rings() > 0;
     }
 
     /**

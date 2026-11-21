@@ -19,8 +19,6 @@ import javax.annotation.Nullable;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
@@ -77,8 +75,6 @@ public final class VillageGeneration {
     private static final int TICKET_DISTANCE = 0;
     private static final TicketType<Long> TICKET = TicketType.create("folkhold_world_village_generate",
             Long::compare);
-    private static final ResourceKey<Structure> RING_STRUCTURE = ResourceKey.create(Registries.STRUCTURE,
-            ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village_ring"));
 
     /** The generation that runs, or null. */
     @Nullable
@@ -157,7 +153,7 @@ public final class VillageGeneration {
         this.style = style;
         this.progress = progress;
         this.ended = ended;
-        this.ringStructure = level.registryAccess().registryOrThrow(Registries.STRUCTURE).get(RING_STRUCTURE);
+        this.ringStructure = level.registryAccess().registryOrThrow(Registries.STRUCTURE).get(VillageRings.STRUCTURE);
         this.candidates = VillageCommands.candidates(new ChunkPos(origin)).iterator();
         // With no structures in the world settings, the world generation places no pieces: this class does it.
         this.structures = level.structureManager().shouldGenerateStructures();
