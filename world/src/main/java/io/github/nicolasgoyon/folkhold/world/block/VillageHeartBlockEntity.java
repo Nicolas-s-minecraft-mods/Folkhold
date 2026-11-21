@@ -32,6 +32,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.settlement.SimulationProfiler;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
+import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.Handymen;
@@ -50,6 +51,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillagePens;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
+import io.github.nicolasgoyon.folkhold.world.village.WallZones;
 import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
 import java.util.ArrayList;
@@ -172,6 +174,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private VillageReference repairReference;
     /** True after the search of {@link #repairReference}. */
     private boolean repairReferenceSearched;
+    /** The zones of the wall where the villagers do not walk, or null before the first use. Not saved. */
+    @Nullable
+    private WallZones wallZones;
     /** True if the last check of the growth found no free plot for the market. Not saved: the next check sets it. */
     private boolean marketNoSpace;
     /**
@@ -911,6 +916,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         List<BlockPos> beds = homeBeds(settlement.get(), seats);
         VillageHomes.claim(serverLevel, worldPosition, inhabitants, seats, beds);
         workers.update(serverLevel, this, inhabitants, seats, beds, settlement.get().jobPosts().orElse(List.of()));
+        FolkNavigation.leaveWall(worldPosition, wallZones(serverLevel), inhabitants);
         int missing = missingInhabitants.size();
         if (missing == 0) {
             boolean changed = villagersFilling;
@@ -1029,6 +1035,22 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
+     * The zones of the wall of the village where its villagers do not walk (see {@link WallZones} and
+     * {@link FolkNavigation}): the towers and the tops of the palisade, from the structure pieces of the village.
+     *
+     * @param serverLevel the level of the heart
+     * @return the zones, or {@link WallZones#NONE} for a heart outside a village structure
+     */
+    public WallZones wallZones(ServerLevel serverLevel) {
+        if (wallZones == null) {
+            wallZones = repairReference(serverLevel)
+                    .map(reference -> WallZones.of(serverLevel.getStructureManager(), reference))
+                    .orElse(WallZones.NONE);
+        }
+        return wallZones;
+    }
+
+    /**
      * Sets the structure pieces of the village for the repairs, for example for a village that a test places.
      *
      * @param reference the pieces, or null for no repairs
@@ -1036,6 +1058,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     public void setRepairReference(@Nullable VillageReference reference) {
         repairReference = reference;
         repairReferenceSearched = true;
+        wallZones = null;
         tradePlaceCache = null;
         if (level != null) {
             VillageHearts.register(level, worldPosition,
