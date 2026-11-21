@@ -10,6 +10,7 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -55,6 +56,14 @@ public final class FolkNavigation extends GroundPathNavigation {
     public static final float LEAVE_SPEED = 0.6F;
     /** A villager that walks out of a zone of the wall stops at this distance from the heart, in blocks. */
     public static final int LEAVE_CLOSE_ENOUGH = 3;
+    /** The search of a way (see {@link #hasWay}) goes this number of blocks farther than the target. */
+    static final int WAY_MARGIN = 16;
+    /** The search of a way goes this number of blocks from the villager at least. */
+    static final int MIN_WAY_RANGE = 48;
+    /** The search of a way goes this number of blocks from the villager at most. */
+    static final int MAX_WAY_RANGE = 160;
+    /** The search of a way visits this number of nodes at most for each block of its range. */
+    static final int WAY_NODES_PER_BLOCK = 32;
 
     private FolkNavigation(Villager villager, PathNavigation original) {
         super(villager, villager.level());
@@ -123,6 +132,32 @@ public final class FolkNavigation extends GroundPathNavigation {
             return WallZones.NONE;
         }
         return entity.wallZones(level);
+    }
+
+    /**
+     * True if a villager has a way to a target: the path finder of the villager (with the zones of the wall of its
+     * village) finds a path that reaches the target. The search does not change the path of the villager. Its range
+     * is the distance to the target and {@value #WAY_MARGIN} blocks, from {@value #MIN_WAY_RANGE} to
+     * {@value #MAX_WAY_RANGE} blocks.
+     *
+     * @param villager    the villager
+     * @param target      the target
+     * @param closeEnough the path reaches the target at this distance or nearer, in blocks
+     * @return true with a way
+     */
+    public static boolean hasWay(Villager villager, BlockPos target, int closeEnough) {
+        BlockPos from = villager.blockPosition();
+        int distance = (int) Math.ceil(Math.sqrt(from.distSqr(target)));
+        int range = Mth.clamp(distance + WAY_MARGIN, MIN_WAY_RANGE, MAX_WAY_RANGE);
+        PathNavigationRegion region = new PathNavigationRegion(villager.level(), from.offset(-range, -range, -range),
+                from.offset(range, range, range));
+        Evaluator evaluator = new Evaluator();
+        evaluator.setCanPassDoors(true);
+        evaluator.setCanOpenDoors(true);
+        evaluator.setCanFloat(villager.getNavigation().canFloat());
+        PathFinder finder = new PathFinder(evaluator, range * WAY_NODES_PER_BLOCK);
+        Path path = finder.findPath(region, villager, Set.of(target), range, closeEnough, 1.0F);
+        return path != null && path.canReach();
     }
 
     /**

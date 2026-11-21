@@ -283,6 +283,7 @@
   "screen.folkhold_world.village_heart.economy": "Economy",
   "screen.folkhold_world.village_heart.population": "Population",
   "screen.folkhold_world.village_heart.housing": "Housing",
+  "screen.folkhold_world.village_heart.blocked_villagers": "Blocked villagers",
   "screen.folkhold_world.village_heart.jobs": "Jobs",
   "screen.folkhold_world.village_heart.food": "Food",
   "screen.folkhold_world.village_heart.treasury": "Faction treasury",

@@ -299,6 +299,9 @@ public final class VillageInfo {
             rows.add(Row.bar(Component.translatable(KEY + "housing"),
                     Component.translatable(KEY + "value", inhabitants, places), inhabitants, places));
         }
+        int blocked = heart.blockedVillagers().count();
+        Component blockedText = Component.literal(String.valueOf(blocked));
+        rows.add(row("blocked_villagers", blocked > 0 ? blockedText.copy().withColor(TEXT_BAD) : blockedText));
         rows.add(row("food", Component.translatable(KEY + "percent", Math.round(economy.foodCovered() * 100))));
         rows.add(row("treasury", Component.translatable(KEY + "emeralds",
                 SettlementData.get(server).treasury(settlement.factionId()))));

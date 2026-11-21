@@ -32,6 +32,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.settlement.SimulationProfiler;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
+import io.github.nicolasgoyon.folkhold.world.village.BlockedVillagers;
 import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
@@ -174,6 +175,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private VillageReference repairReference;
     /** True after the search of {@link #repairReference}. */
     private boolean repairReferenceSearched;
+    /** The blocked villagers of the village. Not saved: the villagers wait for the delay again after a load. */
+    private final BlockedVillagers blockedVillagers = new BlockedVillagers();
     /** The zones of the wall where the villagers do not walk, or null before the first use. Not saved. */
     @Nullable
     private WallZones wallZones;
@@ -917,6 +920,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         VillageHomes.claim(serverLevel, worldPosition, inhabitants, seats, beds);
         workers.update(serverLevel, this, inhabitants, seats, beds, settlement.get().jobPosts().orElse(List.of()));
         FolkNavigation.leaveWall(worldPosition, wallZones(serverLevel), inhabitants);
+        blockedVillagers.update(worldPosition, inhabitants, now);
         int missing = missingInhabitants.size();
         if (missing == 0) {
             boolean changed = villagersFilling;
@@ -1032,6 +1036,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
             repairReference = VillageReference.find(serverLevel, worldPosition).orElse(null);
         }
         return Optional.ofNullable(repairReference);
+    }
+
+    /** The blocked villagers of the village (see {@link BlockedVillagers}). The heart screen shows their number. */
+    public BlockedVillagers blockedVillagers() {
+        return blockedVillagers;
     }
 
     /**
