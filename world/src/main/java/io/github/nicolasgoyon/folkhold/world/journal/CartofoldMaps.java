@@ -10,14 +10,19 @@ import io.github.nicolasgoyon.cartofold.api.MarkerClickEvent;
 import io.github.nicolasgoyon.cartofold.api.MarkerShapes;
 import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
+import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamp;
+import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamps;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claimant;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerData;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerFaction;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +53,8 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *       again only when the claim or a claim near it changes. The server removes the chunks of a settlement that
  *       claims no chunks. The admin map uses the same chunks (see
  *       {@link io.github.nicolasgoyon.folkhold.world.admin.AdminMap}).</li>
+ *   <li>{@link #TERRITORIES} also has the pillager territories that the player entered, in the color of the
+ *       pillager faction (see {@link io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories}).</li>
  *   <li>{@link #VILLAGES}: a marker for each village of the journal, in the color of its faction. The marker is a
  *       square for a visited village, a ring for a discovered village, and a cross for ruins. A click on the marker
  *       opens the journal at the village.</li>
@@ -67,6 +74,8 @@ public final class CartofoldMaps {
     static final int COARSE_COLOR = 0xFF8C8C8C;
     /** The width of the lines of a route. */
     private static final float ROUTE_WIDTH = 2.0F;
+    /** The start of the id of the area of a pillager territory, before the id of the camp. */
+    public static final String PILLAGER_AREA_PREFIX = "pillagers_";
     /** The Y of a marker for a village with no heart. */
     private static final int DEFAULT_Y = 64;
 
@@ -144,7 +153,11 @@ public final class CartofoldMaps {
      */
     static void update(ServerPlayer player, TerritoryMapPayload map) {
         List<Claimant> claimants = SettlementData.get(player.server).claimants();
-        send(player, TERRITORIES, List.of(map, claimants), () -> territories(map, claimants));
+        PillagerData pillagers = PillagerData.get(player.server);
+        List<PillagerCamp> discovered = pillagers.discovered(player.getUUID());
+        List<PillagerCamp> camps = List.copyOf(pillagers.camps());
+        send(player, TERRITORIES, List.of(map, claimants, discovered, camps),
+                () -> territories(map, claimants, pillagerAreas(discovered, camps, claimants)));
         List<Mark> marks = marks(player);
         send(player, VILLAGES, marks, () -> villages(marks));
     }
@@ -199,7 +212,61 @@ public final class CartofoldMaps {
      * @return the layer
      */
     public static LayerContent territories(TerritoryMapPayload map, List<Claimant> claimants) {
-        return new LayerContent(info(TERRITORIES, 10), areas(map.villages(), claimants), List.of(), List.of());
+        return territories(map, claimants, List.of());
+    }
+
+    /**
+     * The layer of the territories: one area for each discovered village with a territory, and the pillager
+     * territories.
+     *
+     * @param map       the discovered territories of a player
+     * @param claimants the claims of all the settlements now
+     * @param pillagers the areas of the pillager territories (see {@link #pillagerAreas})
+     * @return the layer
+     */
+    public static LayerContent territories(TerritoryMapPayload map, List<Claimant> claimants,
+            List<ChunkArea> pillagers) {
+        List<ChunkArea> areas = new ArrayList<>(areas(map.villages(), claimants));
+        areas.addAll(pillagers);
+        return new LayerContent(info(TERRITORIES, 10), areas, List.of(), List.of());
+    }
+
+    /**
+     * The areas of some pillager territories, in the color of the pillager faction. A territory has the chunks of
+     * its disc that its camp owns (see {@link PillagerCamps}) and that no settlement claims.
+     *
+     * @param shown     the camps of the areas
+     * @param camps     all the camps of the world: the nearest camp gets a chunk of two discs
+     * @param claimants the claims of all the settlements now
+     * @return one area for each camp with chunks
+     */
+    public static List<ChunkArea> pillagerAreas(List<PillagerCamp> shown, Collection<PillagerCamp> camps,
+            List<Claimant> claimants) {
+        List<ChunkArea> areas = new ArrayList<>();
+        for (PillagerCamp camp : shown) {
+            Claimant disc = new Claimant(camp.id(), camp.x(), camp.z(), 0, camp.radius());
+            TerritoryClaims claims = TerritoryClaims.compute(claimants.stream()
+                    .filter(claimant -> TerritoryMaps.touches(disc, claimant)).toList());
+            int centerX = Math.floorDiv(camp.x(), 16);
+            int centerZ = Math.floorDiv(camp.z(), 16);
+            List<ChunkPos> chunks = new ArrayList<>();
+            for (int x = centerX - camp.radius() - 1; x <= centerX + camp.radius() + 1; x++) {
+                for (int z = centerZ - camp.radius() - 1; z <= centerZ + camp.radius() + 1; z++) {
+                    if (claims.ownerOfChunk(x, z).isEmpty() && PillagerCamps.ownerOfChunk(camps, x, z)
+                            .map(owner -> owner.id().equals(camp.id())).orElse(false)) {
+                        chunks.add(new ChunkPos(x, z));
+                    }
+                }
+            }
+            if (chunks.isEmpty()) {
+                continue;
+            }
+            Component title = Component.translatable("message.folkhold_world.pillager_territory_title");
+            areas.add(ChunkArea.of(PILLAGER_AREA_PREFIX + camp.id(), Level.OVERWORLD, chunks,
+                    0x40000000 | PillagerFaction.COLOR, 0xCC000000 | PillagerFaction.COLOR, title,
+                    List.of(Component.translatable("folkhold_world.map.pillager_territory", PillagerFaction.name()))));
+        }
+        return areas;
     }
 
     /**

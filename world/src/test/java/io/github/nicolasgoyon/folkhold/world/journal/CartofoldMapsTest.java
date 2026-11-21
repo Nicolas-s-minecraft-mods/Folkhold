@@ -10,9 +10,11 @@ import io.github.nicolasgoyon.cartofold.api.MapLine;
 import io.github.nicolasgoyon.cartofold.api.MapMarker;
 import io.github.nicolasgoyon.cartofold.api.MarkerShapes;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
+import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamp;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claimant;
 import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerFaction;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -118,5 +120,29 @@ class CartofoldMapsTest {
         assertEquals(List.of(new BlockPos(20, 64, 0), new BlockPos(30, 64, 5)), lines.get(1).points());
         assertEquals(CartofoldMaps.surfaceColor(Route.Surface.FORD), lines.get(1).color());
         assertTrue(coarse.stream().allMatch(line -> line.color() == CartofoldMaps.COARSE_COLOR));
+    }
+
+    /**
+     * A pillager territory has the chunks of the disc of its camp, with no chunk that a settlement claims. It shows in
+     * the color of the pillager faction, in the layer of the territories.
+     */
+    @Test
+    void pillagerTerritoryLeavesTheClaimedChunks() {
+        PillagerCamp camp = new PillagerCamp("camp_8_0", 16 * 8 + 8, 70, 8, 3);
+        PillagerCamp far = new PillagerCamp("camp_40_0", 16 * 40, 70, 0, 3);
+
+        List<ChunkArea> areas = CartofoldMaps.pillagerAreas(List.of(camp), List.of(camp, far), CLAIMANTS);
+
+        assertEquals(1, areas.size());
+        ChunkArea area = areas.get(0);
+        assertEquals(CartofoldMaps.PILLAGER_AREA_PREFIX + "camp_8_0", area.id());
+        assertEquals(0xCC000000 | PillagerFaction.COLOR, area.borderColor());
+        assertTrue(area.contains(8, 0));
+        assertTrue(area.contains(10, 0));
+        assertFalse(area.contains(6, 0), "The chunk (6, 0) is in the claim of Southam");
+        assertFalse(area.contains(12, 0), "The chunk (12, 0) is out of the disc");
+
+        LayerContent layer = CartofoldMaps.territories(TerritoryMapPayload.EMPTY, CLAIMANTS, areas);
+        assertEquals(List.of(area), layer.areas());
     }
 }

@@ -155,6 +155,8 @@ A village belongs to the faction with the nearest territory center, so the numbe
 | Materialization | Creation of the entities of an abstract state near a player. The opposite operation removes the entities and writes their state back. |
 | Quest board | Block in each faction village. It shows the quests of the village. |
 | Ambush | Group of vanilla monsters that attacks an escorted caravan at a point of its route. |
+| Pillager camp | Pillager site of the world (a vanilla pillager outpost by default) with a disc of territory around it. |
+| Pillager patrol | Group of vanilla pillagers that leaves a pillager camp and walks to a player in its territory. |
 
 ### Data model
 
@@ -171,12 +173,12 @@ The mod stores all of this in `SavedData` of the Overworld level (settlements, m
 
 ### Simulation rules (abstract tick every 2,400 ticks = 2 minutes)
 
-**Phase 1: living territories, no wars between NPCs.** Territories change mostly because of the player and because of the growth of the villages. The only military content is the defense of the villages. There are no patrols, no bandits and no armies.
+**Phase 1: living territories, no wars between NPCs.** Territories change mostly because of the player and because of the growth of the villages. The only military content is the defense of the villages and the pillager patrols (see "Pillager faction"). The factions have no patrols, and there are no bandits and no armies.
 
 **Implemented**:
 
 - **Claim**: each village claims a disc of chunks around its position (its heart when the village exists). A chunk is in the disc when the distance from the position to the center of the chunk is not more than the claim radius. The claim radius comes from the level of the village (`claim_radius` in `levels.json`): 9 chunks (144 blocks) for a hamlet, 27 chunks for a city, 33 chunks for a capital. The radius is never smaller than the minimum territory radius of the tier of the level (`min_territory_radius` in the village sizes), which contains the village structure of the tier, and never smaller than the radius that contains all the blocks at 1.5 times the village radius (server configuration). Thus the territory contains all of the village and a margin. A chunk that two villages claim belongs to the nearest village. At equal distance, the village with the higher level gets the chunk.
-- **Unclaimed land**: a chunk that no village claims.
+- **Unclaimed land**: a chunk that no village claims. A chunk of unclaimed land near a pillager camp can be a pillager territory (see "Pillager faction").
 - **Destruction of a village**: kill the captain and destroy the village heart (the central banner). The village becomes ruins. Its territory becomes unclaimed. The ruins stay in the world.
 
 The faction of a new village comes from the regions of the cultures (`CultureRegions`, `CultureMap`). The world has a grid of square regions of 2048 blocks. The seed and the biome at the middle of a region select the culture of the region: a culture has a weight of 8 in its biomes of affinity (the tag `#folkhold_world:culture/<id>`) and a weight of 1 in the other biomes. Valeholm is frequent in the cold and frozen biomes, Ashmark in the temperate biomes, and Sunreach in the hot biomes. A village belongs to the nearest faction of the culture of its region: the faction with the nearest territory center.
@@ -202,6 +204,23 @@ A culture is a template for factions: name, colors, banner, name syllables (for 
 The factions of a world are not static content. The mod creates them when the world starts, from the cultures, and saves them in the world.
 
 All cultures are human. **Planned**: non-human cultures (illagers, piglins).
+
+### Pillager faction
+
+**Implemented** (`PillagerFaction`, `PillagerTerritories`, `PillagerPatrols`, `PillagerData`): the pillagers are a faction with a territory, patrols and a negative reputation. They have no villages.
+
+- **Faction**: one fixed faction with the id `pillagers`. The faction generator does not make it, and it is not in the generated factions. Thus no settlement belongs to it: the faction has no quest board, no quests, no traders and no caravans. Its name is in the language files ("Pillagers", "Pillards"), and its color is a fixed grey.
+- **Camps**: a pillager camp is a structure start of the structure tag `#folkhold_world:pillager_sites`. The tag contains the vanilla pillager outpost, and a data pack can add other pillager sites. When a chunk of the Overworld loads with such a start, the mod records the camp: the center of the box of the structure and the radius of its territory (`territoryRadius`, default 6 chunks). The world data keeps the camps (`folkhold_pillagers.dat`). The mod finds a camp only when its start chunk loads: a camp that the game did not generate is not known.
+- **Territory**: a chunk is in the territory of a camp when the center of the chunk is in the disc of the camp and no settlement claims the chunk. The claims of the settlements always win. When two discs contain a chunk, the nearest camp gets it.
+- **Reputation**: each player has one reputation with the pillagers, in the range of the other factions. The start value is -400 (Hostile). The value never goes up: a positive change has no effect, so the tier is always Hostile or Sworn enemy. The value does not spread to other factions, and the actions with other factions do not change it. A player who kills an illager in a pillager territory loses 10 reputation (`killReputation`).
+- **Patrols**: each second, the server checks the players of the Overworld (not the spectators). A player who stays in a pillager territory for 30 seconds (`patrolDelaySeconds`) gets a patrol from the camp. The next patrol for this player comes after 5 minutes (`patrolCooldownSeconds`). A patrol has 3 pillagers for a Hostile player (`patrolSize`, 0 turns off the patrols), and 2 more for a Sworn enemy (`swornEnemyExtra`).
+  - The patrol spawns 32 blocks from the player in the direction of the camp (`spawnDistance`), or at the camp when the player is nearer to it. The position is on the surface, in a loaded chunk, and not in a fluid. When no position is good, the patrol leaves at the next check.
+  - The members are vanilla pillagers. The first member is a patrol leader with the ominous banner. The members walk to the player with the vanilla patrol goal. While the player is in the territory, the members get the new position of the player at each check. The vanilla AI attacks the player at a short distance.
+  - A patrol is a mobile group that exists only near its player, as a vanilla patrol: it has no abstract state and no route. The members despawn as vanilla patrols, far from the players. The clocks of the patrols are in memory: a server restart starts them again.
+- **Raids**: the leader of a patrol carries the ominous banner. A player who kills it gets the vanilla Bad Omen, and the omen starts a raid at the next village that the player enters, also at a faction village (see "Raids against the faction villages").
+- **Information for the player**: when a player enters a pillager territory, the banner of the HUD shows "Lands of the Pillagers" and the tier of the player. The territory HUD shows the faction and the tier, with no village of the faction. A pillager territory that the player entered shows on the maps (see "Maps and journal").
+- **Entry points**: `PillagerPatrols.send` spawns a patrol at a position and sends it to a target. `PillagerTerritories.campAt` and `PillagerTerritories.nearestCamp` find the camp of a position. Another system can use them, for example an ambush on the route of an escort.
+- The numbers are in the section `pillagers` of the server config (`folkhold_world-server.toml`).
 
 ## World mod: villages, NPCs, defense
 
@@ -1022,6 +1041,7 @@ Mobile groups travel in an abstract form along a route. They become entities onl
 | Patrol | 2 | Faction, around its territory | 3 to 6 soldiers, sometimes one rider | Hostile, neutral or ally, as a function of reputation |
 | Army | 2 | Faction at war | 10 to 30 units | The player can join (ally) or harass it |
 | Bandits | 2 | Fallen faction or event | 3 to 8 outlaws | Hostile, raid caravans |
+| Pillager patrol | 1 | Pillager camp, for a player in its territory | 3 to 5 vanilla pillagers with a leader | Always hostile (see "Pillager faction") |
 
 ### Abstract movement
 
@@ -1482,7 +1502,7 @@ With the default values, a furnace locomotive pulls 2 full wagons up a slope of 
   - A spyglass in the inventory explores the survey maps farther (a feature of Cartofold).
 - **Implemented** (Cartofold, a required dependency of the world mod): the players use the survey maps of Cartofold. In the cartography table, a survey map moves in a direction and updates at a distance. A vanilla map has only the actions of the game. The world mod gets the jar of the GitHub Release of Cartofold until the Modrinth project of Cartofold is public.
 - **Implemented** (`CartofoldMaps`): the maps of Cartofold (the minimap, the map of the world, the survey maps and the map frames) show three layers of the world mod.
-  - `folkhold_world:territories`: the territories of the discovered villages, from the claims of all the settlements. A territory has a light fill and a strong border in the color of its faction. Its tooltip gives the village and its faction.
+  - `folkhold_world:territories`: the territories of the discovered villages, from the claims of all the settlements. A territory has a light fill and a strong border in the color of its faction. Its tooltip gives the village and its faction. The layer also has the pillager territories that the player entered, in the color of the pillager faction, with the chunks that no settlement claims (see "Pillager faction"). The legend of the map of the journal does not show the pillager faction.
   - `folkhold_world:villages`: a marker for each village of the journal, in the color of its faction: a square for a visited village, a ring for a discovered village, a cross for ruins. The tooltip of a marker has one line: the faction and the state. A click on a marker opens the journal at the village.
   - `folkhold_world:route`: the route of the tab "Routes" of the journal, with the colors of the surfaces of the journal. A coarse route is grey. The layer changes when the journal shows a new route. The button "✕" and a forgotten village of the pair remove the layer.
   - The three layers also show on the chunks that the player did not explore: the journal knows these villages, and the frames of the journal show the layers on the relief.

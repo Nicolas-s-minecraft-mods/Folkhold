@@ -195,6 +195,13 @@ public final class WorldConfig {
     public static final UnitStats HEALER;
     public static final UnitStats GOLEM;
     public static final UnitStats RIDER;
+    public static final ModConfigSpec.IntValue PILLAGER_TERRITORY_RADIUS;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_DELAY_SECONDS;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_COOLDOWN_SECONDS;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_SIZE;
+    public static final ModConfigSpec.IntValue PILLAGER_SWORN_ENEMY_EXTRA;
+    public static final ModConfigSpec.IntValue PILLAGER_SPAWN_DISTANCE;
+    public static final ModConfigSpec.IntValue PILLAGER_KILL_REPUTATION;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -1064,6 +1071,44 @@ public final class WorldConfig {
         GOLEM = new UnitStats(builder, "golem", new UnitStats.Defaults(120.0, 14.0, 6.0, 0.22, 24.0));
         // For the rider, movementSpeed is the speed on foot. The horse has its own speed.
         RIDER = new UnitStats(builder, "rider", new UnitStats.Defaults(30.0, 3.0, 2.0, 0.3, 32.0));
+        builder.pop();
+
+        builder.comment("The pillager faction: the territories around the pillager camps (the structures of the tag",
+                        "#folkhold_world:pillager_sites), the patrols and the reputation.")
+                .translation(KEY_PREFIX + "pillagers")
+                .push("pillagers");
+        PILLAGER_TERRITORY_RADIUS = builder
+                .comment("Radius of the territory of a pillager camp, in chunks. The claims of the settlements",
+                        "always win. A new value applies to the camps that the mod finds after the change.")
+                .translation(KEY_PREFIX + "pillagerTerritoryRadius")
+                .defineInRange("territoryRadius", 6, 1, 32);
+        PILLAGER_PATROL_DELAY_SECONDS = builder
+                .comment("Time in seconds that a player stays in a pillager territory before a patrol leaves the",
+                        "camp for this player.")
+                .translation(KEY_PREFIX + "pillagerPatrolDelaySeconds")
+                .defineInRange("patrolDelaySeconds", 30, 1, 3600);
+        PILLAGER_PATROL_COOLDOWN_SECONDS = builder
+                .comment("Time in seconds between two patrols for the same player.")
+                .translation(KEY_PREFIX + "pillagerPatrolCooldownSeconds")
+                .defineInRange("patrolCooldownSeconds", 300, 0, 86400);
+        PILLAGER_PATROL_SIZE = builder
+                .comment("Pillagers in a patrol for a hostile player. 0 turns off the patrols.")
+                .translation(KEY_PREFIX + "pillagerPatrolSize")
+                .defineInRange("patrolSize", 3, 0, 16);
+        PILLAGER_SWORN_ENEMY_EXTRA = builder
+                .comment("Pillagers that a patrol gets more for a sworn enemy of the pillagers.")
+                .translation(KEY_PREFIX + "pillagerSwornEnemyExtra")
+                .defineInRange("swornEnemyExtra", 2, 0, 16);
+        PILLAGER_SPAWN_DISTANCE = builder
+                .comment("Distance in blocks from the player to the spawn position of a patrol, in the direction of",
+                        "the camp. A player nearer to the camp gets the patrol at the camp.")
+                .translation(KEY_PREFIX + "pillagerSpawnDistance")
+                .defineInRange("spawnDistance", 32, 8, 64);
+        PILLAGER_KILL_REPUTATION = builder
+                .comment("Change of the reputation with the pillagers when a player kills an illager in a pillager",
+                        "territory. The reputation with the pillagers never goes up.")
+                .translation(KEY_PREFIX + "pillagerKillReputation")
+                .defineInRange("killReputation", -10, -1000, 0);
         builder.pop();
 
         SPEC = builder.build();
