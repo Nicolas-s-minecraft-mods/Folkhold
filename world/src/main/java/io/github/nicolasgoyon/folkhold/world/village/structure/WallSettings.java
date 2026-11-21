@@ -5,6 +5,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorList;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorType;
 
@@ -22,9 +24,12 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProc
  * @param processors   the processors of the templates of the towers and of the gates, for example a foundation
  * @param palisade     the blocks of the palisade
  * @param pier         the blocks of the pier of a gate that opens on water
+ * @param streetStairs the stair of the streets and of the paths where they go up or down by one block (see
+ *                     {@link StreetStepsPiece}): the stone of the style of the culture and of the biome. The default
+ *                     is cobblestone stairs.
  */
 public record WallSettings(int margin, int towerSpacing, ResourceLocation tower, ResourceLocation gate,
-        Holder<StructureProcessorList> processors, PalisadeBlocks palisade, PierBlocks pier) {
+        Holder<StructureProcessorList> processors, PalisadeBlocks palisade, PierBlocks pier, BlockState streetStairs) {
     /** The largest margin. */
     public static final int MAX_MARGIN = 16;
     /** The largest tower spacing. */
@@ -38,6 +43,8 @@ public record WallSettings(int margin, int towerSpacing, ResourceLocation tower,
             ResourceLocation.CODEC.fieldOf("gate").forGetter(WallSettings::gate),
             StructureProcessorType.LIST_CODEC.fieldOf("processors").forGetter(WallSettings::processors),
             PalisadeBlocks.CODEC.fieldOf("palisade").forGetter(WallSettings::palisade),
-            PierBlocks.CODEC.fieldOf("pier").forGetter(WallSettings::pier))
+            PierBlocks.CODEC.fieldOf("pier").forGetter(WallSettings::pier),
+            BlockState.CODEC.optionalFieldOf("street_stairs", Blocks.COBBLESTONE_STAIRS.defaultBlockState())
+                    .forGetter(WallSettings::streetStairs))
             .apply(instance, WallSettings::new));
 }

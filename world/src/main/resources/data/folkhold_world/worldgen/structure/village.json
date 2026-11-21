@@ -42,6 +42,9 @@
       "rail": {
         "Name": "minecraft:spruce_fence"
       }
+    },
+    "street_stairs": {
+      "Name": "minecraft:cobblestone_stairs"
     }
   },
   "homes": "folkhold_world:village/homes",
@@ -91,6 +94,9 @@
           "rail": {
             "Name": "minecraft:oak_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/plains/homes"
@@ -136,6 +142,9 @@
           "rail": {
             "Name": "minecraft:birch_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/birch/homes"
@@ -181,6 +190,9 @@
           "rail": {
             "Name": "minecraft:acacia_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/savanna/homes"
@@ -220,6 +232,9 @@
           "rail": {
             "Name": "minecraft:sandstone_wall"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/desert/homes"
@@ -266,6 +281,9 @@
           "rail": {
             "Name": "minecraft:mangrove_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mud_brick_stairs"
         }
       },
       "homes": "folkhold_world:village/swamp/homes"
@@ -309,6 +327,9 @@
           "rail": {
             "Name": "minecraft:spruce_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/valeholm/homes",
@@ -359,6 +380,9 @@
           "rail": {
             "Name": "minecraft:oak_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/valeholm/plains/homes",
@@ -405,6 +429,9 @@
           "rail": {
             "Name": "minecraft:birch_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/valeholm/birch/homes",
@@ -451,6 +478,9 @@
           "rail": {
             "Name": "minecraft:acacia_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/valeholm/savanna/homes",
@@ -491,6 +521,9 @@
           "rail": {
             "Name": "minecraft:sandstone_wall"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/valeholm/desert/homes",
@@ -538,6 +571,9 @@
           "rail": {
             "Name": "minecraft:mangrove_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mud_brick_stairs"
         }
       },
       "homes": "folkhold_world:village/valeholm/swamp/homes",
@@ -582,6 +618,9 @@
           "rail": {
             "Name": "minecraft:spruce_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/sunreach/homes",
@@ -632,6 +671,9 @@
           "rail": {
             "Name": "minecraft:oak_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/sunreach/plains/homes",
@@ -678,6 +720,9 @@
           "rail": {
             "Name": "minecraft:birch_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/sunreach/birch/homes",
@@ -724,6 +769,9 @@
           "rail": {
             "Name": "minecraft:acacia_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/sunreach/savanna/homes",
@@ -764,6 +812,9 @@
           "rail": {
             "Name": "minecraft:sandstone_wall"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/sunreach/desert/homes",
@@ -811,6 +862,9 @@
           "rail": {
             "Name": "minecraft:mangrove_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/sunreach/swamp/homes",
@@ -855,6 +909,9 @@
           "rail": {
             "Name": "minecraft:spruce_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
         }
       },
       "homes": "folkhold_world:village/maritime/homes",
@@ -905,6 +962,9 @@
           "rail": {
             "Name": "minecraft:oak_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
         }
       },
       "homes": "folkhold_world:village/maritime/plains/homes",
@@ -951,6 +1011,9 @@
           "rail": {
             "Name": "minecraft:birch_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
         }
       },
       "homes": "folkhold_world:village/maritime/birch/homes",
@@ -997,6 +1060,9 @@
           "rail": {
             "Name": "minecraft:acacia_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
         }
       },
       "homes": "folkhold_world:village/maritime/savanna/homes",
@@ -1037,6 +1103,9 @@
           "rail": {
             "Name": "minecraft:sandstone_wall"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
         }
       },
       "homes": "folkhold_world:village/maritime/desert/homes",
@@ -1084,6 +1153,9 @@
           "rail": {
             "Name": "minecraft:mangrove_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mud_brick_stairs"
         }
       },
       "homes": "folkhold_world:village/maritime/swamp/homes",
@@ -1128,6 +1200,9 @@
           "rail": {
             "Name": "minecraft:spruce_fence"
           }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
         }
       },
       "homes": "folkhold_world:village/cave/homes",

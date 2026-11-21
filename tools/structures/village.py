@@ -4437,6 +4437,9 @@ DESERT = {
     "minecraft:mossy_cobblestone": "minecraft:sandstone",
     "minecraft:stone_bricks": "minecraft:cut_sandstone",
     "minecraft:chiseled_stone_bricks": "minecraft:chiseled_sandstone",
+    "minecraft:cobblestone_stairs": "minecraft:sandstone_stairs",
+    "minecraft:mossy_cobblestone_stairs": "minecraft:sandstone_stairs",
+    "minecraft:stone_brick_stairs": "minecraft:sandstone_stairs",
 }
 # The swamp: mangrove wood, and mud bricks for the stones of the base variant.
 SWAMP = {
@@ -4444,6 +4447,9 @@ SWAMP = {
     "minecraft:cobblestone": "minecraft:mud_bricks",
     "minecraft:mossy_cobblestone": "minecraft:packed_mud",
     "minecraft:stone_bricks": "minecraft:mud_bricks",
+    "minecraft:cobblestone_stairs": "minecraft:mud_brick_stairs",
+    "minecraft:mossy_cobblestone_stairs": "minecraft:mud_brick_stairs",
+    "minecraft:stone_brick_stairs": "minecraft:mud_brick_stairs",
 }
 
 
@@ -4664,6 +4670,18 @@ def processor_lists(v):
     }
 
 
+# The stairs of the streets and of the paths on a slope, for each style: the stone of the culture. The maritime
+# villages have the stone bricks of their quays. The desert and the swamp change the stone (see DESERT and SWAMP).
+STREET_STAIRS = {"valeholm": "minecraft:mossy_cobblestone_stairs", "sunreach": "minecraft:sandstone_stairs"}
+
+
+def street_stairs(v):
+    """The stair block of the streets of a variant."""
+    if v.maritime:
+        return v.state("minecraft:stone_brick_stairs")
+    return v.state(STREET_STAIRS.get(v.culture, "minecraft:cobblestone_stairs"))
+
+
 def village_settings(v):
     """The settings of the village that change with the variant: the start pool, the wall and the homes."""
     return {
@@ -4685,6 +4703,7 @@ def village_settings(v):
                 "post": v.state("minecraft:spruce_log", LOG_UP),
                 "rail": v.state("minecraft:spruce_fence"),
             },
+            "street_stairs": street_stairs(v),
         },
         "homes": v.id("homes"),
     }

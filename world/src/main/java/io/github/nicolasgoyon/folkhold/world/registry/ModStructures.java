@@ -10,6 +10,7 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.OptionalReplacePr
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.RockShellProcessor;
+import io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRingStructure;
@@ -51,6 +52,10 @@ public final class ModStructures {
     /** A pier from a water gate of a village ({@link PierPiece}). */
     public static final DeferredHolder<StructurePieceType, StructurePieceType> PIER =
             PIECES.register("pier", () -> PierPiece::new);
+
+    /** The stairs of a street piece of a village on a slope ({@link StreetStepsPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> STREET_STEPS =
+            PIECES.register("street_steps", () -> (StructurePieceType.ContextlessType) StreetStepsPiece::new);
 
     /** A piece with no blocks that changes the shape of the terrain ({@link TerrainPiece}). */
     public static final DeferredHolder<StructurePieceType, StructurePieceType> TERRAIN =
