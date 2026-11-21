@@ -7,6 +7,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTable;
 import io.github.nicolasgoyon.folkhold.core.sim.village.CaveSite;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanGround;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotUses;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
@@ -71,7 +72,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>The start level of the village comes from the world seed and the start chunk (see
  *       {@link Settlements#startLevel(long, ChunkPos)}). Its tier gives the size of the village (see
  *       {@link VillageSizes}): the plot target and the maximum radius of the plan (see {@link VillagePlan}).</li>
- *   <li>The plan uses the plots with good terrain (see {@link PlotTerrains}): no lava, no deep water and no steep
+ *   <li>The plan follows the ground of the site (see {@link PlanGround}): it grows from the plaza on the ground
+ *       with no cliff, near the level of the plaza, and the line of the first wall does not climb a cliff. The plan
+ *       uses the plots with good terrain (see {@link PlotTerrains}): no lava, no deep water and no steep
  *       slope. A plot with bad terrain is a spare plot. When the good plots in the radius do not give the homes that
  *       the village needs, the missing homes take the nearest plots over deep water with no lava and no steep slope,
  *       on their foundation. The plots of the bank and of the first jobs next to the plaza
@@ -548,7 +551,8 @@ public final class FortifiedVillageStructure extends Structure {
         Rotation turn = start.plaza().getRotation();
         VillagePlan plan = VillagePlan.plan(limited, bands ? size.corePlots(target) : target, style, plazaSize,
                 VillagePlan.Start.around(plazaSize), plots.plan(start.center(), turn),
-                plots.foundation(start.center(), turn), seed);
+                plots.foundation(start.center(), turn),
+                plots.core(start.center(), turn, radius, start.variant().wall().margin()), seed, true);
         VillagePlanPieces.Posts posts = posts(context, start.center(), level, seed);
         int beds = Math.max(0, LevelTables.get().traits(level).maxPopulation() - VillageBeds.staff());
         PlotUses.Result uses = PlotUses.assign(plan, buildings, posts.count());
@@ -581,7 +585,8 @@ public final class FortifiedVillageStructure extends Structure {
                 VillageWall.Wall inner = ring == 0 ? wall : walls.get(ring - 1);
                 VillagePlan bandPlan = VillagePlan.band(size, bandPlots.get(ring), plain,
                         planBox(inner.layout().outline(), start.center(), turn), band,
-                        plots.plan(start.center(), turn), plots.foundation(start.center(), turn), seed + ring + 1);
+                        plots.plan(start.center(), turn), plots.foundation(start.center(), turn),
+                        plots.band(start.center(), turn), seed + ring + 1);
                 PlotUses.Result bandUses = PlotUses.assign(bandPlan, missing, posts.count() - placedPosts);
                 laterHomes -= (int) bandUses.uses().stream().filter(use -> use.type() == PlotUses.Type.HOME).count();
                 VillagePlanPieces.Builder.Stage stage = pieces.plots(plain, bandPlan, bandUses, random, true,
