@@ -80,14 +80,30 @@ public final class CliffSide {
         for (int i = 0; i < drops.length; i++) {
             Cell cell = layout.ringCell(i);
             Side side = layout.ringSide(i);
-            int lowest = levels[i];
-            for (int distance = 1; distance <= DISTANCE; distance++) {
-                lowest = Math.min(lowest, height.applyAsInt(cell.x() - side.insideX() * distance,
-                        cell.z() - side.insideZ() * distance));
-            }
-            drops[i] = levels[i] - lowest;
+            drops[i] = drop(height, cell.x(), cell.z(), -side.insideX(), -side.insideZ(), levels[i], DISTANCE);
         }
         return drops;
+    }
+
+    /**
+     * The drop at a position: a level minus the lowest terrain at 1 to a distance from the position, in a direction.
+     * The cave sites (see {@link CaveSite}) use it for the rock face.
+     *
+     * @param height   the Y of the top block of the terrain at a position (X, Z)
+     * @param x        the X of the position
+     * @param z        the Z of the position
+     * @param outX     the step on the X axis of the direction: -1, 0 or 1
+     * @param outZ     the step on the Z axis of the direction: -1, 0 or 1
+     * @param level    the level at the position
+     * @param distance the largest distance, in blocks
+     * @return the drop, 0 or more
+     */
+    public static int drop(IntBinaryOperator height, int x, int z, int outX, int outZ, int level, int distance) {
+        int lowest = level;
+        for (int step = 1; step <= distance; step++) {
+            lowest = Math.min(lowest, height.applyAsInt(x + outX * step, z + outZ * step));
+        }
+        return level - lowest;
     }
 
     /**
