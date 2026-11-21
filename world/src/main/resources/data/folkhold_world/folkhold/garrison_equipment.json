@@ -1022,7 +1022,12 @@
   },
   "sunreach/hamlet": {
     "guard": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:golden_helmet",
       "chest": "tabard",
       "legs": "minecraft:chainmail_leggings",
@@ -1060,7 +1065,12 @@
   },
   "sunreach/village": {
     "guard": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": {
         "item": "minecraft:golden_helmet",
         "enchantments": {
@@ -1138,7 +1148,12 @@
   },
   "sunreach/town": {
     "guard": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": {
         "item": "minecraft:chainmail_helmet",
         "enchantments": {
@@ -1219,6 +1234,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },
@@ -1323,6 +1339,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 2
         }
       },

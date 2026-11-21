@@ -162,6 +162,9 @@ class GarrisonEquipmentTest {
             }
             assertTrue(sets.pieces("sunreach", set, GarrisonRole.GUARD, id).get(EquipmentSlot.OFFHAND) == null,
                     "A spear needs both hands: no shield " + set);
+            assertTrue(sets.pieces("sunreach", set, GarrisonRole.GUARD, id).get(EquipmentSlot.MAINHAND).enchantments()
+                    .getOrDefault(ResourceLocation.withDefaultNamespace("loyalty"), 0) > 0,
+                    "The spear of a guard comes back after a throw: " + set);
         }
     }
 

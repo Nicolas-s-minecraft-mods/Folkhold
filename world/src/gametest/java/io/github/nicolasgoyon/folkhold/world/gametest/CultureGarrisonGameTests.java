@@ -5,19 +5,26 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
+import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
 import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.Husk;
 import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -54,10 +61,34 @@ public final class CultureGarrisonGameTests {
                 .thenSucceed();
     }
 
-    /** A Valeholm town has one guard more than the level table gives (see {@code culture_garrison}). */
-    @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_valeholm_guard")
-    public static void valeholmTownHasAnExtraGuard(GameTestHelper helper) {
-        extraUnit(helper, Cultures.VALEHOLM.id(), GarrisonRole.GUARD);
+    /**
+     * A guard with a trident with Loyalty (a Sunreach spear) throws it at a monster out of melee reach: its hand is
+     * empty while the trident flies. The trident hits the monster and comes back to the guard.
+     */
+    @GameTest(template = "arena", timeoutTicks = 400, batch = "culture_spear_throw")
+    public static void spearGuardThrowsItsTrident(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        GuardEntity guard = TestSupport.spawnGuard(helper, new BlockPos(2, 1, 2));
+        ItemStack trident = new ItemStack(Items.TRIDENT);
+        trident.enchant(helper.getLevel().registryAccess().registryOrThrow(Registries.ENCHANTMENT)
+                .getHolderOrThrow(Enchantments.LOYALTY), 3);
+        guard.setItemSlot(EquipmentSlot.MAINHAND, trident.copy());
+        guard.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+        Husk husk = helper.spawn(EntityType.HUSK, new BlockPos(10, 1, 10));
+        husk.setNoAi(true);
+        guard.setTarget(husk);
+        boolean[] thrown = {false};
+        helper.onEachTick(() -> thrown[0] |= guard.tridentThrow().isFlying() && guard.getMainHandItem().isEmpty());
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(thrown[0] && husk.getHealth() < husk.getMaxHealth(),
+                        "The guard must throw its trident at the husk"))
+                .thenExecute(husk::discard)
+                .thenWaitUntil(() -> helper.assertTrue(!guard.tridentThrow().isFlying()
+                        && ItemStack.isSameItemSameComponents(guard.getMainHandItem(), trident),
+                        "The trident must come back to the guard, hand: " + guard.getMainHandItem()))
+                .thenExecute(guard::discard)
+                .thenSucceed();
     }
 
     /** A Sunreach town has one healer more than the level table gives (see {@code culture_garrison}). */

@@ -114,6 +114,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     private static final RawAnimation HURT = RawAnimation.begin().thenPlay("misc.hurt");
 
     private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
+    /** The throw of the trident of the unit (see {@link TridentThrow}). */
+    private final TridentThrow tridentThrow = new TridentThrow(this);
 
     /** A unit gives an alert at most once in this time, in ticks: 5 seconds. */
     private static final int ALERT_INTERVAL = 100;
@@ -645,6 +647,11 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         }));
     }
 
+    /** The throw of the trident of the unit: a unit with a trident in its main hand can throw it. */
+    public TridentThrow tridentThrow() {
+        return tridentThrow;
+    }
+
     /** True while the unit charges a crossbow. Only an archer charges a crossbow (see {@link ArcherEntity}). */
     public boolean isChargingCrossbow() {
         return false;
@@ -673,6 +680,7 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     @Override
     protected void customServerAiStep() {
         super.customServerAiStep();
+        tridentThrow.tick();
 
         if (isRouted()) {
             if (getTarget() != null) {
@@ -913,6 +921,7 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
             tag.put(POST_TAG, NbtUtils.writeBlockPos(postPos));
         }
         tag.putLong(ROUTED_TAG, routedUntil);
+        tridentThrow.save(tag, registryAccess());
         if (nightPos != null) {
             tag.put(NIGHT_TAG, NbtUtils.writeBlockPos(nightPos));
         }
@@ -934,5 +943,6 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (tag.contains(EQUIPMENT_TAG)) {
             equipmentSet = tag.getString(EQUIPMENT_TAG);
         }
+        tridentThrow.load(tag, registryAccess());
     }
 }
