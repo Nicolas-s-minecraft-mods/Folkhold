@@ -1,0 +1,211 @@
+package io.github.nicolasgoyon.folkhold.world.village;
+
+import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
+import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import javax.annotation.Nullable;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.Brain;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.level.PathNavigationRegion;
+import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.level.pathfinder.PathFinder;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+
+/**
+ * The navigation of a villager: the path finder of a vanilla villager, with the zones of the wall of its village (see
+ * {@link WallZones}).
+ *
+ * <ul>
+ *   <li>Each villager gets this navigation when it joins a level (see {@link #onEntityJoin}). A villager that is not
+ *       a villager of a faction village keeps the vanilla path finder.</li>
+ *   <li>A villager of a faction village does not walk into a zone of the wall of its village: the stairs and the
+ *       platforms of the towers, and the tops of the palisade columns. The navigation gives no path to a target in a
+ *       zone, and the path finder gives no path through a zone. Thus the vanilla behaviors do not walk to a wander
+ *       target or a work target on the wall, and the villagers do not stop in a group at the foot of a stair. The
+ *       units of the garrison are not villagers: they walk on the towers.</li>
+ *   <li>A villager in a zone walks out of it. In a zone, the path finder gives a step to a position of a zone only
+ *       on the same level or down: the villager walks down the stair of a tower, and does not go up. A step to the top
+ *       of a palisade column starts only on the top of a column: a path from a tower does not end on a column. The
+ *       check of the villagers by the heart gives a walk to the heart to a villager in a zone (see
+ *       {@link #leaveWall}).</li>
+ *   <li>The zones come from the heart of the village of the villager (see
+ *       {@link VillageHeartBlockEntity#wallZones}). With the chunk of the heart not loaded, the villager has no
+ *       zone.</li>
+ *   <li>A builder at work gets the navigation of a builder (see
+ *       {@link io.github.nicolasgoyon.folkhold.world.construction.BuilderNavigation}). This navigation has no zone: a
+ *       builder repairs the towers and the palisade. After the work, the builder gets this navigation again.</li>
+ * </ul>
+ */
+public final class FolkNavigation extends GroundPathNavigation {
+    /** The speed of a villager that walks out of a zone of the wall, as a multiple of its speed. */
+    public static final float LEAVE_SPEED = 0.6F;
+    /** A villager that walks out of a zone of the wall stops at this distance from the heart, in blocks. */
+    public static final int LEAVE_CLOSE_ENOUGH = 3;
+
+    private FolkNavigation(Villager villager, PathNavigation original) {
+        super(villager, villager.level());
+        setCanOpenDoors(true);
+        setCanFloat(original.canFloat());
+    }
+
+    @Override
+    @Nullable
+    protected Path createPath(Set<BlockPos> targets, int regionOffset, boolean offsetUpward, int accuracy,
+            float followRange) {
+        WallZones zones = mob instanceof Villager villager ? zonesOf(villager) : WallZones.NONE;
+        if (zones.isEmpty() || targets.stream().noneMatch(zones::contains)) {
+            return super.createPath(targets, regionOffset, offsetUpward, accuracy, followRange);
+        }
+        Set<BlockPos> outside = targets.stream().filter(target -> !zones.contains(target))
+                .collect(Collectors.toUnmodifiableSet());
+        return outside.isEmpty() ? null
+                : super.createPath(outside, regionOffset, offsetUpward, accuracy, followRange);
+    }
+
+    @Override
+    protected PathFinder createPathFinder(int maxVisitedNodes) {
+        this.nodeEvaluator = new Evaluator();
+        this.nodeEvaluator.setCanPassDoors(true);
+        return new PathFinder(this.nodeEvaluator, maxVisitedNodes);
+    }
+
+    /**
+     * Gives this navigation to a villager that joins a server level.
+     *
+     * @param event the event
+     */
+    public static void onEntityJoin(EntityJoinLevelEvent event) {
+        if (!event.getLevel().isClientSide() && event.getEntity() instanceof Villager villager) {
+            equip(villager);
+        }
+    }
+
+    /**
+     * Gives this navigation to a villager, if it does not have it.
+     *
+     * @param villager the villager
+     */
+    public static void equip(Villager villager) {
+        PathNavigation current = villager.navigation;
+        if (!(current instanceof FolkNavigation)) {
+            current.stop();
+            villager.navigation = new FolkNavigation(villager, current);
+        }
+    }
+
+    /**
+     * The zones of the wall of the village of a villager.
+     *
+     * @param villager the villager
+     * @return the zones, or {@link WallZones#NONE} for a villager that is not a villager of a faction village, or with
+     *         the chunk of its heart not loaded
+     */
+    public static WallZones zonesOf(Villager villager) {
+        if (!(villager.level() instanceof ServerLevel level) || !VillageFolk.isVillageFolk(villager)) {
+            return WallZones.NONE;
+        }
+        BlockPos heart = BlockPos.of(villager.getPersistentData().getLong(Merchants.VILLAGE_TAG));
+        if (!level.isLoaded(heart) || !(level.getBlockEntity(heart) instanceof VillageHeartBlockEntity entity)) {
+            return WallZones.NONE;
+        }
+        return entity.wallZones(level);
+    }
+
+    /**
+     * Gives a walk to the heart to each villager of a village that stands in a zone of the wall. A builder at work and
+     * a villager in a bed keep their walk.
+     *
+     * @param heart       the heart of the village
+     * @param zones       the zones of the wall of the village
+     * @param inhabitants the loaded villagers of the village
+     * @return the number of villagers that get a walk to the heart
+     */
+    public static int leaveWall(BlockPos heart, WallZones zones, List<Villager> inhabitants) {
+        if (zones.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (Villager villager : inhabitants) {
+            if (!(villager.navigation instanceof FolkNavigation) || villager.isSleeping()
+                    || !zones.contains(villager.blockPosition())) {
+                continue;
+            }
+            Brain<Villager> brain = villager.getBrain();
+            Optional<WalkTarget> target = brain.getMemory(MemoryModuleType.WALK_TARGET);
+            if (target.isPresent() && target.get().getTarget().currentBlockPosition().equals(heart)) {
+                continue;
+            }
+            brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(heart, LEAVE_SPEED, LEAVE_CLOSE_ENOUGH));
+            count++;
+        }
+        return count;
+    }
+
+    /**
+     * The path types of a vanilla villager. A position in a zone of the wall is a neighbor only of a position in a zone
+     * on the same level or above it. A position on a palisade column is a neighbor only of a position on a column.
+     */
+    private static final class Evaluator extends WalkNodeEvaluator {
+        private WallZones zones = WallZones.NONE;
+        /** The node of the search that gets its neighbors, or null. */
+        @Nullable
+        private Node expanded;
+
+        @Override
+        public void prepare(PathNavigationRegion region, Mob mob) {
+            super.prepare(region, mob);
+            zones = mob instanceof Villager villager ? zonesOf(villager) : WallZones.NONE;
+        }
+
+        @Override
+        public void done() {
+            super.done();
+            zones = WallZones.NONE;
+            expanded = null;
+        }
+
+        @Override
+        public int getNeighbors(Node[] outputArray, Node node) {
+            expanded = node;
+            try {
+                return super.getNeighbors(outputArray, node);
+            } finally {
+                expanded = null;
+            }
+        }
+
+        @Override
+        @Nullable
+        protected Node findAcceptedNode(int x, int y, int z, int verticalDeltaLimit, double nodeFloorLevel,
+                Direction direction, PathType pathType) {
+            Node node = super.findAcceptedNode(x, y, z, verticalDeltaLimit, nodeFloorLevel, direction, pathType);
+            if (node == null || zones.isEmpty()) {
+                return node;
+            }
+            boolean column = zones.onColumn(node.x, node.y, node.z);
+            if (!column && !zones.inTower(node.x, node.y, node.z)) {
+                return node;
+            }
+            Node from = expanded;
+            if (from == null || node.y > from.y) {
+                return null;
+            }
+            boolean fromColumn = zones.onColumn(from.x, from.y, from.z);
+            return fromColumn || (!column && zones.inTower(from.x, from.y, from.z)) ? node : null;
+        }
+    }
+}

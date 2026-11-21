@@ -57,6 +57,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SimulationProfiler;
 import io.github.nicolasgoyon.folkhold.world.settlement.SimulationTicker;
 import io.github.nicolasgoyon.folkhold.world.testworld.TestWorldPack;
 import io.github.nicolasgoyon.folkhold.world.village.BankChests;
+import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.RaidHelpers;
 import io.github.nicolasgoyon.folkhold.world.village.RepairEquivalents;
@@ -128,6 +129,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(Merchants::onTrade);
         NeoForge.EVENT_BUS.addListener(VillageFolk::onDeath);
         NeoForge.EVENT_BUS.addListener(VillageFolk::onBabySpawn);
+        NeoForge.EVENT_BUS.addListener(FolkNavigation::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(TerritoryMessages::onPlayerTick);
         NeoForge.EVENT_BUS.addListener(TerritoryMessages::onLoggedOut);
         NeoForge.EVENT_BUS.addListener(TerritoryMessages::onServerStopped);
