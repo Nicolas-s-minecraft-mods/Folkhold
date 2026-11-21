@@ -214,11 +214,11 @@ Each faction village has fortifications and guards. A player in iron armor with 
 
       | Tier | Level | Archers | First wall | Ring 1 | Ring 2 | Ring 3 | All the walls | Full layout |
       |---|---|---|---|---|---|---|---|---|
-      | hamlet | 4 | 2 | 4 | - | - | - | 4 | FULL_HAMLET |
-      | village | 8 | 3 | 6 | - | - | - | 6 | FULL_VILLAGE |
-      | town | 12 | 4 | 8 | 4 | - | - | 12 | FULL_TOWN |
-      | city | 16 | 5 | 10 | 4 | 4 | - | 18 | FULL_CITY |
-      | capital | 20 | 5 | 10 | 4 | 4 | 4 | 22 | FULL_CAPITAL |
+      | hamlet | 4 | 2 | 4 | - | - | - | 4 | 11 |
+      | village | 8 | 3 | 6 | - | - | - | 6 | 12 |
+      | town | 12 | 4 | 8 | 4 | - | - | 12 | 36 |
+      | city | 16 | 5 | 10 | 4 | 4 | - | 18 | 64 |
+      | capital | 20 | 5 | 10 | 4 | 4 | 4 | 22 | 101 |
   - The cliff side (`CliffSide`): a village on a cliff uses the cliff as a wall. The drop of a block of the line is the base of its column minus the lowest terrain at 1 to 10 blocks outside the line, on the axis out of its side. A block with a drop of 8 blocks or more is a cliff block: the flat terrain of a gate goes 6 blocks out, and the stairs of an exit have 6 steps at most, thus no walk goes from the gate down the cliff.
     - No gate opens on a cliff: a gate is on a cliff when its level is 8 blocks or more above the lowest terrain at 1 to 10 blocks in front of its 5 blocks. The level of a gate is the highest base under it, in the range of its arm (or of its path across the band for a ring). A gate of the first wall on a cliff moves along its side by 2 blocks at most, to the nearest position with no cliff block: at this distance, it stays on the axis of its street and keeps its arm. Else the gate goes away when the wall keeps another gate. The towers of the side follow the new position of the gate, or the palisade takes the place of the gate.
     - The wall keeps at least one gate. When each gate is on a cliff, the gate with the nearest free position on its side moves there: this gate can have no arm. When no side has a free position, the gate with the smallest drop stays. A gate on the water side of a maritime village (no palisade, see `SeaWall`) does not count as another gate.
