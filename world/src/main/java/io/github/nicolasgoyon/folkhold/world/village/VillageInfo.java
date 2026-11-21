@@ -302,6 +302,9 @@ public final class VillageInfo {
         int blocked = heart.blockedVillagers().count();
         Component blockedText = Component.literal(String.valueOf(blocked));
         rows.add(row("blocked_villagers", blocked > 0 ? blockedText.copy().withColor(TEXT_BAD) : blockedText));
+        if (heart.rescues().waitsForLadders()) {
+            rows.add(row("rescue", Component.translatable(KEY + "rescue.no_ladders").withColor(TEXT_BAD)));
+        }
         rows.add(row("food", Component.translatable(KEY + "percent", Math.round(economy.foodCovered() * 100))));
         rows.add(row("treasury", Component.translatable(KEY + "emeralds",
                 SettlementData.get(server).treasury(settlement.factionId()))));
