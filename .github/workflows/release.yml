@@ -8,6 +8,9 @@ name: Release
 # the publication did not happen.
 # When the tag of the version exists, the workflow does not build and makes no release. To run it again after a failure, use
 # "Run workflow" on main.
+# After the release, the job CurseForge uploads the jars of the release to the CurseForge project of each mod
+# (scripts/curseforge_publish.py, docs/curseforge/). It needs the repository secret CURSEFORGE_TOKEN: with no secret,
+# the job uploads nothing. A failure of this job does not change the release: run the job again from the run page.
 # After the release, the workflow starts the workflow Pages on develop. Pages publishes the site of the project with
 # the downloads and the notes of the releases, and version.json for the version badge of the README.
 
@@ -118,6 +121,45 @@ jobs:
           MAVEN_USER: ${{ github.actor }}
           MAVEN_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/maven_publish.py build/maven "https://maven.pkg.github.com/${GITHUB_REPOSITORY,,}"
+
+  curseforge:
+    name: CurseForge
+    needs: [build, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      COMMIT: ${{ needs.build.outputs.commit }}
+      VERSION: ${{ needs.build.outputs.version }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The history and the tags, for the release notes.
+          fetch-depth: 0
+
+      - name: Write the release notes
+        uses: ./.github/actions/version
+        with:
+          release: 'true'
+          rev: ${{ env.COMMIT }}
+          notes: ${{ runner.temp }}/release-notes.md
+
+      - name: Download the mod jars
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: folkhold-mods
+
+      - name: Upload the jars to CurseForge
+        env:
+          NOTES: ${{ runner.temp }}/release-notes.md
+        shell: bash
+        run: |
+          if [ -z "$CURSEFORGE_TOKEN" ]; then
+            echo "::notice::The secret CURSEFORGE_TOKEN is not set. No upload to CurseForge."
+            exit 0
+          fi
+          python3 scripts/curseforge_publish.py "$VERSION" "$NOTES"
 
   # The site deploys from develop (see pages.yml). A workflow_dispatch event of the GITHUB_TOKEN starts a workflow run.
   site:
