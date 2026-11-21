@@ -692,33 +692,33 @@ The vanilla raid stays. Near a faction village, Folkhold changes where the raide
 - difficulty: Normal (the GameTest world).
 - garrison: the full garrison of the level, no refill, 4 villagers with a bed, no palisade (except the palisade cells).
 
-The units and the raiders use random sources with no fixed seed, thus a cell gives a rate, not a fixed result. With 12 trials, the hold rate of one run has a standard deviation of about 13 points at a rate of 0.7 (about 9 points with 24 trials). The server runs of the border cells below give the same rates within this noise: chi-square test of the runs, p = 0.15 or more in each cell and culture, p = 0.46 for all the cells together. The balance decisions use the pooled runs, not one run.
+The units and the raiders use random sources with no fixed seed, thus a cell gives a rate, not a fixed result. With 12 trials, the hold rate of one run has a standard deviation of about 13 points at a rate of 0.7 (about 9 points with 24 trials). The server runs of the border cells below give the same rates within this noise: chi-square test of the runs, p = 0.2 or more in each cell of Ashmark and Valeholm, p = 0.37 or more for Sunreach. The balance decisions use the pooled runs, not one run.
 
-**Measured balance** (difficulty Normal, Ashmark, no palisade): one server run of all the cells (2 trials each), and the 3 server runs of the border cells "raid level 4, town" and "raid level 5, city" below. Each cell: results / trials. **Bold**: not the target.
+**Measured balance** (difficulty Normal, Ashmark, no palisade): one server run of all the cells (2 trials each), and the 4 server runs of the border cells "raid level 4, town" and "raid level 5, city" below. Each cell: results / trials. **Bold**: not the target.
 
 | Raid level | Hamlet (1) | Village (5) | Town (9) | City (13) | Capital (17) |
 | --- | --- | --- | --- | --- | --- |
 | 1 | falls 2 / 2 | holds 1, **falls 1** / 2 | holds 2 / 2 | holds 2 / 2 | holds 2 / 2 |
 | 3 | falls 2 / 2 | falls 2 / 2 | holds 2 / 2 | holds 2 / 2 | holds 2 / 2 |
-| 4 | falls 2 / 2 | falls 2 / 2 | falls 11, **holds 25** / 36 | holds 2 / 2 | holds 2 / 2 |
-| 5 | falls 2 / 2 | falls 2 / 2 | falls 2 / 2 | holds 40, **falls 7** / 47 | holds 2 / 2 |
+| 4 | falls 2 / 2 | falls 2 / 2 | falls 12, **holds 36** / 48 | holds 2 / 2 | holds 2 / 2 |
+| 5 | falls 2 / 2 | falls 2 / 2 | falls 2 / 2 | holds 53, **falls 10** / 63 | holds 2 / 2 |
 
 - The city has 6 guards, 5 archers, 2 healers and 2 golems, thus 5 units more than the town. With a difference of one unit, the measured values of extra ravagers (1 / 1 and 1 / 2 at the levels 4 / 5) do not make the town fall and the city hold with a good probability.
-- Gaps: the town holds against a raid of level 4 in 69 % of the trials: this cell misses its target (Falls). The city holds against a raid of level 5 in 85 % of the trials. The village holds against a raid of level 1 in 1 of 2 trials of the run of all the cells.
+- Gaps: the town holds against a raid of level 4 in 75 % of the trials: this cell misses its target (Falls). The city holds against a raid of level 5 in 84 % of the trials. The village holds against a raid of level 1 in 1 of 2 trials of the run of all the cells.
 
-**Border cells by culture and server run** (`FOLKHOLD_RAID_MATRIX=12`, `FOLKHOLD_RAID_CELLS=4:9,5:13`, `FOLKHOLD_RAID_CULTURE=ashmark,valeholm,sunreach`, with the culture advantages of "Garrison": the war horn of Valeholm, the spear throws and the extra guard and healer of Sunreach). Each cell: holds / trials. The Ashmark city cell also has the trials of the exit test "City holds" of the same run (3 to 5 trials).
+**Border cells by culture and server run** (`FOLKHOLD_RAID_CELLS=4:9,5:13`, with the culture advantages of "Garrison": the war horn of Valeholm, the spear throws and the extra guards and healer of Sunreach). Each cell: holds / trials. Runs 1 to 4: `FOLKHOLD_RAID_MATRIX=12`, `FOLKHOLD_RAID_CULTURE=ashmark,valeholm,sunreach`. Runs 5 and 6: `FOLKHOLD_RAID_MATRIX=16`, `FOLKHOLD_RAID_CULTURE=sunreach`. The Ashmark city cell also has the trials of the exit test "City holds" of the same run (3 to 5 trials).
 
-| Culture | Cell | Run 1 | Run 2 | Run 3 | Pooled | Chi-square p |
-| --- | --- | --- | --- | --- | --- | --- |
-| Ashmark | Town, raid 4 | 8 / 12 | 7 / 12 | 10 / 12 | 25 / 36 (69 %) | 0.40 |
-| Valeholm | Town, raid 4 | 9 / 12 | 7 / 12 | 11 / 12 | 27 / 36 (75 %) | 0.17 |
-| Sunreach | Town, raid 4 | 9 / 12 | 5 / 12 | 9 / 12 | 23 / 36 (64 %) | 0.15 |
-| Ashmark | City, raid 5 | 13 / 15 | 13 / 15 | 14 / 17 | 40 / 47 (85 %) | 0.92 |
-| Valeholm | City, raid 5 | 11 / 12 | 10 / 12 | 10 / 12 | 31 / 36 (86 %) | 0.79 |
-| Sunreach | City, raid 5 | 9 / 12 | 10 / 12 | 7 / 12 | 26 / 36 (72 %) | 0.38 |
+| Culture | Cell | Run 1 | Run 2 | Run 3 | Run 4 | Run 5 | Run 6 | Pooled | Chi-square p |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Ashmark | Town, raid 4 | 8 / 12 | 7 / 12 | 10 / 12 | 11 / 12 | | | 36 / 48 (75 %) | 0.22 |
+| Valeholm | Town, raid 4 | 9 / 12 | 7 / 12 | 11 / 12 | 8 / 12 | | | 35 / 48 (73 %) | 0.30 |
+| Sunreach | Town, raid 4 | | | | | 12 / 16 | 14 / 16 | 26 / 32 (81 %) | 0.37 |
+| Ashmark | City, raid 5 | 13 / 15 | 13 / 15 | 14 / 17 | 13 / 16 | | | 53 / 63 (84 %) | 0.96 |
+| Valeholm | City, raid 5 | 11 / 12 | 10 / 12 | 10 / 12 | 12 / 12 | | | 43 / 48 (90 %) | 0.48 |
+| Sunreach | City, raid 5 | | | | | 13 / 16 | 14 / 16 | 27 / 32 (84 %) | 0.63 |
 
-- Town, raid 4: the 3 cultures are within 11 points.
-- City, raid 5: Sunreach is 13 points below Ashmark and 14 points below Valeholm.
+- Town, raid 4: the 3 cultures are within 8 points.
+- City, raid 5: the 3 cultures are within 6 points.
 
 **Measured with a palisade** (the Falls cells, difficulty Normal, Ashmark, closed gates at the start, the run of all the cells). Each cell: results / trials.
 
@@ -827,7 +827,7 @@ All values are configurable, with a global difficulty multiplier. This lets us a
 - the equipment of each culture: the set `<culture>/<set>` (for example `valeholm/hamlet`) changes some roles for the units of the factions of the culture. The other roles come from the set with no culture. A stronger weapon goes with a lighter armor:
   - Valeholm: axes and shields for the guards and the captain, axes for the riders, with chainmail at the small levels. The archers have bows. War horn: when the village goes into alert, a horn sounds at the heart (a vanilla goat horn sound, subtitle "War horn sounds", heard up to 64 blocks away). Each loaded unit of the village gets Resistance I for 30 seconds. While the alert continues, the horn sounds again each 30 seconds (`WarHorn`, section `warHorn` of the server config).
   - Ashmark: the swords and the shields of the sets with no culture. The archers have crossbows.
-  - Sunreach: spears (tridents) with no shield for the guards and the riders, light armor with gold. The captain keeps a shield. All the tridents have Loyalty III, with Sharpness in the sets `city` and `capital`: they come back after a throw. From the town, a Sunreach settlement has one more guard and one more healer (`culture_garrison` in `levels.json`).
+  - Sunreach: spears (tridents) with no shield for the guards and the riders, light armor with gold. The captain keeps a shield. All the tridents have Loyalty III, with Sharpness in the sets `city` and `capital`: they come back after a throw. From the town, a Sunreach settlement has two more guards and one more healer (`culture_garrison` in `levels.json`).
     - The archers throw their tridents in place of arrows. The next throw comes at the shot interval of the archers after the throw, when the trident is back.
     - The guards, the captain and the riders throw their spears at a target out of melee reach: farther than 3 blocks, at 14 blocks or less, in sight, at most once in 30 ticks. In melee reach, they attack with the trident in the hand.
     - The throw (`TridentThrow`): the hand of the unit is empty while the trident flies. The trident comes back to the unit, and the unit catches it at 1.5 blocks or less from its eyes. A trident that does not come back in 5 seconds goes back into the hand. A thrown trident does the vanilla damage (8, plus Sharpness), not the arrow damage of the config. The unit is the owner of the trident: as an arrow, it does not hurt the villagers and the units of the village (`FriendlyFire`), and nobody can pick it up. A thrown trident in a chunk that unloads does not load again: the unit keeps the item in its save data and gets it back at load.

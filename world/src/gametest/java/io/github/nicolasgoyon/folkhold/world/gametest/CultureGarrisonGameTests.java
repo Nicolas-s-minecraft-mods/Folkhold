@@ -92,10 +92,10 @@ public final class CultureGarrisonGameTests {
     }
 
     /**
-     * A Sunreach town has one guard and one healer more than the level table gives (see {@code culture_garrison}).
+     * A Sunreach town has two guards and one healer more than the level table gives (see {@code culture_garrison}).
      */
     @GameTest(template = "arena", timeoutTicks = TestSupport.WORKER_TICKS, batch = "culture_sunreach_units")
-    public static void sunreachTownHasAnExtraGuardAndHealer(GameTestHelper helper) {
+    public static void sunreachTownHasExtraGuardsAndAHealer(GameTestHelper helper) {
         VillageHeartBlockEntity[] heart = new VillageHeartBlockEntity[1];
         thenGarrison(helper, heart, Cultures.SUNREACH.id())
                 .thenExecute(() -> {
@@ -104,7 +104,7 @@ public final class CultureGarrisonGameTests {
                     int tableGuards = LevelTables.get().traits(TOWN).garrison().count("guard");
                     int tableHealers = LevelTables.get().traits(TOWN).garrison().count("healer");
                     removeVillage(helper, heart[0]);
-                    helper.assertTrue(guards == tableGuards + 1, "The town must have " + (tableGuards + 1)
+                    helper.assertTrue(guards == tableGuards + 2, "The town must have " + (tableGuards + 2)
                             + " guards: " + guards);
                     helper.assertTrue(healers == tableHealers + 1, "The town must have " + (tableHealers + 1)
                             + " healers: " + healers);
