@@ -602,7 +602,7 @@ public final class VillageRepairGameTests {
     }
 
     /** The position of the origin of the template {@code village/center} in the test: from its village heart. */
-    private static BlockPos templateOrigin(GameTestHelper helper, BlockPos heartPos) {
+    static BlockPos templateOrigin(GameTestHelper helper, BlockPos heartPos) {
         StructureTemplate template = helper.getLevel().getStructureManager().get(CENTER)
                 .orElseThrow(() -> new GameTestAssertException("No template " + CENTER));
         Optional<BlockPos> local = ConstructionTargets.templateBlocks(helper.getLevel(), template).stream()
