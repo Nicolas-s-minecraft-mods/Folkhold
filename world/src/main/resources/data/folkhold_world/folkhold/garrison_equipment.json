@@ -1022,7 +1022,12 @@
   },
   "sunreach/hamlet": {
     "guard": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:golden_helmet",
       "chest": "tabard",
       "legs": "minecraft:chainmail_leggings",
@@ -1030,7 +1035,12 @@
     },
     "archer": [
       {
-        "mainhand": "minecraft:bow",
+        "mainhand": {
+          "item": "minecraft:trident",
+          "enchantments": {
+            "minecraft:loyalty": 3
+          }
+        },
         "head": "minecraft:golden_helmet",
         "chest": "tabard",
         "legs": "minecraft:leather_leggings",
@@ -1038,7 +1048,12 @@
       }
     ],
     "captain": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "offhand": "minecraft:shield",
       "head": "banner",
       "chest": "minecraft:golden_chestplate",
@@ -1046,7 +1061,12 @@
       "feet": "minecraft:chainmail_boots"
     },
     "rider": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:golden_helmet",
       "chest": "tabard",
       "legs": "minecraft:leather_leggings",
@@ -1055,7 +1075,12 @@
   },
   "sunreach/village": {
     "guard": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": {
         "item": "minecraft:golden_helmet",
         "enchantments": {
@@ -1079,9 +1104,9 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 1
+            "minecraft:loyalty": 3
           }
         },
         "head": {
@@ -1101,7 +1126,12 @@
       }
     ],
     "captain": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "offhand": "minecraft:shield",
       "head": "banner",
       "chest": {
@@ -1124,7 +1154,12 @@
       }
     },
     "rider": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:golden_helmet",
       "chest": "tabard",
       "legs": "minecraft:leather_leggings",
@@ -1133,7 +1168,12 @@
   },
   "sunreach/town": {
     "guard": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": {
         "item": "minecraft:chainmail_helmet",
         "enchantments": {
@@ -1157,9 +1197,9 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 1
+            "minecraft:loyalty": 3
           }
         },
         "head": {
@@ -1179,7 +1219,12 @@
       }
     ],
     "captain": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "offhand": "minecraft:shield",
       "head": "banner",
       "chest": {
@@ -1202,7 +1247,12 @@
       }
     },
     "rider": {
-      "mainhand": "minecraft:trident",
+      "mainhand": {
+        "item": "minecraft:trident",
+        "enchantments": {
+          "minecraft:loyalty": 3
+        }
+      },
       "head": "minecraft:chainmail_helmet",
       "chest": "tabard",
       "legs": "minecraft:chainmail_leggings",
@@ -1214,6 +1264,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },
@@ -1240,9 +1291,10 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 2
+            "minecraft:loyalty": 3,
+            "minecraft:sharpness": 1
           }
         },
         "head": {
@@ -1265,6 +1317,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },
@@ -1293,6 +1346,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },
@@ -1317,6 +1371,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 2
         }
       },
@@ -1343,9 +1398,10 @@
     "archer": [
       {
         "mainhand": {
-          "item": "minecraft:bow",
+          "item": "minecraft:trident",
           "enchantments": {
-            "minecraft:power": 3
+            "minecraft:loyalty": 3,
+            "minecraft:sharpness": 2
           }
         },
         "head": {
@@ -1373,6 +1429,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 2
         }
       },
@@ -1401,6 +1458,7 @@
       "mainhand": {
         "item": "minecraft:trident",
         "enchantments": {
+          "minecraft:loyalty": 3,
           "minecraft:sharpness": 1
         }
       },

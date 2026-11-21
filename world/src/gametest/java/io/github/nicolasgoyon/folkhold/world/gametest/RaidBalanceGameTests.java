@@ -140,9 +140,9 @@ public final class RaidBalanceGameTests {
      */
     static final String CULTURE = Cultures.ASHMARK.id();
     /**
-     * The environment variable that selects the culture of the matrix trials, for example {@code sunreach} (the case
-     * of the value does not change the culture). With no value, the matrix uses {@link #CULTURE}. The exit tests
-     * always use {@link #CULTURE}.
+     * The environment variable that selects the cultures of the matrix trials, for example {@code sunreach} or
+     * {@code ashmark,valeholm,sunreach} (the case of the value does not change the culture). The matrix runs its trials
+     * for each culture. With no value, the matrix uses {@link #CULTURE}. The exit tests always use {@link #CULTURE}.
      */
     static final String CULTURE_VARIABLE = "FOLKHOLD_RAID_CULTURE";
     static final int[] MATRIX_RAIDS = {1, 3, 4, 5};
@@ -246,37 +246,40 @@ public final class RaidBalanceGameTests {
         int runs = runs(System.getenv(MATRIX_VARIABLE));
         List<TestFunction> tests = new ArrayList<>();
         List<int[]> cells = cells(System.getenv(CELLS_VARIABLE));
-        if (!cells.isEmpty()) {
+        for (String culture : cultures(System.getenv(CULTURE_VARIABLE))) {
             for (int run = 1; run <= runs; run++) {
-                for (int[] cell : cells) {
-                    boolean palisade = cell[2] != 0;
-                    String name = String.format(Locale.ROOT, "raid%d_level%02d%s_run%d", cell[0], cell[1],
-                            palisade ? "_palisade" : "", run);
-                    tests.add(matrixTrial(name, cell[0], cell[1], palisade));
+                if (!cells.isEmpty()) {
+                    for (int[] cell : cells) {
+                        boolean palisade = cell[2] != 0;
+                        String name = String.format(Locale.ROOT, "raid%d_level%02d%s_%s_run%d", cell[0], cell[1],
+                                palisade ? "_palisade" : "", culture, run);
+                        tests.add(matrixTrial(name, cell[0], cell[1], palisade, culture));
+                    }
+                    continue;
                 }
-            }
-            return tests;
-        }
-        for (int run = 1; run <= runs; run++) {
-            for (int raidLevel : MATRIX_RAIDS) {
-                for (int villageLevel : MATRIX_LEVELS) {
-                    String name = String.format(Locale.ROOT, "raid%d_level%02d_run%d", raidLevel, villageLevel, run);
-                    tests.add(matrixTrial(name, raidLevel, villageLevel, false));
+                for (int raidLevel : MATRIX_RAIDS) {
+                    for (int villageLevel : MATRIX_LEVELS) {
+                        String name = String.format(Locale.ROOT, "raid%d_level%02d_%s_run%d", raidLevel, villageLevel,
+                                culture, run);
+                        tests.add(matrixTrial(name, raidLevel, villageLevel, false, culture));
+                    }
                 }
-            }
-            for (int[] cell : PALISADE_CELLS) {
-                String name = String.format(Locale.ROOT, "raid%d_level%02d_palisade_run%d", cell[0], cell[1], run);
-                tests.add(matrixTrial(name, cell[0], cell[1], true));
+                for (int[] cell : PALISADE_CELLS) {
+                    String name = String.format(Locale.ROOT, "raid%d_level%02d_palisade_%s_run%d", cell[0], cell[1],
+                            culture, run);
+                    tests.add(matrixTrial(name, cell[0], cell[1], true, culture));
+                }
             }
         }
         return tests;
     }
 
-    private static TestFunction matrixTrial(String name, int raidLevel, int villageLevel, boolean palisade) {
+    private static TestFunction matrixTrial(String name, int raidLevel, int villageLevel, boolean palisade,
+            String culture) {
         return new TestFunction("raid_matrix_" + name, "raidmatrix." + name, TEMPLATE, Rotation.NONE,
                 TestSupport.WORKER_TICKS, 0L, false, false, 1, 1, false,
                 helper -> thenTrial(helper, helper.startSequence(), raidLevel, villageLevel, palisade,
-                        culture(System.getenv(CULTURE_VARIABLE)), () -> false,
+                        culture, () -> false,
                         result -> helper.assertTrue(
                                 result.outcome() == Outcome.HOLDS || result.outcome() == Outcome.FALLS,
                                 "The trial must give a result: " + result))
@@ -317,9 +320,18 @@ public final class RaidBalanceGameTests {
         }
     }
 
-    /** The culture of the matrix trials: the value of the variable in lower case, else {@link #CULTURE}. */
-    static String culture(String value) {
-        return value == null || value.isBlank() ? CULTURE : value.trim().toLowerCase(Locale.ROOT);
+    /**
+     * The cultures of the matrix trials: the values of the variable in lower case, separated by commas, else
+     * {@link #CULTURE}. The matrix runs its trials for each culture.
+     */
+    static List<String> cultures(String value) {
+        List<String> cultures = new ArrayList<>();
+        if (value != null) {
+            for (String culture : Splitter.on(',').trimResults().omitEmptyStrings().split(value)) {
+                cultures.add(culture.toLowerCase(Locale.ROOT));
+            }
+        }
+        return cultures.isEmpty() ? List.of(CULTURE) : cultures;
     }
 
     /**
@@ -437,8 +449,8 @@ public final class RaidBalanceGameTests {
                         return;
                     }
                     Result result = trial[0].result();
-                    FolkholdWorld.LOGGER.info("Raid trial: raid level {}, village level {}{}: {}", raidLevel,
-                            villageLevel, palisade ? ", palisade" : "", result);
+                    FolkholdWorld.LOGGER.info("Raid trial: raid level {}, village level {}{}, culture {}: {}",
+                            raidLevel, villageLevel, palisade ? ", palisade" : "", culture, result);
                     if (result.raiders() > 0 && result.outcome() != Outcome.FALLS) {
                         trial[0].raid.getAllRaiders().forEach(raider -> FolkholdWorld.LOGGER.info(
                                 "Raid trial: raider left: {}, offset from the heart {}, distance {} blocks, ticking {}, "

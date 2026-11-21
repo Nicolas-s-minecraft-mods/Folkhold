@@ -31,7 +31,7 @@ import net.minecraft.world.item.component.ChargedProjectiles;
 import net.minecraft.world.level.Level;
 
 /**
- * Archer: ranged defender of a faction village. It carries a bow or a crossbow (see the equipment sets in
+ * Archer: ranged defender of a faction village. It carries a bow, a crossbow or a trident (see the equipment sets in
  * {@code garrison_equipment.json}).
  *
  * <p>Behavior (see also {@link FactionUnit}):
@@ -45,6 +45,10 @@ import net.minecraft.world.level.Level;
  *       The rule is the same for all the weapons.</li>
  *   <li>With a crossbow, the archer charges the crossbow, aims, and shoots a bolt (see {@link CrossbowAttackGoal}).
  *       The bolt is faster than an arrow of the bow, so it does more damage.</li>
+ *   <li>With a trident, the archer throws the trident (see {@link TridentThrow}). Its hand is empty while the
+ *       trident flies. With Loyalty, the trident comes back to the archer, and the archer catches it. The next throw
+ *       comes at the shot interval after the throw, when the trident is back. The trident does the vanilla damage of a
+ *       thrown trident (8, more with Sharpness), not the arrow damage.</li>
  *   <li>The arrow damage comes from the "attackDamage" value of the archer config.</li>
  * </ul>
  */
@@ -52,7 +56,6 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
     /** True while the archer charges its crossbow. The clients use it for the animation. */
     private static final EntityDataAccessor<Boolean> CHARGING_CROSSBOW =
             SynchedEntityData.defineId(ArcherEntity.class, EntityDataSerializers.BOOLEAN);
-
     public ArcherEntity(EntityType<? extends ArcherEntity> type, Level level) {
         super(type, level);
     }
@@ -84,22 +87,29 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
         float radius = WorldConfig.ARCHER_ATTACK_RADIUS.get().floatValue();
         goalSelector.addGoal(2, new PlatformLookoutGoal(this));
         goalSelector.addGoal(2, new PostRangedAttackGoal(this, interval, radius) {
+            // The goal continues while the trident flies: the time between two throws starts at the throw.
             @Override
             public boolean canUse() {
-                return holdsBow() && super.canUse();
+                return (holdsBow() || holdsTrident() || tridentThrow().isFlying()) && super.canUse();
+            }
+
+            @Override
+            protected boolean isReady() {
+                return holdsBow() || holdsTrident();
             }
         });
         goalSelector.addGoal(2, new CrossbowAttackGoal(this, true, radius, 1.0));
         goalSelector.addGoal(3, new RangedAttackGoal(this, 1.0, interval, radius) {
             @Override
             public boolean canUse() {
-                return getPostPos() == null && holdsBow() && super.canUse();
+                return getPostPos() == null && (holdsBow() || holdsTrident()) && super.canUse();
             }
 
             // The goal stops when the archer has no target. Else the vanilla goal can shoot until its path ends.
             @Override
             public boolean canContinueToUse() {
-                return getPostPos() == null && holdsBow() && getTarget() != null && super.canContinueToUse();
+                return getPostPos() == null && (holdsBow() || holdsTrident() || tridentThrow().isFlying())
+                        && getTarget() != null && super.canContinueToUse();
             }
         });
         goalSelector.addGoal(3, new CrossbowAttackGoal(this, false, radius, 1.0));
@@ -111,9 +121,25 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
         setAggressive(target != null);
     }
 
+    /** The attack goals of the archer throw its trident. */
+    @Override
+    protected boolean throwsSpear() {
+        return false;
+    }
+
     /** True if the archer holds a bow in its main hand. */
     public boolean holdsBow() {
         return getMainHandItem().getItem() instanceof BowItem;
+    }
+
+    /** True if the archer holds a trident in its main hand. */
+    public boolean holdsTrident() {
+        return tridentThrow().holdsTrident();
+    }
+
+    /** True while the trident of the archer flies: the archer does not hold it. */
+    public boolean hasThrownTrident() {
+        return tridentThrow().isFlying();
     }
 
     /** True if the archer holds a crossbow in its main hand. */
@@ -179,8 +205,28 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
         triggerAnim(HOLD_CONTROLLER, CROSSBOW_SHOT);
     }
 
+    /**
+     * Throws the trident of the main hand at a target (see {@link TridentThrow}).
+     *
+     * @param target the target
+     */
+    public void throwTrident(LivingEntity target) {
+        tridentThrow().throwAt(target, 0.1);
+    }
+
     @Override
     public void performRangedAttack(LivingEntity target, float velocity) {
+        if (holdsTrident()) {
+            throwTrident(target);
+            return;
+        }
+        if (hasThrownTrident()) {
+            tridentThrow().throwWhenBack(target);
+            return;
+        }
+        if (!holdsBow()) {
+            return;
+        }
         ItemStack bow = getItemInHand(ProjectileUtil.getWeaponHoldingHand(this, item -> item == Items.BOW));
         ItemStack ammo = new ItemStack(Items.ARROW);
         AbstractArrow arrow = ProjectileUtil.getMobArrow(this, ammo, velocity, bow);

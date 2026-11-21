@@ -114,6 +114,16 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     private static final RawAnimation HURT = RawAnimation.begin().thenPlay("misc.hurt");
 
     private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
+    /** The throw of the trident of the unit (see {@link TridentThrow}). */
+    private final TridentThrow tridentThrow = new TridentThrow(this);
+    /** A unit throws its spear only at a target farther than this distance, in blocks: out of melee reach. */
+    static final double SPEAR_MIN_DISTANCE = 3.0;
+    /** The largest distance of a throw of the spear, in blocks. */
+    static final double SPEAR_RANGE = 14.0;
+    /** The shortest time between two throws of the spear, in ticks. */
+    static final int SPEAR_INTERVAL = 30;
+    /** The value of {@code tickCount} at the last throw of the spear. Not saved. */
+    private int lastSpearThrow = -SPEAR_INTERVAL;
 
     /** A unit gives an alert at most once in this time, in ticks: 5 seconds. */
     private static final int ALERT_INTERVAL = 100;
@@ -645,6 +655,11 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         }));
     }
 
+    /** The throw of the trident of the unit: a unit with a trident in its main hand can throw it. */
+    public TridentThrow tridentThrow() {
+        return tridentThrow;
+    }
+
     /** True while the unit charges a crossbow. Only an archer charges a crossbow (see {@link ArcherEntity}). */
     public boolean isChargingCrossbow() {
         return false;
@@ -673,6 +688,7 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     @Override
     protected void customServerAiStep() {
         super.customServerAiStep();
+        tridentThrow.tick();
 
         if (isRouted()) {
             if (getTarget() != null) {
@@ -727,7 +743,36 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         } else if (tickCount % 40 == 0 && canSpeak()) {
             greetFriendlyPlayer();
         }
+        throwSpear(target);
         unitServerAiStep(target);
+    }
+
+    /**
+     * True if the unit throws its spear: a trident with Loyalty in the main hand (see {@link #throwSpear}). The
+     * archers return false: their attack goals throw the trident.
+     */
+    protected boolean throwsSpear() {
+        return true;
+    }
+
+    /**
+     * Throws the spear of the unit at its target: a unit with a trident with Loyalty (a spear of Sunreach) throws it
+     * at a target farther than {@link #SPEAR_MIN_DISTANCE} and at {@link #SPEAR_RANGE} blocks or less, in sight, at
+     * most once in {@link #SPEAR_INTERVAL} ticks. The trident comes back to the unit (see {@link TridentThrow}). In
+     * melee reach, the unit attacks with the trident in its hand.
+     *
+     * @param target the target, or null
+     */
+    private void throwSpear(@Nullable LivingEntity target) {
+        if (target == null || !throwsSpear() || tickCount - lastSpearThrow < SPEAR_INTERVAL
+                || !tridentThrow.holdsLoyalTrident()) {
+            return;
+        }
+        double distance = distanceTo(target);
+        if (distance > SPEAR_MIN_DISTANCE && distance <= SPEAR_RANGE && getSensing().hasLineOfSight(target)) {
+            lastSpearThrow = tickCount;
+            tridentThrow.throwAt(target, 0.1);
+        }
     }
 
     private void greetFriendlyPlayer() {
@@ -913,6 +958,7 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
             tag.put(POST_TAG, NbtUtils.writeBlockPos(postPos));
         }
         tag.putLong(ROUTED_TAG, routedUntil);
+        tridentThrow.save(tag, registryAccess());
         if (nightPos != null) {
             tag.put(NIGHT_TAG, NbtUtils.writeBlockPos(nightPos));
         }
@@ -934,5 +980,6 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (tag.contains(EQUIPMENT_TAG)) {
             equipmentSet = tag.getString(EQUIPMENT_TAG);
         }
+        tridentThrow.load(tag, registryAccess());
     }
 }

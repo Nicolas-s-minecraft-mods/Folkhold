@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.blocks.block.JobSignBlockEntity;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
 import io.github.nicolasgoyon.folkhold.core.sim.faction.VillageNames;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.GarrisonTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.PostAssignment;
@@ -49,6 +50,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillagePens;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
+import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -215,6 +217,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private int tradePlaceCalculations;
     /** Game time of the last ring of the bells. Not saved. */
     private long lastBellTick = Long.MIN_VALUE / 2;
+    /** The game time of the last sound of the war horn (see {@link WarHorn}). Not saved. */
+    private long lastHornTick = Long.MIN_VALUE / 2;
     /** Game time of the last shared target. Not saved. */
     private long lastShareTick = Long.MIN_VALUE / 2;
     /** True after the heart is linked to its settlement. Not saved: the heart links again after a load. */
@@ -358,7 +362,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
 
     /**
      * Changes the alert state and saves the change. When the village leaves the calm state, each archer goes to the
-     * nearest free tower (see {@link #assignAlertPosts()}).
+     * nearest free tower (see {@link #assignAlertPosts()}), the bells ring, and the war horn of the village sounds
+     * (see {@link WarHorn}).
      */
     public void setAlertState(AlertState state) {
         if (alertState != state) {
@@ -368,7 +373,16 @@ public class VillageHeartBlockEntity extends BlockEntity {
             if (wasCalm) {
                 assignAlertPosts();
                 ringBells();
+                soundWarHorn();
             }
+        }
+    }
+
+    /** Sounds the war horn of the village, when the culture of its faction has one (see {@link WarHorn}). */
+    private void soundWarHorn() {
+        if (level instanceof ServerLevel serverLevel && WarHorn.hasHorn(serverLevel, this)) {
+            lastHornTick = level.getGameTime();
+            WarHorn.sound(serverLevel, this);
         }
     }
 
@@ -777,15 +791,18 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
-     * The garrison of the level of the settlement of the heart (see {@code garrison} in the level table). A heart with
-     * no settlement uses the level 1.
+     * The garrison of the level of the settlement of the heart (see {@code garrison} in the level table), with the
+     * extra units of the culture of the faction of the heart ({@code culture_garrison}). A heart with no settlement
+     * uses the level 1.
      */
     public GarrisonTraits garrisonTraits() {
         int settlementLevel = 1;
+        String culture = null;
         if (level != null && level.getServer() != null) {
             settlementLevel = Settlements.of(level.getServer(), this).map(Settlement::level).orElse(1);
+            culture = FactionVisuals.faction(level.getServer(), factionId).map(FactionSpec::cultureId).orElse(null);
         }
-        return LevelTables.get().traits(settlementLevel).garrison();
+        return LevelTables.get().traits(settlementLevel).garrison().forCulture(culture);
     }
 
     /** The loaded cats of this village. */
@@ -1448,6 +1465,10 @@ public class VillageHeartBlockEntity extends BlockEntity {
         long calmDelayTicks = WorldConfig.CALM_DELAY_SECONDS.get() * 20L;
         if (heart.alertState != AlertState.CALM && level.getGameTime() - heart.lastBellTick >= BELL_INTERVAL) {
             heart.ringBells();
+        }
+        long hornTicks = WarHorn.intervalTicks();
+        if (heart.alertState != AlertState.CALM && hornTicks > 0 && level.getGameTime() - heart.lastHornTick >= hornTicks) {
+            heart.soundWarHorn();
         }
         if (heart.alertState != AlertState.CALM && level.getGameTime() - heart.lastThreatTick > calmDelayTicks) {
             heart.setAlertState(AlertState.CALM);

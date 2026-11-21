@@ -171,13 +171,15 @@ public final class LevelTable {
         int[][] garrisons = {{2, 2, 1, 0, 0, 0}, {5, 3, 1, 1, 0, 0}, {5, 4, 1, 1, 1, 1}, {6, 5, 1, 2, 2, 2},
                 {6, 5, 1, 2, 2, 3}};
         String[] equipment = {"hamlet", "town", "city", "city", "capital"};
+        // The extra units of the cultures from the town: they close the gap of the culture equipment in the raids.
+        Map<String, Map<String, Integer>> cultureUnits = Map.of("sunreach", Map.of("guard", 1, "healer", 1));
         List<LevelTraits> levels = new ArrayList<>();
         for (int level = 1; level <= 20; level++) {
             int tier = (level - 1) / 4;
             int[] units = garrisons[tier];
             GarrisonTraits garrison = new GarrisonTraits(Map.of("guard", units[0], "archer", units[1],
                     "captain", units[2], "healer", units[3], "golem", units[4], "rider", units[5]),
-                    equipment[tier]);
+                    equipment[tier], tier >= 2 ? cultureUnits : Map.of());
             levels.add(new LevelTraits(10 + 5 * level, claimRadius[level - 1], 4 + 5 * level, 1 + level,
                     128 * level, 2 + level, cats[level - 1], garrison));
         }

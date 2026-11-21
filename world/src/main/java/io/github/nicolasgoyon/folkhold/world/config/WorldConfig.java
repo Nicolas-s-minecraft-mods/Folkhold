@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.config;
 
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Reach;
 import io.github.nicolasgoyon.folkhold.core.sim.schedule.DaySchedule;
+import java.util.List;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
@@ -41,6 +42,10 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue CAPTAIN_AURA_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue CAPTAIN_AURA_DURATION_TICKS;
     public static final ModConfigSpec.IntValue CAPTAIN_AURA_LEVEL;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> WAR_HORN_CULTURES;
+    public static final ModConfigSpec.IntValue WAR_HORN_SECONDS;
+    public static final ModConfigSpec.IntValue WAR_HORN_INTERVAL_SECONDS;
+    public static final ModConfigSpec.IntValue WAR_HORN_LEVEL;
     public static final ModConfigSpec.IntValue ARCHER_ATTACK_INTERVAL_TICKS;
     public static final ModConfigSpec.DoubleValue ARCHER_ATTACK_RADIUS;
     public static final ModConfigSpec.DoubleValue ARCHER_BOLT_SPEED;
@@ -353,6 +358,29 @@ public final class WorldConfig {
                 .comment("Level of the Strength effect of the aura. 0: no aura.")
                 .translation(KEY_PREFIX + "captainAuraLevel")
                 .defineInRange("auraLevel", 1, 0, 5);
+        builder.pop();
+
+        builder.comment("War horn: when a village of these cultures goes into alert, a horn gives Resistance to the",
+                        "units of the village.")
+                .translation(KEY_PREFIX + "warHorn")
+                .push("warHorn");
+        WAR_HORN_CULTURES = builder
+                .comment("The ids of the cultures with a war horn.")
+                .translation(KEY_PREFIX + "warHornCultures")
+                .defineListAllowEmpty("cultures", List.of("valeholm"), () -> "", value -> value instanceof String);
+        WAR_HORN_SECONDS = builder
+                .comment("Duration in seconds of the Resistance effect of one sound of the horn.")
+                .translation(KEY_PREFIX + "warHornSeconds")
+                .defineInRange("seconds", 30, 1, 600);
+        WAR_HORN_INTERVAL_SECONDS = builder
+                .comment("While the alert continues, the horn sounds again after this time, in seconds. 0: the horn",
+                        "sounds only when the village goes into alert.")
+                .translation(KEY_PREFIX + "warHornIntervalSeconds")
+                .defineInRange("intervalSeconds", 30, 0, 3600);
+        WAR_HORN_LEVEL = builder
+                .comment("Level of the Resistance effect of the horn. 0: no war horn.")
+                .translation(KEY_PREFIX + "warHornLevel")
+                .defineInRange("level", 1, 0, 4);
         builder.pop();
 
         builder.comment("Archer: the ranged unit of the garrison.")

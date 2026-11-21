@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.github.nicolasgoyon.folkhold.core.sim.garrison.GarrisonTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,6 +32,51 @@ class LevelTablesTest {
             for (long seed = 0; seed < 1000; seed++) {
                 assertEquals(code.startLevel(seed), file.startLevel(seed), "Seed " + seed);
             }
+        }
+    }
+
+    /**
+     * The extra units of a culture ({@code culture_garrison}) add to the garrison of the settlements of the culture
+     * only.
+     */
+    @Test
+    void cultureGarrisonAddsUnitsForItsCulture() {
+        JsonObject json = JsonParser.parseString("""
+                {
+                  "tiers": [{"id": "town", "min_level": 1, "max_level": 1}],
+                  "levels": [
+                    {"experience": 15, "claim_radius": 9, "max_population": 9, "job_slots": 2,
+                     "stock_capacity": 128, "trade_offers": 3, "cats": 1,
+                     "garrison": {"guard": 5, "healer": 1}, "equipment": "city",
+                     "culture_garrison": {"valeholm": {"guard": 1}, "sunreach": {"healer": 2}}}
+                  ],
+                  "start_levels": [{"min_level": 1, "max_level": 1, "weight": 1}]
+                }
+                """).getAsJsonObject();
+
+        GarrisonTraits garrison = LevelTables.parse(json).traits(1).garrison();
+
+        assertEquals(6, garrison.forCulture("valeholm").count("guard"));
+        assertEquals(1, garrison.forCulture("valeholm").count("healer"));
+        assertEquals(3, garrison.forCulture("sunreach").count("healer"));
+        assertEquals(5, garrison.forCulture("ashmark").count("guard"));
+        assertEquals(5, garrison.forCulture(null).count("guard"));
+        assertEquals("city", garrison.forCulture("valeholm").equipment());
+    }
+
+    /** The default table gives one guard and one healer more to Sunreach, from the town. */
+    @Test
+    void defaultTableHasTheExtraUnitsOfTheCultures() {
+        LevelTable table = LevelTable.DEFAULT;
+        for (int level = 1; level <= table.maxLevel(); level++) {
+            GarrisonTraits garrison = table.traits(level).garrison();
+            int extra = level >= 9 ? 1 : 0;
+            assertEquals(garrison.count("guard") + extra, garrison.forCulture("sunreach").count("guard"),
+                    "Level " + level);
+            assertEquals(garrison.count("healer") + extra, garrison.forCulture("sunreach").count("healer"),
+                    "Level " + level);
+            assertEquals(garrison.units(), garrison.forCulture("ashmark").units(), "Level " + level);
+            assertEquals(garrison.units(), garrison.forCulture("valeholm").units(), "Level " + level);
         }
     }
 

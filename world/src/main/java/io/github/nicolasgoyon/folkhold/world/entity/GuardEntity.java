@@ -26,6 +26,8 @@ import net.minecraft.world.level.Level;
  *       the other units in the alert radius and in its village.</li>
  *   <li>It never chases a target that is farther than the chase radius from the home position.</li>
  *   <li>It raises its shield when the target is not in melee reach.</li>
+ *   <li>A guard with a trident with Loyalty (a spear of Sunreach) throws it at a target out of melee reach (see
+ *       {@link FactionUnit#throwsSpear()}).</li>
  * </ul>
  */
 public class GuardEntity extends FactionUnit {
