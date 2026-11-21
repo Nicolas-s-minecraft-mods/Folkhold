@@ -284,6 +284,18 @@ public final class WallLayout {
         return rings(inner, size.rings(), band);
     }
 
+    /**
+     * This wall with other gates: the same outline and the same tower spacing. The towers and the segments of the
+     * palisade obey the new gates. A side with no gate in the list has no gate. The cliff side of a wall uses it (see
+     * {@link CliffSide}).
+     *
+     * @param gates the gates, at most one for each side counts
+     * @return the wall with these gates
+     */
+    public WallLayout withGates(List<Gate> gates) {
+        return build(outline, towerSpacing, gates);
+    }
+
     /** Calculates the towers, the gates and the segments of the palisade on an outline. */
     private static WallLayout build(Box outline, int towerSpacing, List<Gate> gates) {
         List<Gate> placed = new ArrayList<>();
@@ -316,12 +328,12 @@ public final class WallLayout {
     }
 
     /** The first distance of the middle of a gate: after the corner tower, its stair and the clearance. */
-    private static int firstGate() {
+    static int firstGate() {
         return TOWER + STAIR + GATE_CLEARANCE + GATE / 2;
     }
 
     /** The last distance of the middle of a gate: before the clearance and the next corner tower. */
-    private static int lastGate(int length) {
+    static int lastGate(int length) {
         return length - 1 - TOWER - GATE_CLEARANCE - GATE / 2;
     }
 

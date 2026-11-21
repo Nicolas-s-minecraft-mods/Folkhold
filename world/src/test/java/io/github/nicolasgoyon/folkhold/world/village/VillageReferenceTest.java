@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadeBlocks;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import java.util.List;
@@ -13,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RotatedPillarBlock;
@@ -52,6 +54,29 @@ class VillageReferenceTest {
         assertEquals(Blocks.COBBLESTONE.defaultBlockState(), blocks.get(new BlockPos(10, 65, -2)));
         assertEquals(LOG, blocks.get(new BlockPos(10, 69, -2)));
         assertFalse(blocks.containsKey(new BlockPos(10, 70, -2)), "The point is not a part of the reference");
+    }
+
+    /**
+     * A low palisade on the edge of a cliff has its logs only: the repairs do not add the logs of a full palisade. The
+     * number of logs stays after a save and a load. Data with no number of logs gives a full palisade.
+     */
+    @Test
+    void lowPalisadeHasItsLogsOnly() {
+        PalisadePiece piece = new PalisadePiece(10, -4, 0, 1, new int[] {64, 65}, PalisadeHeights.LOW_LOGS, BLOCKS);
+        VillageReference reference = new VillageReference(List.of(new VillageReference.Piece(TOWER,
+                new BlockPos(10, 63, -9), Rotation.CLOCKWISE_90)), List.of(VillageReference.Palisade.of(piece)),
+                Optional.empty());
+
+        Map<BlockPos, BlockState> blocks = reference.palisadeBlocks();
+
+        assertEquals(2 * (1 + PalisadeHeights.LOW_LOGS), blocks.size(), "The blocks: " + blocks.keySet());
+        assertEquals(LOG, blocks.get(new BlockPos(10, 64 + PalisadeHeights.LOW_LOGS, -4)));
+        assertFalse(blocks.containsKey(new BlockPos(10, 65 + PalisadeHeights.LOW_LOGS, -4)));
+        CompoundTag tag = reference.save();
+        assertEquals(reference, VillageReference.load(BuiltInRegistries.BLOCK.asLookup(), tag).orElseThrow());
+        tag.getList("Palisades", Tag.TAG_COMPOUND).getCompound(0).remove("Logs");
+        VillageReference full = VillageReference.load(BuiltInRegistries.BLOCK.asLookup(), tag).orElseThrow();
+        assertEquals(PalisadeHeights.LOGS, full.palisades().get(0).logs());
     }
 
     /** The area contains the positions inside the palisade, the palisade included, at all heights. */

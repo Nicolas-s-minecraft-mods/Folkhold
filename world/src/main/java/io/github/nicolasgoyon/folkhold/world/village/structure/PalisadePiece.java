@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.village.structure;
 
+import io.github.nicolasgoyon.folkhold.core.sim.village.CliffSide;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.world.registry.ModStructures;
 import java.util.Arrays;
@@ -27,12 +28,13 @@ import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
  * A segment of the palisade of a village: a straight line of columns, each one with its base.
  *
  * <ul>
- *   <li>A column is the base block at its base, and {@link PalisadeHeights#LOGS} logs above it. Every second column
- *       has a point on top (the sum of X and Z is even).</li>
+ *   <li>A column is the base block at its base, and the logs of the segment above it: {@link PalisadeHeights#LOGS}
+ *       logs, or {@link PalisadeHeights#LOW_LOGS} logs on the edge of a cliff (see {@link CliffSide}). Every second
+ *       column has a point on top (the sum of X and Z is even).</li>
  *   <li>A foundation fills the space under the base, down to the ground: the column never floats. The foundation goes
  *       down {@link #MAX_FOUNDATION} blocks at most.</li>
  *   <li>The terrain adaptation of a near piece can raise the ground above the base. Then more logs go up: the top
- *       of the column stays {@link PalisadeHeights#LOGS} blocks above the ground.</li>
+ *       of the column stays the number of logs of the segment above the ground.</li>
  * </ul>
  *
  * <p>The piece does not change the terrain before the generation of the chunks: the bases follow the terrain (see
@@ -49,10 +51,11 @@ public final class PalisadePiece extends StructurePiece implements PieceBeardifi
     private final int stepX;
     private final int stepZ;
     private final int[] bases;
+    private final int logs;
     private final PalisadeBlocks blocks;
 
     /**
-     * Makes a segment of palisade.
+     * Makes a segment of palisade with {@link PalisadeHeights#LOGS} logs on each column.
      *
      * @param startX the X of the first column
      * @param startZ the Z of the first column
@@ -62,12 +65,28 @@ public final class PalisadePiece extends StructurePiece implements PieceBeardifi
      * @param blocks the blocks of the palisade
      */
     public PalisadePiece(int startX, int startZ, int stepX, int stepZ, int[] bases, PalisadeBlocks blocks) {
-        super(ModStructures.PALISADE.get(), 0, boundingBox(startX, startZ, stepX, stepZ, bases));
+        this(startX, startZ, stepX, stepZ, bases, PalisadeHeights.LOGS, blocks);
+    }
+
+    /**
+     * Makes a segment of palisade.
+     *
+     * @param startX the X of the first column
+     * @param startZ the Z of the first column
+     * @param stepX  the X step from a column to the next one: -1, 0 or 1
+     * @param stepZ  the Z step from a column to the next one: -1, 0 or 1
+     * @param bases  the base of each column, at least one
+     * @param logs   the number of logs of each column, above its base: 1 or more
+     * @param blocks the blocks of the palisade
+     */
+    public PalisadePiece(int startX, int startZ, int stepX, int stepZ, int[] bases, int logs, PalisadeBlocks blocks) {
+        super(ModStructures.PALISADE.get(), 0, boundingBox(startX, startZ, stepX, stepZ, bases, logs));
         this.startX = startX;
         this.startZ = startZ;
         this.stepX = stepX;
         this.stepZ = stepZ;
         this.bases = bases.clone();
+        this.logs = logs;
         this.blocks = blocks;
     }
 
@@ -79,20 +98,25 @@ public final class PalisadePiece extends StructurePiece implements PieceBeardifi
         this.stepX = tag.getInt("StepX");
         this.stepZ = tag.getInt("StepZ");
         this.bases = tag.getIntArray("Bases");
+        // The data of a segment with no number of logs is a full palisade.
+        this.logs = tag.contains("Logs") ? tag.getInt("Logs") : PalisadeHeights.LOGS;
         this.blocks = PalisadeBlocks.load(context.registryAccess().lookupOrThrow(Registries.BLOCK),
                 tag.getCompound("Blocks"));
     }
 
-    private static BoundingBox boundingBox(int startX, int startZ, int stepX, int stepZ, int[] bases) {
+    private static BoundingBox boundingBox(int startX, int startZ, int stepX, int stepZ, int[] bases, int logs) {
         if (bases.length == 0) {
             throw new IllegalArgumentException("A segment of palisade needs at least one column");
+        }
+        if (logs < 1) {
+            throw new IllegalArgumentException("A column of palisade needs at least one log: " + logs);
         }
         int endX = startX + stepX * (bases.length - 1);
         int endZ = startZ + stepZ * (bases.length - 1);
         int low = Arrays.stream(bases).min().orElseThrow();
         int high = Arrays.stream(bases).max().orElseThrow();
         return new BoundingBox(Math.min(startX, endX), low - MAX_FOUNDATION, Math.min(startZ, endZ),
-                Math.max(startX, endX), high + MAX_RAISE + PalisadeHeights.LOGS + 1, Math.max(startZ, endZ));
+                Math.max(startX, endX), high + MAX_RAISE + logs + 1, Math.max(startZ, endZ));
     }
 
     @Override
@@ -102,6 +126,7 @@ public final class PalisadePiece extends StructurePiece implements PieceBeardifi
         tag.putInt("StepX", stepX);
         tag.putInt("StepZ", stepZ);
         tag.putIntArray("Bases", bases);
+        tag.putInt("Logs", logs);
         tag.put("Blocks", blocks.save());
     }
 
@@ -125,7 +150,7 @@ public final class PalisadePiece extends StructurePiece implements PieceBeardifi
             level.setBlock(pos.set(x, y, z), blocks.foundation(), Block.UPDATE_CLIENTS);
         }
         level.setBlock(pos.set(x, base, z), blocks.base(), Block.UPDATE_CLIENTS);
-        int top = Math.max(base, ground) + PalisadeHeights.LOGS;
+        int top = Math.max(base, ground) + logs;
         for (int y = base + 1; y <= top; y++) {
             level.setBlock(pos.set(x, y, z), blocks.log(), Block.UPDATE_CLIENTS);
         }
@@ -199,6 +224,11 @@ public final class PalisadePiece extends StructurePiece implements PieceBeardifi
     /** The base of each column. */
     public int[] bases() {
         return bases.clone();
+    }
+
+    /** The number of logs of each column, above its base. */
+    public int logs() {
+        return logs;
     }
 
     /** The blocks of the palisade. */

@@ -55,7 +55,8 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  *       and the surface blocks of the streets that the heart records (see {@link StreetBlocks}).</li>
  *   <li>A palisade is a segment of the palisade: the base block and the logs of each column (see
  *       {@link PalisadePiece}). The point on top of a column and the foundation under it are not a part of the
- *       reference. The logs above the first {@link PalisadeHeights#LOGS} logs are not a part of it too.</li>
+ *       reference. The logs above the logs of the segment ({@link PalisadeHeights#LOGS}, or
+ *       {@link PalisadeHeights#LOW_LOGS} on the edge of a cliff) are not a part of it too.</li>
  *   <li>The area is the box of the village inside its palisade, the palisade included, from the lowest to the highest
  *       template piece. A village with no palisade pieces has no area. The pieces of the ring districts of a town, a
  *       city or a capital (see {@link VillageRings#generatedPieces}) are a part of the reference: the area goes to
@@ -102,12 +103,18 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
      * @param bases the Y of the base of each column
      * @param base  the base block
      * @param log   the log block
+     * @param logs  the number of logs of each column, above its base
      */
     public record Palisade(BlockPos start, int stepX, int stepZ, List<Integer> bases, BlockState base,
-            BlockState log) {
+            BlockState log, int logs) {
         public Palisade {
             start = start.immutable();
             bases = List.copyOf(bases);
+        }
+
+        /** A segment with {@link PalisadeHeights#LOGS} logs on each column. */
+        public Palisade(BlockPos start, int stepX, int stepZ, List<Integer> bases, BlockState base, BlockState log) {
+            this(start, stepX, stepZ, bases, base, log, PalisadeHeights.LOGS);
         }
 
         /** The palisade of a structure piece. */
@@ -118,7 +125,7 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                 list.add(base);
             }
             return new Palisade(new BlockPos(piece.startX(), bases[0], piece.startZ()), piece.stepX(), piece.stepZ(),
-                    list, piece.blocks().base(), piece.blocks().log());
+                    list, piece.blocks().base(), piece.blocks().log(), piece.logs());
         }
 
         /** The blocks of the palisade: the base block and the logs of each column. */
@@ -129,7 +136,7 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                 int z = start.getZ() + stepZ * i;
                 int y = bases.get(i);
                 blocks.put(new BlockPos(x, y, z), base);
-                for (int log = 1; log <= PalisadeHeights.LOGS; log++) {
+                for (int log = 1; log <= logs; log++) {
                     blocks.put(new BlockPos(x, y + log, z), this.log);
                 }
             }
@@ -342,6 +349,7 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
             palisadeTag.putIntArray("Bases", palisade.bases());
             palisadeTag.put("Base", NbtUtils.writeBlockState(palisade.base()));
             palisadeTag.put("Log", NbtUtils.writeBlockState(palisade.log()));
+            palisadeTag.putInt("Logs", palisade.logs());
             palisadeList.add(palisadeTag);
         }
         tag.put("Palisades", palisadeList);
@@ -414,7 +422,8 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                 palisades.add(new Palisade(BlockPos.of(palisadeTag.getLong("Start")), palisadeTag.getInt("StepX"),
                         palisadeTag.getInt("StepZ"), list,
                         NbtUtils.readBlockState(blocks, palisadeTag.getCompound("Base")),
-                        NbtUtils.readBlockState(blocks, palisadeTag.getCompound("Log"))));
+                        NbtUtils.readBlockState(blocks, palisadeTag.getCompound("Log")),
+                        palisadeTag.contains("Logs") ? palisadeTag.getInt("Logs") : PalisadeHeights.LOGS));
             }
         }
         Optional<BoundingBox> area = box(tag.getIntArray("Area"));

@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.village.structure;
 
+import io.github.nicolasgoyon.folkhold.core.sim.village.CliffSide;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HeightGrid;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PathRamp;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.IntBinaryOperator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -46,6 +48,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * <ul>
  *   <li>A gate goes on each side, on the axis of the start piece: the streets go out of the start piece on these
  *       axes.</li>
+ *   <li>The cliff side (see {@link CliffSide}): where the terrain outside the line goes down steeply, the palisade is
+ *       low, and no gate opens. A gate on a cliff moves along its side by 2 blocks at most, or goes away when the wall
+ *       keeps another gate.</li>
  *   <li>The structure reads the height of the terrain on the line of the palisade, and at 2 blocks inside and outside
  *       the line. The bases of the columns come from these heights (see {@link PalisadeHeights}).</li>
  *   <li>A tower or a gate is a structure template on the highest base under it. The bases near it go up again, so
@@ -147,16 +152,20 @@ public final class VillageWall {
         reserved.forEach(space -> inside.add(box(space)));
         List<Gate> gates = List.of(new Gate(Side.NORTH, center.getX()), new Gate(Side.EAST, center.getZ()),
                 new Gate(Side.SOUTH, center.getX()), new Gate(Side.WEST, center.getZ()));
-        WallLayout layout = WallLayout.plan(inside, settings.margin(), settings.towerSpacing(), gates);
+        WallLayout planned = WallLayout.plan(inside, settings.margin(), settings.towerSpacing(), gates);
         Terrain terrain = new Terrain(heights);
         int seaLevel = context.chunkGenerator().getSeaLevel();
-        int[] bases = bases(layout, terrain);
-        boolean[] water = new boolean[layout.ringSize()];
+        boolean[] water = new boolean[planned.ringSize()];
         for (int i = 0; i < water.length; i++) {
-            Cell cell = layout.ringCell(i);
+            Cell cell = planned.ringCell(i);
             water[i] = isWater(terrain.height(cell.x(), cell.z()), seaLevel);
         }
         boolean[] keep = maritime ? SeaWall.keep(water) : allColumns(water.length);
+        // The bases of the columns come from the ring only: the gates do not change them.
+        int[] bases = bases(planned, terrain);
+        List<Stop> stops = stops(village);
+        WallLayout layout = withGates(planned, CliffSide.gates(planned,
+                gateDrop(planned, bases, terrain, gate -> arm(planned, gate, stops)), keep));
         Set<Gate> waterGates = new HashSet<>();
         for (Gate gate : layout.gates()) {
             if (isWaterGate(layout, gate, terrain::height, seaLevel)) {
@@ -170,7 +179,6 @@ public final class VillageWall {
         for (Tower tower : layout.towers()) {
             towerLevels.put(tower, flatten(bases, layout.ringIndices(layout.towerBox(tower))));
         }
-        List<Stop> stops = stops(village);
         Map<Gate, Arm> arms = new HashMap<>();
         for (Gate gate : layout.gates()) {
             Optional<Arm> arm = arm(layout, gate, stops);
@@ -181,6 +189,7 @@ public final class VillageWall {
             gateLevels.put(gate, level);
         }
         int[] smooth = PalisadeHeights.smooth(bases);
+        boolean[] cliffs = CliffSide.cliffs(CliffSide.drops(layout, smooth, terrain::height));
         for (Tower tower : layout.towers()) {
             if (kept(keep, layout.ringIndices(layout.towerBox(tower)))) {
                 pieces.add(template(templates, settings, settings.tower(),
@@ -195,7 +204,9 @@ public final class VillageWall {
         }
         for (Segment segment : layout.segments()) {
             for (Segment run : runs(layout, segment, keep)) {
-                pieces.add(palisade(layout, run, smooth, settings.palisade()));
+                for (Segment part : parts(layout, run, cliffs)) {
+                    pieces.add(palisade(layout, part, smooth, settings.palisade(), cliffs));
+                }
             }
         }
         for (Gate gate : keptGates) {
@@ -219,10 +230,11 @@ public final class VillageWall {
 
     /**
      * The rings of a village around its first wall (see {@link WallLayout#rings}). Each ring follows the rules of the
-     * first wall: the palisade on the terrain, the towers, the gates, the flat terrain and the water side. Each gate of
-     * a ring gets a path across the band: a ramp from the ring gate to the level of the gate of the wall inside it (see
-     * {@link #bandArm}). The bands have no other piece. A segment of palisade is cut at the borders of the district
-     * cells (see {@link RingDistricts}), thus each piece goes to one district.
+     * first wall: the palisade on the terrain, the towers, the gates, the flat terrain, the water side and the cliff
+     * side. On the cliff side, a gate of a ring goes away and does not move (see {@link CliffSide#ringGates}). Each
+     * gate of a ring gets a path across the band: a ramp from the ring gate to the level of the gate of the wall inside
+     * it (see {@link #bandArm}). The bands have no other piece. A segment of palisade is cut at the borders of the
+     * district cells (see {@link RingDistricts}), thus each piece goes to one district.
      *
      * @param context  the context of the generation
      * @param heights  the terrain cache of the village
@@ -242,14 +254,17 @@ public final class VillageWall {
         List<Wall> rings = new ArrayList<>();
         Wall inner = first;
         for (int ring = 0; ring < count; ring++) {
-            WallLayout layout = WallLayout.ring(inner.layout(), band);
-            int[] bases = bases(layout, terrain);
-            boolean[] water = new boolean[layout.ringSize()];
+            WallLayout planned = WallLayout.ring(inner.layout(), band);
+            boolean[] water = new boolean[planned.ringSize()];
             for (int i = 0; i < water.length; i++) {
-                Cell cell = layout.ringCell(i);
+                Cell cell = planned.ringCell(i);
                 water[i] = isWater(terrain.height(cell.x(), cell.z()), seaLevel);
             }
             boolean[] keep = maritime ? SeaWall.keep(water) : allColumns(water.length);
+            int[] bases = bases(planned, terrain);
+            Wall wall = inner;
+            WallLayout layout = withGates(planned, CliffSide.ringGates(planned,
+                    gateDrop(planned, bases, terrain, gate -> bandArm(planned, gate, band, wall)), keep));
             List<StructurePiece> pieces = new ArrayList<>();
             Map<Tower, Integer> towerLevels = new HashMap<>();
             for (Tower tower : layout.towers()) {
@@ -268,6 +283,7 @@ public final class VillageWall {
                 gateLevels.put(gate, level);
             }
             int[] smooth = PalisadeHeights.smooth(bases);
+            boolean[] cliffs = CliffSide.cliffs(CliffSide.drops(layout, smooth, terrain::height));
             for (Tower tower : layout.towers()) {
                 if (kept(keep, layout.ringIndices(layout.towerBox(tower)))) {
                     pieces.add(template(templates, settings, settings.tower(),
@@ -281,7 +297,9 @@ public final class VillageWall {
             for (Segment segment : layout.segments()) {
                 for (Segment run : runs(layout, segment, keep)) {
                     for (Segment part : cut(layout, run, start)) {
-                        pieces.add(palisade(layout, part, smooth, settings.palisade()));
+                        for (Segment low : parts(layout, part, cliffs)) {
+                            pieces.add(palisade(layout, low, smooth, settings.palisade(), cliffs));
+                        }
                     }
                 }
             }
@@ -416,6 +434,47 @@ public final class VillageWall {
             }
         }
         return runs;
+    }
+
+    /**
+     * The parts of a segment with the same value of a flag on all their columns, in order. The parts cover the
+     * segment. The flag of the cliff blocks cuts the palisade into its full and its low parts (see {@link CliffSide}).
+     */
+    static List<Segment> parts(WallLayout layout, Segment segment, boolean[] flags) {
+        List<Segment> parts = new ArrayList<>();
+        int start = segment.from();
+        for (int along = segment.from() + 1; along <= segment.to() + 1; along++) {
+            if (along > segment.to() || flags[layout.ringIndex(segment.side(), along)]
+                    != flags[layout.ringIndex(segment.side(), start)]) {
+                parts.add(new Segment(segment.side(), start, along - 1));
+                start = along;
+            }
+        }
+        return parts;
+    }
+
+    /**
+     * The drop of a gate at each position of a side (see {@link CliffSide}): the level that the gate gets there, minus
+     * the lowest terrain in front of it. The level is the highest base under the gate, in the range of the street of
+     * the gate (see {@link #reachable}).
+     *
+     * @param layout the wall
+     * @param bases  the bases of the ring, before the towers and the gates
+     * @param terrain the terrain
+     * @param arm    the street of a gate
+     */
+    private static CliffSide.GateDrop gateDrop(WallLayout layout, int[] bases, Terrain terrain,
+            Function<Gate, Optional<Arm>> arm) {
+        return (side, along) -> {
+            Gate gate = new Gate(side, WallLayout.position(layout.outline(), side, along));
+            int level = layout.ringIndices(gate).stream().mapToInt(index -> bases[index]).max().orElseThrow();
+            return reachable(level, arm.apply(gate)) - CliffSide.lowestInFront(layout, side, along, terrain::height);
+        };
+    }
+
+    /** A wall with the gates of the cliff side: the same wall when the gates do not change. */
+    private static WallLayout withGates(WallLayout layout, List<Gate> gates) {
+        return gates.equals(layout.gates()) ? layout : layout.withGates(gates);
     }
 
     /**
@@ -653,8 +712,12 @@ public final class VillageWall {
                 element.getBoundingBox(templates, origin, rotation), LiquidSettings.APPLY_WATERLOGGING);
     }
 
-    /** The piece of a segment of palisade. The columns go along the side, in the direction of the ring. */
-    private static PalisadePiece palisade(WallLayout layout, Segment segment, int[] bases, PalisadeBlocks blocks) {
+    /**
+     * The piece of a segment of palisade. The columns go along the side, in the direction of the ring. A segment on
+     * cliff blocks has a low palisade: the cliff flag of its first column gives the logs of all its columns.
+     */
+    private static PalisadePiece palisade(WallLayout layout, Segment segment, int[] bases, PalisadeBlocks blocks,
+            boolean[] cliffs) {
         Side side = segment.side();
         Cell start = layout.cell(side, segment.from());
         Cell next = layout.cell(side, segment.from() + 1);
@@ -662,7 +725,9 @@ public final class VillageWall {
         for (int i = 0; i < columns.length; i++) {
             columns[i] = bases[layout.ringIndex(side, segment.from() + i)];
         }
-        return new PalisadePiece(start.x(), start.z(), next.x() - start.x(), next.z() - start.z(), columns, blocks);
+        int logs = CliffSide.logs(cliffs[layout.ringIndex(side, segment.from())]);
+        return new PalisadePiece(start.x(), start.z(), next.x() - start.x(), next.z() - start.z(), columns, logs,
+                blocks);
     }
 
     /**
@@ -840,6 +905,17 @@ public final class VillageWall {
                 }
             }
         }
+    }
+
+    /**
+     * The height of the terrain that the wall reads before the generation of the chunks (see {@link Terrain}). The
+     * tests of the cliff side use it.
+     *
+     * @param heights the terrain cache of the layout
+     * @return the Y of the top block of the terrain at a position (X, Z)
+     */
+    public static IntBinaryOperator heights(TerrainCache heights) {
+        return new Terrain(heights)::height;
     }
 
     /**

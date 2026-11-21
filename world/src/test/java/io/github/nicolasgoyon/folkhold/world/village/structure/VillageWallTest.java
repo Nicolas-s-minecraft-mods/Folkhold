@@ -276,6 +276,23 @@ class VillageWallTest {
         assertTrue(VillageWall.runs(layout, first, keep).isEmpty(), "No kept column: no palisade");
     }
 
+    /** The cliff blocks cut a segment into its full and its low parts: the parts cover the segment. */
+    @Test
+    void cliffCutsASegmentIntoParts() {
+        WallLayout layout = layout();
+        Segment first = layout.segments().get(0);
+        boolean[] cliffs = new boolean[layout.ringSize()];
+        cliffs[layout.ringIndex(first.side(), first.from() + 2)] = true;
+        cliffs[layout.ringIndex(first.side(), first.from() + 3)] = true;
+
+        List<Segment> parts = VillageWall.parts(layout, first, cliffs);
+
+        assertEquals(List.of(new Segment(first.side(), first.from(), first.from() + 1),
+                new Segment(first.side(), first.from() + 2, first.from() + 3),
+                new Segment(first.side(), first.from() + 4, first.to())), parts);
+        assertEquals(List.of(first), VillageWall.parts(layout, first, new boolean[layout.ringSize()]));
+    }
+
     /**
      * The path of a ring gate across the band: it starts 2 blocks inside the ring line, stops at the flat terrain in
      * front of the inner gate, and ends at the level of the inner gate. An inner gate on water gives no path.
