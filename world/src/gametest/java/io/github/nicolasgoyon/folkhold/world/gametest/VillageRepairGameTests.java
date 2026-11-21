@@ -260,6 +260,14 @@ public final class VillageRepairGameTests {
                 "With no ignored property, stairs with another facing are damaged");
         helper.assertTrue(RepairEquivalents.get().ignoredProperties().contains("weathering"),
                 "The shipped file must ignore the property weathering of Immersive Weathering");
+        // The GameTest server has no Immersive Weathering: the shipped file skips its blocks, and the list of the
+        // skipped blocks shows that the file names them.
+        for (String soil : List.of("permafrost", "grassy_permafrost", "sandy_dirt", "silt", "earthen_clay", "loam",
+                "loamy_farmland")) {
+            helper.assertTrue(RepairEquivalents.get().skipped().contains(ResourceLocation.fromNamespaceAndPath(
+                    "immersive_weathering", soil)), "The shipped file must name the soil " + soil
+                    + " of Immersive Weathering");
+        }
         List<ResourceLocation> known = RepairEquivalents.get().skipped().stream()
                 .filter(id -> id.getNamespace().equals(ResourceLocation.DEFAULT_NAMESPACE)
                         || id.getNamespace().startsWith("folkhold"))
