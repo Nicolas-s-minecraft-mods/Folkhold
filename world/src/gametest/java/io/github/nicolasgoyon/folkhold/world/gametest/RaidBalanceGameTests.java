@@ -16,11 +16,14 @@ import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
+import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -81,7 +84,12 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  *       GameTest server puts the tests at a random position. Without this fixed faction, all the trials of one server
  *       run get the equipment of one random culture. The economy of the settlement (population, jobs, stock) starts
  *       again with the faction and the level of the trial.</li>
- *   <li>Time: the trial starts at noon of the first day ({@link TestSupport#sweep}), thus at the same moon phase.</li>
+ *   <li>Chunks: the trial builds the village only when each chunk of its tickets ({@link #forcedRadius}) ticks its
+ *       entities. A chunk that does not tick stops the raiders and the units in it, and the raid spawns its waves only
+ *       in chunks that tick. The time to load and generate the chunks depends on the load of the machine. Thus
+ *       without this wait, the result of a trial depends on the load of the machine.</li>
+ *   <li>Time: the raid starts at noon of the first day, thus at the same moon phase and with the same time before the
+ *       night, also after a long wait for the chunks.</li>
  *   <li>Difficulty: the GameTest world has the difficulty Normal.</li>
  * </ul>
  *
@@ -99,12 +107,13 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  *   <li>{@link Outcome#STOPPED}: the vanilla raid stops with no result, for example with no spawn position.</li>
  * </ul>
  *
- * <p>Each trial writes one line {@code Raid trial: ...} in the log. The environment variable
+ * <p>Each trial writes one line {@code Raid trial: ...} in the log, and one line {@code Raid trial conditions: ...}
+ * with the conditions of the trial (see {@link Trial#conditions}). The environment variable
  * {@value #MATRIX_VARIABLE} adds the optional trials of the matrix {@link #MATRIX_RAIDS} × {@link #MATRIX_LEVELS},
  * and the trials of the {@link #PALISADE_CELLS} with a palisade: its value is the number of runs of each pair.
  *
- * <p>The time of an exit test: 3 to 5 trials of 5 to 15 s each. The worst time is {@link #EXIT_TRIALS} × (60 s for
- * the setup + {@link #TRIAL_SECONDS} s for the raid) = 3300 s. When the test ends, also after a failure, a listener
+ * <p>The time of an exit test: 3 to 5 trials of 5 to 20 s each. The worst time is {@link #EXIT_TRIALS} × (60 s for
+ * the chunks + 60 s for the setup + {@link #TRIAL_SECONDS} s for the raid) = 3600 s. When the test ends, also after a failure, a listener
  * releases the tickets of the chunks and removes the raiders and the units of the trial.
  */
 @GameTestHolder(FolkholdWorld.MOD_ID)
@@ -394,25 +403,43 @@ public final class RaidBalanceGameTests {
         boolean[] skipped = new boolean[1];
         releaseAtEnd(helper, trial);
 
+        // The real time of the start of the chunk wait, and its duration in nanoseconds.
+        long[] chunkWait = new long[2];
         sequence = sequence.thenExecute(() -> {
             skipped[0] = skip.getAsBoolean();
             if (skipped[0]) {
                 return;
             }
-            TestSupport.buildFloor(helper, HUGE);
-            // The raiders come from outside the test area: no barriers around it.
-            StructureUtils.removeBarriers(helper.getBounds(), level);
             forceChunks(helper, true);
-            helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
-            VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
-            TestSupport.setLevel(helper, heart, villageLevel);
-            joinFaction(helper, heart, culture);
-            heads.forEach(head -> TestSupport.placeBed(helper, head.north(), Direction.SOUTH));
-            if (palisade) {
-                buildPalisade(helper, Blocks.OAK_LOG.defaultBlockState(), Blocks.SPRUCE_FENCE_GATE.defaultBlockState());
-            }
-            trial[0] = new Trial(heart, raidLevel, palisade ? PALISADE_STALL_TICKS : STALL_TICKS);
+            chunkWait[0] = System.nanoTime();
         });
+        sequence = TestSupport.thenWaitForWorker(helper, sequence,
+                () -> skipped[0] || isTicking(level, heartPos),
+                () -> "Each chunk of the trial must tick its entities: " + tickingChunks(level, heartPos)[0] + " of "
+                        + tickingChunks(level, heartPos)[1])
+                .thenExecute(() -> {
+                    if (skipped[0]) {
+                        return;
+                    }
+                    chunkWait[1] = System.nanoTime() - chunkWait[0];
+                    TestSupport.buildFloor(helper, HUGE);
+                    // The raiders come from outside the test area: no barriers around it.
+                    StructureUtils.removeBarriers(helper.getBounds(), level);
+                    helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
+                    VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
+                    TestSupport.setLevel(helper, heart, villageLevel);
+                    String regionCulture = regionCulture(helper, heart);
+                    joinFaction(helper, heart, culture);
+                    heads.forEach(head -> TestSupport.placeBed(helper, head.north(), Direction.SOUTH));
+                    if (palisade) {
+                        buildPalisade(helper, Blocks.OAK_LOG.defaultBlockState(),
+                                Blocks.SPRUCE_FENCE_GATE.defaultBlockState());
+                    }
+                    trial[0] = new Trial(heart, raidLevel, palisade ? PALISADE_STALL_TICKS : STALL_TICKS);
+                    trial[0].regionCulture = regionCulture;
+                    trial[0].setupTick = level.getGameTime();
+                    trial[0].chunkWaitSeconds = chunkWait[1] / 1.0e9;
+                });
         return TestSupport.thenWaitForWorker(helper, sequence, () -> {
             if (skipped[0]) {
                 return true;
@@ -451,6 +478,7 @@ public final class RaidBalanceGameTests {
                     Result result = trial[0].result();
                     FolkholdWorld.LOGGER.info("Raid trial: raid level {}, village level {}{}, culture {}: {}",
                             raidLevel, villageLevel, palisade ? ", palisade" : "", culture, result);
+                    FolkholdWorld.LOGGER.info("Raid trial conditions: {}", trial[0].conditions());
                     if (result.raiders() > 0 && result.outcome() != Outcome.FALLS) {
                         trial[0].raid.getAllRaiders().forEach(raider -> FolkholdWorld.LOGGER.info(
                                 "Raid trial: raider left: {}, offset from the heart {}, distance {} blocks, ticking {}, "
@@ -506,6 +534,40 @@ public final class RaidBalanceGameTests {
             Economies.initialize(server, settlement);
         }
         SettlementData.get(server).setDirty();
+    }
+
+    /** The culture of the faction of the settlement of the heart: before {@link #joinFaction}, the region culture. */
+    private static String regionCulture(GameTestHelper helper, VillageHeartBlockEntity heart) {
+        MinecraftServer server = helper.getLevel().getServer();
+        return Settlements.of(server, heart)
+                .flatMap(settlement -> FactionData.get(server).byId(settlement.factionId()))
+                .map(FactionSpec::cultureId)
+                .orElse("none");
+    }
+
+    /** True when each chunk of the trial ({@link #forcedRadius}) ticks its entities. */
+    static boolean isTicking(ServerLevel level, BlockPos heart) {
+        int[] chunks = tickingChunks(level, heart);
+        return chunks[0] == chunks[1];
+    }
+
+    /**
+     * The number of chunks of the trial ({@link #forcedRadius}) that tick their entities, and the number of chunks
+     * of the trial: {ticking, all}.
+     */
+    private static int[] tickingChunks(ServerLevel level, BlockPos heart) {
+        int radius = forcedRadius();
+        int ticking = 0;
+        int all = 0;
+        for (int x = (heart.getX() - radius) >> 4; x <= (heart.getX() + radius) >> 4; x++) {
+            for (int z = (heart.getZ() - radius) >> 4; z <= (heart.getZ() + radius) >> 4; z++) {
+                all++;
+                if (level.isPositionEntityTicking(new ChunkPos(x, z).getMiddleBlockPosition(heart.getY()))) {
+                    ticking++;
+                }
+            }
+        }
+        return new int[] {ticking, all};
     }
 
     /**
@@ -621,6 +683,15 @@ public final class RaidBalanceGameTests {
         /** The state of the fight at the last change, and the game time of this change. */
         private List<Integer> lastState = List.of();
         private long lastChange;
+        /** The conditions of the trial, for the log: see {@link #conditions}. */
+        private String regionCulture = "none";
+        private long setupTick;
+        private long startDayTime;
+        private long endDayTime;
+        private int[] chunksAtStart = {0, 0};
+        private int inhabitants;
+        private double chunkWaitSeconds;
+        private final Map<Integer, BlockPos> waveSpawns = new TreeMap<>();
 
         Trial(VillageHeartBlockEntity heart, int raidLevel, long stallTicks) {
             this.heart = heart;
@@ -637,8 +708,28 @@ public final class RaidBalanceGameTests {
             helper.assertTrue(raid != null && !raid.isStarted(), "The trial must start a new raid");
             raid.setRaidOmenLevel(raidLevel);
             garrison = fullSize(heart);
+            // The raid starts at noon, also after a long setup.
+            level.setDayTime(TestSupport.NOON);
             startTick = level.getGameTime();
+            startDayTime = level.getDayTime();
+            chunksAtStart = tickingChunks(level, heart.getBlockPos());
+            inhabitants = VillageFolk.inhabitants(level, heart.getBlockPos()).size();
             startNanos = System.nanoTime();
+        }
+
+        /**
+         * The conditions of the trial: the position of the heart, the culture of the region, the inhabitants and the
+         * ticking chunks at the start, the wait for the chunks, the setup time, the day time at the start and at the
+         * end, the mean tick time, and the spawn position of each wave relative to the heart.
+         */
+        String conditions() {
+            double tickMillis = endTick > startTick ? (endNanos - startNanos) / 1.0e6 / (endTick - startTick) : 0.0;
+            return String.format(Locale.ROOT,
+                    "heart %s, region culture %s, inhabitants %d, ticking chunks %d/%d, chunk wait %.1f s, "
+                            + "setup %d ticks, day time %d to %d, %.2f ms/tick, wave spawns %s",
+                    heart.getBlockPos().toShortString(), regionCulture, inhabitants, chunksAtStart[0],
+                    chunksAtStart[1], chunkWaitSeconds, startTick - setupTick, startDayTime, endDayTime, tickMillis,
+                    waveSpawns);
         }
 
         /** True when the trial has a result. The method sets the result at the first check that finds it. */
@@ -648,6 +739,9 @@ public final class RaidBalanceGameTests {
             }
             long now = System.nanoTime();
             long tick = heart.getLevel().getGameTime();
+            for (Raider raider : raid.getAllRaiders()) {
+                waveSpawns.putIfAbsent(raider.getWave(), raider.blockPosition().subtract(heart.getBlockPos()));
+            }
             List<Integer> state = List.of(raid.getTotalRaidersAlive(), (int) raid.getHealthOfLivingRaiders(),
                     heart.getGarrison().aliveCount(), raid.getGroupsSpawned());
             if (!state.equals(lastState) || !raid.isStarted()) {
@@ -669,6 +763,7 @@ public final class RaidBalanceGameTests {
             }
             endTick = tick;
             endNanos = now;
+            endDayTime = heart.getLevel().getDayTime();
             return true;
         }
 
