@@ -1,0 +1,5 @@
+{
+  "category": "fixed",
+  "en_us": "The game has fewer slow ticks when the player moves: the mod reads the roads of a chunk at its unload only when a block of the chunk changed.",
+  "fr_fr": "Le jeu a moins de ticks lents quand le joueur se déplace : le mod relit les routes d'un chunk à son déchargement seulement si un bloc du chunk a changé."
+}
