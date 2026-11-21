@@ -30,6 +30,8 @@
   "folkhold_world.configuration.garrison": "Garnison",
   "folkhold_world.configuration.garrisonRefillDelaySeconds": "Délai de remplacement (secondes)",
   "folkhold_world.configuration.garrisonActivationRadius": "Rayon d'activation",
+  "folkhold_world.configuration.penAnimals": "Animaux dans un enclos",
+  "folkhold_world.configuration.penReplaceSeconds": "Délai avant de nouveaux animaux d'enclos (secondes)",
   "folkhold_world.configuration.archerRotationSeconds": "Temps d'un archer sur une tour (secondes)",
   "entity.folkhold_world.archer": "Archer",
   "item.folkhold_world.archer_spawn_egg": "Œuf d'apparition d'archer",

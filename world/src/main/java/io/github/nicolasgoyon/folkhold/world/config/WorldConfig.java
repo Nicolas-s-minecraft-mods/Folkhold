@@ -74,6 +74,8 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue GARRISON_REFILL_DELAY_SECONDS;
     public static final ModConfigSpec.IntValue DETACHMENT_GUARDS;
     public static final ModConfigSpec.IntValue GARRISON_ACTIVATION_RADIUS;
+    public static final ModConfigSpec.IntValue PEN_ANIMALS;
+    public static final ModConfigSpec.IntValue PEN_REPLACE_SECONDS;
     public static final ModConfigSpec.IntValue INHABITANT_LIMIT;
     public static final ModConfigSpec.IntValue ARCHER_ROTATION_SECONDS;
 
@@ -277,6 +279,16 @@ public final class WorldConfig {
                 .comment("A heart creates its missing units only when a player is in this radius, in blocks.")
                 .translation(KEY_PREFIX + "garrisonActivationRadius")
                 .defineInRange("activationRadius", 64, 16, 256);
+        PEN_ANIMALS = builder
+                .comment("Number of animals in the pen of a job building (cows for the rancher, sheep for the",
+                        "shepherd). The heart of the village puts them into a complete pen one time. 0: no animals.")
+                .translation(KEY_PREFIX + "penAnimals")
+                .defineInRange("penAnimals", 3, 0, 8);
+        PEN_REPLACE_SECONDS = builder
+                .comment("When a pen has fewer animals than its number for this time, in seconds, the missing",
+                        "animals come back.")
+                .translation(KEY_PREFIX + "penReplaceSeconds")
+                .defineInRange("penReplaceSeconds", 1200, 10, 86400);
         INHABITANT_LIMIT = builder
                 .comment("Maximum number of inhabitants (villagers with no trades) in the world for each village.",
                         "0: no maximum. The number comes from the population of the settlement.",

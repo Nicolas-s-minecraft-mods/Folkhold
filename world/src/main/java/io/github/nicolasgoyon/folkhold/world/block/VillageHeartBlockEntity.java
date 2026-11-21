@@ -44,6 +44,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHomes;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import io.github.nicolasgoyon.folkhold.world.village.VillageMarket;
+import io.github.nicolasgoyon.folkhold.world.village.VillagePens;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
@@ -100,6 +101,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String ALERT_TAG = "Alert";
     private static final String LAST_THREAT_TAG = "LastThreat";
     private static final String GARRISON_TAG = "Garrison";
+    private static final String PENS_TAG = "Pens";
     /** The heart checks its garrison every 2 seconds. */
     private static final int GARRISON_INTERVAL = 40;
     /** In an alert, the heart rings the bells every 5 seconds. */
@@ -110,6 +112,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final int ROTATION_INTERVAL = 400;
     /** The heart checks the end of the alert once each second. */
     private static final int CHECK_INTERVAL = 20;
+    /** The heart checks the pens of its job buildings at this interval, in ticks (see {@link VillagePens}). */
+    private static final int PEN_INTERVAL = 200;
     /** The name of the search of the units in the simulation profiler (see {@link #getUnits()}). */
     public static final String UNITS_PROFILER_NAME = "village units (area search)";
 
@@ -117,6 +121,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private AlertState alertState = AlertState.CALM;
     private long lastThreatTick;
     private final Garrison garrison = new Garrison();
+    private final VillagePens pens = new VillagePens();
     private final Map<UUID, Offense> offenses = new HashMap<>();
     /**
      * Players that attacked the village, with the game time when the hostility ends. All units of the village
@@ -554,6 +559,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
     /** The posts, gates and braziers of the village. The heart scans them before the first garrison. */
     public VillageLayout getLayout() {
         return layout;
+    }
+
+    /** The pens of the job buildings of the village, with their animals. */
+    public VillagePens getPens() {
+        return pens;
     }
 
     /**
@@ -1399,6 +1409,10 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (heart.layout.isScanned() && level instanceof ServerLevel serverLevel) {
             heart.updateBraziers(serverLevel);
+            if (time % PEN_INTERVAL == 0
+                    && heart.pens.check(serverLevel, heart.layout.jobSigns(), level.getGameTime())) {
+                heart.setChanged();
+            }
             long repairTicks = WorldConfig.CONSTRUCTION_REPAIR_CHECK_SECONDS.get() * 20L;
             if (heart.alertState == AlertState.CALM && time % repairTicks < CHECK_INTERVAL
                     && VillageRepairs.check(serverLevel, heart).isEmpty()) {
@@ -1451,6 +1465,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         tag.putString(ALERT_TAG, alertState.serializedName());
         tag.putLong(LAST_THREAT_TAG, lastThreatTick);
         tag.put(GARRISON_TAG, garrison.save());
+        tag.put(PENS_TAG, pens.save());
         tag.put(LAYOUT_TAG, layout.save());
         tag.putBoolean(NIGHT_TAG, nightMode);
         tag.putBoolean(EXITS_TAG, exitStairs);
@@ -1487,6 +1502,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         });
         lastThreatTick = tag.getLong(LAST_THREAT_TAG);
         garrison.load(tag.getList(GARRISON_TAG, Garrison.TAG_TYPE));
+        pens.load(tag.getList(PENS_TAG, Tag.TAG_COMPOUND));
         layout.load(tag.getCompound(LAYOUT_TAG));
         tradePlaceCache = null;
         nightMode = tag.getBoolean(NIGHT_TAG);

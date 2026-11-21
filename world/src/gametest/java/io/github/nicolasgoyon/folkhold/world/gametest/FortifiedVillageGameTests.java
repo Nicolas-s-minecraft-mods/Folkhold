@@ -145,7 +145,7 @@ public final class FortifiedVillageGameTests {
         helper.assertTrue(closed.exit().isEmpty(), "The walk must not go out of the palisade "
                 + area + ": out at " + closed.exit().orElse(null));
 
-        List<BlockPos> fenceGates = blocksIn(level, area, state -> state.getBlock() instanceof FenceGateBlock);
+        List<BlockPos> fenceGates = wallFenceGates(level, reference);
         helper.assertTrue(fenceGates.size() == 4 * 3, "Each gate must have 3 fence gates: " + fenceGates.size());
         for (BlockPos gate : fenceGates) {
             level.setBlock(gate, level.getBlockState(gate).setValue(FenceGateBlock.OPEN, true), Block.UPDATE_CLIENTS);
@@ -638,7 +638,7 @@ public final class FortifiedVillageGameTests {
         helper.assertTrue(level.getBlockState(outOfBand).is(Blocks.POWDER_SNOW),
                 "The powder snow out of the band must stay");
 
-        List<BlockPos> fenceGates = blocksIn(level, area, state -> state.getBlock() instanceof FenceGateBlock);
+        List<BlockPos> fenceGates = wallFenceGates(level, reference);
         helper.assertTrue(fenceGates.size() == 4 * 3, "Each gate must have 3 fence gates: " + fenceGates.size());
         for (BlockPos gate : fenceGates) {
             level.setBlock(gate, level.getBlockState(gate).setValue(FenceGateBlock.OPEN, true), Block.UPDATE_CLIENTS);
@@ -804,6 +804,22 @@ public final class FortifiedVillageGameTests {
                         .orElse("")
                 : piece.getClass().getSimpleName()) + " " + piece.getRotation() + " " + piece.getBoundingBox())
                 .toList();
+    }
+
+    /**
+     * The fence gates of the gates of the wall: the fence gates in the gate pieces of a reference. The pen of a job
+     * building also has a fence gate, and it is not a gate of the wall.
+     */
+    private static List<BlockPos> wallFenceGates(ServerLevel level, VillageReference reference) {
+        List<BlockPos> gates = new ArrayList<>();
+        for (VillageReference.Piece piece : reference.pieces()) {
+            if (name(piece.template()).equals(GATE)) {
+                BoundingBox box = level.getStructureManager().getOrCreate(piece.template()).getBoundingBox(
+                        new StructurePlaceSettings().setRotation(piece.rotation()), piece.origin());
+                gates.addAll(blocksIn(level, box, state -> state.getBlock() instanceof FenceGateBlock));
+            }
+        }
+        return gates;
     }
 
     /** The number of pieces of a template, in the folder of any variant. */
