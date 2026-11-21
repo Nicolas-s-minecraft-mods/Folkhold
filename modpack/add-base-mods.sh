@@ -40,6 +40,9 @@ add small-ships                 # beta
 # Terrain shape: continents, oceans, mountain ranges
 add tectonic
 
+# Sleep
+add slumbermod                  # the world runs extra ticks while all the players sleep, in place of the night skip
+
 # Light
 add lambdynamiclights           # client only, NeoForge build of the 1.21.1 line
 
@@ -77,6 +80,7 @@ pin_project small-ships
 pin_project serene-seasons
 pin_project c2me-neoforge
 pin_project scalablelux
+pin_project slumbermod
 
 packwiz refresh
 echo

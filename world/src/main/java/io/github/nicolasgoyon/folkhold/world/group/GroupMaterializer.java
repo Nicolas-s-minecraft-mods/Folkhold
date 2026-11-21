@@ -7,6 +7,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.group.MemberRole;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.CaravanMerchant;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
@@ -75,6 +76,8 @@ public final class GroupMaterializer {
     public static final String GROUP_TAG = "folkhold_world:group";
     /** Game ticks between two checks. */
     private static final int CHECK_INTERVAL = 20;
+    /** The check of the groups, one time in each {@link #CHECK_INTERVAL} of game time. */
+    private static final IntervalCheck CHECK = new IntervalCheck(CHECK_INTERVAL);
     /** With no known heart, the group arrives when its merchant is nearer than this distance to the end of the route. */
     private static final double ARRIVAL_DISTANCE = 3.0;
     /** The group arrives when its merchant is nearer than this horizontal distance to the destination heart. */
@@ -128,7 +131,7 @@ public final class GroupMaterializer {
 
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
-        if (server.overworld().getGameTime() % CHECK_INTERVAL == 0) {
+        if (CHECK.isDue(server.overworld().getGameTime())) {
             SimulationProfiler.time("materialization (each second)", () -> update(server));
         }
     }
@@ -565,6 +568,7 @@ public final class GroupMaterializer {
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
+        CHECK.reset();
         CaravanStays.clear();
         MATERIALIZED.clear();
         KEPT.clear();

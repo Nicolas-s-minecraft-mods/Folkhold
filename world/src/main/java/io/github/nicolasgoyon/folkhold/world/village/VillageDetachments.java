@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.village;
 
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.GarrisonTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
 import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
@@ -46,6 +47,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class VillageDetachments {
     /** The scan of the bells around the players runs at this interval, in ticks. */
     public static final int SCAN_INTERVAL = 200;
+    /** The scan around the players, one time in each {@link #SCAN_INTERVAL} of game time. */
+    private static final IntervalCheck SCAN = new IntervalCheck(SCAN_INTERVAL);
     /** The radius of the scan around a player, in blocks. */
     public static final int SCAN_RADIUS = 64;
     /** A bell is the center of a vanilla village when this number of beds or more is near it. */
@@ -60,7 +63,7 @@ public final class VillageDetachments {
 
     public static void onServerTick(ServerTickEvent.Post event) {
         ServerLevel overworld = event.getServer().overworld();
-        if (overworld.getGameTime() % SCAN_INTERVAL != 0) {
+        if (!SCAN.isDue(overworld.getGameTime())) {
             return;
         }
         for (ServerPlayer player : overworld.players()) {

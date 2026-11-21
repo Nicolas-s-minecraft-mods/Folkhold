@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.settlement;
 
 import io.github.nicolasgoyon.folkhold.core.sim.RegionPos;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import java.util.ArrayDeque;
@@ -61,6 +62,8 @@ public final class SettlementDiscovery {
             ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "villages"));
     /** The discovery adds the regions around the players to the queue every 5 seconds. */
     private static final int SCAN_INTERVAL = 100;
+    /** The scan around the players, one time in each {@link #SCAN_INTERVAL} of game time. */
+    private static final IntervalCheck SCAN = new IntervalCheck(SCAN_INTERVAL);
 
     private static final Deque<RegionPos> QUEUE = new ArrayDeque<>();
     private static final Set<RegionPos> QUEUED = new HashSet<>();
@@ -75,6 +78,7 @@ public final class SettlementDiscovery {
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
+        SCAN.reset();
         QUEUE.clear();
         QUEUED.clear();
     }
@@ -82,7 +86,7 @@ public final class SettlementDiscovery {
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
         ServerLevel overworld = server.overworld();
-        if (overworld.getGameTime() % SCAN_INTERVAL == 0) {
+        if (SCAN.isDue(overworld.getGameTime())) {
             for (ServerPlayer player : overworld.players()) {
                 enqueueAround(overworld, player.blockPosition());
             }

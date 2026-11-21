@@ -8,6 +8,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestGenerator;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
@@ -64,6 +65,8 @@ public final class Escorts {
     /** Key in the persistent data of an ambush monster. */
     public static final String AMBUSH_TAG = "folkhold_world:ambush";
     private static final int CHECK_INTERVAL = 20;
+    /** The check of the escorts, one time in each {@link #CHECK_INTERVAL} of game time. */
+    private static final IntervalCheck CHECK = new IntervalCheck(CHECK_INTERVAL);
     /** The minutes that the time of an escort adds to the travel: the departure, the stops, the ambushes. */
     private static final long EXTRA_MINUTES = 10L;
     /** The ambushes are between these shares of the route. */
@@ -205,12 +208,13 @@ public final class Escorts {
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
         long now = server.overworld().getGameTime();
-        if (now % CHECK_INTERVAL == 0) {
+        if (CHECK.isDue(now)) {
             SimulationProfiler.time("escorts (each second)", () -> update(server, now));
         }
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
+        CHECK.reset();
         AWAY_SINCE.clear();
         AMBUSHES.clear();
     }
