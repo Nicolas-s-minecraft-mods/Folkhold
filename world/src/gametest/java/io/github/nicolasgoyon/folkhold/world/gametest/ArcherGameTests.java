@@ -9,6 +9,8 @@ import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -21,9 +23,14 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.WanderingTrader;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -260,6 +267,136 @@ public final class ArcherGameTests {
                 .thenExecute(() -> List.of(archer, villager, pillager, zombieShooter, zombie, traderShooter, trader, raider, victim)
                         .forEach(Entity::discard))
                 .thenSucceed();
+    }
+
+    /** The tower of the palisade (template of the village pieces), with its lower corner at this position. */
+    private static final BlockPos TOWER_ORIGIN = new BlockPos(2, 0, 4);
+    /** The post of the tower: the position above the watch post, in the middle of the platform. */
+    private static final BlockPos TOWER_POST = TOWER_ORIGIN.offset(2, 8, 2);
+    /** The position at the foot of the tower, against its outer face (west), under the post. */
+    private static final BlockPos TOWER_FOOT = TOWER_ORIGIN.offset(-1, 1, 2);
+
+    /**
+     * An archer with a bow on a tower of the palisade hits a husk at the foot of the tower. The parapet hides the
+     * husk from the post: the archer goes to the edge of the platform above the husk, and shoots down. It stays on
+     * the platform. When the husk is dead, the archer goes back to its post.
+     */
+    @GameTest(template = "arena", timeoutTicks = 600, batch = "archer_tower_foot")
+    public static void towerArcherHitsATargetAtTheFootOfTheTower(GameTestHelper helper) {
+        towerFoot(helper, Items.BOW);
+    }
+
+    /** As {@link #towerArcherHitsATargetAtTheFootOfTheTower}, with a crossbow: the rule is the same for all weapons. */
+    @GameTest(template = "arena", timeoutTicks = 600, batch = "archer_tower_foot_crossbow")
+    public static void crossbowTowerArcherHitsATargetAtTheFootOfTheTower(GameTestHelper helper) {
+        towerFoot(helper, Items.CROSSBOW);
+    }
+
+    private static void towerFoot(GameTestHelper helper, Item weapon) {
+        BlockPos post = placeTower(helper);
+        ArcherEntity archer = towerArcher(helper, post, weapon);
+        Husk husk = helper.spawn(EntityType.HUSK, TOWER_FOOT);
+        husk.setNoAi(true);
+        helper.assertFalse(archer.hasLineOfSight(husk), "The parapet must hide the husk from the post");
+        // The archer saw the husk on its way to the tower: the husk is the target of the archer.
+        archer.setTarget(husk);
+        String[] offPlatform = {null};
+        helper.onEachTick(() -> {
+            if (offPlatform[0] == null && !isOnPlatform(archer, post)) {
+                offPlatform[0] = String.format("x %.2f, y %.2f, z %.2f", archer.getX(), archer.getY(), archer.getZ());
+            }
+        });
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(husk.getLastHurtByMob() == archer,
+                        "The archer must hit the husk at the foot of the tower"))
+                .thenExecute(husk::discard)
+                .thenWaitUntil(() -> helper.assertTrue(isAtPost(archer, post),
+                        "The archer must go back to its post, position: " + archer.position()))
+                .thenExecute(() -> {
+                    archer.discard();
+                    helper.assertTrue(offPlatform[0] == null, "The archer must stay on the platform: " + offPlatform[0]);
+                })
+                .thenSucceed();
+    }
+
+    /** An archer on a tower of the palisade with no target stays at its post. */
+    @GameTest(template = "arena", timeoutTicks = 200, batch = "archer_tower_no_target")
+    public static void towerArcherWithNoTargetStaysAtItsPost(GameTestHelper helper) {
+        BlockPos post = placeTower(helper);
+        ArcherEntity archer = towerArcher(helper, post, Items.BOW);
+        boolean[] left = {false};
+        helper.onEachTick(() -> left[0] |= !isAtPost(archer, post));
+
+        helper.startSequence()
+                .thenExecuteAfter(100, () -> {
+                    archer.discard();
+                    helper.assertTrue(archer.getTarget() == null, "The archer must have no target");
+                    helper.assertFalse(left[0], "The archer with no target must stay at its post");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * No spot of the platform gives a line of sight to a husk in a closed box at the foot of the tower. The archer
+     * stays at its post, and drops the husk.
+     */
+    @GameTest(template = "arena", timeoutTicks = 400, batch = "archer_tower_hidden")
+    public static void towerArcherKeepsItsPostWhenNoSpotSeesTheTarget(GameTestHelper helper) {
+        BlockPos post = placeTower(helper);
+        ArcherEntity archer = towerArcher(helper, post, Items.BOW);
+        for (BlockPos pos : List.of(TOWER_FOOT.west(), TOWER_FOOT.north(), TOWER_FOOT.south(), TOWER_FOOT.above(2))) {
+            helper.setBlock(pos, Blocks.STONE);
+            helper.setBlock(pos.above(), Blocks.STONE);
+        }
+        Husk husk = helper.spawn(EntityType.HUSK, TOWER_FOOT);
+        husk.setNoAi(true);
+        archer.setTarget(husk);
+        boolean[] left = {false};
+        helper.onEachTick(() -> left[0] |= !isAtPost(archer, post));
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(archer.getTarget() == null, "The archer must drop the husk"))
+                .thenExecute(() -> {
+                    archer.discard();
+                    husk.discard();
+                    helper.assertFalse(left[0], "The archer must keep its post");
+                    helper.assertTrue(husk.getHealth() == husk.getMaxHealth(), "The hidden husk must not get a hit");
+                })
+                .thenSucceed();
+    }
+
+    /** Places the tower of the palisade in the arena. Returns the absolute position of its post. */
+    private static BlockPos placeTower(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ServerLevel level = helper.getLevel();
+        StructureTemplate tower = level.getStructureManager()
+                .get(ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village/tower")).orElseThrow();
+        BlockPos origin = helper.absolutePos(TOWER_ORIGIN);
+        tower.placeInWorld(level, origin, origin, new StructurePlaceSettings(), level.getRandom(), Block.UPDATE_CLIENTS);
+        BlockPos post = helper.absolutePos(TOWER_POST);
+        helper.assertBlockPresent(ModBlocks.WATCH_POST.get(), TOWER_POST.below());
+        return post;
+    }
+
+    /** Spawns an archer with a weapon at the post of a tower. */
+    private static ArcherEntity towerArcher(GameTestHelper helper, BlockPos post, Item weapon) {
+        ArcherEntity archer = TestSupport.spawnUnit(helper, ModEntities.ARCHER.get(), TOWER_POST);
+        archer.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(weapon));
+        archer.setPostPos(post);
+        archer.setHomePos(post);
+        return archer;
+    }
+
+    /** True if the archer stands at its post: at 0.5 block or less from the middle of the post. */
+    private static boolean isAtPost(ArcherEntity archer, BlockPos post) {
+        return archer.position().distanceTo(Vec3.atBottomCenterOf(post)) <= 0.5;
+    }
+
+    /** True if the archer is on the platform of its tower: in the square of the tower, not lower than the post. */
+    private static boolean isOnPlatform(ArcherEntity archer, BlockPos post) {
+        return archer.getY() >= post.getY() - 0.01 && Math.abs(archer.getX() - (post.getX() + 0.5)) <= 2.6
+                && Math.abs(archer.getZ() - (post.getZ() + 0.5)) <= 2.6;
     }
 
     /**

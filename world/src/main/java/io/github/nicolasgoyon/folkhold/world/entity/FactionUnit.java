@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.UnitStats;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.AnchorStrollGoal;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.PlatformLookoutGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.ReturnToAnchorGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitHurtByTargetGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitNavigation;
@@ -183,6 +184,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     /** Time in ticks on the way to the post. Not saved. */
     private int postTravelTicks;
     private int noPathTicks;
+    /** True while the unit holds a lookout spot on its platform (see {@link PlatformLookoutGoal}). Not saved. */
+    private boolean onLookout;
 
     protected FactionUnit(EntityType<? extends FactionUnit> type, Level level) {
         super(type, level);
@@ -310,6 +313,26 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
 
     public void setNightPos(@Nullable BlockPos pos) {
         nightPos = pos == null ? null : pos.immutable();
+    }
+
+    /**
+     * True while the unit holds a lookout spot on the platform of its post (see {@link PlatformLookoutGoal}). At an
+     * edge spot, the unit leans over the drop: a hit does not push it, so it does not fall from its tower.
+     */
+    public boolean isOnLookout() {
+        return onLookout;
+    }
+
+    public void setOnLookout(boolean value) {
+        onLookout = value;
+    }
+
+    /** A unit on a lookout spot does not move back after a hit (see {@link #isOnLookout()}). */
+    @Override
+    public void knockback(double strength, double x, double z) {
+        if (!onLookout) {
+            super.knockback(strength, x, z);
+        }
     }
 
     /** True if the unit is routed: it runs back home and does not fight. */
