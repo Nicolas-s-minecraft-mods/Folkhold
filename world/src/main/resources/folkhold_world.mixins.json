@@ -4,6 +4,7 @@
   "package": "io.github.nicolasgoyon.folkhold.world.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "LevelChunkMixin",
     "VillagerGoalPackagesMixin",
     "VillagerMixin"
   ],

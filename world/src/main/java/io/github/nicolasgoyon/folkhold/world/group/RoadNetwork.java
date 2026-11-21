@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.group;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
 import io.github.nicolasgoyon.folkhold.core.sim.group.RouteFinder;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.mixin.RoadChunk;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -39,8 +40,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>A column of blocks is a road when a block of the tag {@link #ROAD} has {@link #HEADROOM} blocks of free space
  *       above it: no collision and no fluid. The highest such block of the column counts, also under a roof. Thus a
  *       tunnel in a mountain, a covered bridge and a bridge above a river are roads.</li>
- *   <li>The mod reads the columns of a chunk when the chunk loads and when it unloads. It reads a column again after
- *       a block changes in it: a placed or a broken block, a path that a shovel makes.</li>
+ *   <li>The mod reads the columns of a chunk when the chunk loads. It reads them again when the chunk unloads, if a
+ *       block of the chunk changed since the load (see {@link RoadChunk}). It reads a column again after a block
+ *       changes in it: a placed or a broken block, a path that a shovel makes.</li>
  *   <li>The network keeps an array of road heights for each chunk with a road. The mod replaces an array and does not
  *       change it, so the worker thread of the routes reads the network with no lock.</li>
  *   <li>When the roads of a chunk change, the routes near the chunk become old (see
@@ -201,11 +203,16 @@ public final class RoadNetwork extends SavedData {
     @Nullable
     static short[] scanChunk(LevelChunk chunk) {
         short[] heights = null;
+        // The number of columns with no road floor until now. The scan stops when all the columns have one.
+        int open = COLUMNS;
+        // The last block state of the scan and its result: most blocks of a section follow a block of the same state.
+        BlockState lastState = null;
+        boolean lastRoad = false;
         LevelChunkSection[] sections = chunk.getSections();
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int baseX = chunk.getPos().getMinBlockX();
         int baseZ = chunk.getPos().getMinBlockZ();
-        for (int index = sections.length - 1; index >= 0; index--) {
+        for (int index = sections.length - 1; index >= 0 && open > 0; index--) {
             LevelChunkSection section = sections[index];
             if (section.hasOnlyAir() || !section.maybeHas(state -> state.is(ROAD))) {
                 continue;
@@ -218,7 +225,12 @@ public final class RoadNetwork extends SavedData {
                         if (heights != null && heights[column] != NONE) {
                             continue;
                         }
-                        if (!section.getBlockState(localX, localY, localZ).is(ROAD)) {
+                        BlockState state = section.getBlockState(localX, localY, localZ);
+                        if (state != lastState) {
+                            lastState = state;
+                            lastRoad = state.is(ROAD);
+                        }
+                        if (!lastRoad) {
                             continue;
                         }
                         int y = baseY + localY;
@@ -227,6 +239,7 @@ public final class RoadNetwork extends SavedData {
                                 heights = empty();
                             }
                             heights[column] = (short) y;
+                            open--;
                         }
                     }
                 }
@@ -331,10 +344,13 @@ public final class RoadNetwork extends SavedData {
         }
     }
 
-    /** A chunk of the Overworld unloads: the mod reads its roads, with the changes since its load. */
+    /**
+     * A chunk of the Overworld unloads: the mod reads its roads, with the changes since its load. A chunk with no
+     * changed block keeps the roads of its load.
+     */
     public static void onChunkUnload(ChunkEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD
-                && event.getChunk() instanceof LevelChunk chunk) {
+                && event.getChunk() instanceof LevelChunk chunk && ((RoadChunk) chunk).folkhold_world$blocksChanged()) {
             get(level).scan(chunk);
         }
     }

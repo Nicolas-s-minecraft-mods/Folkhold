@@ -5,6 +5,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.group.RouteFinder;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.group.CaravanRoutes;
 import io.github.nicolasgoyon.folkhold.world.group.RoadNetwork;
+import io.github.nicolasgoyon.folkhold.world.mixin.RoadChunk;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -77,6 +78,16 @@ public final class RoadGameTests {
         helper.assertTrue(loadedTunnel == tunnel, "The saved data must keep the roads: " + loadedTunnel);
         helper.assertTrue(roadAt(helper, network, TUNNEL) == RouteFinder.NO_ROAD,
                 "After the removal of the blocks, the network must forget the road");
+        helper.succeed();
+    }
+
+    /** A changed block sets the flag of its chunk, so the unload of the chunk reads its roads again. */
+    @GameTest(template = "arena", batch = "road_scan")
+    public static void changedBlockMarksItsChunk(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 2, 2);
+        helper.setBlock(pos, Blocks.COBBLESTONE);
+        RoadChunk chunk = (RoadChunk) helper.getLevel().getChunkAt(helper.absolutePos(pos));
+        helper.assertTrue(chunk.folkhold_world$blocksChanged(), "The chunk of a changed block has no changed flag");
         helper.succeed();
     }
 
