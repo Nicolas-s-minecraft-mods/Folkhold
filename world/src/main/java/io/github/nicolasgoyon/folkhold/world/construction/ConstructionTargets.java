@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -129,6 +130,22 @@ public final class ConstructionTargets {
      */
     public static Target fromTemplate(Level level, StructureTemplate template, BlockPos origin,
             StructurePlaceSettings settings, Predicate<BlockPos> keep) {
+        return fromTemplate(level, template, origin, settings, keep, UnaryOperator.identity());
+    }
+
+    /**
+     * Some blocks of a structure template, as a target, with a change of their states.
+     *
+     * @param level    the level of the construction: it gives the blocks and the block entities
+     * @param template the template
+     * @param origin   the position of the origin of the template
+     * @param settings the rotation and the mirror of the template
+     * @param keep     true for the positions of the level that the target keeps
+     * @param change   gives the state of the target from the state of the template, after the rotation
+     * @return the target
+     */
+    public static Target fromTemplate(Level level, StructureTemplate template, BlockPos origin,
+            StructurePlaceSettings settings, Predicate<BlockPos> keep, UnaryOperator<BlockState> change) {
         HolderLookup.Provider registries = level.registryAccess();
         Map<BuildPos, BuildBlock> blocks = new HashMap<>();
         for (TemplateBlock block : templateBlocks(level, template)) {
@@ -136,7 +153,8 @@ public final class ConstructionTargets {
             if (!keep.test(pos)) {
                 continue;
             }
-            BlockState state = block.state().mirror(settings.getMirror()).rotate(level, pos, settings.getRotation());
+            BlockState state = change.apply(block.state().mirror(settings.getMirror()).rotate(level, pos,
+                    settings.getRotation()));
             Optional<String> data = block.nbt().filter(tag -> state.is(BlockKinds.KEEP_DATA))
                     .flatMap(tag -> normalData(pos, state, tag, registries));
             blocks.put(BlockKinds.toBuildPos(pos), BlockKinds.describe(pos, state, data));
