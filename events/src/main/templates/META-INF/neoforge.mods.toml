@@ -9,6 +9,7 @@ version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
 displayURL = "https://github.com/nicolas-goyon/Folkhold"
+logoFile = "${mod_id}_logo.png"
 # The mod list shows the translated description (key: fml.menu.mods.info.description.<mod_id>) when it exists.
 description = '''${mod_description}'''
 

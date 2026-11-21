@@ -239,6 +239,7 @@ Scripts make the textures of the villager and zombie villager professions, the a
 ```bash
 python3 tools/textures/villager_professions.py
 python3 tools/textures/golem_armband.py
+python3 tools/textures/mod_logos.py
 python3 tools/textures/map_decorations.py
 ```
 
