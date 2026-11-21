@@ -672,43 +672,33 @@ The vanilla raid stays. Near a faction village, Folkhold changes where the raide
 - difficulty: Normal (the GameTest world).
 - garrison: the full garrison of the level, no refill, 4 villagers with a bed, no palisade (except the palisade cells).
 
-The units and the raiders use random sources with no fixed seed, thus a cell gives a rate, not a fixed result. With 24 trials, the hold rate of one run has a standard deviation of about 10 points at a rate of 0.7. The hold rates of the runs below also change by about ±10 points more than this binomial noise (p ≈ 0.004 in both cells). Issue #769 tracks this spread. The balance decisions use the pooled runs, not one run.
+The units and the raiders use random sources with no fixed seed, thus a cell gives a rate, not a fixed result. With 12 trials, the hold rate of one run has a standard deviation of about 13 points at a rate of 0.7 (about 9 points with 24 trials). The server runs of the border cells below give the same rates within this noise: chi-square test of the runs, p = 0.15 or more in each cell and culture, p = 0.46 for all the cells together. The balance decisions use the pooled runs, not one run.
 
-**Measured balance** (difficulty Normal, Ashmark, no palisade): one server run of all the cells (2 trials each), and 5 server runs of 24 trials of the cells "raid level 4, town" and "raid level 5, city". Each cell: results / trials. **Bold**: not the target.
+**Measured balance** (difficulty Normal, Ashmark, no palisade): one server run of all the cells (2 trials each), and the 3 server runs of the border cells "raid level 4, town" and "raid level 5, city" below. Each cell: results / trials. **Bold**: not the target.
 
 | Raid level | Hamlet (1) | Village (5) | Town (9) | City (13) | Capital (17) |
 | --- | --- | --- | --- | --- | --- |
 | 1 | falls 2 / 2 | holds 1, **falls 1** / 2 | holds 2 / 2 | holds 2 / 2 | holds 2 / 2 |
 | 3 | falls 2 / 2 | falls 2 / 2 | holds 2 / 2 | holds 2 / 2 | holds 2 / 2 |
-| 4 | falls 2 / 2 | falls 2 / 2 | falls 37, **holds 85** / 122 | holds 2 / 2 | holds 2 / 2 |
-| 5 | falls 2 / 2 | falls 2 / 2 | falls 2 / 2 | holds 98, **falls 24** / 122 | holds 2 / 2 |
+| 4 | falls 2 / 2 | falls 2 / 2 | falls 11, **holds 25** / 36 | holds 2 / 2 | holds 2 / 2 |
+| 5 | falls 2 / 2 | falls 2 / 2 | falls 2 / 2 | holds 40, **falls 7** / 47 | holds 2 / 2 |
 
 - The city has 6 guards, 5 archers, 2 healers and 2 golems, thus 5 units more than the town. With a difference of one unit, the measured values of extra ravagers (1 / 1 and 1 / 2 at the levels 4 / 5) do not make the town fall and the city hold with a good probability.
-- Gaps: the town holds against a raid of level 4 in 70 % of the trials: this cell misses its target (Falls). The city holds against a raid of level 5 in 80 % of the trials. The village holds against a raid of level 1 in 1 of 2 trials of this run (22 of 24 in the measures of the exit test).
+- Gaps: the town holds against a raid of level 4 in 69 % of the trials: this cell misses its target (Falls). The city holds against a raid of level 5 in 85 % of the trials. The village holds against a raid of level 1 in 1 of 2 trials of the run of all the cells.
 
-The border cells in each server run (Ashmark, 24 trials each):
+**Border cells by culture and server run** (`FOLKHOLD_RAID_MATRIX=12`, `FOLKHOLD_RAID_CELLS=4:9,5:13`, `FOLKHOLD_RAID_CULTURE=ashmark,valeholm,sunreach`, with the culture advantages of "Garrison": the war horn of Valeholm, the spear throws and the extra guard and healer of Sunreach). Each cell: holds / trials. The Ashmark city cell also has the trials of the exit test "City holds" of the same run (3 to 5 trials).
 
-| Run | Town, raid 4: holds | City, raid 5: holds |
-| --- | --- | --- |
-| 1 | 18 / 24 (75 %) | 14 / 24 (58 %) |
-| 2 | 11 / 24 (46 %) | 19 / 24 (79 %) |
-| 3 | 16 / 24 (67 %) | 21 / 24 (88 %) |
-| 4 | 17 / 24 (71 %) | 20 / 24 (83 %) |
-| 5 | 21 / 24 (88 %) | 23 / 24 (96 %) |
-| 6 | 18 / 24 (75 %) | 21 / 24 (88 %) |
+| Culture | Cell | Run 1 | Run 2 | Run 3 | Pooled | Chi-square p |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ashmark | Town, raid 4 | 8 / 12 | 7 / 12 | 10 / 12 | 25 / 36 (69 %) | 0.40 |
+| Valeholm | Town, raid 4 | 9 / 12 | 7 / 12 | 11 / 12 | 27 / 36 (75 %) | 0.17 |
+| Sunreach | Town, raid 4 | 9 / 12 | 5 / 12 | 9 / 12 | 23 / 36 (64 %) | 0.15 |
+| Ashmark | City, raid 5 | 13 / 15 | 13 / 15 | 14 / 17 | 40 / 47 (85 %) | 0.92 |
+| Valeholm | City, raid 5 | 11 / 12 | 10 / 12 | 10 / 12 | 31 / 36 (86 %) | 0.79 |
+| Sunreach | City, raid 5 | 9 / 12 | 10 / 12 | 7 / 12 | 26 / 36 (72 %) | 0.38 |
 
-Runs 1 to 5 change the faction of the settlement and keep the economy of its region. Run 6 and the exit test measures use the full setup, with the economy of the trial culture: the rates stay in the range of runs 1 to 5. The tables use runs 1 to 5.
-
-**Border cells by culture** (`FOLKHOLD_RAID_CULTURE=ashmark,valeholm,sunreach`, with the culture advantages of "Garrison": the war horn of Valeholm, the spear throws and the extra guard and healer of Sunreach). Each cell: holds / trials, pooled over the server runs of each culture. The Ashmark garrison is the same as in the runs above.
-
-| Culture | Server runs | Town, raid 4: holds | City, raid 5: holds |
-| --- | --- | --- | --- |
-| Ashmark | 2 (16 + 24 trials) | 29 / 40 (73 %) | 34 / 40 (85 %) |
-| Valeholm | 2 (16 + 24 trials) | 28 / 40 (70 %) | 37 / 40 (93 %) |
-| Sunreach | 2 (24 + 24 trials) | 32 / 48 (67 %) | 29 / 48 (60 %) |
-
-- Town, raid 4: the 3 cultures are within 6 points.
-- City, raid 5: Sunreach is 25 points below Ashmark and 33 points below Valeholm. The two Sunreach runs give 18 / 24 and 11 / 24: the spread between server runs (issue #769) is large in this cell.
+- Town, raid 4: the 3 cultures are within 11 points.
+- City, raid 5: Sunreach is 13 points below Ashmark and 14 points below Valeholm.
 
 **Measured with a palisade** (the Falls cells, difficulty Normal, Ashmark, closed gates at the start, the run of all the cells). Each cell: results / trials.
 
