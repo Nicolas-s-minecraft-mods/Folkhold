@@ -24,7 +24,8 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * <p>The game places the trees of the biome after the structures. In a forest, the trees grow between the buildings,
  * on the flat terrain in front of the gates and against the palisade. Before the first activation of a village, its
  * heart removes the blocks of the trees and the cacti in the area of the village, and in a band of {@link #BAND} blocks
- * around it (see {@link #isCleared}). A waterlogged block leaves its water. The clearing keeps:
+ * around it (see {@link #isCleared}). A waterlogged block leaves its water. The layer of snow on a removed block goes
+ * away with it. The clearing keeps:
  *
  * <ul>
  *   <li>the blocks of the structure pieces (see {@link VillageRepairs#expectedBlocks}). In a piece, the clearing removes
@@ -109,6 +110,12 @@ public final class VillageClearing {
             level.setBlock(pos, state.getFluidState().createLegacyBlock(),
                     Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
             removed++;
+            // The layer of snow on a removed block has no support: it goes away with the block.
+            BlockPos above = pos.above();
+            if (level.getBlockState(above).is(Blocks.SNOW) && !data.keeps(heart, above)) {
+                level.setBlock(above, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                removed++;
+            }
         }
         return Optional.of(removed);
     }

@@ -505,6 +505,7 @@ public final class FortifiedVillageGameTests {
      * the area, the roots of the mangroves and the cacti. Waterlogged leaves leave their water. The heart keeps the
      * blocks of the structure pieces, the columns of the palisade, the blocks of the players and the trees out of the
      * band. It also keeps a stilt under a template piece and a post of a pier, and it removes a log next to the pier.
+     * A layer of snow on removed leaves goes away, and a layer of snow on the ground stays.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "fortified_village_clearing")
     public static void heartClearsTheTreesOfTheVillage(GameTestHelper helper) {
@@ -557,8 +558,17 @@ public final class FortifiedVillageGameTests {
         level.setBlock(post, log, Block.UPDATE_CLIENTS);
         level.setBlock(besidePier, log, Block.UPDATE_CLIENTS);
 
+        // Snow on the leaves of a tree, and snow on the ground out of the pieces.
+        BlockPos snowOnLeaves = aboveHeart.above();
+        BlockPos snowOnGround = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                new BlockPos(area.maxX() + 3, 0, village.heart().getZ() + 3));
+        level.setBlock(snowOnLeaves, Blocks.SNOW.defaultBlockState(), Block.UPDATE_CLIENTS);
+        level.setBlock(snowOnGround, Blocks.SNOW.defaultBlockState(), Block.UPDATE_CLIENTS);
+
         heart.clearTrees(level);
 
+        helper.assertTrue(level.getBlockState(snowOnLeaves).isAir(), "The snow on removed leaves must go");
+        helper.assertTrue(level.getBlockState(snowOnGround).is(Blocks.SNOW), "The snow on the ground must stay");
         helper.assertTrue(level.getBlockState(aboveHeart).isAir(), "The leaves above the plaza must go");
         helper.assertTrue(level.getBlockState(inBand).isAir(), "A log in the band around the area must go");
         helper.assertTrue(level.getBlockState(roots).isAir(), "The roots of a mangrove must go");
