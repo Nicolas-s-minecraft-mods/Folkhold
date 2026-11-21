@@ -2053,13 +2053,20 @@ def butchery():
     return t
 
 
+def pen_gate(t, width, depth):
+    """The gate of a pen: a fence gate in the middle of the back edge of the yard. A player brings animals into the
+    pen through it. The animals and the villagers do not open a fence gate."""
+    t.set(width // 2, 1, depth - 1, "minecraft:spruce_fence_gate",
+          {"facing": "south", "in_wall": "false", "open": "false", "powered": "false"})
+
+
 def ranch():
     """The building of the rancher: a shed with a smoker (the work block of the vanilla butcher) and a pen behind it,
     with hay and a water trough. The doors of the shed and the fence keep the animals in the pen.
 
     The template has no animals: a template with entities adds them again at each placement (the village structure
-    and each construction of the builders). The job produces its goods in the economy, and a player can bring
-    animals into the pen.
+    and each construction of the builders). The heart of the village puts the animals into the pen (VillagePens in
+    the world mod), and a player can bring animals into the pen through the gate of the pen (see pen_gate).
     """
     rng = random.Random(59)
 
@@ -2077,6 +2084,7 @@ def ranch():
     t = job_building(rng, "rancher", "minecraft:lead", ground, plants,
                      work=("minecraft:smoker", {"facing": "east", "lit": "false"}))
     t.set(1, 1, 2, "minecraft:hay_block", LOG_Y)
+    pen_gate(t, W, D)
     return t
 
 
@@ -2403,6 +2411,7 @@ def sheepfold():
     t.set(1, 1, 2, "minecraft:white_wool")
     t.set(1, 2, 2, "minecraft:white_wool")
     t.set(2, 1, 2, "minecraft:white_wool")
+    pen_gate(t, W, D)
     return t
 
 
@@ -2833,6 +2842,7 @@ def style_ranch(s):
     t = s.yard_workshop(rng, "rancher", "minecraft:lead", ground, plants,
                         work=("minecraft:smoker", {"facing": "east", "lit": "false"}))
     t.set(1, 1, 2, "minecraft:hay_block", LOG_Y)
+    pen_gate(t, s.width, s.depth)
     return t
 
 
@@ -3137,6 +3147,7 @@ def style_sheepfold(s):
     t.set(1, 1, 2, "minecraft:white_wool")
     t.set(1, 2, 2, "minecraft:white_wool")
     t.set(2, 1, 2, "minecraft:white_wool")
+    pen_gate(t, s.width, s.depth)
     return t
 
 
