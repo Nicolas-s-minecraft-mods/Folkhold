@@ -6,9 +6,11 @@ import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -59,12 +61,10 @@ public final class CaveTemplateGameTests {
             "gate", new BlockPos(30, 2, 2),
             "house_cottage", new BlockPos(42, 2, 2),
             "market", new BlockPos(2, 2, 22),
-            "bank", new BlockPos(22, 2, 22),
-            "job_farmer", new BlockPos(34, 2, 22),
+            "bank", new BlockPos(29, 2, 22),
+            "job_farmer", new BlockPos(41, 2, 22),
             "job_miner", new BlockPos(2, 2, 40),
             "tunnel", new BlockPos(16, 2, 40));
-    /** The light test waits this number of ticks at most for the light of the level. */
-    private static final int LIGHT_TICKS = 100;
 
     private CaveTemplateGameTests() {
     }
@@ -139,21 +139,44 @@ public final class CaveTemplateGameTests {
     /**
      * Some cave pieces in blocks of stone, as the generation places them: each position in the box of a piece where a
      * monster can spawn (a position with no collision and no fluid, on a block that lets a zombie spawn) has a block
-     * light of 1 or more. Thus no
-     * monster spawns in the halls, the tunnels and the rooms. The structure script checks the light of each cave
-     * piece with the lights of the piece (see {@code cave_lit}).
+     * light of 1 or more. Thus no monster spawns in the halls, the tunnels and the rooms. The structure script checks
+     * the light of each cave piece with the lights of the piece (see {@code cave_lit}).
+     *
+     * <p>The pieces and their blocks of stone do not overlap: each piece keeps all its light blocks. The light engine
+     * of the level runs its updates on the background executor of the game ({@code Util.backgroundExecutor}). Other
+     * work on this executor, for example the generation of a village structure, can delay the light by some seconds,
+     * and the GameTest server ticks faster than real time. Thus the test waits for the light with a real-time limit
+     * (see {@link TestSupport#thenWaitForWorker}), not with a number of ticks.
      */
-    @GameTest(template = "arena_huge", timeoutTicks = LIGHT_TICKS + 20, batch = "cave_templates")
+    @GameTest(template = "arena_huge", timeoutTicks = TestSupport.WORKER_TICKS, batch = "cave_templates")
     public static void cavePiecesHaveLightOnEachFloor(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
+        List<BoundingBox> fills = new ArrayList<>();
+        LIGHT_PIECES.forEach((name, origin) -> {
+            BoundingBox fill = fillBox(helper, origin, template(helper, name).getSize(), 1);
+            fills.stream().filter(fill::intersects).findFirst().ifPresent(other -> helper.fail(
+                    "The block of stone of the piece " + name + " overlaps another piece: " + fill + " " + other));
+            fills.add(fill);
+        });
         List<BoundingBox> boxes = new ArrayList<>();
+        Set<String> lights = new HashSet<>();
         LIGHT_PIECES.forEach((name, origin) -> {
             StructureTemplate template = template(helper, name);
             fill(helper, origin, template.getSize(), 1, Blocks.STONE);
-            boxes.add(place(helper, template, origin));
+            BoundingBox box = place(helper, template, origin);
+            boxes.add(box);
+            BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ())
+                    .forEach(pos -> {
+                        if (level.getBlockState(pos).getLightEmission(level, pos) > 0) {
+                            lights.add(name);
+                        }
+                    });
         });
-        helper.succeedWhen(() -> {
-            List<String> dark = new ArrayList<>();
+        helper.assertTrue(LIGHT_PIECES.keySet().stream().allMatch(lights::contains),
+                "Each cave piece must have a light block after the placement: " + lights);
+        List<String> dark = new ArrayList<>();
+        TestSupport.thenWaitForWorker(helper, helper.startSequence(), () -> {
+            dark.clear();
             for (BoundingBox box : boxes) {
                 BlockPos.betweenClosed(box.minX(), box.minY() + 1, box.minZ(), box.maxX(), box.maxY(), box.maxZ())
                         .forEach(pos -> {
@@ -166,10 +189,11 @@ public final class CaveTemplateGameTests {
                             }
                         });
             }
-            helper.assertTrue(dark.isEmpty(), "Dark floor positions of the cave pieces: " + dark);
-            LIGHT_PIECES.forEach((name, origin) -> fill(helper, origin, template(helper, name).getSize(), 1,
-                    Blocks.AIR));
-        });
+            return dark.isEmpty();
+        }, () -> "Dark floor positions of the cave pieces: " + dark)
+                .thenExecute(() -> LIGHT_PIECES.forEach((name, origin) -> fill(helper, origin,
+                        template(helper, name).getSize(), 1, Blocks.AIR)))
+                .thenSucceed();
     }
 
     /**
@@ -229,6 +253,14 @@ public final class CaveTemplateGameTests {
     private static StructureTemplate template(GameTestHelper helper, String name) {
         return helper.getLevel().getStructureManager().get(cave(name))
                 .orElseThrow(() -> new IllegalStateException("No cave piece " + name));
+    }
+
+    /** The box of {@link #fill} in the level. */
+    private static BoundingBox fillBox(GameTestHelper helper, BlockPos origin, Vec3i size, int margin) {
+        BlockPos min = helper.absolutePos(origin.offset(-margin, -1, -margin));
+        BlockPos max = helper.absolutePos(origin.offset(size.getX() + margin - 1, size.getY() + margin - 1,
+                size.getZ() + margin - 1));
+        return BoundingBox.fromCorners(min, max);
     }
 
     /**

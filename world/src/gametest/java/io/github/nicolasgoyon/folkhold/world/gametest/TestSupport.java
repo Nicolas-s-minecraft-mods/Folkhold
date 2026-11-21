@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -366,6 +367,22 @@ final class TestSupport {
      */
     static GameTestSequence thenWaitForWorker(GameTestHelper helper, GameTestSequence sequence,
             BooleanSupplier condition, String message) {
+        return thenWaitForWorker(helper, sequence, condition, () -> message);
+    }
+
+    /**
+     * Waits until a condition is true, with the real-time limit {@link #WORKER_SECONDS} (see
+     * {@link #thenWaitForWorker(GameTestHelper, GameTestSequence, BooleanSupplier, String)}). The message of the
+     * failure comes after the last check of the condition: it can give the state of this check.
+     *
+     * @param helper    the helper of the test
+     * @param sequence  the sequence of the test
+     * @param condition the condition
+     * @param message   the message of the failure
+     * @return the sequence
+     */
+    static GameTestSequence thenWaitForWorker(GameTestHelper helper, GameTestSequence sequence,
+            BooleanSupplier condition, Supplier<String> message) {
         long[] deadline = {0L};
         return sequence.thenWaitUntil(() -> {
             long now = System.nanoTime();
@@ -373,10 +390,10 @@ final class TestSupport {
                 deadline[0] = now + WORKER_SECONDS * 1_000_000_000L;
             }
             if (!condition.getAsBoolean() && now - deadline[0] < 0) {
-                throw new GameTestAssertException("Waiting: " + message);
+                throw new GameTestAssertException("Waiting: " + message.get());
             }
         }).thenExecute(() -> helper.assertTrue(condition.getAsBoolean(),
-                message + " (real-time limit: " + WORKER_SECONDS + " s)"));
+                message.get() + " (real-time limit: " + WORKER_SECONDS + " s)"));
     }
 
     /**
