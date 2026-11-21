@@ -3,6 +3,8 @@ package io.github.nicolasgoyon.folkhold.world.village;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitNavigation;
+import it.unimi.dsi.fastutil.longs.Long2BooleanMap;
+import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -45,6 +47,10 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       of a palisade column starts only on the top of a column: a path from a tower does not end on a column. The
  *       check of the villagers by the heart gives a walk to the heart to a villager in a zone (see
  *       {@link #leaveWall}).</li>
+ *   <li>A villager of a faction village keeps away from the drops (see {@link Pits}). The navigation gives no path to
+ *       a target in a pit or at the edge of a pit, except for a villager in a pit. The path finder gives no fall of {@value #FALL} blocks or
+ *       more into a pit, and a position at the edge of a drop of 2 blocks or more costs {@value #EDGE_COST} blocks of
+ *       walk more. Thus the wander targets and the paths of the villagers do not go into a pit.</li>
  *   <li>The zones come from the heart of the village of the villager (see
  *       {@link VillageHeartBlockEntity#wallZones}). With the chunk of the heart not loaded, the villager has no
  *       zone.</li>
@@ -58,6 +64,10 @@ public final class FolkNavigation extends GroundPathNavigation {
     public static final float LEAVE_SPEED = 0.6F;
     /** A villager that walks out of a zone of the wall stops at this distance from the heart, in blocks. */
     public static final int LEAVE_CLOSE_ENOUGH = 3;
+    /** A villager does not fall this number of blocks or more into a pit (see {@link Pits}). */
+    public static final int FALL = 2;
+    /** A position at the edge of a drop costs this number of blocks of walk more (see {@link Pits#isEdge}). */
+    public static final float EDGE_COST = 4.0F;
     /** The search of a way (see {@link #hasWay}) goes this number of blocks farther than the target. */
     static final int WAY_MARGIN = 16;
     /** The search of a way goes this number of blocks from the villager at least. */
@@ -78,13 +88,23 @@ public final class FolkNavigation extends GroundPathNavigation {
     protected Path createPath(Set<BlockPos> targets, int regionOffset, boolean offsetUpward, int accuracy,
             float followRange) {
         WallZones zones = mob instanceof Villager villager ? zonesOf(villager) : WallZones.NONE;
-        if (zones.isEmpty() || targets.stream().noneMatch(zones::contains)) {
-            return super.createPath(targets, regionOffset, offsetUpward, accuracy, followRange);
+        boolean folk = mob instanceof Villager villager && VillageFolk.isVillageFolk(villager);
+        Set<BlockPos> allowed = targets;
+        if (!zones.isEmpty()) {
+            allowed = allowed.stream().filter(target -> !zones.contains(target))
+                    .collect(Collectors.toUnmodifiableSet());
         }
-        Set<BlockPos> outside = targets.stream().filter(target -> !zones.contains(target))
-                .collect(Collectors.toUnmodifiableSet());
-        return outside.isEmpty() ? null
-                : super.createPath(outside, regionOffset, offsetUpward, accuracy, followRange);
+        if (folk && !allowed.isEmpty() && allowed.stream().anyMatch(target -> isNearPit(target))
+                && !Pits.isPit(level, mob.blockPosition())) {
+            allowed = allowed.stream().filter(target -> !isNearPit(target)).collect(Collectors.toUnmodifiableSet());
+        }
+        return allowed.isEmpty() ? null
+                : super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
+    }
+
+    /** True if a target is in a pit or at the edge of a pit (see {@link Pits}). */
+    private boolean isNearPit(BlockPos target) {
+        return Pits.isPit(level, target) || Pits.isPitEdge(level, target);
     }
 
     @Override
@@ -204,6 +224,10 @@ public final class FolkNavigation extends GroundPathNavigation {
      */
     private static final class Evaluator extends WalkNodeEvaluator {
         private WallZones zones = WallZones.NONE;
+        /** True for a villager of a faction village: the rules of the pits and of the edges apply. */
+        private boolean folk;
+        /** The pits of this search (see {@link Pits#isPit}), by position. */
+        private final Long2BooleanMap pits = new Long2BooleanOpenHashMap();
         /** The node of the search that gets its neighbors, or null. */
         @Nullable
         private Node expanded;
@@ -212,12 +236,15 @@ public final class FolkNavigation extends GroundPathNavigation {
         public void prepare(PathNavigationRegion region, Mob mob) {
             super.prepare(region, mob);
             zones = mob instanceof Villager villager ? zonesOf(villager) : WallZones.NONE;
+            folk = mob instanceof Villager villager && VillageFolk.isVillageFolk(villager);
         }
 
         @Override
         public void done() {
             super.done();
             zones = WallZones.NONE;
+            folk = false;
+            pits.clear();
             expanded = null;
         }
 
@@ -236,6 +263,9 @@ public final class FolkNavigation extends GroundPathNavigation {
         protected Node findAcceptedNode(int x, int y, int z, int verticalDeltaLimit, double nodeFloorLevel,
                 Direction direction, PathType pathType) {
             Node node = super.findAcceptedNode(x, y, z, verticalDeltaLimit, nodeFloorLevel, direction, pathType);
+            if (node != null && folk) {
+                node = withDrops(node);
+            }
             if (node == null || zones.isEmpty()) {
                 return node;
             }
@@ -249,6 +279,29 @@ public final class FolkNavigation extends GroundPathNavigation {
             }
             boolean fromColumn = zones.onColumn(from.x, from.y, from.z);
             return fromColumn || (!column && zones.inTower(from.x, from.y, from.z)) ? node : null;
+        }
+
+        /**
+         * The rules of the drops for a node of a villager of a faction village: a fall of {@value #FALL} blocks or
+         * more into a pit gives no node, and a node at the edge of a drop costs {@value #EDGE_COST} blocks of walk
+         * more. A fall in a pit where the search starts stays possible.
+         */
+        @Nullable
+        private Node withDrops(Node node) {
+            Node from = expanded;
+            if (from != null && from.y - node.y >= FALL && isPit(node.x, node.y, node.z)
+                    && !isPit(from.x, from.y, from.z)) {
+                return null;
+            }
+            if (node.costMalus >= 0.0F && Pits.isEdge(currentContext.level(), new BlockPos(node.x, node.y, node.z))) {
+                node.costMalus = Math.max(node.costMalus, EDGE_COST);
+            }
+            return node;
+        }
+
+        private boolean isPit(int x, int y, int z) {
+            BlockPos pos = new BlockPos(x, y, z);
+            return pits.computeIfAbsent(pos.asLong(), key -> Pits.isPit(currentContext.level(), pos));
         }
     }
 }
