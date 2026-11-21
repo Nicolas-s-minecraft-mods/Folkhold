@@ -48,10 +48,10 @@ public final class VillageTemplateGameTests {
     private static final int STREET_PIECES = 6;
     /**
      * The number of the pieces of the cave village that are not homes: a room for each job, the main hall, the bank,
-     * the market, the 6 pieces of the tunnels of the streets, the tunnel and the gate of the entrance, and the seal.
-     * All the cave pieces are rigid.
+     * the market, the 6 pieces of the tunnels of the streets, and the tunnel and the gate of the entrance. All the cave
+     * pieces are rigid.
      */
-    private static final int CAVE_PIECES = JOBS + 3 + STREET_PIECES + 3;
+    private static final int CAVE_PIECES = JOBS + 3 + STREET_PIECES + 2;
     /** The number of the pieces that the plan test checks: all the rigid pieces of all the variants. */
     private static final int PLAN_PIECES = (JOBS + OTHER_PIECES) * VARIANTS + HomeTemplateGameTests.HOME_PIECES
             + CAVE_PIECES;

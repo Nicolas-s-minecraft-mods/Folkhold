@@ -338,7 +338,8 @@ public final class FortifiedVillageGameTests {
     /**
      * Each variant has all the pieces of the base variant (the style of a culture can have more pieces), with its
      * materials: no piece of a biome variant has a block of the spruce wood of the base variant. The base variant of a
-     * culture keeps the spruce.
+     * culture keeps the spruce. The cave variant has other pieces (see {@link CaveTemplateGameTests}): the test skips
+     * it.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "fortified_village_variants")
     public static void variantPiecesHaveTheirMaterials(GameTestHelper helper) {
@@ -353,6 +354,9 @@ public final class FortifiedVillageGameTests {
                 "The base variant must have its pieces: " + basePieces);
         helper.assertFalse(structure.variants().isEmpty(), "The village must have variants");
         for (FortifiedVillageStructure.Variant variant : structure.variants()) {
+            if (variant.cave()) {
+                continue;
+            }
             String start = variant.startPool().unwrapKey().orElseThrow().location().getPath();
             String folder = start.substring(0, start.lastIndexOf('/') + 1);
             Set<String> pieces = pieceNames(templates, folder);

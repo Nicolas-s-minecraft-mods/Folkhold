@@ -36,7 +36,8 @@ them. The jigsaw connectors give the positions of the plots and the pools of the
 - gate.nbt: a gate of 3 blocks in the palisade. The outside of the template is to the north.
 The palisade comes from code: it follows the terrain.
 - cave/*.nbt: the pieces of the cave village (see CAVE_PIECES): the main hall (plaza.nbt), the tunnels of the
-  streets, the tunnel and the gate of the entrance, the seal of a free plot, and a carved room for each building.
+  streets, the tunnel and the gate of the entrance, and a carved room for each building. The variant of the cave
+  village in the structure has the pieces of the folder cave (see cave_variant).
   The shell of rock of a cave piece comes from the processor folkhold_world:rock_shell (see ROCK_SHELL).
 
 The compound of the GameTests (center.nbt) is a village in one piece: palisade, 4 corner towers, 2 gates, paths, a
@@ -4379,18 +4380,6 @@ def cave_gate():
     return rock_shell(t, carved(t))
 
 
-def cave_seal():
-    """The seal of a free plot: the shell in front of the opening of the plot in the wall of the tunnel. A free plot
-    has no room behind the opening: the seal closes a hole of the world there (a cave, water). The builders of the
-    village remove it when they build a room on the plot."""
-    t = Template(W, CAVE_PORCH + 1, 1)
-    for x in range(1, W - 1):
-        for y in range(1, CAVE_PORCH + 1):
-            t.set(x, y, 0, ROCK_SHELL)
-    t.jigsaw(W // 2, 1, 0, "north_up", HOUSE_FRONT, "minecraft:empty", "minecraft:empty", ROCK_SHELL)
-    return t
-
-
 def cave_room(build):
     """The carved room of a building of PIECES (see carve)."""
     return carve(build())
@@ -4408,7 +4397,6 @@ CAVE_PIECES = {
     "street_side": cave_street_side,
     "tunnel": cave_entrance_tunnel,
     "gate": cave_gate,
-    "seal": cave_seal,
     **{name: functools.partial(cave_room, PIECES[name])
        for name in ("house_cottage", "house_barracks", "house_forge", "house_storehouse", "bank", "market")},
     **{f"job_{job}": functools.partial(cave_room, PIECES[f"job_{job}"]) for job in JOBS},
@@ -4615,8 +4603,9 @@ def pools(v):
 def cave_pools(v):
     """The template pools of the cave village, by name: the pools of a variant, with the cave pieces. All the pieces
     are rigid, with the processor list rock (see ROCK_SHELL). The pools of the land (fields, mills) are empty: a cave
-    village has no land outside a palisade. The pool tunnels has the segments of the tunnel of the entrance, the pool
-    gates the entrance gate, and the pool seals the seal of a free plot."""
+    village has no land outside a palisade. The pool tunnels has the segments of the tunnel of the entrance, and the
+    pool gates the entrance gate. The seal of a free plot is a piece of the structure (CaveSealPiece), with no
+    template."""
     def piece(name):
         return element(v, name, "rigid", "rock")
 
@@ -4637,7 +4626,6 @@ def cave_pools(v):
         "streets_side": pool([(1, piece("street_side"))], v.id("street_ends")),
         "tunnels": pool([(1, piece("tunnel"))], v.id("street_ends")),
         "gates": pool([(1, piece("gate"))]),
-        "seals": pool([(1, piece("seal"))]),
     }
 
 
@@ -4709,10 +4697,19 @@ def all_variants():
             + [v.at_sea() for v in VARIANTS])
 
 
+def cave_variant(base):
+    """The variant of the cave village: the cave pieces in all the biomes. A cave site selects it (see CaveVillage).
+    The wall of the variant has the cave gate. The cave village has no palisade and no tower: the other settings of
+    the wall are the settings of the base variant."""
+    return {"biomes": [], "start_pool": CAVE.id("plaza"), "wall": {**base["wall"], "gate": CAVE.id("gate")},
+            "homes": CAVE.id("homes"), "cave": True}
+
+
 def structure():
     """The village structure: the base variant, then the list of the other variants with their biomes. A variant of
     the style of a culture has the culture. The base variant of a style has no biome: it is the variant of the culture
-    in the biomes of no other variant of the culture. The maritime variants are for a site on the coast."""
+    in the biomes of no other variant of the culture. The maritime variants are for a site on the coast. The last
+    variant is the cave village (see cave_variant)."""
     base = village_settings(BASE)
     variants = []
     for v in all_variants():
@@ -4726,6 +4723,7 @@ def structure():
         if v.maritime:
             entry["maritime"] = True
         variants.append(entry)
+    variants.append(cave_variant(base))
     return {
         "type": f"{NS}:fortified_village",
         "biomes": f"#{NS}:has_village",

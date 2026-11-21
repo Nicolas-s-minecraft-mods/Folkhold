@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -161,6 +162,8 @@ final class VillagePlanPieces {
         private int beds;
         /** The home plots that have no piece yet, the current plot included. */
         private int homesLeft;
+        /** The floor level of a cave village, or empty: the pieces follow the terrain. */
+        private OptionalInt floor = OptionalInt.empty();
 
         Builder(Structure.GenerationContext context, TerrainCache terrain, PoolElementStructurePiece plaza,
                 BlockPos center, Holder<StructureTemplatePool> homes, Set<String> levelKinds) {
@@ -174,6 +177,19 @@ final class VillagePlanPieces {
             this.homes = homes.unwrapKey().orElseThrow().location();
             this.homePools = VillagePlots.homePools(context.registryAccess(), homes);
             this.pools = context.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL);
+        }
+
+        /**
+         * Puts the pieces of a cave village on a flat floor: the first free block above the floor of the streets and
+         * of the buildings is at the floor level. The pieces are cave pieces (see {@link CavePiece}): no terrain
+         * adaptation and no waterlogged blocks.
+         *
+         * @param level the floor level
+         * @return this builder
+         */
+        Builder onFloor(int level) {
+            floor = OptionalInt.of(level);
+            return this;
         }
 
         /**
@@ -318,12 +334,15 @@ final class VillagePlanPieces {
             }
             BlockPos start = world(piece.x(), piece.z());
             BlockPos before = world(piece.x() - piece.dir().dx(), piece.z() - piece.dir().dz());
-            int ground = height(before);
+            // A rigid street of a cave village has its floor block under the floor level.
+            int ground = floor.isPresent() ? floor.getAsInt() - 1 : height(before);
             Rotation turn = rotation.getRotated(turns(piece.dir()));
             BlockPos origin = start.atY(ground).subtract(STREET_START.rotate(turn));
-            PoolElementStructurePiece street = new PoolElementStructurePiece(templates, element.get(), origin,
-                    element.get().getGroundLevelDelta(), turn,
-                    element.get().getBoundingBox(templates, origin, turn), LiquidSettings.APPLY_WATERLOGGING);
+            PoolElementStructurePiece street = floor.isPresent()
+                    ? new CavePiece(templates, element.get(), origin, turn)
+                    : new PoolElementStructurePiece(templates, element.get(), origin,
+                            element.get().getGroundLevelDelta(), turn,
+                            element.get().getBoundingBox(templates, origin, turn), LiquidSettings.APPLY_WATERLOGGING);
             // The junctions of a jigsaw connection, at the level of the plaza after the plaza.
             int level = parent == plaza ? plaza.getBoundingBox().minY() + plaza.getGroundLevelDelta()
                     : ground + street.getGroundLevelDelta();
@@ -454,7 +473,7 @@ final class VillagePlanPieces {
          * @return the placed element, or empty if no element fits the plot
          */
         private Optional<StructurePoolElement> place(Site site, List<StructurePoolElement> elements) {
-            int ground = height(site.connector().connector());
+            int ground = floor.isPresent() ? floor.getAsInt() : height(site.connector().connector());
             for (StructurePoolElement element : elements) {
                 if (!site.fits().test(element.getSize(templates, Rotation.NONE))) {
                     continue;
@@ -464,9 +483,11 @@ final class VillagePlanPieces {
                 if (placement.isEmpty() || !inside(placement.get().box(), site.area())) {
                     continue;
                 }
-                PoolElementStructurePiece building = new PoolElementStructurePiece(templates, element,
-                        placement.get().origin(), site.street().getGroundLevelDelta(), placement.get().rotation(),
-                        placement.get().box(), LiquidSettings.APPLY_WATERLOGGING);
+                PoolElementStructurePiece building = floor.isPresent()
+                        ? new CavePiece(templates, element, placement.get().origin(), placement.get().rotation())
+                        : new PoolElementStructurePiece(templates, element, placement.get().origin(),
+                                site.street().getGroundLevelDelta(), placement.get().rotation(),
+                                placement.get().box(), LiquidSettings.APPLY_WATERLOGGING);
                 BlockPos front = site.connector().front();
                 BlockPos connector = site.connector().connector();
                 site.street().addJunction(new JigsawJunction(front.getX(), ground, front.getZ(), 0,
