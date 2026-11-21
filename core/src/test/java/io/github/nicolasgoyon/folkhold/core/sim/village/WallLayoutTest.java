@@ -213,7 +213,7 @@ class WallLayoutTest {
                 + WallLayout.GATE_CLEARANCE + WallLayout.GATE / 2), walls.get(3).gates().get(1));
     }
 
-    /** The band of a ring is 24 to 32 blocks, and the number of rings is 0 or more. */
+    /** The band of a ring is 24 to 48 blocks, and the number of rings is 0 or more. */
     @Test
     void ringBandLimits() {
         WallLayout inner = WallLayout.plan(List.of(new Box(0, 0, 40, 40)), MARGIN, SPACING, gatesAtTheMiddle(20, 20));
@@ -222,7 +222,7 @@ class WallLayoutTest {
         WallLayout.ring(inner, WallLayout.MAX_BAND);
         IllegalArgumentException small = assertThrows(IllegalArgumentException.class,
                 () -> WallLayout.ring(inner, WallLayout.MIN_BAND - 1));
-        assertEquals("The band of a ring must be 24 to 32 blocks: 23", small.getMessage());
+        assertEquals("The band of a ring must be 24 to 48 blocks: 23", small.getMessage());
         assertThrows(IllegalArgumentException.class, () -> WallLayout.ring(inner, WallLayout.MAX_BAND + 1));
         assertThrows(IllegalArgumentException.class, () -> WallLayout.rings(inner, -1, 28));
         assertEquals(List.of(inner), WallLayout.rings(inner, 0, 28));

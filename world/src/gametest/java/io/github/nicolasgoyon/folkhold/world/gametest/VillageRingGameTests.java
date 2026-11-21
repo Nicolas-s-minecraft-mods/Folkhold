@@ -6,6 +6,8 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
+import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
@@ -13,6 +15,7 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -46,6 +49,7 @@ import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
@@ -53,6 +57,7 @@ import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.TerrainAdjustment;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -126,9 +131,9 @@ public final class VillageRingGameTests {
         FortifiedVillageStructure.Variant land = new FortifiedVillageStructure.Variant(HolderSet.direct(),
                 structure.startPool(), structure.wall(), structure.homes(), Optional.empty());
         FortifiedVillageStructure.Layout layout = structure.layout(context, land, false, startLevel).orElseThrow();
-        List<VillageWall.Wall> rings = VillageWall.rings(context, TerrainCache.of(context), layout.firstWall(),
-                layout.size().rings(), WallLayout.MIN_BAND, structure.wall(), false, start);
+        List<VillageWall.Wall> rings = layout.rings();
         helper.assertTrue(rings.size() == ringCount, "The village must have " + ringCount + " rings: " + rings.size());
+        helper.assertTrue(layout.problems().isEmpty(), "Problems of the village: " + layout.problems());
 
         Map<RingDistricts.District, List<StructurePiece>> districts = VillageWall.districts(rings, start);
         List<StructurePiece> ringPieces = new ArrayList<>();
@@ -169,6 +174,29 @@ public final class VillageRingGameTests {
                 int z = middle.z() - GATE_APPROACH * gate.side().insideZ();
                 helper.assertTrue(reached.contains(ChunkPos.asLong(x, z)),
                         "A walk from the heart must go out of the ring gate " + gate + " to " + x + ", " + z);
+            }
+            List<VillagePlots.Plot> homes = VillagePlots.of(level.getStructureManager(), wall.band()).stream()
+                    .filter(VillagePlots.Plot::built).toList();
+            helper.assertTrue(!homes.isEmpty(), "The band of the ring must have buildings");
+            for (VillagePlots.Plot home : homes) {
+                BlockPos street = home.connector();
+                helper.assertTrue(reached.contains(ChunkPos.asLong(street.getX(), street.getZ())),
+                        "A walk from the heart must go to the building of the band at " + home.front());
+            }
+        }
+        // The reference of the village has the pieces of the bands: the area, the scan and the repairs cover them.
+        VillageReference reference = VillageReference.of(level, layout.allPieces()).orElseThrow();
+        Set<BlockPos> origins = new HashSet<>();
+        reference.pieces().forEach(piece -> origins.add(piece.origin()));
+        for (VillageWall.Wall wall : rings) {
+            for (StructurePiece piece : wall.band()) {
+                helper.assertTrue(reference.isInArea(piece.getBoundingBox().getCenter()),
+                        "The area of the village must hold the band piece " + piece.getBoundingBox());
+                if (piece instanceof PoolElementStructurePiece pool
+                        && pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID) {
+                    helper.assertTrue(origins.contains(pool.getPosition()),
+                            "The reference of the village must hold the building of the band at " + pool.getPosition());
+                }
             }
         }
         helper.succeed();
@@ -281,8 +309,7 @@ public final class VillageRingGameTests {
             }
             TerrainCache terrain = TerrainCache.of(context);
             FortifiedVillageStructure.Layout layout = village.layout(context, land, false, TOWN_LEVEL).orElseThrow();
-            VillageWall.Wall ring = VillageWall.rings(context, terrain, layout.firstWall(), 1, VillageRings.BAND,
-                    village.wall(), false, start).get(0);
+            VillageWall.Wall ring = layout.rings().get(0);
             Optional<BlockPos> front = Optional.empty();
             int slope = 0;
             for (Map.Entry<WallLayout.Gate, Integer> gate : ring.gateLevels().entrySet()) {

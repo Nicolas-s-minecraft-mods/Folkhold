@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -134,6 +135,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             return Math.sqrt((double) (x * x + z * z));
         }
 
+        /** This box, larger by a margin on each side. */
+        public Box grow(int margin) {
+            return new Box(minX - margin, minZ - margin, maxX + margin, maxZ + margin);
+        }
+
         Box union(Box other) {
             return new Box(Math.min(minX, other.minX), Math.min(minZ, other.minZ), Math.max(maxX, other.maxX),
                     Math.max(maxZ, other.maxZ));
@@ -248,15 +254,96 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      */
     public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
             Predicate<Box> terrain, Predicate<Box> foundation, long seed) {
+        int half = plazaSize / 2;
+        Box plaza = new Box(-half, -half, plazaSize - 1 - half, plazaSize - 1 - half);
+        long maxRadius = size.maxRadius();
+        return best(seed, random -> new Planner(target, target - size.sparePlots(target), style,
+                box -> box.reach() <= maxRadius, List.of(plaza), true, terrain, foundation, random).plan(starts));
+    }
+
+    /** The best plan of {@link #ATTEMPTS} layouts from a seed. */
+    private static VillagePlan best(long seed, Function<Random, VillagePlan> planner) {
         VillagePlan best = null;
         for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
             Random random = new Random(seed ^ (attempt * 0x9E3779B97F4A7C15L));
-            VillagePlan plan = new Planner(size, target, style, plazaSize, terrain, foundation, random).plan(starts);
+            VillagePlan plan = planner.apply(random);
             if (best == null || BETTER.compare(plan, best) < 0) {
                 best = plan;
             }
         }
         return best;
+    }
+
+    /** The plots of a band start this number of blocks outside the line of the wall inside the band. */
+    public static final int BAND_INNER = 4;
+    /**
+     * The plots of a band stop this number of blocks inside the line of its ring: the flat terrain, the towers and
+     * the stairs of the ring stay free.
+     */
+    public static final int BAND_OUTER = 6;
+    /** The middle of an axis street is at x = 0 or z = 0. The paths across the bands keep this half width. */
+    private static final int AXIS_HALF_WIDTH = StreetStyle.WIDTH / 2;
+
+    /**
+     * The band of the rings of a style, in blocks from the line of the inner wall to the line of the ring: a row of
+     * plots, a ring street and a row of plots, with {@link #BAND_INNER} and {@link #BAND_OUTER} blocks on the two
+     * sides.
+     *
+     * @param style the style
+     * @return the band, in blocks
+     */
+    public static int bandWidth(StreetStyle style) {
+        return BAND_INNER + 2 * style.home().depth() + StreetStyle.WIDTH + BAND_OUTER - 1;
+    }
+
+    /**
+     * Makes the plan of the band of a ring: the ring street and its plots. The band is the space between the line of
+     * the inner wall and the line of the ring, {@link #bandWidth} blocks outside it.
+     *
+     * <ul>
+     *   <li>The ring street goes along each side of the inner wall, in the band. Its middle is
+     *       {@link #BAND_INNER} blocks, a home depth and 2 blocks outside the inner line. It starts at the 2 sides of
+     *       the path across the band on the axis of the side (x = 0 or z = 0), and goes to the 2 corners of the band.
+     *       The paths across the bands keep the 5 blocks of the axis.</li>
+     *   <li>The plan adds segments ({@code street_next}) one by one at the open end that is nearest to the middle, as
+     *       the plan of the core. Each open end gets a street end.</li>
+     *   <li>Each piece, each street end and each home stays in the band: {@link #BAND_INNER} blocks or more outside
+     *       the inner line, and {@link #BAND_OUTER} blocks or more inside the ring line.</li>
+     *   <li>The plots have no role and no wide home. The homes are the good plots nearest to the middle, then the bad
+     *       plots that hold a home on its foundation. The spare plots are the bad plots first, then the farthest
+     *       plots.</li>
+     * </ul>
+     *
+     * @param size       the size of the tier: the spare share
+     * @param target     the plots of the band, with the spare plots
+     * @param style      the street pieces and the homes of the style
+     * @param inner      the outline of the inner wall in the frame of the plan: its lines are the edges of the box
+     * @param band       the band, in blocks (see {@link #bandWidth})
+     * @param terrain    true when the terrain of a box is good for a home
+     * @param foundation true when a box with bad terrain can hold a home on its foundation
+     * @param seed       the seed of the choices
+     * @return the plan of the band, with its shortfall when the band is too small
+     */
+    public static VillagePlan band(VillageSize size, int target, StreetStyle style, Box inner, int band,
+            Predicate<Box> terrain, Predicate<Box> foundation, long seed) {
+        StreetStyle plain = new StreetStyle(style.name(), style.segment(), style.segmentPlots(), style.crossArm(),
+                style.crossPlots(), style.side(), style.home(), List.of(), style.endOverflow());
+        Box near = inner.grow(BAND_INNER - 1);
+        Box far = inner.grow(band - BAND_OUTER);
+        Predicate<Box> region = box -> far.contains(box.minX(), box.minZ()) && far.contains(box.maxX(), box.maxZ())
+                && !box.overlaps(near);
+        int wide = Integer.MAX_VALUE / 4;
+        List<Box> axes = List.of(new Box(-AXIS_HALF_WIDTH, -wide, AXIS_HALF_WIDTH, wide),
+                new Box(-wide, -AXIS_HALF_WIDTH, wide, AXIS_HALF_WIDTH));
+        int middle = BAND_INNER + style.home().depth() + StreetStyle.WIDTH / 2;
+        int first = AXIS_HALF_WIDTH + 1;
+        List<Start> starts = List.of(
+                new Start(first, inner.minZ() - middle, Dir.EAST), new Start(-first, inner.minZ() - middle, Dir.WEST),
+                new Start(inner.maxX() + middle, first, Dir.SOUTH), new Start(inner.maxX() + middle, -first, Dir.NORTH),
+                new Start(first, inner.maxZ() + middle, Dir.EAST), new Start(-first, inner.maxZ() + middle, Dir.WEST),
+                new Start(inner.minX() - middle, first, Dir.SOUTH), new Start(inner.minX() - middle, -first, Dir.NORTH));
+        return best(seed, random -> new Planner(target, target - size.sparePlots(target), plain, region, axes, false,
+                terrain, foundation, random).plan(starts));
     }
 
     /** The number of layouts that the plan tries. It keeps the best one. */
@@ -298,31 +385,37 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final Predicate<Box> terrain;
         private final Predicate<Box> foundation;
         private final Random random;
-        private final long maxRadius;
-        private final Box plaza;
+        /** True for a box in the space of the plan: in the maximum radius, or in the band. */
+        private final Predicate<Box> region;
+        /** The boxes that no piece and no plot touch: the plaza, or the axes of the paths across a band. */
+        private final List<Box> blocked;
+        /** True for the plan of the core: the 4 axis streets, the roles of their first plots and the crossroads. */
+        private final boolean axis;
         private final List<Piece> pieces = new ArrayList<>();
         private final List<Slot> slots = new ArrayList<>();
         private final List<Tail> tails = new ArrayList<>();
         /** The ends where no piece fits: they keep their street end. */
         private final List<Tail> closed = new ArrayList<>();
 
-        Planner(VillageSize size, int target, StreetStyle style, int plazaSize, Predicate<Box> terrain,
-                Predicate<Box> foundation, Random random) {
+        Planner(int target, int needed, StreetStyle style, Predicate<Box> region, List<Box> blocked, boolean axis,
+                Predicate<Box> terrain, Predicate<Box> foundation, Random random) {
             this.target = target;
-            this.needed = target - size.sparePlots(target);
+            this.needed = needed;
             this.style = style;
             this.terrain = terrain;
             this.foundation = foundation;
             this.random = random;
-            this.maxRadius = size.maxRadius();
-            int half = plazaSize / 2;
-            this.plaza = new Box(-half, -half, plazaSize - 1 - half, plazaSize - 1 - half);
+            this.region = region;
+            this.blocked = List.copyOf(blocked);
+            this.axis = axis;
         }
 
         VillagePlan plan(List<Start> starts) {
             // The first pieces of the streets to the north and to the south come first: their plots have roles.
             List<Start> ordered = new ArrayList<>(starts);
-            ordered.sort(Comparator.comparing(start -> start.dir() != Dir.NORTH && start.dir() != Dir.SOUTH));
+            if (axis) {
+                ordered.sort(Comparator.comparing(start -> start.dir() != Dir.NORTH && start.dir() != Dir.SOUTH));
+            }
             for (Start start : ordered) {
                 Tail tail = new Tail(start, false, -1, -1, box(start, StreetStyle.END));
                 if (fits(tail, Kind.SEGMENT)) {
@@ -341,8 +434,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 }
                 Tail tail = tails.stream().min(Comparator.comparingLong(t -> distance(t.start()))).orElseThrow();
                 tails.remove(tail);
-                List<Kind> kinds =
-                        new ArrayList<>(tail.side() ? List.of(Kind.SIDE) : List.of(Kind.SEGMENT, Kind.CROSS));
+                List<Kind> kinds = new ArrayList<>(tail.side() ? List.of(Kind.SIDE)
+                        : axis ? List.of(Kind.SEGMENT, Kind.CROSS) : List.of(Kind.SEGMENT));
                 kinds.removeIf(kind -> !fits(tail, kind));
                 if (kinds.isEmpty()) {
                     closed.add(tail);
@@ -423,12 +516,16 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         }
 
         private boolean inside(Box box) {
-            return box.reach() <= maxRadius;
+            return region.test(box);
         }
 
-        /** True when the box is inside the radius and touches no piece, no plot and no street end. */
+        private boolean isBlocked(Box box) {
+            return blocked.stream().anyMatch(other -> other.overlaps(box));
+        }
+
+        /** True when the box is in the region of the plan and touches no piece, no plot and no street end. */
         private boolean free(Box box) {
-            if (!inside(box) || box.overlaps(plaza)) {
+            if (!inside(box) || isBlocked(box)) {
                 return false;
             }
             return pieces.stream().noneMatch(p -> p.box().overlaps(box))
@@ -471,7 +568,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                         int[] connector = at(start, east ? StreetStyle.WIDTH - 1 : 0, along);
                         Dir side = start.dir().counterclockwise();
                         Dir facing = east ? side : side.opposite();
-                        PlotRole role = tail.parent() == -1 ? role(start.dir(), row, east) : PlotRole.HOME;
+                        PlotRole role = axis && tail.parent() == -1 ? role(start.dir(), row, east)
+                                : PlotRole.HOME;
                         boolean good = terrain.test(area);
                         slots.add(new Slot(connector[0], connector[1], facing, index, along, east, area, role, good,
                                 !good && foundation.test(area)));
@@ -585,7 +683,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     .union(slot.area());
             int overflow = slot.along() + wide.frontage() - 1 - wide.frontage() / 2 - (piece.length() - 1);
             boolean next = pieces.stream().anyMatch(p -> p.parent() == slot.piece() && p.exit() == 0);
-            if (!inside(area) || area.overlaps(plaza) || !terrain.test(area) || (overflow > style.endOverflow() && next)
+            if (!inside(area) || isBlocked(area) || !terrain.test(area) || (overflow > style.endOverflow() && next)
                     || pieces.stream().anyMatch(p -> p.box().overlaps(area))
                     || tails.stream().anyMatch(t -> t.end().overlaps(area))
                     || closed.stream().anyMatch(t -> t.end().overlaps(area))) {

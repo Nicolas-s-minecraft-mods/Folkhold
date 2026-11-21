@@ -157,6 +157,8 @@ final class VillagePlanPieces {
         private final List<String> problems = new ArrayList<>();
         private List<Job> eligible = List.of();
         private int postLimit;
+        /** The seed of the jobs of the posts. */
+        private long postSeed;
         /** The home beds that the village needs, and the home beds of the placed pieces. */
         private int bedTarget;
         private int beds;
@@ -217,7 +219,7 @@ final class VillagePlanPieces {
         }
 
         /**
-         * Makes the pieces of a plan.
+         * Makes the pieces of a plan with no band: the plaza, the streets and the buildings of the core.
          *
          * @param style  the style of the plan
          * @param plan   the plan
@@ -230,20 +232,73 @@ final class VillagePlanPieces {
          */
         Result place(StreetStyle style, VillagePlan plan, PlotUses.Result uses, Posts posts, int bedTarget,
                 RandomSource random) {
-            uses.missing().forEach(kind -> problems.add("no plot for the building " + kind));
-            if (uses.posts() < posts.count()) {
-                problems.add("plots for " + uses.posts() + " job posts of " + posts.count());
-            }
+            start(posts, bedTarget);
+            Stage core = plots(style, plan, uses, random, false, 0);
+            finish(uses.missing(), uses.posts(), posts.count());
+            return new Result(pieces, core.reserved(), core.built(), core.free(), postJobs, problems);
+        }
+
+        /**
+         * Starts the pieces of a village: the plaza, the job posts and the home beds.
+         *
+         * @param posts     the job posts
+         * @param bedTarget the home beds that the village needs: the maximum population of the level minus the places
+         *                  of the hall
+         */
+        void start(Posts posts, int bedTarget) {
             pieces.add(plaza);
-            List<PoolElementStructurePiece> streets = new ArrayList<>();
-            for (Piece piece : plan.pieces()) {
-                streets.add(street(piece, piece.parent() < 0 ? plaza : streets.get(piece.parent())));
-            }
-            streets.stream().filter(street -> street != null).forEach(pieces::add);
             eligible = new ArrayList<>(posts.eligible());
             postLimit = posts.count();
+            postSeed = posts.seed();
             this.bedTarget = bedTarget;
-            homesLeft = (int) uses.uses().stream().filter(use -> use.type() == PlotUses.Type.HOME).count();
+        }
+
+        /** The seed of the jobs of the posts. */
+        private long posts() {
+            return postSeed;
+        }
+
+        /**
+         * The pieces of a part of the village: the core or a band (see {@link VillagePlan#band}).
+         *
+         * @param pieces   the street pieces and the buildings of the part
+         * @param reserved the spaces of the free plots of the part
+         * @param built    the number of plots with a building
+         * @param free     the number of free plots
+         */
+        record Stage(List<PoolElementStructurePiece> pieces, List<BoundingBox> reserved, int built, int free) {
+            Stage {
+                pieces = List.copyOf(pieces);
+                reserved = List.copyOf(reserved);
+            }
+        }
+
+        /**
+         * Makes the street pieces and the buildings of a plan: the plan of the core or of a band. The builder keeps the
+         * job posts and the home beds of the earlier parts.
+         *
+         * @param style      the style of the plan
+         * @param plan       the plan
+         * @param uses       the uses of the plots of the plan
+         * @param random     the random of the choice of the buildings
+         * @param band       true for the plan of a band: its first pieces start on the paths across the band, with
+         *                   the pool {@code streets_next}
+         * @param laterHomes the home plots of the parts after this part, for the home beds of each plot
+         * @return the pieces of the part
+         */
+        Stage plots(StreetStyle style, VillagePlan plan, PlotUses.Result uses, RandomSource random, boolean band,
+                int laterHomes) {
+            int first = pieces.size();
+            int firstReserved = reserved.size();
+            List<PoolElementStructurePiece> streets = new ArrayList<>();
+            for (Piece piece : plan.pieces()) {
+                PoolElementStructurePiece parent = piece.parent() >= 0 ? streets.get(piece.parent())
+                        : band ? null : plaza;
+                streets.add(street(piece, parent, band));
+            }
+            streets.stream().filter(street -> street != null).forEach(pieces::add);
+            homesLeft = laterHomes
+                    + (int) uses.uses().stream().filter(use -> use.type() == PlotUses.Type.HOME).count();
             int built = 0;
             int free = 0;
             for (int i : order(uses)) {
@@ -264,8 +319,7 @@ final class VillagePlanPieces {
                     case FREE -> false;
                     case BANK -> build(site, shuffled("bank", random), "the bank");
                     case BUILDING -> build(site, candidates(use.kind(), style), "the building " + use.kind());
-                    case POST -> (postJobs.size() < postLimit && post(site, posts.seed(), random))
-                            || home(site, random);
+                    case POST -> (postJobs.size() < postLimit && post(site, posts(), random)) || home(site, random);
                     case HOME -> home(site, random);
                 };
                 if (use.type() == PlotUses.Type.HOME) {
@@ -280,10 +334,41 @@ final class VillagePlanPieces {
                     reserved.add(BoundingBox.encapsulatingBoxes(space).orElseThrow());
                 }
             }
-            if (beds < this.bedTarget) {
-                problems.add("home beds " + beds + " of " + this.bedTarget);
+            return new Stage(pieces.subList(first, pieces.size()), reserved.subList(firstReserved, reserved.size()),
+                    built, free);
+        }
+
+        /**
+         * Ends the pieces of a village: the problems of the buildings with no plot, of the job posts with no plot and
+         * of the home beds.
+         *
+         * @param missing the kinds of the buildings of the level with no plot in all the parts
+         * @param posts   the job posts with a plot in all the parts
+         * @param count   the job posts of the level
+         */
+        void finish(List<String> missing, int posts, int count) {
+            missing.forEach(kind -> problems.add("no plot for the building " + kind));
+            if (posts < count) {
+                problems.add("plots for " + posts + " job posts of " + count);
             }
-            return new Result(pieces, reserved, built, free, postJobs, problems);
+            if (beds < bedTarget) {
+                problems.add("home beds " + beds + " of " + bedTarget);
+            }
+        }
+
+        /** The pieces of all the parts: the plaza, the streets and the buildings. */
+        List<PoolElementStructurePiece> pieces() {
+            return List.copyOf(pieces);
+        }
+
+        /** The job ids of the house-workshops of all the parts, in the order of the posts. */
+        List<String> postJobs() {
+            return List.copyOf(postJobs);
+        }
+
+        /** The problems of all the parts. */
+        List<String> problems() {
+            return List.copyOf(problems);
         }
 
         /**
@@ -315,10 +400,13 @@ final class VillagePlanPieces {
                 BoundingBox area) {
         }
 
-        /** The piece of a street, connected to the piece before it. Null if its pool has no element of its length. */
-        private PoolElementStructurePiece street(Piece piece, PoolElementStructurePiece parent) {
+        /**
+         * The piece of a street, connected to the piece before it. Null if its pool has no element of its length. The
+         * first piece of a band street has no piece before it: it starts at the side of the path across the band.
+         */
+        private PoolElementStructurePiece street(Piece piece, PoolElementStructurePiece parent, boolean band) {
             String name = switch (piece.kind()) {
-                case SEGMENT, CROSS -> piece.parent() >= 0 ? "streets_next" : switch (piece.dir()) {
+                case SEGMENT, CROSS -> piece.parent() >= 0 || band ? "streets_next" : switch (piece.dir()) {
                     case NORTH -> "streets_bank";
                     case SOUTH, EAST, WEST -> "streets_first";
                 };
@@ -328,7 +416,7 @@ final class VillagePlanPieces {
             Optional<StructurePoolElement> element = elements(name).stream()
                     .filter(candidate -> candidate.getSize(templates, Rotation.NONE).getZ() == piece.length())
                     .findFirst();
-            if (element.isEmpty() || parent == null) {
+            if (element.isEmpty() || (parent == null && !band)) {
                 problems.add("no " + piece.kind() + " of length " + piece.length() + " in " + name);
                 return null;
             }
@@ -343,6 +431,9 @@ final class VillagePlanPieces {
                     : new PoolElementStructurePiece(templates, element.get(), origin,
                             element.get().getGroundLevelDelta(), turn,
                             element.get().getBoundingBox(templates, origin, turn), LiquidSettings.APPLY_WATERLOGGING);
+            if (parent == null) {
+                return street;
+            }
             // The junctions of a jigsaw connection, at the level of the plaza after the plaza.
             int level = parent == plaza ? plaza.getBoundingBox().minY() + plaza.getGroundLevelDelta()
                     : ground + street.getGroundLevelDelta();

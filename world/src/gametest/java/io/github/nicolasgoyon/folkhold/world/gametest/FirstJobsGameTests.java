@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.TemplateSigns;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -25,6 +26,7 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -107,7 +109,10 @@ public final class FirstJobsGameTests {
                     level.getChunkSource().randomState().sampler());
             int workshops = Math.min(LevelTables.get().traits(startLevel).jobSlots(),
                     Economies.eligibleJobs(biome, startLevel, null).size());
-            List<String> ids = workshopJobs(level, start);
+            // The house-workshops of the bands are in the ring districts: the layout gives their pieces.
+            List<StructurePiece> pieces = new ArrayList<>(start.getPieces());
+            layout.rings().forEach(ring -> pieces.addAll(ring.band()));
+            List<String> ids = workshopJobs(level, pieces);
             helper.assertTrue(ids.size() == workshops, "The village " + folder + " of the level " + startLevel
                     + " in " + chunk + " must have " + workshops + " house-workshops: " + ids);
             helper.assertTrue(ids.stream().sorted().toList().equals(layout.posts().stream().sorted().toList()),
@@ -125,8 +130,8 @@ public final class FirstJobsGameTests {
      * The job ids of the job signs of a village, as the scan of the heart reads them: the house-workshops
      * ({@code job_<id>} pieces) and the homes with a job sign (the fishing hut of the maritime villages).
      */
-    private static List<String> workshopJobs(ServerLevel level, StructureStart start) {
-        return start.getPieces().stream().filter(PoolElementStructurePiece.class::isInstance)
+    private static List<String> workshopJobs(ServerLevel level, List<StructurePiece> pieces) {
+        return pieces.stream().filter(PoolElementStructurePiece.class::isInstance)
                 .map(piece -> ((PoolElementStructurePiece) piece).getElement())
                 .flatMap(element -> VillageReference.templateOf(level, element).stream())
                 .flatMap(id -> level.getStructureManager().get(id).map(template -> TemplateSigns.of(id, template))

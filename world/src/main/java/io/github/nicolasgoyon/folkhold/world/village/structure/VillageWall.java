@@ -145,19 +145,41 @@ public final class VillageWall {
      * @param pieces      the pieces of the wall
      * @param spareTowers the towers of the garrison that have no place on this wall and on the walls inside it: the
      *                    next ring gets them, in addition to the towers of its gates
+     * @param band        the streets and the buildings of the band inside a ring (see
+     *                    {@link io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan#band}): empty for the
+     *                    first wall and for a ring with no band plots
      */
     public record Wall(WallLayout layout, Map<Gate, Integer> gateLevels, Set<Gate> waterGates,
-            List<StructurePiece> pieces, int spareTowers) {
+            List<StructurePiece> pieces, int spareTowers, List<StructurePiece> band) {
         public Wall {
             gateLevels = Map.copyOf(gateLevels);
             waterGates = Set.copyOf(waterGates);
             pieces = List.copyOf(pieces);
+            band = List.copyOf(band);
         }
 
-        /** A wall with no spare towers. */
+        /** A wall with no band. */
+        public Wall(WallLayout layout, Map<Gate, Integer> gateLevels, Set<Gate> waterGates,
+                List<StructurePiece> pieces, int spareTowers) {
+            this(layout, gateLevels, waterGates, pieces, spareTowers, List.of());
+        }
+
+        /** A wall with no spare towers and no band. */
         public Wall(WallLayout layout, Map<Gate, Integer> gateLevels, Set<Gate> waterGates,
                 List<StructurePiece> pieces) {
             this(layout, gateLevels, waterGates, pieces, 0);
+        }
+
+        /** This ring with the streets and the buildings of its band. */
+        public Wall withBand(List<? extends StructurePiece> pieces) {
+            return new Wall(layout, gateLevels, waterGates, this.pieces, spareTowers, List.copyOf(pieces));
+        }
+
+        /** The pieces of the wall, then the pieces of its band. */
+        public List<StructurePiece> allPieces() {
+            List<StructurePiece> all = new ArrayList<>(pieces);
+            all.addAll(band);
+            return all;
         }
     }
 
@@ -263,8 +285,8 @@ public final class VillageWall {
      * first wall: the palisade on the terrain, the towers, the gates, the flat terrain, the water side and the cliff
      * side. On the cliff side, a gate of a ring goes away and does not move (see {@link CliffSide#ringGates}). Each
      * gate of a ring gets a path across the band: a ramp from the ring gate to the level of the gate of the wall inside
-     * it (see {@link #bandArm}). The bands have no other piece. A segment of palisade is cut at the borders of the
-     * district cells (see {@link RingDistricts}), thus each piece goes to one district. A ring has a tower next to
+     * it (see {@link #bandArm}). The streets and the buildings of a band come from the layout of the village (see
+     * {@link Wall#withBand}). A segment of palisade is cut at the borders of the district cells (see {@link RingDistricts}), thus each piece goes to one district. A ring has a tower next to
      * each of its gates, and the spare towers of the wall inside it (see {@link Wall#spareTowers}).
      *
      * @param context  the context of the generation
@@ -362,6 +384,8 @@ public final class VillageWall {
      * The pieces of the rings of a village in each district (see {@link RingDistricts}): a piece goes to the district
      * of the middle of its box. Each district also gets the ground fill of its towers and gates (see {@link #fills}),
      * with the cleared spaces of the gates of all the districts: a gate and its cleared space can be in 2 districts.
+     * The streets and the buildings of the bands come after the pieces of the walls of their district, with no ground
+     * fill.
      *
      * @param rings the rings
      * @param start the start chunk of the village
@@ -370,15 +394,22 @@ public final class VillageWall {
     public static Map<RingDistricts.District, List<StructurePiece>> districts(List<Wall> rings, ChunkPos start) {
         Map<RingDistricts.District, List<StructurePiece>> districts = new LinkedHashMap<>();
         for (Wall ring : rings) {
-            for (StructurePiece piece : ring.pieces()) {
-                BlockPos middle = piece.getBoundingBox().getCenter();
-                districts.computeIfAbsent(RingDistricts.of(start.x, start.z, middle.getX(), middle.getZ()),
-                        key -> new ArrayList<>()).add(piece);
-            }
+            ring.pieces().forEach(piece -> districtOf(districts, piece, start).add(piece));
         }
         List<BoundingBox> cleared = cleared(rings.stream().flatMap(ring -> ring.pieces().stream()).toList());
         districts.values().forEach(pieces -> pieces.addAll(fills(pieces, cleared)));
+        for (Wall ring : rings) {
+            ring.band().forEach(piece -> districtOf(districts, piece, start).add(piece));
+        }
         return districts;
+    }
+
+    /** The list of the pieces of the district of the middle of the box of a piece. */
+    private static List<StructurePiece> districtOf(Map<RingDistricts.District, List<StructurePiece>> districts,
+            StructurePiece piece, ChunkPos start) {
+        BlockPos middle = piece.getBoundingBox().getCenter();
+        return districts.computeIfAbsent(RingDistricts.of(start.x, start.z, middle.getX(), middle.getZ()),
+                key -> new ArrayList<>());
     }
 
     /** The parts of a run of palisade in each district cell. */

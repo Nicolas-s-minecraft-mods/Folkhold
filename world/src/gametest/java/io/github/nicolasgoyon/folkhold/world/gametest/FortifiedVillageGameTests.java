@@ -492,7 +492,7 @@ public final class FortifiedVillageGameTests {
                     level.getChunkSource().randomState(), level.getStructureManager(), level.getSeed(), chunk, level,
                     biome -> true));
             helper.assertTrue(layout.isPresent(), "The village must start in " + chunk);
-            VillageReference reference = VillageReference.of(level, layout.get().pieces()).orElseThrow();
+            VillageReference reference = VillageReference.of(level, layout.get().allPieces()).orElseThrow();
             BoundingBox area = reference.area().orElseThrow();
             long houses = reference.pieces().stream().map(piece -> name(piece.template()))
                     .filter(name -> HOUSES.contains(name) || name.startsWith("job_")).count();

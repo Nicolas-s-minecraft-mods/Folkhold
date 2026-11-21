@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.IntBinaryOperator;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
@@ -247,21 +248,23 @@ public final class PlotTerrainGameTests {
                     + style.name();
             measure.check(context, layout, " forced", problems);
             VillagePlanGameTests.checkLevel(level, measure.generator, layout, name, problems);
-            VillagePlan plan = layout.plan();
-            long spare = plan.plots().stream().filter(VillagePlan.Plot::spare).count();
-            double share = (double) spare / (plan.plots().size() - spare);
+            List<VillagePlan.Plot> plots = layout.plots();
+            long spare = plots.stream().filter(VillagePlan.Plot::spare).count();
+            double share = (double) spare / (plots.size() - spare);
             if (share < MIN_SPARE_SHARE || share > MAX_SPARE_SHARE) {
-                problems.add(name + ": " + spare + " spare plots for " + plan.plots().size() + " plots");
+                problems.add(name + ": " + spare + " spare plots for " + plots.size() + " plots");
             }
             Map<String, Integer> signs = VillagePlanGameTests.signs(level, layout);
-            FolkholdWorld.LOGGER.info("Village measure | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} / {} / {} "
-                    + "| {} | {} | {} | {} |", tier.id(), style.name(), tier.maxLevel(), plan.plots().size(),
+            FolkholdWorld.LOGGER.info("Village measure | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} / {} / {} "
+                    + "| {} | {} | {} | {} |", tier.id(), style.name(), tier.maxLevel(), plots.size(),
+                    layout.plans().stream().map(part -> String.valueOf(part.plots().size()))
+                            .collect(Collectors.joining(" + ")),
                     layout.free(), spare, signs.getOrDefault(VillagePlanGameTests.HOME, 0) - layout.posts().size(),
                     VillagePlanGameTests.homeBeds(level, layout),
                     LevelTables.get().traits(tier.maxLevel()).maxPopulation() - VillageBeds.staff(),
                     layout.built(), signs.getOrDefault("storehouse", 0), signs.getOrDefault("barracks", 0),
                     signs.getOrDefault(VillageBuildings.MARKET, 0), layout.posts().size(), layout.problems().size(),
-                    plan.plots().stream().filter(plot -> plot.spare() && !plot.good()).count(), time);
+                    plots.stream().filter(plot -> plot.spare() && !plot.good()).count(), time);
         }
         measure.end(helper, tiers.size(), tiers.size(), problems);
     }
@@ -391,8 +394,7 @@ public final class PlotTerrainGameTests {
                     .orElseThrow();
             TerrainCache terrain = TerrainCache.of(context);
             List<VillageWall.Wall> walls = new ArrayList<>(List.of(layout.firstWall()));
-            walls.addAll(VillageWall.rings(context, terrain, layout.firstWall(), layout.size().rings(),
-                    VillageRings.BAND, variant.wall(), false, context.chunkPos()));
+            walls.addAll(layout.rings());
             for (int w = 0; w < walls.size(); w++) {
                 String name = "chunk " + context.chunkPos() + " wall " + w;
                 Optional<VillageWall.Wall> inner = w == 0 ? Optional.empty() : Optional.of(walls.get(w - 1));
@@ -566,23 +568,23 @@ public final class PlotTerrainGameTests {
         /** Measures a village and adds its problems. */
         void check(Structure.GenerationContext context, FortifiedVillageStructure.Layout layout, String forced,
                 List<String> problems) {
-            VillagePlan plan = layout.plan();
             PoolElementStructurePiece plaza = layout.village().get(0);
             String name = "chunk " + context.chunkPos() + " level " + layout.level() + forced + " "
                     + layout.size().tier() + " " + layout.style().name();
-            if (plan.missingHomes() > 0 || plan.missingPlots() > 0) {
-                problems.add(name + ": " + plan.missingPlots() + " missing plots, " + plan.missingHomes()
-                        + " missing homes");
+            int missingPlots = layout.plans().stream().mapToInt(VillagePlan::missingPlots).sum();
+            int missingHomes = layout.plans().stream().mapToInt(VillagePlan::missingHomes).sum();
+            if (missingHomes > 0 || missingPlots > 0) {
+                problems.add(name + ": " + missingPlots + " missing plots, " + missingHomes + " missing homes");
             }
             layout.problems().forEach(problem -> problems.add(name + ": " + problem));
             PlotTerrains terrain = new PlotTerrains(TerrainCache.of(context));
             Map<PlotTerrain.Result, Integer> bad = new EnumMap<>(PlotTerrain.Result.class);
             Map<PlotTerrain.Result, Integer> fineBad = new EnumMap<>(PlotTerrain.Result.class);
-            for (PoolElementStructurePiece building : layout.village().stream().skip(1)
+            for (PoolElementStructurePiece building : layout.buildings().stream().skip(1)
                     .filter(piece -> piece.getElement().getProjection() == StructureTemplatePool.Projection.RIGID)
                     .toList()) {
                 BoundingBox box = building.getBoundingBox();
-                Optional<VillagePlan.Plot> plot = plotOf(plan, layout.center(), plaza.getRotation(), box);
+                Optional<VillagePlan.Plot> plot = plotOf(layout.plots(), layout.center(), plaza.getRotation(), box);
                 boolean role = plot.map(value -> value.role() != VillagePlan.PlotRole.HOME).orElse(false);
                 PlotTerrain.Result result = terrain.check(box);
                 if (role) {
@@ -609,12 +611,12 @@ public final class PlotTerrainGameTests {
                             name, FINE_STEP, fine, box);
                 }
             }
-            long spareBad = plan.plots().stream().filter(plot -> plot.spare() && !plot.good()).count();
+            long spareBad = layout.plots().stream().filter(plot -> plot.spare() && !plot.good()).count();
             badPlots += (int) spareBad;
             FolkholdWorld.LOGGER.info("Plot terrain {}: {} plots, {} spare plots with bad terrain, {} missing plots, "
                     + "{} missing homes, {} buildings, buildings on bad terrain {}, buildings on bad terrain on the "
-                    + "grid of {} blocks {}, {} problems", name, plan.plots().size(), spareBad, plan.missingPlots(),
-                    plan.missingHomes(), layout.built(), bad, FINE_STEP, fineBad, layout.problems().size());
+                    + "grid of {} blocks {}, {} problems", name, layout.plots().size(), spareBad, missingPlots,
+                    missingHomes, layout.built(), bad, FINE_STEP, fineBad, layout.problems().size());
         }
 
         /**
@@ -638,7 +640,7 @@ public final class PlotTerrainGameTests {
             if (chunks.chunks() == 0) {
                 problems.add(name + ": no noise object of a chunk");
             }
-            if (!fast.plan().equals(slow.plan())) {
+            if (!fast.plans().equals(slow.plans())) {
                 problems.add(name + ": the plans are not the same");
             }
             if (!saved(fast).equals(saved(slow)) || !fast.problems().equals(slow.problems())) {
@@ -649,7 +651,7 @@ public final class PlotTerrainGameTests {
         /** The saved data of the pieces of a layout. */
         private List<CompoundTag> saved(FortifiedVillageStructure.Layout layout) {
             StructurePieceSerializationContext saveContext = StructurePieceSerializationContext.fromLevel(level);
-            return layout.pieces().stream().map(piece -> piece.createTag(saveContext)).toList();
+            return layout.allPieces().stream().map(piece -> piece.createTag(saveContext)).toList();
         }
 
         /** Logs the totals, and ends the test. */
@@ -688,8 +690,8 @@ public final class PlotTerrainGameTests {
     }
 
     /** The plot of the plan with the middle of a box in its area. */
-    private static Optional<VillagePlan.Plot> plotOf(VillagePlan plan, BlockPos center, Rotation rotation,
-            BoundingBox box) {
+    private static Optional<VillagePlan.Plot> plotOf(List<VillagePlan.Plot> plots, BlockPos center,
+            Rotation rotation, BoundingBox box) {
         BlockPos middle = box.getCenter();
         Predicate<VillagePlan.Plot> holds = plot -> {
             BlockPos first = center.atY(0).offset(new BlockPos(plot.area().minX(), 0, plot.area().minZ())
@@ -700,6 +702,6 @@ public final class PlotTerrainGameTests {
             return middle.getX() >= area.minX() && middle.getX() <= area.maxX() && middle.getZ() >= area.minZ()
                     && middle.getZ() <= area.maxZ();
         };
-        return plan.plots().stream().filter(holds).findFirst();
+        return plots.stream().filter(holds).findFirst();
     }
 }

@@ -7,7 +7,6 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.ArcherEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
-import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
@@ -15,7 +14,6 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
-import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import java.util.ArrayList;
 import java.util.List;
@@ -83,8 +81,7 @@ public final class WallTowerGameTests {
             VillageSize size = layout.size();
             int archers = FortifiedVillageStructure.archers(size);
             List<VillageWall.Wall> walls = new ArrayList<>(List.of(layout.firstWall()));
-            walls.addAll(VillageWall.rings(context, TerrainCache.of(context), layout.firstWall(), size.rings(),
-                    VillageRings.BAND, structure.wall(), false, context.chunkPos()));
+            walls.addAll(layout.rings());
             int first = layout.firstWall().layout().towers().size();
             int total = 0;
             int full = 0;
