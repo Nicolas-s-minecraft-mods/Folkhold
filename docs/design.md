@@ -901,6 +901,29 @@ A recipe with no inputs produces nothing. The job goes into "need" state and buy
 
 The population consumes food at each cycle.
 
+### Start stock
+
+The first abstract tick of a new settlement starts its economy (`Economies.initialize`): its population, its jobs and its start stock. The start stock has 3 parts. Each part goes into the stock up to the stock capacity of the level.
+
+- The outputs of its jobs for 2 + level cycles, and 2 times the inputs of each job.
+- Food for the population for 2 + level cycles, from the food items of its jobs.
+- **Start materials** (`StartMaterials`, data file `folkhold/start_materials.json`): the base building materials of the style of its culture, from its culture, its tier and its biome. The first repairs of the builders after the spawn take these materials and do not wait for a delivery.
+
+The start materials:
+
+- The file gives the quantity of each item of the economy, by culture and by tier. A culture with no entry (for example the culture of a data pack) uses the entry `default`. A tier with no entry gives no materials. The materials are items of the economy, because the builders take the costs of the blocks in items of the economy (see "Construction"): 1 spruce stairs costs 1.5 spruce planks, 1 dark oak stairs costs 3/8 of a dark oak log.
+- The rules `biomes` give the materials of the biome variants of the village structure (see `VARIANTS` in `tools/structures/village.py`): oak in the plains, the meadow, the cherry groves and the forests, birch in the birch forests, acacia in the savanna, sandstone in the desert (no sticks and no vines), mangrove in the swamps (no cobblestone and no vines: the mud bricks of the swamp have no recipe from the items of the economy, and the village asks for them with a quest). The first rule with the biome of the settlement applies. A replacement can change the quantity: 4 planks of birch, acacia or mangrove cost 1 log.
+- The quantity of an item covers the repair of 5 % of the blocks of this item in a village of the tier. The design value of 5 % comes from the counts of the blocks of the templates, as items of the economy:
+
+  | Style | Items of the economy for each piece | Palisade (each column) |
+  | --- | --- | --- |
+  | Base pieces (Ashmark, `default`) | 94 spruce planks, 49 cobblestone, 31 spruce logs, 16 dark oak logs, 10.5 sticks, 9 vines | 4 spruce logs, 1 cobblestone |
+  | Valeholm | 144 spruce planks, 62 cobblestone, 59 spruce logs, 51 dark oak logs, 16 sticks, 13 vines | 4 spruce logs, 1 cobblestone |
+  | Sunreach | 201 sandstone, 22 terracotta, 18.5 spruce planks, 5 cobblestone, 4.6 sticks, 2.4 spruce logs | 4 spruce logs, 1 cobblestone |
+
+  A village of a tier has about one piece for each plot (14, 28, 42, 53 and 66 plots, see `village_sizes.json`), and a palisade of about 240, 300, 360, 400 and 440 columns. The quantity is `5 % × (pieces × items for each piece + columns × items for each column)`, rounded up to a multiple of 8. The smaller items of the templates (glass, bricks, stone bricks, lanterns, beds) are not start materials: the jobs make them, and the repairs ask for them with a quest when the stock does not have them.
+- The start materials follow the rules of the stock: the decay, the trade between villages and the trade with the player. A settlement with a started economy keeps its stock: a village of an existing world gets no start materials. The admin action `economy_reset` starts the economy again, with the start materials.
+
 ### Price formula
 
 ```math

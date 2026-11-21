@@ -41,7 +41,9 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  *
  * <ul>
  *   <li>The first abstract tick of a settlement sets its population, its jobs and its start stock. A settlement
- *       with a higher level starts with more stock.</li>
+ *       with a higher level starts with more stock. The start stock also has the building materials of the culture,
+ *       the tier and the biome of the settlement (see {@link StartMaterials}). A settlement with a started economy
+ *       keeps its stock.</li>
  *   <li>At each cycle: the job slots follow the level (more slots, new jobs), then the settlement runs one
  *       economic cycle (see {@link Economy}). Only the active jobs work: the jobs of the active job posts of a scanned
  *       village, and the job slots of a village with no scan (see {@link #activeJobIds}).</li>
@@ -82,7 +84,8 @@ public final class Economies {
     }
 
     /**
-     * Sets the population, the jobs and the start stock of a settlement.
+     * Sets the population, the jobs and the start stock of a settlement: the outputs of its jobs, food, and the
+     * building materials of {@link StartMaterials}.
      *
      * @param server     the server
      * @param settlement the settlement
@@ -98,6 +101,7 @@ public final class Economies {
         updateJobs(server, settlement);
         Economy.seedStock(state, jobs(settlement), 2 + settlement.level(), traits.stockCapacity(),
                 EconomyData.catalog(), settings());
+        StartMaterials.addTo(server, settlement, traits.stockCapacity());
         state.setInitialized(true);
         SettlementData.get(server).setDirty();
     }

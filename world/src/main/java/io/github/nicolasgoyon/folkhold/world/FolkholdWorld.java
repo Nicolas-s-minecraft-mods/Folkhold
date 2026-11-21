@@ -13,6 +13,7 @@ import io.github.nicolasgoyon.folkhold.world.construction.ConstructionRuns;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import io.github.nicolasgoyon.folkhold.world.economy.StartMaterials;
 import io.github.nicolasgoyon.folkhold.world.entity.AnimatedVillagers;
 import io.github.nicolasgoyon.folkhold.world.entity.TridentThrow;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.FriendlyFire;
@@ -198,6 +199,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(RepairEquivalents::onAddReloadListener);
         NeoForge.EVENT_BUS.addListener(GarrisonEquipment::onAddReloadListener);
         NeoForge.EVENT_BUS.addListener(EconomyData::onAddReloadListener);
+        NeoForge.EVENT_BUS.addListener(StartMaterials::onAddReloadListener);
         SimulationTicker.addSystem("economy", Economies::tick);
         SimulationTicker.addSystem("level", SettlementLevels::tick);
         SimulationTicker.addWorldSystem("mobile groups", MobileGroupSystem::tick);
