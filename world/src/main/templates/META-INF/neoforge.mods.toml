@@ -14,7 +14,7 @@ logoFile = "${mod_id}_logo.png"
 description = '''${mod_description}'''
 
 # The workers of the faction villages keep their daily schedule, their job sign and their market sign in the vanilla
-# villager brain.
+# villager brain. The settlement discovery puts the results of its checks on a worker thread in the structure check.
 [[mixins]]
 config = "folkhold_world.mixins.json"
 
