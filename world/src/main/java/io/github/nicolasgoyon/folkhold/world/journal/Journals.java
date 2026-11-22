@@ -10,6 +10,7 @@ import io.github.nicolasgoyon.folkhold.world.faction.Reputations;
 import io.github.nicolasgoyon.folkhold.world.journal.JournalData.Visit;
 import io.github.nicolasgoyon.folkhold.world.network.JournalPayload;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
+import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
@@ -129,6 +130,8 @@ public final class Journals {
                         ReputationTier.of(value), value, entry.getValue()));
             });
         }
-        return new JournalPayload(villages, factions, day(server), focus);
+        List<String> visited = villages.stream().filter(JournalPayload.Village::visited)
+                .map(JournalPayload.Village::id).toList();
+        return new JournalPayload(villages, factions, day(server), focus, QuestBoards.journal(player, visited));
     }
 }

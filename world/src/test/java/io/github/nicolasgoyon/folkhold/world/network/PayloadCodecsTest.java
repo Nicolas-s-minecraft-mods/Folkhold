@@ -125,6 +125,18 @@ class PayloadCodecsTest {
     }
 
     @Test
+    void journalWithQuests() {
+        JournalPayload payload = new JournalPayload(List.of(), List.of(), 12, "", List.of(
+                new JournalPayload.Quest("q-1", true, "v-1", "Northam", "minecraft:bread", Component.literal("Bring"),
+                        Component.literal("4 / 8"), Component.literal("5 emeralds"), Component.literal("Failure"),
+                        600),
+                new JournalPayload.Quest("q-2", false, "v-2", "Southam", "minecraft:iron_sword",
+                        Component.literal("Hunt"), Component.literal("Hunt · 20 min"), Component.literal("4 emeralds"),
+                        Component.empty(), 90)));
+        assertEquals(payload, roundTrip(JournalPayload.STREAM_CODEC, payload));
+    }
+
+    @Test
     void questBoard() {
         QuestBoardPayload payload = new QuestBoardPayload(Component.literal("Northam"), "id-1", "neutral", 3, 20,
                 List.of(new QuestBoardPayload.Offer("q-1", "delivery", "minecraft:bread", Component.literal("Bring"),

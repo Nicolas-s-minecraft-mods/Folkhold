@@ -16,6 +16,7 @@ import io.github.nicolasgoyon.folkhold.world.entity.CaptainEntity;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionVisuals;
 import io.github.nicolasgoyon.folkhold.world.faction.Reputations;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
+import io.github.nicolasgoyon.folkhold.world.network.JournalPayload;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.network.QuestActionPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
@@ -548,6 +549,50 @@ public final class QuestBoards {
         return new QuestBoardPayload(Component.literal(settlement.name()), settlement.id(),
                 playerTier.serializedName(), maxActive, WorldConfig.QUEST_OFFER_MINUTES.get(), offers, active,
                 Optional.empty(), true);
+    }
+
+    /**
+     * The quests of the tab "Quests" of the journal of a player: the active quests of the player, then the offers of
+     * the villages that the player visited. The offers are read-only: the player accepts a quest at the board or from
+     * the captain of the village.
+     *
+     * @param player  the player
+     * @param visited the settlement ids of the villages that the player visited, nearest first
+     * @return the quests
+     */
+    public static List<JournalPayload.Quest> journal(ServerPlayer player, List<String> visited) {
+        MinecraftServer server = player.server;
+        Quests quests = QuestData.get(server).quests();
+        SettlementData settlements = SettlementData.get(server);
+        long now = server.overworld().getGameTime();
+        int maxActive = WorldConfig.QUEST_MAX_ACTIVE.get();
+        List<Quest> mine = quests.active(player.getUUID());
+        List<JournalPayload.Quest> result = new ArrayList<>();
+        for (Quest quest : mine) {
+            Optional<Settlement> village = settlements.registry().byId(quest.settlementId());
+            if (village.isEmpty()) {
+                continue;
+            }
+            Active active = active(server, player, quest, now, village.get());
+            result.add(new JournalPayload.Quest(quest.id(), true, quest.settlementId(), village.get().name(),
+                    active.itemId(), active.name(), active.info(), QuestRewards.describe(quest),
+                    joined(QuestRewards.risks(quest)), active.secondsLeft()));
+        }
+        for (String villageId : visited) {
+            Optional<Settlement> village = settlements.registry().byId(villageId).filter(Settlement::isActive);
+            if (village.isEmpty()) {
+                continue;
+            }
+            ReputationTier tier = Reputations.effective(server, player, village.get().factionId(), villageId)
+                    .map(ReputationTier::of).orElse(ReputationTier.NEUTRAL);
+            for (Quest quest : quests.offers(villageId)) {
+                Offer offer = offer(server, player, quest, now, tier, mine.size(), maxActive);
+                int seconds = (int) Math.max(0, (quest.offerEnd() - now) / SharedConstants.TICKS_PER_SECOND);
+                result.add(new JournalPayload.Quest(quest.id(), false, villageId, village.get().name(),
+                        offer.itemId(), offer.name(), offer.info(), offer.reward(), offer.risk(), seconds));
+            }
+        }
+        return result;
     }
 
     private static Offer offer(MinecraftServer server, ServerPlayer player, Quest quest, long now,
