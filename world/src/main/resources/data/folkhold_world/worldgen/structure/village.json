@@ -960,13 +960,13 @@
           "gate": "folkhold_world:village/sunreach/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:smooth_sandstone"
             },
             "base": {
-              "Name": "minecraft:cobblestone"
+              "Name": "minecraft:sandstone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:sandstone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"
@@ -1040,13 +1040,13 @@
           "gate": "folkhold_world:village/sunreach/plains/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:smooth_sandstone"
             },
             "base": {
-              "Name": "minecraft:cobblestone"
+              "Name": "minecraft:sandstone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:sandstone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"
@@ -1116,13 +1116,13 @@
           "gate": "folkhold_world:village/sunreach/birch/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:smooth_sandstone"
             },
             "base": {
-              "Name": "minecraft:cobblestone"
+              "Name": "minecraft:sandstone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:sandstone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"
@@ -1192,13 +1192,13 @@
           "gate": "folkhold_world:village/sunreach/savanna/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:smooth_sandstone"
             },
             "base": {
-              "Name": "minecraft:cobblestone"
+              "Name": "minecraft:sandstone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:sandstone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"
@@ -1262,7 +1262,7 @@
           "gate": "folkhold_world:village/sunreach/desert/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:cut_sandstone"
+              "Name": "minecraft:smooth_sandstone"
             },
             "base": {
               "Name": "minecraft:sandstone"
@@ -1339,13 +1339,13 @@
           "gate": "folkhold_world:village/sunreach/swamp/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:mud_bricks"
+              "Name": "minecraft:smooth_sandstone"
             },
             "base": {
-              "Name": "minecraft:mud_bricks"
+              "Name": "minecraft:sandstone"
             },
             "point": {
-              "Name": "minecraft:mud_brick_wall"
+              "Name": "minecraft:sandstone_wall"
             },
             "foundation": {
               "Name": "minecraft:mud_bricks"
