@@ -240,6 +240,32 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                 gateFronts);
     }
 
+    /**
+     * This reference with the pieces of another reference after its pieces, for example the pieces of a ring that the
+     * builders build (see {@link RingWall}): the template pieces, the palisades, the piers, the paths and the gate
+     * fronts of the two references. The area is the box around the two areas. The plots, the pool of the homes and the
+     * streets of this reference stay.
+     *
+     * @param other the other reference
+     * @return the reference
+     */
+    public VillageReference with(VillageReference other) {
+        List<Piece> allPieces = new ArrayList<>(pieces);
+        allPieces.addAll(other.pieces);
+        List<Palisade> allPalisades = new ArrayList<>(palisades);
+        allPalisades.addAll(other.palisades);
+        List<BoundingBox> allPiers = new ArrayList<>(piers);
+        allPiers.addAll(other.piers);
+        List<BoundingBox> allPaths = new ArrayList<>(paths);
+        allPaths.addAll(other.paths);
+        List<BoundingBox> allFronts = new ArrayList<>(gateFronts);
+        allFronts.addAll(other.gateFronts);
+        Optional<BoundingBox> box = area.isEmpty() ? other.area : other.area.isEmpty() ? area
+                : BoundingBox.encapsulatingBoxes(List.of(area.get(), other.area.get()));
+        return new VillageReference(allPieces, allPalisades, box, plots, homes, allPiers, streetColumns, streets,
+                allPaths, allFronts);
+    }
+
     /** This reference with other segments of the palisade, for example the segments of a stone wall. */
     public VillageReference withPalisades(List<Palisade> others) {
         return new VillageReference(pieces, others, area, plots, homes, piers, streetColumns, streets, paths,
