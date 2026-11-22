@@ -42,10 +42,10 @@ public final class HeartSearch {
     private static final PlanCache<Key, HeartSite.Offset> OFFSETS = new PlanCache<>(CACHE_SIZE);
 
     /**
-     * The key of a village in the cache: the generator, its random state, the seed, the start chunk and the largest
-     * shift.
+     * The key of a village in the cache: the generator, its random state, the seed, the start chunk, the largest
+     * shift and the largest offset on one axis.
      */
-    record Key(ChunkGenerator generator, RandomState random, long seed, long chunk, int shift) {
+    record Key(ChunkGenerator generator, RandomState random, long seed, long chunk, int shift, int limit) {
     }
 
     private HeartSearch() {

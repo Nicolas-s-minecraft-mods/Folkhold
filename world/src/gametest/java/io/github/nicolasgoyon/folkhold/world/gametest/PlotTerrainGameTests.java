@@ -21,6 +21,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.HeartSearch;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PlotTerrains;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
@@ -632,6 +633,10 @@ public final class PlotTerrainGameTests {
         int missingBand = 0;
         int highRings = 0;
         int highBoxes = 0;
+        int missingPlots = 0;
+        int missingHomes = 0;
+        int homeBeds = 0;
+        int posts = 0;
         for (int i = 0; i < TRIES && sites < MEASURE_MOUNTAIN_SITES; i++) {
             Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
                     (i / ROW) * LAND_STEP));
@@ -642,8 +647,9 @@ public final class PlotTerrainGameTests {
             sites++;
             FortifiedVillageStructure.Variant variant = measure.variant(context, false);
             for (int level : new int[] {HAMLET_LEVEL, VILLAGE_LEVEL, TOWN_LEVEL}) {
-                FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, level)
-                        .orElseThrow();
+                // The layout of the generation: the plaza goes to the heart of the search (see HeartSearch).
+                FortifiedVillageStructure.Layout layout = structure.layout(context, level,
+                        candidate -> candidate == variant).orElseThrow();
                 PlanGround core = new PlotTerrains(TerrainCache.of(context)).core(layout.center(),
                         layout.village().get(0).getRotation(), Math.min(FortifiedVillageStructure.firstRadius(
                                 layout.size()), structure.maxDistanceFromCenter()), variant.wall().margin());
@@ -659,17 +665,21 @@ public final class PlotTerrainGameTests {
                 long climb = core.climb(line(wall), PlanGround.HIGH_RISE);
                 long rectangleClimb = core.climb(line(rectangle), PlanGround.HIGH_RISE);
                 plans++;
+                int beds = VillagePlanGameTests.homeBeds(helper.getLevel(), layout);
+                missingPlots += layout.plan().missingPlots();
+                missingHomes += layout.plan().missingHomes();
+                homeBeds += beds;
+                posts += layout.posts().size();
                 rules.merge(layout.plan().rules().name(), 1, Integer::sum);
                 free += wall.isRectangle() ? 0 : 1;
                 climbing += climb > 0 ? 1 : 0;
                 climbingRectangles += rectangleClimb > 0 ? 1 : 0;
                 FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {}: rules {}, free outline {} ({} edges),"
                         + " climb {}, climb of the rectangle {}, {} plots of {}, {} missing plots, {} missing homes,"
-                        + " {} home beds, {} job posts", context.chunkPos(), layout.style().name(), level,
+                        + " {} home beds, {} job posts, heart {}", context.chunkPos(), layout.style().name(), level,
                         layout.plan().rules(), !wall.isRectangle(), wall.edges(), climb, rectangleClimb,
                         layout.plan().plots().size(), layout.plan().target(), layout.plan().missingPlots(),
-                        layout.plan().missingHomes(), VillagePlanGameTests.homeBeds(helper.getLevel(), layout),
-                        layout.posts().size());
+                        layout.plan().missingHomes(), beds, layout.posts().size(), layout.center());
                 int rise = FortifiedVillageStructure.outlineRise(layout.plan().rules());
                 WallLayout inside = wall;
                 for (int r = 0; r < layout.rings().size() && r + 1 < layout.plans().size(); r++) {
@@ -697,7 +707,8 @@ public final class PlotTerrainGameTests {
             }
         }
         FolkholdWorld.LOGGER.info("Mountain measure | {} sites | {} plans | rules {} | {} free outlines | {} walls"
-                + " climb | {} rectangles climb |", sites, plans, rules, free, climbing, climbingRectangles);
+                + " climb | {} rectangles climb | {} missing plots | {} missing homes | {} home beds | {} job posts |",
+                sites, plans, rules, free, climbing, climbingRectangles, missingPlots, missingHomes, homeBeds, posts);
         FolkholdWorld.LOGGER.info("Mountain ring measure | {} rings | {} cut | {} rings climb | {} rectangles climb |"
                 + " {} rings on high ground | {} rectangles on high ground | {} bands miss plots or homes |", ringCount,
                 cutRings, climbingRings, climbingBoxes, highRings, highBoxes, missingBand);
@@ -705,30 +716,29 @@ public final class PlotTerrainGameTests {
         helper.succeed();
     }
 
-    /** The largest shift of the heart of the study of #1005, in blocks. */
-    private static final int HEART_SHIFT = 48;
-    /** The distance between 2 positions of the search of the study of #1005, in blocks. */
-    private static final int HEART_STEP = 16;
-
     /**
-     * Study of issue #1005 at the first {@link #MEASURE_MOUNTAIN_SITES} mountain sites: the size of the flat region of
-     * the core (the grid points of the flood with the small rise, {@link PlanGround#MAX_RISE}) at the middle of the
-     * plaza of a village, and at the positions of a grid of {@link #HEART_STEP} blocks up to {@link #HEART_SHIFT}
-     * blocks from it. The log has a line {@code Heart site study:} for each site and the line {@code Heart site study |}
-     * for all the sites: the region at the middle, the best region, its shift, and the time of the search. The test runs
-     * only with the environment variable {@link #MEASURE_VARIABLE}.
+     * The measure of the search of the heart (see {@link HeartSearch}) at the first {@link #MEASURE_MOUNTAIN_SITES}
+     * mountain sites, with the start level of each chunk. For each site, the log has a line {@code Heart measure:}:
+     * the time of the check of the start (the calculation of the structure check and of the {@code /locate} command),
+     * the time of the start with the search, the offset of the heart, and the size of the flood region of the core with
+     * the strict rules at the start and at the heart (see {@link FortifiedVillageStructure#regionSize}). The line
+     * {@code Heart measure |} gives the means. In a world with no search (see {@link HeartSearch#setEnabled}), the
+     * heart stays at the start. The test runs only with the environment variable {@link #MEASURE_VARIABLE}.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_heart", required = false)
-    public static void studyHeartShift(GameTestHelper helper) {
+    public static void measureHeartShift(GameTestHelper helper) {
         if (System.getenv(MEASURE_VARIABLE) == null) {
             helper.succeed();
             return;
         }
         Measure measure = new Measure(helper.getLevel());
         FortifiedVillageStructure structure = measure.structure;
+        boolean search = HeartSearch.enabled();
         int sites = 0;
-        int better = 0;
-        long totalNanos = 0;
+        int moved = 0;
+        long checkNanos = 0;
+        long startNanos = 0;
+        long slowest = 0;
         long sumBefore = 0;
         long sumAfter = 0;
         for (int i = 0; i < TRIES && sites < MEASURE_MOUNTAIN_SITES; i++) {
@@ -739,61 +749,44 @@ public final class PlotTerrainGameTests {
                 continue;
             }
             sites++;
-            FortifiedVillageStructure.Variant variant = measure.variant(context, false);
-            FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, VILLAGE_LEVEL)
-                    .orElseThrow();
-            TerrainCache terrain = TerrainCache.of(context);
-            PlotTerrains plots = new PlotTerrains(terrain);
-            Rotation rotation = layout.village().get(0).getRotation();
-            int radius = Math.min(FortifiedVillageStructure.firstRadius(layout.size()), structure.maxDistanceFromCenter());
-            BlockPos center = layout.center();
-            int before = regionSize(plots, center, rotation, radius, variant.wall().margin());
-            long start = System.nanoTime();
-            int best = before;
-            BlockPos bestPos = center;
-            for (int dx = -HEART_SHIFT; dx <= HEART_SHIFT; dx += HEART_STEP) {
-                for (int dz = -HEART_SHIFT; dz <= HEART_SHIFT; dz += HEART_STEP) {
-                    if ((dx == 0 && dz == 0) || dx * dx + dz * dz > HEART_SHIFT * HEART_SHIFT) {
-                        continue;
-                    }
-                    int x = center.getX() + dx;
-                    int z = center.getZ() + dz;
-                    BlockPos candidate = new BlockPos(x, terrain.surface(x, z), z);
-                    int size = regionSize(plots, candidate, rotation, radius, variant.wall().margin());
-                    if (size > best) {
-                        best = size;
-                        bestPos = candidate;
-                    }
-                }
-            }
-            long nanos = System.nanoTime() - start;
-            totalNanos += nanos;
+            HeartSearch.clear();
+            long time = System.nanoTime();
+            boolean starts = structure.findValidGenerationPoint(context).isPresent();
+            long check = System.nanoTime() - time;
+            time = System.nanoTime();
+            FortifiedVillageStructure.Start heart = structure.generatedStart(context).orElseThrow();
+            long start = System.nanoTime() - time;
+            HeartSearch.setEnabled(false);
+            FortifiedVillageStructure.Start origin = structure.generatedStart(context).orElseThrow();
+            HeartSearch.setEnabled(search);
+            int radius = Math.min(FortifiedVillageStructure.firstRadius(FortifiedVillageStructure.sizeAt(SEED,
+                    context.chunkPos())), structure.maxDistanceFromCenter());
+            PlotTerrains plots = new PlotTerrains(TerrainCache.of(context));
+            Rotation rotation = origin.plaza().getRotation();
+            int margin = origin.variant().wall().margin();
+            int before = FortifiedVillageStructure.regionSize(plots.core(origin.center(), rotation, radius, margin),
+                    origin.center(), radius);
+            int after = FortifiedVillageStructure.regionSize(plots.core(heart.center(), rotation, radius, margin),
+                    heart.center(), radius);
+            checkNanos += check;
+            startNanos += start;
+            slowest = Math.max(slowest, start);
             sumBefore += before;
-            sumAfter += best;
-            better += best > before * 5 / 4 ? 1 : 0;
-            FolkholdWorld.LOGGER.info("Heart site study: chunk {} {}: region {} at the middle, best {} at a shift of"
-                    + " {} {} ({} blocks up or down), {} ms", context.chunkPos(), layout.style().name(), before, best,
-                    bestPos.getX() - center.getX(), bestPos.getZ() - center.getZ(),
-                    bestPos.getY() - center.getY(), nanos / 1_000_000);
+            sumAfter += after;
+            moved += heart.center().equals(origin.center()) ? 0 : 1;
+            FolkholdWorld.LOGGER.info("Heart measure: chunk {} level {}: check {} ms (starts {}), start with the search"
+                    + " {} ms, offset {} {} ({} blocks up or down), region {} at the start, {} at the heart",
+                    context.chunkPos(), Settlements.startLevel(SEED, context.chunkPos()), check / 1_000_000, starts,
+                    start / 1_000_000, heart.center().getX() - origin.center().getX(),
+                    heart.center().getZ() - origin.center().getZ(), heart.center().getY() - origin.center().getY(),
+                    before, after);
         }
-        FolkholdWorld.LOGGER.info("Heart site study | {} sites | mean region {} at the middle, {} at the best"
-                + " position | {} sites with a region 25 % larger or more | mean search {} ms |", sites,
-                sites == 0 ? 0 : sumBefore / sites, sites == 0 ? 0 : sumAfter / sites, better,
-                sites == 0 ? 0 : totalNanos / sites / 1_000_000);
+        FolkholdWorld.LOGGER.info("Heart measure | search {} | {} sites | {} moved | mean check {} ms | mean start {} ms"
+                + " | slowest start {} ms | mean region {} at the start, {} at the heart |", search, sites, moved,
+                sites == 0 ? 0 : checkNanos / sites / 1_000_000, sites == 0 ? 0 : startNanos / sites / 1_000_000,
+                slowest / 1_000_000, sites == 0 ? 0 : sumBefore / sites, sites == 0 ? 0 : sumAfter / sites);
         helper.assertTrue(sites == MEASURE_MOUNTAIN_SITES, "Only " + sites + " mountain sites");
         helper.succeed();
-    }
-
-    /** The number of the grid points of the flood of the core with the small rise around a middle. */
-    private static int regionSize(PlotTerrains plots, BlockPos center, Rotation rotation, int radius, int margin) {
-        PlanGround ground = plots.core(center, rotation, radius, margin);
-        int count = 0;
-        for (int x = center.getX() - radius; x <= center.getX() + radius; x += PlanGround.STEP) {
-            for (int z = center.getZ() - radius; z <= center.getZ() + radius; z += PlanGround.STEP) {
-                count += ground.inRegion(x, z, PlanGround.MAX_RISE) ? 1 : 0;
-            }
-        }
-        return count;
     }
 
     /** The outline of a rectangle. */

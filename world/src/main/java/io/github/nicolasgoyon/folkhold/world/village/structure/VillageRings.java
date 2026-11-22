@@ -211,7 +211,7 @@ public final class VillageRings {
      */
     public static Optional<Planned> planOfLevel(FortifiedVillageStructure village, Structure.GenerationContext context,
             int level, Predicate<FortifiedVillageStructure.Variant> variant) {
-        return village.generatedStart(context).filter(site -> variant.test(site.variant())).map(site -> {
+        return village.generatedStart(context, level).filter(site -> variant.test(site.variant())).map(site -> {
             FortifiedVillageStructure.Layout layout = village.layout(context, site, level);
             if (layout.rings().isEmpty()) {
                 return new Planned(layout, Map.of());

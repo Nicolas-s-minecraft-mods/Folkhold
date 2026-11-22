@@ -227,7 +227,7 @@ public final class FortifiedVillageStructure extends Structure {
         // The structure check and the /locate command read only the position of the stub. The search of the heart
         // runs with the generation of the pieces.
         return Optional.of(new GenerationStub(village.biomePosition(), builder -> VillageRings.layout(this, context,
-                shifted(context, village),
+                shifted(context, village, Settlements.startLevel(context.seed(), context.chunkPos())),
                 Settlements.startLevel(context.seed(), context.chunkPos())).pieces().forEach(builder::addPiece)));
     }
 
@@ -241,25 +241,37 @@ public final class FortifiedVillageStructure extends Structure {
      * @return the start, or empty if no village starts there
      */
     public Optional<Start> generatedStart(GenerationContext context) {
+        return generatedStart(context, Settlements.startLevel(context.seed(), context.chunkPos()));
+    }
+
+    /**
+     * As {@link #generatedStart(GenerationContext)}, for a village of a given start level in place of the start level
+     * of the chunk: the search of the heart keeps the plan of the tier of this level in the range of the structure.
+     *
+     * @param context the context of the generation at the start chunk
+     * @param level   the start level
+     * @return the start, or empty if no village starts there
+     */
+    public Optional<Start> generatedStart(GenerationContext context, int level) {
         return start(context).filter(start -> context.validBiome().test(biomeAt(context, start.biomePosition())))
-                .map(start -> shifted(context, start));
+                .map(start -> shifted(context, start, level));
     }
 
     /**
      * The start of a village after the search of the heart (see {@link HeartSite}): the plaza moves to flatter ground
      * near a steep start. A cave village, a maritime village and a village in a world with no search stay at their
-     * start. The largest offset on one axis keeps the plan of the tier of the start level in the range of the
+     * start. The largest offset on one axis keeps the plan of the tier of a start level in the range of the
      * structure ({@code max_distance_from_center}).
      */
-    private Start shifted(GenerationContext context, Start start) {
+    private Start shifted(GenerationContext context, Start start, int level) {
         int shift = HeartSearch.shift();
         if (shift == 0 || start.cave().isPresent() || start.maritime()) {
             return start;
         }
-        int radius = Math.min(firstRadius(sizeAt(context.seed(), context.chunkPos())), maxDistanceFromCenter);
+        int radius = Math.min(firstRadius(VillageSizes.forLevel(level)), maxDistanceFromCenter);
         int limit = maxDistanceFromCenter - radius;
         HeartSearch.Key key = new HeartSearch.Key(context.chunkGenerator(), context.randomState(), context.seed(),
-                context.chunkPos().toLong(), shift);
+                context.chunkPos().toLong(), shift, limit);
         HeartSite.Offset offset = HeartSearch.offset(key, () -> search(context, start, shift, limit, radius));
         if (offset.equals(HeartSite.Offset.ZERO)) {
             return start;
@@ -525,8 +537,8 @@ public final class FortifiedVillageStructure extends Structure {
      * @return the layout, or empty if the site does not accept a village
      */
     public Optional<Layout> layout(GenerationContext context) {
-        return start(context).map(start -> layout(context, shifted(context, start),
-                Settlements.startLevel(context.seed(), context.chunkPos())));
+        int level = Settlements.startLevel(context.seed(), context.chunkPos());
+        return start(context).map(start -> layout(context, shifted(context, start, level), level));
     }
 
     /**
@@ -540,7 +552,7 @@ public final class FortifiedVillageStructure extends Structure {
      *         not valid (as {@code Structure.generate} checks it), or if the variant fails the test
      */
     public Optional<Layout> layout(GenerationContext context, int level, Predicate<Variant> variant) {
-        return generatedStart(context).filter(start -> variant.test(start.variant()))
+        return generatedStart(context, level).filter(start -> variant.test(start.variant()))
                 .map(start -> layout(context, start, level));
     }
 
