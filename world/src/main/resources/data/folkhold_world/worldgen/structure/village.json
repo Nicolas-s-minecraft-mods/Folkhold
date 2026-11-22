@@ -1860,24 +1860,6 @@
         },
         "street_stairs": {
           "Name": "minecraft:cobblestone_stairs"
-        },
-        "stone": {
-          "tower": "folkhold_world:village/stone/tower",
-          "gate": "folkhold_world:village/stone/gate",
-          "palisade": {
-            "log": {
-              "Name": "minecraft:stone_bricks"
-            },
-            "base": {
-              "Name": "minecraft:cobblestone"
-            },
-            "point": {
-              "Name": "minecraft:stone_brick_wall"
-            },
-            "foundation": {
-              "Name": "minecraft:cobblestone"
-            }
-          }
         }
       },
       "homes": "folkhold_world:village/cave/homes",

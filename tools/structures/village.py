@@ -5404,9 +5404,10 @@ def all_variants():
 
 def cave_variant(base):
     """The variant of the cave village: the cave pieces in all the biomes. A cave site selects it (see CaveVillage).
-    The wall of the variant has the cave gate. The cave village has no palisade and no tower: the other settings of
-    the wall are the settings of the base variant."""
-    return {"biomes": [], "start_pool": CAVE.id("plaza"), "wall": {**base["wall"], "gate": CAVE.id("gate")},
+    The wall of the variant has the cave gate and no stone wall. The cave village has no palisade and no tower: the
+    other settings of the wall are the settings of the base variant."""
+    wall = {key: value for key, value in base["wall"].items() if key != "stone"}
+    return {"biomes": [], "start_pool": CAVE.id("plaza"), "wall": {**wall, "gate": CAVE.id("gate")},
             "homes": CAVE.id("homes"), "cave": True}
 
 

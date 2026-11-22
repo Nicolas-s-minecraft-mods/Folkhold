@@ -125,7 +125,8 @@ public final class VillageTemplateGameTests {
     }
 
     /**
-     * Each variant of the village structure has a stone wall (see {@link WallSettings.StoneWall}). The stone tower and
+     * Each variant of the village structure has a stone wall (see {@link WallSettings.StoneWall}), except the cave
+     * variant: a cave village has no palisade. The stone tower and
      * the stone gate have the shape of the wooden tower and gate: the same positions, and at each position the same
      * collision shape. Thus the watch post, the stair and the passage of the gate are at the same places.
      */
@@ -135,7 +136,8 @@ public final class VillageTemplateGameTests {
         FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
                 .registryOrThrow(Registries.STRUCTURE).getOrThrow(Settlements.VILLAGE_STRUCTURE);
         List<WallSettings> walls = new ArrayList<>(List.of(structure.wall()));
-        structure.variants().forEach(variant -> walls.add(variant.wall()));
+        // A cave village has no palisade: its variant has no stone wall.
+        structure.variants().stream().filter(variant -> !variant.cave()).forEach(variant -> walls.add(variant.wall()));
         List<String> problems = new ArrayList<>();
         for (WallSettings wall : walls) {
             Optional<WallSettings.StoneWall> stone = wall.stone();
