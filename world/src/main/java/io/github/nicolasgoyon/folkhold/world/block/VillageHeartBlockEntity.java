@@ -960,6 +960,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 VillageFolk.assign(inhabitants, seats.stream().map(VillageFolk.Seat::profession).toList());
         List<BlockPos> beds = homeBeds(settlement.get(), seats);
         VillageHomes.claim(serverLevel, worldPosition, inhabitants, seats, beds);
+        VillageHomes.lieDown(serverLevel, inhabitants);
         workers.update(serverLevel, this, inhabitants, seats, beds, settlement.get().jobPosts().orElse(List.of()));
         FolkNavigation.leaveWall(worldPosition, wallZones(serverLevel), inhabitants);
         List<PathfinderMob> mobs = new ArrayList<>(inhabitants);

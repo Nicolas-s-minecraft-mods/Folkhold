@@ -7,6 +7,7 @@ import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
+import io.github.nicolasgoyon.folkhold.world.village.VillageHomes;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.WorkerBrains;
@@ -15,6 +16,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
@@ -29,9 +31,12 @@ import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -95,6 +100,44 @@ public final class VillagerSleepGameTests {
     @GameTest(template = "empty", timeoutTicks = 3000, batch = "villager_sleep_monster")
     public static void villagersSleepWhenTheUnitsFightAMonsterFarFromThem(GameTestHelper helper) {
         checkSleep(helper, 2, 0, true);
+    }
+
+    /**
+     * A villager at the foot of its bed, in a corner with no free place near the head of the bed, lies down at the
+     * check of the heart (see {@link VillageHomes#lieDown}). A villager farther from its bed does not.
+     */
+    @GameTest(template = "arena", timeoutTicks = 100, batch = "villager_sleep_lie_down")
+    public static void villagerAtTheFootOfItsBedLiesDown(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ServerLevel level = helper.getLevel();
+        // A bed along the X axis with its head against a wall, and walls on its 2 sides.
+        BlockPos head = new BlockPos(5, 1, 5);
+        helper.setBlock(head.east(), Blocks.STONE);
+        for (BlockPos side : List.of(head.north(), head.south(), head.west().north(), head.west().south())) {
+            helper.setBlock(side, Blocks.STONE);
+        }
+        BlockPos foot = head.west();
+        helper.setBlock(foot, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
+                .setValue(BedBlock.PART, BedPart.FOOT));
+        helper.setBlock(head, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
+                .setValue(BedBlock.PART, BedPart.HEAD));
+        Villager near = helper.spawn(EntityType.VILLAGER, foot.west());
+        Villager far = helper.spawn(EntityType.VILLAGER, foot.west(4));
+        TestSupport.atTestEnd(helper, () -> {
+            near.discard();
+            far.discard();
+        });
+        for (Villager villager : List.of(near, far)) {
+            villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(),
+                    helper.absolutePos(head)));
+            villager.getBrain().setActiveActivityIfPossible(Activity.REST);
+        }
+        helper.assertTrue(near.getBrain().isActive(Activity.REST), "The villager must rest");
+        helper.assertTrue(VillageHomes.lieDown(level, List.of(near, far)) == 1, "One villager must lie down");
+        helper.assertTrue(near.isSleeping() && near.getSleepingPos().filter(helper.absolutePos(head)::equals)
+                .isPresent(), "The villager at the foot of its bed must sleep in it: " + near.getSleepingPos());
+        helper.assertFalse(far.isSleeping(), "A villager 5 blocks from its bed must not lie down");
+        helper.succeed();
     }
 
     /**
