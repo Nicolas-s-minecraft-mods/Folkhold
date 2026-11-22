@@ -16,6 +16,7 @@ import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +36,12 @@ import net.minecraft.server.MinecraftServer;
  *   <li>A patrol moves {@code groups.blocksPerTick} blocks on each abstract tick, also with no player near. At the
  *       end of the loop, the patrol gets the loop again from the claims of this time, and starts it again. A patrol
  *       never arrives.</li>
- *   <li>When its camp goes away, or when the loop of its camp has no good chunk, the patrol goes away.</li>
+ *   <li>A patrol gets entities when its camp sends it to a player (see {@link PatrolEntities}). While it has
+ *       entities, the abstract simulation does not move it.</li>
+ *   <li>When all members of a patrol are dead, the patrol waits at the start of its loop for
+ *       {@code pillagers.patrolRespawnMinutes} of game time, with new members (see {@link #regroup}).</li>
+ *   <li>When its camp goes away, or when the loop of its camp has no good chunk, the patrol and its entities go
+ *       away.</li>
  *   <li>The patrols are saved with the camps (see {@link PillagerData}). They are not in the registry of the
  *       caravans: they do not count in {@code groups.maxGroups}, and the code of the caravans and of the escorts
  *       does not see them.</li>
@@ -75,7 +81,7 @@ public final class PillagerPatrolGroups {
             return;
         }
         GroupSimulation.Report report = GroupSimulation.tick(data.patrols(), tickNumber,
-                WorldConfig.GROUP_BLOCKS_PER_TICK.get(), patrol -> false, new GroupSimulation.Listener() {
+                WorldConfig.GROUP_BLOCKS_PER_TICK.get(), PatrolEntities::isMaterialized, new GroupSimulation.Listener() {
                     @Override
                     public boolean onEndOfRoute(MobileGroup patrol, long number) {
                         restartLoop(server, patrol);
@@ -155,6 +161,53 @@ public final class PillagerPatrolGroups {
         return patrol;
     }
 
+    /**
+     * Gives a patrol with no living member new members at full health. The patrol waits at the start of its loop for
+     * {@code pillagers.patrolRespawnMinutes} of game time, then travels again.
+     *
+     * @param server     the server
+     * @param patrol     the patrol
+     * @param tickNumber the number of the abstract tick now
+     */
+    static void regroup(MinecraftServer server, MobileGroup patrol, long tickNumber) {
+        Optional<Route> route = PillagerData.get(server).camp(patrol.originId()).flatMap(camp -> loop(server, camp));
+        if (route.isEmpty()) {
+            remove(server, patrol);
+            return;
+        }
+        MobileGroup fresh = create(PillagerData.get(server).camp(patrol.originId()).orElseThrow(), index(patrol),
+                route.get());
+        long respawnTicks = WorldConfig.PILLAGER_PATROL_RESPAWN_MINUTES.get() * 1200L;
+        long interval = Math.max(1, WorldConfig.SIMULATION_INTERVAL_TICKS.get());
+        fresh.setState(GroupState.WAITING);
+        fresh.setDepartureTick(tickNumber + (respawnTicks + interval - 1) / interval);
+        PillagerData data = PillagerData.get(server);
+        data.patrols().remove(patrol.id());
+        data.patrols().add(fresh);
+        data.setDirty();
+        FolkholdWorld.LOGGER.debug("Pillager patrol wiped out, new members: {}", fresh);
+    }
+
+    /**
+     * The traveling patrol of a camp with no entities that is the nearest to a position. The camp gets its patrols
+     * first (see {@link #ensure}).
+     *
+     * @param server the server
+     * @param camp   the camp
+     * @param x      X coordinate of the position
+     * @param z      Z coordinate of the position
+     * @return the patrol, or empty if all patrols of the camp have entities, wait or have no living member
+     */
+    public static Optional<MobileGroup> nearestFree(MinecraftServer server, PillagerCamp camp, double x, double z) {
+        return ensure(server, camp).stream()
+                .filter(patrol -> patrol.state() == GroupState.TRAVELING && !PatrolEntities.isMaterialized(patrol))
+                .filter(patrol -> patrol.members().stream().anyMatch(GroupMember::isAlive))
+                .min(Comparator.comparingDouble(patrol -> {
+                    Route.Position position = patrol.position();
+                    return (position.x() - x) * (position.x() - x) + (position.z() - z) * (position.z() - z);
+                }));
+    }
+
     /** The number of patrols of each camp, from the server config. */
     static int wantedPatrols() {
         return WorldConfig.PILLAGER_PATROL_SIZE.get() > 0 ? WorldConfig.PILLAGER_PATROLS_PER_CAMP.get() : 0;
@@ -213,6 +266,7 @@ public final class PillagerPatrolGroups {
      */
     static void remove(MinecraftServer server, MobileGroup patrol) {
         PillagerData data = PillagerData.get(server);
+        PatrolEntities.forget(server.overworld(), patrol.id());
         if (data.patrols().remove(patrol.id())) {
             data.setDirty();
             FolkholdWorld.LOGGER.debug("Pillager patrol removed: {}", patrol);

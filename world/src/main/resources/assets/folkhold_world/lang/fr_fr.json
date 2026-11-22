@@ -394,6 +394,7 @@
   "folkhold_world.configuration.pillagerPatrolCooldownSeconds": "Temps entre deux patrouilles (s)",
   "folkhold_world.configuration.pillagerPatrolSize": "Pillards dans une patrouille",
   "folkhold_world.configuration.pillagerPatrolsPerCamp": "Patrouilles de chaque camp",
+  "folkhold_world.configuration.pillagerPatrolRespawnMinutes": "Minutes avant une nouvelle patrouille",
   "folkhold_world.configuration.pillagerSwornEnemyExtra": "Pillards en plus pour un ennemi juré",
   "folkhold_world.configuration.pillagerSpawnDistance": "Distance du joueur à l'apparition de la patrouille",
   "folkhold_world.configuration.pillagerKillReputation": "Réputation pour un illageois tué",

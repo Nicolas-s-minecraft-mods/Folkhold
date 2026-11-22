@@ -209,6 +209,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue PILLAGER_PATROL_COOLDOWN_SECONDS;
     public static final ModConfigSpec.IntValue PILLAGER_PATROL_SIZE;
     public static final ModConfigSpec.IntValue PILLAGER_PATROLS_PER_CAMP;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_RESPAWN_MINUTES;
     public static final ModConfigSpec.IntValue PILLAGER_SWORN_ENEMY_EXTRA;
     public static final ModConfigSpec.IntValue PILLAGER_SPAWN_DISTANCE;
     public static final ModConfigSpec.IntValue PILLAGER_KILL_REPUTATION;
@@ -1162,6 +1163,11 @@ public final class WorldConfig {
                         "territory, also with no player near. 0 removes the patrols of the camps.")
                 .translation(KEY_PREFIX + "pillagerPatrolsPerCamp")
                 .defineInRange("patrolsPerCamp", 2, 0, 4);
+        PILLAGER_PATROL_RESPAWN_MINUTES = builder
+                .comment("Minutes of game time before a camp sends again a patrol with no living member, with new",
+                        "members.")
+                .translation(KEY_PREFIX + "pillagerPatrolRespawnMinutes")
+                .defineInRange("patrolRespawnMinutes", 20, 0, 1440);
         PILLAGER_SWORN_ENEMY_EXTRA = builder
                 .comment("Pillagers that a patrol gets more for a sworn enemy of the pillagers.")
                 .translation(KEY_PREFIX + "pillagerSwornEnemyExtra")

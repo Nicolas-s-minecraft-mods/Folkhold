@@ -8,16 +8,25 @@ import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
 import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamp;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.pillager.PatrolEntities;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerData;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrolGroups;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrols;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Pillager;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -36,6 +45,7 @@ public final class PillagerPatrolGameTests {
     private static final int PATROL_SIZE = 3;
     private static final int SWORN_EXTRA = 2;
     private static final int BLOCKS_PER_TICK = 40;
+    private static final float DAMAGED_HEALTH = 10.0F;
 
     private PillagerPatrolGameTests() {
     }
@@ -126,5 +136,75 @@ public final class PillagerPatrolGameTests {
         PillagerPatrolGroups.update(server, 100);
         helper.assertTrue(data.patrolsOf(camp.id()).isEmpty(), "The patrols must go away with their camp");
         helper.succeed();
+    }
+
+    /**
+     * The acceptance test of the patrols near a player. A player who stays in the territory gets the abstract patrol
+     * of the camp: its entities have the UUIDs of its members, and no other pillager spawns. The player is Hostile, so
+     * 3 of the 5 members get entities. When the player goes away, the entities go away and the members keep their
+     * health: the patrol is abstract again.
+     */
+    @GameTest(template = "arena", batch = "pillager_patrol_materialize", timeoutTicks = 600)
+    public static void anAbstractPatrolMaterializesNearAPlayerAndIsAbstractAgainWhenThePlayerGoesAway(
+            GameTestHelper helper) {
+        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_PATROLS_PER_CAMP, 1);
+        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_PATROL_SIZE, PATROL_SIZE);
+        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_SWORN_ENEMY_EXTRA, SWORN_EXTRA);
+        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_PATROL_DELAY_SECONDS, 1);
+        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_PATROL_COOLDOWN_SECONDS, 600);
+        TestSupport.setConfigForTest(helper, WorldConfig.PILLAGER_SPAWN_DISTANCE, 16);
+        TestSupport.setConfigForTest(helper, WorldConfig.GROUP_MATERIALIZE_DISTANCE, 32);
+        TestSupport.setConfigForTest(helper, WorldConfig.GROUP_DEMATERIALIZE_MARGIN, 8);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        PillagerCamp camp = placeCamp(helper);
+        MobileGroup patrol = PillagerPatrolGroups.ensure(server, camp).get(0);
+        TestSupport.atTestEnd(helper, () -> PatrolEntities.entities(patrol.id()).forEach(id -> {
+            Entity entity = level.getEntity(id);
+            if (entity != null) {
+                entity.discard();
+            }
+        }));
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        BlockPos start = helper.absolutePos(MIDDLE.offset(20, 0, 0));
+        player.moveTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5);
+        List<UUID> entities = new ArrayList<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(PatrolEntities.isMaterialized(patrol),
+                        "The patrol must get its entities near the player"))
+                .thenExecute(() -> {
+                    entities.addAll(PillagerPatrols.patrol(player.getUUID()));
+                    helper.assertTrue(entities.size() == PATROL_SIZE,
+                            "A Hostile player must get " + PATROL_SIZE + " pillagers: " + entities);
+                    for (int i = 0; i < entities.size(); i++) {
+                        helper.assertTrue(entities.get(i).equals(patrol.members().get(i).id()),
+                                "The entities must have the UUIDs of the first members");
+                        helper.assertTrue(level.getEntity(entities.get(i)) instanceof Pillager,
+                                "Each member must be a pillager in the level");
+                    }
+                    List<Pillager> tagged = level.getEntitiesOfClass(Pillager.class,
+                            new AABB(helper.absolutePos(MIDDLE)).inflate(96),
+                            pillager -> pillager.getTags().contains(PillagerPatrols.MEMBER_TAG));
+                    helper.assertTrue(tagged.size() == PATROL_SIZE,
+                            "No other pillager must spawn for the player: " + tagged.size());
+                    ((Pillager) level.getEntity(entities.get(0))).setHealth(DAMAGED_HEALTH);
+                    player.moveTo(start.getX() + 300.5, start.getY(), start.getZ() + 0.5);
+                })
+                .thenWaitUntil(() -> helper.assertFalse(PatrolEntities.isMaterialized(patrol),
+                        "The patrol must be abstract again when the player goes away"))
+                .thenExecute(() -> {
+                    for (UUID id : entities) {
+                        Entity entity = level.getEntity(id);
+                        helper.assertTrue(entity == null || entity.isRemoved(), "The entities must go away");
+                    }
+                    helper.assertTrue(Math.abs(patrol.members().get(0).health() - DAMAGED_HEALTH) < 0.01F,
+                            "The member must keep the health of its entity: " + patrol.members().get(0).health());
+                    helper.assertTrue(patrol.members().stream().allMatch(GroupMember::isAlive),
+                            "All members must be alive");
+                    helper.assertTrue(PillagerData.get(server).patrols().byId(patrol.id()).isPresent()
+                            && patrol.state() == GroupState.TRAVELING, "The patrol must stay and travel: " + patrol);
+                })
+                .thenSucceed();
     }
 }
