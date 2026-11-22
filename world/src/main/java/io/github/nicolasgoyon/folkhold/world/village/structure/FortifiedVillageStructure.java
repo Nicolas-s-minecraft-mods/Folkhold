@@ -692,7 +692,7 @@ public final class FortifiedVillageStructure extends Structure {
     }
 
     /** The outline of a wall in the frame of the plan: (0, 0) is the middle of the plaza. */
-    private static WallLayout planOutline(WallLayout wall, BlockPos center, Rotation rotation) {
+    static WallLayout planOutline(WallLayout wall, BlockPos center, Rotation rotation) {
         Rotation back = switch (rotation) {
             case CLOCKWISE_90 -> Rotation.COUNTERCLOCKWISE_90;
             case COUNTERCLOCKWISE_90 -> Rotation.CLOCKWISE_90;

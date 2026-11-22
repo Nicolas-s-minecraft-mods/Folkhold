@@ -7,17 +7,19 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSite;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSites;
+import io.github.nicolasgoyon.folkhold.world.construction.ConstructionTargets;
+import io.github.nicolasgoyon.folkhold.world.construction.GhostPlacement;
 import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadeBlocks;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.RingBands;
 import io.github.nicolasgoyon.folkhold.world.village.structure.RingPlans;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
-import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -43,6 +45,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.StructureTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -53,6 +56,7 @@ import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
 /**
@@ -216,9 +220,10 @@ public final class RingWall {
      * @param variant the variant of the village structure
      * @param start   the start chunk of the village
      * @param center  the middle of the plaza, on its surface
+     * @param plaza   the plaza piece of the village: the plan of the band turns with it, or empty for no band streets
      */
-    public record Site(FortifiedVillageStructure.Variant variant, ChunkPos start,
-            BlockPos center) {
+    public record Site(FortifiedVillageStructure.Variant variant, ChunkPos start, BlockPos center,
+            Optional<PoolElementStructurePiece> plaza) {
         /** The site of the village structure at a heart, or empty with no structure start. */
         static Optional<Site> find(ServerLevel level, BlockPos heart) {
             Optional<Structure> structure = level.registryAccess().registryOrThrow(Registries.STRUCTURE)
@@ -230,9 +235,11 @@ public final class RingWall {
             if (!start.isValid() || start.getPieces().isEmpty()) {
                 return Optional.empty();
             }
-            BoundingBox plaza = start.getPieces().get(0).getBoundingBox();
+            StructurePiece first = start.getPieces().get(0);
+            BoundingBox plaza = first.getBoundingBox();
             return Optional.of(new Site(village.variantOf(level, start.getPieces()), start.getChunkPos(),
-                    new BlockPos((plaza.minX() + plaza.maxX()) / 2, heart.getY(), (plaza.minZ() + plaza.maxZ()) / 2)));
+                    new BlockPos((plaza.minX() + plaza.maxX()) / 2, heart.getY(), (plaza.minZ() + plaza.maxZ()) / 2),
+                    first instanceof PoolElementStructurePiece piece ? Optional.of(piece) : Optional.empty()));
         }
     }
 
@@ -254,8 +261,7 @@ public final class RingWall {
         for (int i = 0; i < pieces.size(); i++) {
             StructurePiece piece = pieces.get(i);
             if (piece instanceof PalisadePiece || piece instanceof VillagePathPiece
-                    || (piece instanceof PoolElementStructurePiece pool
-                            && pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID)) {
+                    || piece instanceof PoolElementStructurePiece) {
                 main.add(i);
                 terrain.put(i, new ArrayList<>(List.of(i)));
             }
@@ -263,8 +269,8 @@ public final class RingWall {
         if (main.isEmpty()) {
             return List.of();
         }
-        List<Integer> walls = main.stream().filter(index -> !(pieces.get(index) instanceof VillagePathPiece))
-                .toList();
+        List<Integer> walls = main.stream().filter(index -> !(pieces.get(index) instanceof VillagePathPiece)
+                && !isStreet(pieces.get(index))).toList();
         for (int i = 0; i < pieces.size(); i++) {
             if (pieces.get(i) instanceof TerrainPiece flat && !walls.isEmpty()) {
                 BlockPos middle = flat.getBoundingBox().getCenter();
@@ -274,6 +280,12 @@ public final class RingWall {
             }
         }
         return terrain.values().stream().map(Part::new).toList();
+    }
+
+    /** True for a street piece of a band: a piece of a pool on the terrain (projection {@code terrain_matching}). */
+    static boolean isStreet(StructurePiece piece) {
+        return piece instanceof PoolElementStructurePiece pool
+                && pool.getElement().getProjection() == StructureTemplatePool.Projection.TERRAIN_MATCHING;
     }
 
     /** The squared distance on the horizontal plane from a position to the box of a piece. */
@@ -293,8 +305,16 @@ public final class RingWall {
         List<VillageReference.Palisade> palisades = new ArrayList<>();
         List<BoundingBox> boxes = new ArrayList<>();
         List<BoundingBox> fronts = new ArrayList<>();
+        List<BlockPos> streetColumns = new ArrayList<>();
         for (StructurePiece piece : pieces) {
-            if (piece instanceof PoolElementStructurePiece pool) {
+            if (isStreet(piece)) {
+                BoundingBox box = piece.getBoundingBox();
+                for (int x = box.minX(); x <= box.maxX(); x++) {
+                    for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                        streetColumns.add(new BlockPos(x, 0, z));
+                    }
+                }
+            } else if (piece instanceof PoolElementStructurePiece pool) {
                 VillageReference.templateOf(level, pool.getElement()).ifPresent(id -> templates.add(
                         new VillageReference.Piece(id, pool.getPosition(), pool.getRotation())));
                 boxes.add(pool.getBoundingBox());
@@ -305,8 +325,9 @@ public final class RingWall {
                 fronts.add(flat.getBoundingBox());
             }
         }
-        return new VillageReference(templates, palisades, BoundingBox.encapsulatingBoxes(boxes), List.of(),
-                Optional.empty(), List.of(), List.of(), Map.of(), List.of(), fronts);
+        return new VillageReference(templates, palisades, BoundingBox.encapsulatingBoxes(boxes),
+                VillagePlots.of(level.getStructureManager(), pieces), Optional.empty(), List.of(), streetColumns,
+                Map.of(), List.of(), fronts);
     }
 
     /**
@@ -388,16 +409,24 @@ public final class RingWall {
             return false;
         }
         Site site = state.site;
-        Optional<VillageWall.Wall> ring = RingPlans.next(level.getStructureManager(), reference.get(), site.variant(),
-                villageLevel, site.start(), site.center(), RingPlans.worldHeight(level),
+        Optional<RingPlans.Planned> planned = RingPlans.planned(level.getStructureManager(), reference.get(),
+                site.variant(), villageLevel, site.start(), site.center(), RingPlans.worldHeight(level),
                 level.getChunkSource().getGenerator().getSeaLevel());
-        if (ring.isEmpty() || isBlocked(level, ring.get().layout().outline(), site.start())) {
+        if (planned.isEmpty() || isBlocked(level, planned.get().ring().layout().outline(), site.start())) {
             // All the rings of the tier, an outer wall that is not closed, or another village in the way.
             state.noRingLevel = villageLevel;
             return false;
         }
-        FolkholdWorld.LOGGER.debug("Village {}: plan of a new ring with {} pieces", heartPos, ring.get().pieces().size());
-        state.plan(level, ring.get().pieces());
+        List<StructurePiece> ring = new ArrayList<>(planned.get().ring().pieces());
+        Optional<Structure> structure = level.registryAccess().registryOrThrow(Registries.STRUCTURE)
+                .getOptional(Settlements.VILLAGE_STRUCTURE);
+        if (site.plaza().isPresent() && structure.isPresent()
+                && structure.get() instanceof FortifiedVillageStructure village) {
+            ring.addAll(RingBands.streets(level, village, site.variant(), site.start(), site.plaza().get(),
+                    site.center(), planned.get(), villageLevel));
+        }
+        FolkholdWorld.LOGGER.debug("Village {}: plan of a new ring with {} pieces", heartPos, ring.size());
+        state.plan(level, ring);
         heart.onRingWallChanged(level);
         return !state.waiting(level).isEmpty();
     }
@@ -504,7 +533,9 @@ public final class RingWall {
             }
         }
         for (StructurePiece piece : pieces) {
-            if (piece instanceof PoolElementStructurePiece pool) {
+            if (isStreet(piece)) {
+                street(level, (PoolElementStructurePiece) piece, height, target);
+            } else if (piece instanceof PoolElementStructurePiece pool) {
                 Optional<ResourceLocation> id = VillageReference.templateOf(level, pool.getElement());
                 Optional<StructureTemplate> template = id.flatMap(level.getStructureManager()::get);
                 if (id.isEmpty() || template.isEmpty()) {
@@ -569,6 +600,31 @@ public final class RingWall {
         @Override
         public int surface(int x, int z) {
             return level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+        }
+    }
+
+    /**
+     * The blocks of a street piece on the terrain (projection {@code terrain_matching}): each block of the template
+     * goes to the top block of the terrain of its column, plus its layer in the template. The jigsaw connectors become
+     * their final blocks. A street on water keeps the water: the band of a new ring gets no planks on water.
+     */
+    private static void street(ServerLevel level, PoolElementStructurePiece piece, IntBinaryOperator height,
+            Map<BlockPos, BlockState> target) {
+        Optional<StructureTemplate> template = VillageReference.templateOf(level, piece.getElement())
+                .flatMap(level.getStructureManager()::get);
+        if (template.isEmpty()) {
+            return;
+        }
+        StructurePlaceSettings settings = GhostPlacement.settings(piece.getRotation(), Mirror.NONE);
+        for (ConstructionTargets.TemplateBlock block : ConstructionTargets.templateBlocks(level, template.get())) {
+            BlockPos column = StructureTemplate.calculateRelativePosition(settings, block.pos())
+                    .offset(piece.getPosition());
+            int top = height.applyAsInt(column.getX(), column.getZ());
+            BlockPos pos = new BlockPos(column.getX(), top + block.pos().getY(), column.getZ());
+            if (!level.getBlockState(pos.below(block.pos().getY())).getFluidState().isEmpty()) {
+                continue;
+            }
+            target.put(pos, block.state().rotate(level, pos, settings.getRotation()));
         }
     }
 

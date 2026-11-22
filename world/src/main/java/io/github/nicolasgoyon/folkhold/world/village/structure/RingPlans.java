@@ -148,6 +148,24 @@ public final class RingPlans {
     public static Optional<VillageWall.Wall> next(StructureTemplateManager templates, VillageReference reference,
             FortifiedVillageStructure.Variant variant, int level, ChunkPos start, BlockPos center,
             IntBinaryOperator height, int seaLevel) {
+        return planned(templates, reference, variant, level, start, center, height, seaLevel)
+                .map(Planned::ring);
+    }
+
+    /**
+     * The next ring of a village with the wall inside it.
+     *
+     * @param inner the outer wall of the village: the wall inside the new ring
+     * @param ring  the new ring with its pieces
+     * @param index the number of the ring: 0 for the first ring outside the first wall
+     */
+    public record Planned(VillageWall.Wall inner, VillageWall.Wall ring, int index) {
+    }
+
+    /** As {@link #next}, with the wall inside the ring and the number of the ring. */
+    public static Optional<Planned> planned(StructureTemplateManager templates, VillageReference reference,
+            FortifiedVillageStructure.Variant variant, int level, ChunkPos start, BlockPos center,
+            IntBinaryOperator height, int seaLevel) {
         VillageSize size = VillageSizes.forLevel(level);
         WallSettings settings = variant.wall();
         List<VillageWall.Wall> walls = walls(reference, settings.towerSpacing(), height, seaLevel);
@@ -161,9 +179,9 @@ public final class RingPlans {
                 List.of(), spare);
         int plaza = center.getY() - 1;
         WallOutline.Ground ground = (x, z) -> height.applyAsInt(x, z) - plaza > PlanGround.HIGH_RISE;
-        return Optional.of(VillageWall.rings(templates, seaLevel, height, inner, 1,
+        return Optional.of(new Planned(outer, VillageWall.rings(templates, seaLevel, height, inner, 1,
                 FortifiedVillageStructure.bandOf(size, variant), settings, variant.maritime(), start, center, ground)
-                .get(0));
+                .get(0), walls.size() - 1));
     }
 
     /**
