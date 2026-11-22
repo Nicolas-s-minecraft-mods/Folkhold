@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageS
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PortPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.RingDistrictHolds;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
@@ -64,7 +65,8 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  *       template piece. The area of a cave village is the box of its pieces (see {@link #caveArea}). Another village
  *       with no palisade pieces has no area. The pieces of the ring districts of a town, a
  *       city or a capital (see {@link VillageRings#generatedPieces}) are a part of the reference: the area goes to
- *       the outer ring, and the repairs keep the rings.</li>
+ *       the outer ring, and the repairs keep the rings. A village with another first wall than the layout of the
+ *       current version keeps only the districts on closed walls (see {@link RingDistrictHolds}).</li>
  *   <li>The plots are the places for a house along the streets, with and without a house (see
  *       {@link VillagePlots}).</li>
  *   <li>The homes are the pool of the homes that the builders build on the free plots (see {@link VillageGrowth}).</li>
@@ -339,7 +341,7 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         }
         if (hasRings(level, start.getChunkPos())) {
             pieces = new ArrayList<>(pieces);
-            pieces.addAll(VillageRings.generatedPieces(level, start.getChunkPos()));
+            pieces.addAll(RingDistrictHolds.ringPieces(level, start.getChunkPos(), start.getPieces()));
         }
         return of(level, pieces).map(reference -> homes.map(reference::withHomes).orElse(reference));
     }
