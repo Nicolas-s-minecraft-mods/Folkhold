@@ -17,7 +17,9 @@ import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
@@ -54,6 +56,8 @@ public final class RaidGameTests {
     private static final int RING_MIN = 6;
     private static final int RING_MAX = 13;
     private static final int SPAWN_TRIES = 40;
+    /** The runs of the spawn test, one after the other: each run must pass. */
+    private static final int SPAWN_RUNS = 20;
     /** An id for the raids of the tests, far from the ids of the raids of the world. */
     private static final int RAID_ID = 271_828;
     /** The ids of the raids of {@link #raidsOfLevel4And5GetExtraRavagers}: each run takes new ids. */
@@ -73,11 +77,62 @@ public final class RaidGameTests {
      * has a river, a pit 3 blocks deep, a roof and a floor of planks: the spawn positions are on the grass only. The
      * test has access to the sky: the GameTest server puts no roof of barriers on it, so the columns end at the
      * terrain.
+     *
+     * <p>The check of the sky ({@link RaidSpawns.Check#NO_SKY}) reads the sky light ({@code Level#canSeeSky}). The light
+     * engine updates the light of the new blocks of the test (the pit, the roof) on the background executor of the
+     * game, after a time that changes with the other work of this executor. The GameTest server ticks faster than real
+     * time: a limit in ticks can end before the update, and the bottom of the pit then has no sky light. Thus the
+     * checks wait for the light with the real-time limit {@link TestSupport#WORKER_SECONDS} (see
+     * {@link TestSupport#thenWaitForWorker}).
+     *
+     * <p>The test has {@link #SPAWN_RUNS} runs, one after the other. Each run builds the scene again from a flat
+     * ground (see {@link #buildSpawnScene}): the light of the pit and of the roof changes again in each run, and the
+     * checks of each run must pass. The log gives the checks and the time of each run until its checks pass.
      */
-    @GameTest(template = "arena_large", timeoutTicks = 100, batch = "raid_spawn", skyAccess = true)
+    @GameTest(template = "arena_large", timeoutTicks = TestSupport.WORKER_TICKS, batch = "raid_spawn",
+            skyAccess = true)
     public static void spawnPositionsAvoidRiversPitsRoofsAndFloors(GameTestHelper helper) {
         TestSupport.sweep(helper);
+        BlockPos heart = helper.absolutePos(new BlockPos(16, 1, 16));
+        BlockPos pit = helper.absolutePos(new BlockPos(16, -2, 4));
+        GameTestSequence sequence = helper.startSequence();
+        for (int run = 1; run <= SPAWN_RUNS; run++) {
+            int number = run;
+            String[] last = {"no check"};
+            long[] checks = {0L};
+            long[] start = {0L};
+            boolean[] skyAtStart = {false};
+            sequence.thenExecute(() -> {
+                buildSpawnScene(helper);
+                start[0] = System.nanoTime();
+                skyAtStart[0] = helper.getLevel().canSeeSky(pit);
+            });
+            TestSupport.thenWaitForWorker(helper, sequence, () -> {
+                checks[0]++;
+                try {
+                    checkSpawns(helper, heart);
+                    return true;
+                } catch (GameTestAssertException e) {
+                    last[0] = e.getMessage();
+                    return false;
+                }
+            }, () -> "Run " + number + ", the checks of the spawn positions: " + last[0]).thenExecute(() ->
+                    FolkholdWorld.LOGGER.info("Raid spawn checks, run {} of {}: pass after {} checks (1 for each"
+                            + " tick) and {} ms, sky light at the bottom of the pit at the start: {}, last failed"
+                            + " check: {}", number, SPAWN_RUNS, checks[0], (System.nanoTime() - start[0]) / 1_000_000L,
+                            skyAtStart[0], last[0]));
+        }
+        sequence.thenSucceed();
+    }
+
+    /**
+     * Builds the scene of {@link #spawnPositionsAvoidRiversPitsRoofsAndFloors} from a flat ground of grass on stone:
+     * a river, a pit, a roof and a floor of planks.
+     */
+    private static void buildSpawnScene(GameTestHelper helper) {
+        fill(helper, new BlockPos(0, -2, 0), new BlockPos(SIZE - 1, -1, SIZE - 1), Blocks.STONE.defaultBlockState());
         buildGrass(helper);
+        fill(helper, new BlockPos(0, 3, 0), new BlockPos(SIZE - 1, 3, SIZE - 1), Blocks.AIR.defaultBlockState());
         // A river: x 26 to 28, 2 blocks deep. The floor at z 0 and z 31 keeps the water in the arena.
         fill(helper, new BlockPos(26, -1, 1), new BlockPos(28, 0, SIZE - 2), Blocks.WATER.defaultBlockState());
         // A pit 3 blocks deep: x 15 to 17, z 3 to 5.
@@ -86,37 +141,35 @@ public final class RaidGameTests {
         fill(helper, new BlockPos(3, 3, 14), new BlockPos(6, 3, 18), Blocks.OAK_PLANKS.defaultBlockState());
         // A floor of planks: x 14 to 18, z 26 to 29.
         fill(helper, new BlockPos(14, 0, 26), new BlockPos(18, 0, 29), Blocks.OAK_PLANKS.defaultBlockState());
-        BlockPos heart = helper.absolutePos(new BlockPos(16, 1, 16));
+    }
+
+    /** The checks of {@link #spawnPositionsAvoidRiversPitsRoofsAndFloors}, on the scene of the test. */
+    private static void checkSpawns(GameTestHelper helper, BlockPos heart) {
         ServerLevel level = helper.getLevel();
+        assertCheck(helper, new BlockPos(24, 1, 16), RaidSpawns.Check.GOOD);
+        assertCheck(helper, new BlockPos(27, 1, 16), RaidSpawns.Check.FLUID);
+        assertCheck(helper, new BlockPos(16, -2, 4), RaidSpawns.Check.HOLLOW);
+        assertCheck(helper, new BlockPos(4, 4, 16), RaidSpawns.Check.NOT_GROUND);
+        assertCheck(helper, new BlockPos(4, 1, 16), RaidSpawns.Check.NO_SKY);
+        assertCheck(helper, new BlockPos(16, 1, 27), RaidSpawns.Check.NOT_GROUND);
+        helper.assertTrue(RaidSpawns.canWalk(level, helper.absolutePos(new BlockPos(30, 1, 16)), heart),
+                "A raider must have a path across the river");
+        helper.assertFalse(RaidSpawns.canWalk(level, helper.absolutePos(new BlockPos(16, -2, 4)), heart),
+                "A raider must have no path out of the pit");
 
-        // The light engine updates the light of the new blocks in its own thread, after a time that changes: the
-        // checks run at each tick until they pass.
-        helper.succeedWhen(() -> {
-            assertCheck(helper, new BlockPos(24, 1, 16), RaidSpawns.Check.GOOD);
-            assertCheck(helper, new BlockPos(27, 1, 16), RaidSpawns.Check.FLUID);
-            assertCheck(helper, new BlockPos(16, -2, 4), RaidSpawns.Check.HOLLOW);
-            assertCheck(helper, new BlockPos(4, 4, 16), RaidSpawns.Check.NOT_GROUND);
-            assertCheck(helper, new BlockPos(4, 1, 16), RaidSpawns.Check.NO_SKY);
-            assertCheck(helper, new BlockPos(16, 1, 27), RaidSpawns.Check.NOT_GROUND);
-            helper.assertTrue(RaidSpawns.canWalk(level, helper.absolutePos(new BlockPos(30, 1, 16)), heart),
-                    "A raider must have a path across the river");
-            helper.assertFalse(RaidSpawns.canWalk(level, helper.absolutePos(new BlockPos(16, -2, 4)), heart),
-                    "A raider must have no path out of the pit");
-
-            List<BlockPos> found = new ArrayList<>();
-            for (int seed = 0; seed < SPAWN_TRIES; seed++) {
-                RaidSpawns.find(level, heart, List.of(), RandomSource.create(seed), RING_MIN, RING_MAX)
-                        .ifPresent(found::add);
-            }
-            for (BlockPos pos : found) {
-                BlockPos relative = helper.relativePos(pos);
-                helper.assertTrue(relative.getY() == 1 && level.getBlockState(pos.below()).is(Blocks.GRASS_BLOCK),
-                        "A spawn position must be on the grass: " + relative);
-                helper.assertTrue(level.canSeeSky(pos), "A spawn position must be under the sky: " + relative);
-            }
-            helper.assertTrue(found.size() >= SPAWN_TRIES * 3 / 4,
-                    "Most searches must find a position: " + found.size() + " of " + SPAWN_TRIES);
-        });
+        List<BlockPos> found = new ArrayList<>();
+        for (int seed = 0; seed < SPAWN_TRIES; seed++) {
+            RaidSpawns.find(level, heart, List.of(), RandomSource.create(seed), RING_MIN, RING_MAX)
+                    .ifPresent(found::add);
+        }
+        for (BlockPos pos : found) {
+            BlockPos relative = helper.relativePos(pos);
+            helper.assertTrue(relative.getY() == 1 && level.getBlockState(pos.below()).is(Blocks.GRASS_BLOCK),
+                    "A spawn position must be on the grass: " + relative);
+            helper.assertTrue(level.canSeeSky(pos), "A spawn position must be under the sky: " + relative);
+        }
+        helper.assertTrue(found.size() >= SPAWN_TRIES * 3 / 4,
+                "Most searches must find a position: " + found.size() + " of " + SPAWN_TRIES);
     }
 
     private static void assertCheck(GameTestHelper helper, BlockPos relative, RaidSpawns.Check expected) {
