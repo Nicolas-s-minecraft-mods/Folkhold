@@ -4,8 +4,8 @@ import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.HomeNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
-import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
@@ -17,11 +17,14 @@ import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
+import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -61,8 +64,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       market sign or of the market post (see {@link VillageMarket.State#BLOCKED}), the growth goes on with the next
  *       step. Before the steps, the heart scans the village again when a market sign of its scan is broken (see
  *       {@link VillageHeartBlockEntity#checkMarkets}).</li>
- *   <li>A village that needs places gets a new home: the population of the settlement is more than the places (see
- *       {@link VillageBeds}). The home is a house-workshop.</li>
+ *   <li>A village that needs a home gets a new home (see {@link #homeNeed} and {@link HomeNeed}): a job slot of its
+ *       level has no job post, or a resource of the village has a surplus (see {@link SurplusSource}). The population
+ *       of the level is a maximum, not a target. The home is a house-workshop.</li>
  *   <li>Else, a village with a missing building of its level gets this building (see {@link VillageBuildings} and
  *       {@link VillageBuildingTable}). The scan of the heart counts the building signs of each kind. The building comes
  *       from the pool of the houses of the variant of the village: the piece {@code house_<kind>}. A variant with no
@@ -71,7 +75,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       repairs: a repair comes first.</li>
  *   <li>A free plot has no building of the generation. The space of the piece has no piece of the village structure,
  *       no palisade (see {@link #hasRoom}), no earlier construction site and no block of a player. The nearest free
- *       plot to the heart comes first. The wall keeps the space of each house-workshop of the variant on a free plot
+ *       plot to the heart comes first: the spare plots of the plan, in the core first, then in the bands. The wall keeps the space of each house-workshop of the variant on a free plot
  *       (see {@link VillagePlots#reserved}).</li>
  *   <li>The connector of the building goes in front of the connector of the plot, on the ground of the street.</li>
  *   <li>The construction uses the stock of the village and the delivery quests, as the other sites (see
@@ -98,6 +102,28 @@ public final class VillageGrowth {
     private static final String JOB_PREFIX = "job_";
     /** The number of jobs that one check of the growth tries for a house-workshop. */
     public static final int WORKSHOP_JOBS = 3;
+
+    /**
+     * The source of the surplus of a village: the number of days with a surplus of a resource. A surplus for the days
+     * of the setting {@code construction.growthSurplusDays} gives a new home (see {@link HomeNeed}).
+     */
+    @FunctionalInterface
+    public interface SurplusSource {
+        /** The source with no surplus. */
+        SurplusSource NONE = (level, settlement) -> 0;
+
+        /**
+         * The number of days with a surplus.
+         *
+         * @param level      the level of the village
+         * @param settlement the settlement of the village
+         * @return the days, 0 with no surplus
+         */
+        int days(ServerLevel level, Settlement settlement);
+    }
+
+    /** The source of the surplus of the villages. No resource gives a surplus: the source is {@link SurplusSource#NONE}. */
+    private static volatile SurplusSource surplus = SurplusSource.NONE;
 
     /**
      * The pools of the pieces that the growth builds in a variant: the house-workshops, the buildings of the levels,
@@ -141,8 +167,9 @@ public final class VillageGrowth {
         heart.checkMarkets(level);
         VillageLayout layout = heart.getLayout();
         List<String> posts = postJobs(level.getServer(), settlement.get());
+        boolean needsHome = homeNeed(level, heart, settlement.get()) != HomeNeed.Cause.NONE;
         List<VillageBuildings.Step> steps = VillageBuildings.steps(VillageBuildingTable.get(),
-                settlement.get().level(), layout.buildings(), layout.isScanned(), needsPlaces(settlement.get()),
+                settlement.get().level(), layout.buildings(), layout.isScanned(), needsHome,
                 settlement.get().jobPosts().isPresent() && needsFirstPost(posts)).stream()
                 .filter(step -> growth || (step.type() != VillageBuildings.StepType.HOME
                         && step.type() != VillageBuildings.StepType.BUILDING))
@@ -163,6 +190,7 @@ public final class VillageGrowth {
                     heart.setHomeNoSpace(attempt.site().isEmpty());
                 }
                 if (attempt.site().isPresent()) {
+                    heart.setLastHomeTick(level.getGameTime());
                     return attempt.site();
                 }
                 continue;
@@ -386,16 +414,36 @@ public final class VillageGrowth {
     }
 
     /**
-     * True if a village needs places: its population is more than its places. A village with an unknown number
-     * of beds does not need places.
+     * The need of a new home of a village (see {@link HomeNeed}): a free post when the level has more job slots than
+     * the village has job posts, else a surplus of a resource. A village with no list of posts needs no home: the
+     * heart checks the growth after a scan, and the scan gives the list.
      *
+     * @param level      the level
+     * @param heart      the village heart
      * @param settlement the settlement of the village
-     * @return true if the village needs places
+     * @return the cause of the need, or {@link HomeNeed.Cause#NONE}
      */
-    public static boolean needsPlaces(Settlement settlement) {
-        int places = VillageBeds.places(settlement);
-        return places != VillagePlaces.UNKNOWN
-                && settlement.economy().population() > places;
+    public static HomeNeed.Cause homeNeed(ServerLevel level, VillageHeartBlockEntity heart, Settlement settlement) {
+        if (settlement.jobPosts().isEmpty()) {
+            return HomeNeed.Cause.NONE;
+        }
+        int posts = settlement.jobPosts().get().size();
+        int slots = LevelTables.get().traits(settlement.level()).jobSlots();
+        long last = heart.lastHomeTick();
+        long days = last < 0 ? HomeNeed.NO_HOME
+                : Math.max(0L, level.getGameTime() - last) / SharedConstants.TICKS_PER_GAME_DAY;
+        HomeNeed.Rule rule = new HomeNeed.Rule(WorldConfig.CONSTRUCTION_GROWTH_SURPLUS_DAYS.get(),
+                WorldConfig.CONSTRUCTION_GROWTH_HOME_DELAY_DAYS.get());
+        return HomeNeed.of(posts, slots, surplus.days(level, settlement), days, rule);
+    }
+
+    /**
+     * Sets the source of the surplus of the villages.
+     *
+     * @param source the source, {@link SurplusSource#NONE} for no surplus
+     */
+    public static void setSurplusSource(SurplusSource source) {
+        surplus = Objects.requireNonNull(source, "source");
     }
 
     /**

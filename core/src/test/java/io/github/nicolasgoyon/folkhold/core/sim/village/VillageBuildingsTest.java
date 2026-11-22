@@ -95,12 +95,17 @@ class VillageBuildingsTest {
     /** A village with no food post or no post that trades gets a house-workshop first, before the market. */
     @Test
     void firstPostComesBeforeTheMarket() {
-        assertEquals(List.of(FIRST_POST, MARKET), VillageBuildings.steps(WITH_MARKET, 5, Map.of(), true, true, true));
-        assertEquals(List.of(FIRST_POST), VillageBuildings.steps(WITH_MARKET, 4, Map.of(), true, true, true));
+        assertEquals(List.of(FIRST_POST, MARKET, new Step(StepType.BUILDING, "storehouse")),
+                VillageBuildings.steps(WITH_MARKET, 5, Map.of(), true, true, true));
+        assertEquals(List.of(FIRST_POST, new Step(StepType.BUILDING, "storehouse")),
+                VillageBuildings.steps(WITH_MARKET, 4, Map.of(), true, true, true));
         assertEquals(List.of(MARKET, HOME), VillageBuildings.steps(WITH_MARKET, 5, Map.of(), true, true, false));
     }
 
-    /** With no free plot for the first post, the growth goes on with the building of the level. */
+    /**
+     * With no free plot for the first post, the growth goes on with the building of the level. The first post takes
+     * the place of the home: also a village that needs a home gets the building after the first post.
+     */
     @Test
     void firstPostDoesNotStopTheBuildingOfTheLevel() {
         assertEquals(List.of(FIRST_POST, new Step(StepType.BUILDING, "storehouse")),

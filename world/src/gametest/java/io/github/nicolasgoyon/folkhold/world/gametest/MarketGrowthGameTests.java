@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.HomeNeed;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
@@ -304,7 +305,7 @@ public final class MarketGrowthGameTests {
 
     /**
      * With the setting {@code construction.growth} false, a broken market comes back on its plot: this is maintenance.
-     * The village needs places and has a free plot, but it starts no new home.
+     * The village needs a home and has a free plot, but it starts no new home.
      */
     @GameTest(template = "arena_huge", timeoutTicks = 20, batch = "market_no_growth")
     public static void brokenMarketComesBackWithNoGrowth(GameTestHelper helper) {
@@ -329,14 +330,15 @@ public final class MarketGrowthGameTests {
         BuilderSites.stop(level);
         heart.requestScan();
         heart.ensureGarrison(level.getGameTime());
-        boolean needsPlaces = VillageGrowth.needsPlaces(Settlements.of(level.getServer(), heart).orElseThrow());
+        HomeNeed.Cause need = VillageGrowth.homeNeed(level, heart,
+                Settlements.of(level.getServer(), heart).orElseThrow());
         Optional<BuilderSite> next = VillageGrowth.check(level, heart);
 
         helper.assertTrue(again.isPresent() && again.get().template().equals(first.template())
                 && again.get().origin().equals(first.origin()) && again.get().rotation() == first.rotation(),
                 "The broken market must come back on its plot: " + again.map(BuilderSite::origin) + ", expected "
                 + first.origin());
-        helper.assertTrue(needsPlaces, "The village of the test must need places");
+        helper.assertTrue(need == HomeNeed.Cause.FREE_POST, "The village of the test must need a home: " + need);
         helper.assertTrue(next.isEmpty(), "With no growth, the village must start no new home: "
                 + next.map(BuilderSite::template));
         helper.succeed();
@@ -383,7 +385,7 @@ public final class MarketGrowthGameTests {
                 new VillagePlots.Plot(helper.absolutePos(SECOND_CONNECTOR), Direction.EAST, HOUSE_FRONT, false));
     }
 
-    /** Sets a village to the level 5 with more population than places, and gives it builders. */
+    /** Sets a village to the level 5 with free posts and more population than places, and gives it builders. */
     private static Settlement levelFive(GameTestHelper helper, VillageHeartBlockEntity heart) {
         ServerLevel level = helper.getLevel();
         for (int i = 0; i < BUILDERS; i++) {

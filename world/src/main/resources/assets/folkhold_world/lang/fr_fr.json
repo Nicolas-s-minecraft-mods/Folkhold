@@ -279,6 +279,8 @@
   "folkhold_world.configuration.constructionRepairCheckSeconds": "Recherche des blocs endommagés (secondes)",
   "folkhold_world.configuration.constructionCatchUpSteps": "Étapes par tick après le chargement des chunks",
   "folkhold_world.configuration.constructionGrowth": "Croissance des villages",
+  "folkhold_world.configuration.constructionGrowthSurplusDays": "Jours de surplus pour une nouvelle maison",
+  "folkhold_world.configuration.constructionGrowthHomeDelayDays": "Jours entre deux maisons pour un surplus",
   "folkhold_world.configuration.constructionLand": "Champs et moulins des villages",
   "screen.folkhold_world.village_heart.economy": "Économie",
   "screen.folkhold_world.village_heart.population": "Population",

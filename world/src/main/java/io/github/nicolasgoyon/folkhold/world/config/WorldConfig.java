@@ -187,6 +187,8 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue CONSTRUCTION_REPAIR_CHECK_SECONDS;
     public static final ModConfigSpec.IntValue CONSTRUCTION_CATCH_UP_STEPS;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_GROWTH;
+    public static final ModConfigSpec.IntValue CONSTRUCTION_GROWTH_SURPLUS_DAYS;
+    public static final ModConfigSpec.IntValue CONSTRUCTION_GROWTH_HOME_DELAY_DAYS;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_LAND;
 
     public static final UnitStats GUARD;
@@ -1043,7 +1045,8 @@ public final class WorldConfig {
                 .defineInRange("catchUpStepsPerTick", 32, 1, 4096);
         CONSTRUCTION_GROWTH = builder
                 .comment("True: the builders of a village build a new home on a free plot of its streets when the",
-                        "village needs places: its population is more than the places of its beds and of its hall.",
+                        "village needs a home: a job slot of its level has no job post, or a resource of the village",
+                        "has a surplus. The population of the level is a maximum, not a target.",
                         "They also build the buildings of the level and the first market on the free plots.",
                         "The village looks for a free plot after the check of the repairs.",
                         "False (default): the villages take no new plot for a new home, a building of the level or a",
@@ -1051,6 +1054,15 @@ public final class WorldConfig {
                         "broken market on its plot, still come back.")
                 .translation(KEY_PREFIX + "constructionGrowth")
                 .define("growth", false);
+        CONSTRUCTION_GROWTH_SURPLUS_DAYS = builder
+                .comment("A village with a surplus of a resource for this number of days needs a new home.")
+                .translation(KEY_PREFIX + "constructionGrowthSurplusDays")
+                .defineInRange("growthSurplusDays", 3, 1, 365);
+        CONSTRUCTION_GROWTH_HOME_DELAY_DAYS = builder
+                .comment("After the start of a new home, a village waits this number of days before a new home for",
+                        "a surplus. A job slot with no job post does not wait.")
+                .translation(KEY_PREFIX + "constructionGrowthHomeDelayDays")
+                .defineInRange("growthHomeDelayDays", 2, 0, 365);
         CONSTRUCTION_LAND = builder
                 .comment("True: the builders of a village build the fields and the mills of its level outside its",
                         "palisade, in the territory of the village. The village looks for a site after the check of",

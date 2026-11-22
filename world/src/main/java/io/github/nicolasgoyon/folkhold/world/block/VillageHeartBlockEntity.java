@@ -156,6 +156,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String NAME_TAG = "Name";
     private static final String MARKET_PLOT_TAG = "MarketPlot";
     private static final String LAND_TAG = "LandPieces";
+    private static final String LAST_HOME_TAG = "LastHomeTick";
 
     /** Name of the village, or null before the village has a faction. */
     @Nullable
@@ -196,6 +197,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     /** The plot of the market of the village, or null before the growth starts the market. */
     @Nullable
     private VillageMarket.Plot marketPlot;
+    /** The game time of the start of the last new home of the growth, or -1 with no such home. */
+    private long lastHomeTick = -1;
     /** The fields and the mills that the builders of the village started outside the palisade (see {@link VillageLand}). */
     private final List<VillageReference.Piece> landPieces = new ArrayList<>();
     /** The positions of the last repairs, with the game time of their end. Not saved. */
@@ -1124,6 +1127,23 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
+     * The game time of the start of the last new home of the growth (see {@link VillageGrowth#homeNeed}).
+     *
+     * @return the game time, or -1 when the growth started no new home
+     */
+    public long lastHomeTick() {
+        return lastHomeTick;
+    }
+
+    /** Records the start of a new home of the growth. */
+    public void setLastHomeTick(long tick) {
+        if (lastHomeTick != tick) {
+            lastHomeTick = tick;
+            setChanged();
+        }
+    }
+
+    /**
      * The plot of the market of the village (see {@link VillageMarket.Plot}). The growth builds the market again on
      * this plot when the market is broken or not finished.
      *
@@ -1585,6 +1605,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (!landPieces.isEmpty()) {
             tag.put(LAND_TAG, VillageLand.save(landPieces));
         }
+        if (lastHomeTick >= 0) {
+            tag.putLong(LAST_HOME_TAG, lastHomeTick);
+        }
     }
 
     @Override
@@ -1622,5 +1645,6 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 : null;
         landPieces.clear();
         landPieces.addAll(VillageLand.load(tag.getList(LAND_TAG, Tag.TAG_COMPOUND)));
+        lastHomeTick = tag.contains(LAST_HOME_TAG, Tag.TAG_LONG) ? tag.getLong(LAST_HOME_TAG) : -1;
     }
 }

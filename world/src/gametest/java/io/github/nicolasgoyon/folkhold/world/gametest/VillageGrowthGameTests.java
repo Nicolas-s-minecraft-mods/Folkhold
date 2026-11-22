@@ -5,6 +5,7 @@ import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.HomeNeed;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
@@ -120,26 +121,28 @@ public final class VillageGrowthGameTests {
     }
 
     /**
-     * A village with a farmer post, too few places and a free plot: its builders start the house-workshop of the job
-     * that {@link JobAssignment#next} gives. The connector of the house-workshop is in front of the connector of the
-     * plot, and the house-workshop faces the street. A village with enough places builds nothing. At the end of the
-     * site, the scan gives 1 more post with the job and the places of the new home.
+     * The population follows the homes. A village of the level 1 has 2 job slots and a farmer post: a free post. Its
+     * builders start the house-workshop of the job that {@link JobAssignment#next} gives on the spare plot. The
+     * connector of the house-workshop is in front of the connector of the plot, and the house-workshop faces the
+     * street. At the end of the site, the scan gives 1 more post with the job and the places of the new home. Then
+     * the village has no free post: with a population above its places, it builds no home. The population of the
+     * level is not a target.
      */
     @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_plot")
-    public static void buildersStartTheHouseWorkshopOfTheNextJob(GameTestHelper helper) {
+    public static void freePostBuildsAHouseWorkshopOnTheSparePlot(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Village village = village(helper, HOMES, true, List.of(plot(helper, false)), 1, 3, false);
         Settlement settlement = village.settlement();
         VillageHeartBlockEntity heart = village.heart();
         try {
-            boolean enoughPlaces = VillageGrowth.check(level, heart).isEmpty();
-            settlement.economy().setPopulation(20);
+            HomeNeed.Cause need = VillageGrowth.homeNeed(level, heart, settlement);
             String job = nextJob(level, settlement);
             int places = VillageBeds.places(settlement);
             Optional<BuilderSite> site = VillageGrowth.check(level, heart);
 
-            helper.assertTrue(enoughPlaces, "A village with enough places must build no home");
-            helper.assertTrue(site.isPresent(), "A village that needs places must start a home on the free plot");
+            helper.assertTrue(need == HomeNeed.Cause.FREE_POST, "A village with a free post must need a home: "
+                    + need);
+            helper.assertTrue(site.isPresent(), "A village with a free post must start a home on the spare plot");
             helper.assertTrue(site.get().template().equals(workshop(job)), "The home must be the house-workshop of "
                     + job + ": " + site.get().template());
             // The connector of the house-workshop is at (4, 1, 0) and faces north. To face the west, the piece turns
@@ -162,7 +165,74 @@ public final class VillageGrowthGameTests {
             helper.assertTrue(VillageBeds.places(settlement) > places, "The new home must give places: "
                     + VillageBeds.places(settlement) + " places, " + places + " before");
             helper.assertFalse(heart.isHomeNoSpace(), "A free plot held the new home");
+
+            settlement.economy().setPopulation(LevelTables.get().traits(1).maxPopulation());
+            helper.assertTrue(settlement.economy().population() > VillageBeds.places(settlement),
+                    "The population of the test must be above the places");
+            HomeNeed.Cause noNeed = VillageGrowth.homeNeed(level, heart, settlement);
+            helper.assertTrue(noNeed == HomeNeed.Cause.NONE, "A village with no free post must need no home: "
+                    + noNeed);
         } finally {
+            end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A village with no need builds no home: its posts fill the job slots of its level, and it has no surplus. Its
+     * population is the maximum population of the level, above its places. The spare plot stays free.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_no_need")
+    public static void villageWithNoNeedBuildsNoHome(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Village village = village(helper, HOMES, true, List.of(plot(helper, false)), 1, 3, false);
+        Settlement settlement = village.settlement();
+        try {
+            fillPosts(settlement, LevelTables.get().traits(1).jobSlots());
+            settlement.economy().setPopulation(LevelTables.get().traits(1).maxPopulation());
+            HomeNeed.Cause need = VillageGrowth.homeNeed(level, village.heart(), settlement);
+            Optional<BuilderSite> site = VillageGrowth.check(level, village.heart());
+
+            helper.assertTrue(settlement.economy().population() > VillageBeds.places(settlement),
+                    "The population of the test must be above the places");
+            helper.assertTrue(need == HomeNeed.Cause.NONE, "The village must need no home: " + need);
+            helper.assertTrue(site.isEmpty(), "A village with no need must build no home: "
+                    + site.map(BuilderSite::template));
+        } finally {
+            end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A surplus gives one home at a time. The village has no free post. With a surplus for the days of the setting,
+     * it starts one house-workshop. Then the next home waits for the delay of the setting, also with the surplus.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_surplus")
+    public static void surplusGivesOneHomeAtATime(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_GROWTH_SURPLUS_DAYS, 3);
+        TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_GROWTH_HOME_DELAY_DAYS, 2);
+        Village village = village(helper, HOMES, true, List.of(plot(helper, false)), 1, 3, false);
+        Settlement settlement = village.settlement();
+        VillageHeartBlockEntity heart = village.heart();
+        try {
+            fillPosts(settlement, LevelTables.get().traits(1).jobSlots());
+            VillageGrowth.setSurplusSource((found, ignored) -> 2);
+            HomeNeed.Cause brief = VillageGrowth.homeNeed(level, heart, settlement);
+            VillageGrowth.setSurplusSource((found, ignored) -> 3);
+            HomeNeed.Cause surplus = VillageGrowth.homeNeed(level, heart, settlement);
+            Optional<BuilderSite> site = VillageGrowth.check(level, heart);
+            HomeNeed.Cause after = VillageGrowth.homeNeed(level, heart, settlement);
+
+            helper.assertTrue(brief == HomeNeed.Cause.NONE, "A short surplus must give no home: " + brief);
+            helper.assertTrue(surplus == HomeNeed.Cause.SURPLUS, "The surplus must give a home: " + surplus);
+            helper.assertTrue(site.isPresent() && site.get().template().getPath().startsWith("village/job_"),
+                    "The surplus must start a house-workshop: " + site.map(BuilderSite::template));
+            helper.assertTrue(heart.lastHomeTick() == level.getGameTime(), "The heart must record the new home");
+            helper.assertTrue(after == HomeNeed.Cause.NONE, "The next home must wait for the delay: " + after);
+        } finally {
+            VillageGrowth.setSurplusSource(VillageGrowth.SurplusSource.NONE);
             end(helper, village);
         }
         helper.succeed();
@@ -177,7 +247,8 @@ public final class VillageGrowthGameTests {
         ServerLevel level = helper.getLevel();
         Village village = village(helper, HOMES, false, List.of(plot(helper, false)), 3, 3, false);
         try {
-            helper.assertFalse(VillageGrowth.needsPlaces(village.settlement()), "The village must have its places");
+            helper.assertFalse(village.settlement().economy().population() > VillageBeds.places(village.settlement()),
+                    "The village must have its places");
             Optional<BuilderSite> site = VillageGrowth.check(level, village.heart());
             String job = site.map(found -> jobOf(found.template())).orElse("");
             helper.assertTrue(site.isPresent() && site.get().template().equals(workshop(job)),
@@ -283,15 +354,15 @@ public final class VillageGrowthGameTests {
     }
 
     /**
-     * A village with its food post, enough places and a missing building of its level: its builders start this
-     * building on the free plot. The village has a storehouse sign, so the barracks of the level 9 comes first. The
+     * A village with its food post, a post for each job slot and a missing building of its level: its builders start
+     * this building on the free plot. The village has a storehouse sign, so the barracks of the level 9 comes first. The
      * village has a market. A village of the level 1 or of the level 5 needs no building: the forge is the building of
      * the blacksmith, not a building of a level.
      */
     @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_building")
     public static void buildersStartAMissingBuildingOfTheLevel(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        // The population fills the places of the staff: the village needs no home.
+        // The population fills the places of the staff.
         Village village = village(helper, HOMES, true, List.of(plot(helper, false)), 1, 3, false);
         Settlement settlement = village.settlement();
         VillageHeartBlockEntity heart = village.heart();
@@ -303,6 +374,8 @@ public final class VillageGrowthGameTests {
             helper.setBlock(HEART.west(2).south(), Blocks.OAK_LOG);
             heart.requestScan();
             heart.ensureGarrison(level.getGameTime());
+            // The posts fill the job slots of the level 9: the village needs no home.
+            fillPosts(settlement, LevelTables.get().traits(9).jobSlots());
             boolean lowLevel = VillageGrowth.check(level, heart).isEmpty();
             settlement.setProgress(5, 0);
             boolean noForge = VillageGrowth.check(level, heart).isEmpty();
@@ -590,6 +663,19 @@ public final class VillageGrowthGameTests {
         settlement.setJobPosts(Optional.empty());
         heart.ensureGarrison(serverLevel.getGameTime());
         return new Village(heart, settlement, boxes);
+    }
+
+    /**
+     * Gives a village posts up to a number: copies of its first post at other positions. The heart keeps them until
+     * its next scan.
+     */
+    private static void fillPosts(Settlement settlement, int count) {
+        List<JobPosts.Post> posts = new ArrayList<>(settlement.jobPosts().orElseThrow());
+        JobPosts.Post first = posts.get(0);
+        for (int i = posts.size(); i < count; i++) {
+            posts.add(new JobPosts.Post(first.jobId(), first.x(), first.y() + 100 + i, first.z(), first.homeBeds()));
+        }
+        settlement.setJobPosts(Optional.of(posts));
     }
 
     /** The end of a site: the blocks of its piece are in place, and the heart scans the village again. */

@@ -39,7 +39,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>The wall of the village keeps the space of a new home on each free plot (see {@link #reserved} and
  *       {@link io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall}). This space holds each piece of
  *       the pools of the homes and of the house-workshops of the variant (see {@link #homePools}). The builders of the
- *       village build a house-workshop on a free plot when the village needs places (see {@link VillageGrowth}).</li>
+ *       village build a house-workshop on a free plot when the village needs a home (see {@link VillageGrowth}).</li>
  * </ul>
  */
 public final class VillagePlots {
