@@ -5,12 +5,14 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
+import io.github.nicolasgoyon.folkhold.core.sim.reputation.PlayerReputation;
 import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementState;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
+import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
 import io.github.nicolasgoyon.folkhold.world.quest.Deliveries;
 import io.github.nicolasgoyon.folkhold.world.quest.Hunts;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
@@ -88,12 +90,16 @@ public final class QuestTypeGameTests {
         BlockPos middle = helper.absolutePos(new BlockPos(4, 1, 4));
         Settlement village = village(server, middle.getX(), middle.getZ(), 5, List.of());
         ServerPlayer player = TestSupport.mockPlayer(helper);
+        // A neutral player: the start reputation of the faction can be below the neutral tier.
+        PlayerReputation reputation = ReputationData.get(server).get(player.getUUID());
+        reputation.setFaction(village.factionId(), 0);
+        reputation.setVillage(village.id(), 0);
         Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.HUNT, village.id(), village.factionId(),
                 Quest.MONSTERS, 2, 4, 10, ReputationTier.NEUTRAL, level.getGameTime() + 5000, 5000, "");
         QuestData.get(server).quests().add(quest);
         try {
-            helper.assertTrue(QuestBoards.accept(player, quest.id()) == Quests.AcceptResult.ACCEPTED,
-                    "The player must accept the hunt");
+            Quests.AcceptResult accepted = QuestBoards.accept(player, quest.id());
+            helper.assertTrue(accepted == Quests.AcceptResult.ACCEPTED, "The player must accept the hunt: " + accepted);
             int far = Hunts.recordKill(server, player, middle.getX() + WorldConfig.QUEST_HUNT_RADIUS.get() + 10.0,
                     middle.getZ());
             kill(helper, player, EntityType.COW);
