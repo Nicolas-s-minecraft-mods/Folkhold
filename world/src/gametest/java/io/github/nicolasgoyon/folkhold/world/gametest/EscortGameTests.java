@@ -124,8 +124,11 @@ public final class EscortGameTests {
                 "The village must offer an escort of its caravan");
         helper.assertTrue(departure == 100 + WorldConfig.QUEST_ESCORT_WAIT_TICKS.get(),
                 "The caravan must wait for an escort: " + departure);
-        helper.assertTrue(quest.rewardEmeralds() == Math.max(1,
-                Math.round(20 * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())), "The reward comes from the cargo");
+        // The factor of the difficulty of the escort (see EscortDifficulty) multiplies the share of the cargo.
+        double factor = EscortDifficulties.get().level(quest.difficulty()).rewardFactor();
+        helper.assertTrue(quest.difficulty() >= 1 && quest.rewardEmeralds() == Math.max(1,
+                Math.round(20 * factor * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())),
+                "The reward comes from the cargo and the difficulty: " + quest.rewardEmeralds());
         helper.succeed();
     }
 
