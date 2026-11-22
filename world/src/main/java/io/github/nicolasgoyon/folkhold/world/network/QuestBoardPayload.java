@@ -45,23 +45,22 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
             new Type<>(ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "quest_board"));
 
     /**
-     * An offer of the village: one paper on the board.
+     * An offer of the village: one row on the board, and the detail panel of the row.
      *
      * @param questId   the id of the quest
-     * @param kind      the kind of the quest (serialized name), for the sort
+     * @param kind      the kind of the quest (serialized name), for the category and the sort
      * @param itemId    the item of the icon
-     * @param name      what to do
-     * @param info      the kind, the distance, the time, and the minimum tier
-     * @param reward    the reward: emeralds, reputation, experience and items
-     * @param risk      the start items and the reputation loss of a failure, or empty
+     * @param name      what to do: the objective
+     * @param story     the story of the quest, or empty
+     * @param details   the lines of the detail panel: time, place, difficulty, reward, start items, failure
      * @param progress  the items of the player for a delivery, or empty
      * @param countdown the seconds before the caravan of an escort leaves, or -1
-     * @param emeralds  the reward in emeralds, for the sort
+     * @param emeralds  the reward in emeralds, for the row and the sort
      * @param minutes   the time to complete the quest, for the sort
      * @param blocked   the reason why the player cannot accept the offer, or empty
      */
-    public record Offer(String questId, String kind, String itemId, Component name, Component info,
-            Component reward, Component risk, Component progress, int countdown, int emeralds, int minutes,
+    public record Offer(String questId, String kind, String itemId, Component name, Component story,
+            List<QuestDetail> details, Component progress, int countdown, int emeralds, int minutes,
             Optional<Component> blocked) {
 
         public static final StreamCodec<RegistryFriendlyByteBuf, Offer> STREAM_CODEC = StreamCodec.of(
@@ -70,9 +69,8 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
                     buf.writeUtf(offer.kind);
                     buf.writeUtf(offer.itemId);
                     ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.name);
-                    ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.info);
-                    ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.reward);
-                    ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.risk);
+                    ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.story);
+                    QuestDetail.STREAM_CODEC.apply(ByteBufCodecs.list()).encode(buf, offer.details);
                     ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.progress);
                     buf.writeVarInt(offer.countdown);
                     buf.writeVarInt(offer.emeralds);
@@ -82,8 +80,7 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
                 buf -> new Offer(buf.readUtf(), buf.readUtf(), buf.readUtf(),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
-                        ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
-                        ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
+                        QuestDetail.STREAM_CODEC.apply(ByteBufCodecs.list()).decode(buf),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                         buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
                         ComponentSerialization.TRUSTED_OPTIONAL_STREAM_CODEC.decode(buf)));

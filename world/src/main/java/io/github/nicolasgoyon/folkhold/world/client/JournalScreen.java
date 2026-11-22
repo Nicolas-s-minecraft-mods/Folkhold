@@ -24,6 +24,7 @@ import io.github.nicolasgoyon.folkhold.world.network.JournalPayload;
 import io.github.nicolasgoyon.folkhold.world.network.JournalPayload.Faction;
 import io.github.nicolasgoyon.folkhold.world.network.JournalPayload.Village;
 import io.github.nicolasgoyon.folkhold.world.network.JournalRequestPayload;
+import io.github.nicolasgoyon.folkhold.world.network.QuestDetail;
 import io.github.nicolasgoyon.folkhold.world.network.RoutePayload;
 import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
 import java.util.ArrayList;
@@ -630,8 +631,10 @@ public class JournalScreen extends UiScreen {
     }
 
     /**
-     * Adds the rows of the selected quest: the village, the progress or the offer, the time, the reward and the loss
-     * of a failure. A button shows the village of the quest on the map of the journal.
+     * Adds the rows of the selected quest. An active quest: the village, the progress, the time left, the reward and
+     * the loss of a failure. An offer: the village, the story, the lines of the detail panel of the quest board (see
+     * {@link io.github.nicolasgoyon.folkhold.world.quest.QuestOfferDetails}) and the end of the offer. A button shows
+     * the village of the quest on the map of the journal.
      */
     private void initQuestDetails(UiRect area) {
         Optional<JournalPayload.Quest> quest = selectedQuest();
@@ -641,13 +644,26 @@ public class JournalScreen extends UiScreen {
         UiRect row = area.bottomPart(UiTheme.CONTROL);
         List<UiRow> rows = new ArrayList<>();
         rows.add(UiRow.of(Component.translatable(KEY + "row.village"), Component.literal(quest.get().village())));
-        rows.add(UiRow.of(Component.translatable(KEY + (quest.get().active() ? "row.progress" : "row.offer")),
-                quest.get().progress()));
-        rows.add(UiRow.of(Component.translatable(KEY + (quest.get().active() ? "row.time_left" : "row.offer_end")),
-                Component.literal(UiText.clock(quest.get().secondsLeft()))));
-        rows.add(UiRow.of(Component.translatable(KEY + "row.reward"), quest.get().reward()));
-        if (!quest.get().risk().getString().isEmpty()) {
-            rows.add(UiRow.of(Component.translatable(KEY + "row.risk"), quest.get().risk()));
+        if (quest.get().active()) {
+            rows.add(UiRow.of(Component.translatable(KEY + "row.progress"), quest.get().progress()));
+            rows.add(UiRow.of(Component.translatable(KEY + "row.time_left"),
+                    Component.literal(UiText.clock(quest.get().secondsLeft()))));
+            rows.add(UiRow.of(Component.translatable(KEY + "row.reward"), quest.get().reward()));
+            if (!quest.get().risk().getString().isEmpty()) {
+                rows.add(UiRow.of(Component.translatable(KEY + "row.risk"), quest.get().risk()));
+            }
+        } else {
+            // The lines of the detail panel of the quest board. The colors of the server are for the parchment of
+            // the board: the journal shows the plain text.
+            if (!quest.get().story().getString().isEmpty()) {
+                rows.add(UiRow.of(Component.translatable(KEY + "row.story"),
+                        Component.literal(quest.get().story().getString())));
+            }
+            for (QuestDetail detail : quest.get().details()) {
+                rows.add(UiRow.of(detail.label(), Component.literal(detail.value().getString())));
+            }
+            rows.add(UiRow.of(Component.translatable(KEY + "row.offer_end"),
+                    Component.literal(UiText.clock(quest.get().secondsLeft()))));
         }
         if (!quest.get().active()) {
             rows.add(UiRow.of(Component.translatable(KEY + "row.accept"),

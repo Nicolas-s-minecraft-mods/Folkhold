@@ -169,6 +169,60 @@ public final class VillageHearts {
     }
 
     /**
+     * Finds the village of the welcome message of a position: the nearest loaded heart of a village that the position
+     * is near (see {@link #isNear}). The structure area of a large village makes this distance larger: the message
+     * shows at the limit of the village.
+     *
+     * @param level  the level
+     * @param pos    the position of the player
+     * @param radius the smallest distance of the message from a heart, in blocks
+     * @param margin the distance of the message out of the structure area of a heart, in blocks
+     * @return the position of the heart, or empty
+     */
+    public static Optional<BlockPos> findNearForMessage(Level level, BlockPos pos, double radius, int margin) {
+        Map<BlockPos, Optional<BoundingBox>> hearts = LOADED.get(level.dimension());
+        if (hearts == null) {
+            return Optional.empty();
+        }
+        BlockPos nearest = null;
+        double nearestSqr = Double.MAX_VALUE;
+        for (BlockPos heart : List.copyOf(hearts.keySet())) {
+            double sqr = heart.distSqr(pos);
+            if (sqr < nearestSqr && isNear(heart, resolve(level, hearts, heart), pos, radius, margin)) {
+                nearest = heart;
+                nearestSqr = sqr;
+            }
+        }
+        return Optional.ofNullable(nearest);
+    }
+
+    /**
+     * True if a position is near a village for the welcome message: at {@code radius} blocks from the heart or
+     * nearer, or at {@code margin} blocks or nearer from the structure area of the heart on the horizontal plane (and
+     * {@value #AREA_HEIGHT} blocks up or down from the heart or nearer).
+     *
+     * @param heart     the position of the heart
+     * @param structure the structure area of the heart, or empty
+     * @param pos       the position of the player
+     * @param radius    the smallest distance of the message from the heart, in blocks
+     * @param margin    the distance of the message out of the structure area, in blocks
+     * @return true if the position is near the village
+     */
+    public static boolean isNear(BlockPos heart, Optional<BoundingBox> structure, BlockPos pos, double radius,
+            int margin) {
+        if (heart.distSqr(pos) <= radius * radius) {
+            return true;
+        }
+        if (structure.isEmpty() || Math.abs(pos.getY() - heart.getY()) > AREA_HEIGHT) {
+            return false;
+        }
+        BoundingBox box = structure.get();
+        int dx = Math.max(0, Math.max(box.minX() - pos.getX(), pos.getX() - box.maxX()));
+        int dz = Math.max(0, Math.max(box.minZ() - pos.getZ(), pos.getZ() - box.maxZ()));
+        return (long) dx * dx + (long) dz * dz <= (long) margin * margin;
+    }
+
+    /**
      * Finds the village of a position: the nearest loaded heart with the position in its village. A position is in
      * the village of a heart when it is at the village radius from the heart or nearer, or when it is in the structure
      * area of the heart (on the horizontal plane, and {@value #AREA_HEIGHT} blocks up or down from the heart or

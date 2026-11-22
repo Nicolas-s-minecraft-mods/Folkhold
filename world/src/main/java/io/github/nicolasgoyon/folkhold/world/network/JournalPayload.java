@@ -7,6 +7,7 @@ import java.util.List;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -34,13 +35,17 @@ public record JournalPayload(List<Village> villages, List<Faction> factions, lon
      * @param village     the name of the village
      * @param itemId      the item of the icon
      * @param name        what to do
-     * @param progress    the progress of an active quest, or the kind, the time and the minimum tier of an offer
+     * @param progress    the progress of an active quest, or empty for an offer
      * @param reward      the reward: emeralds, reputation, experience and items
      * @param risk        the start items and the reputation loss of a failure, or empty
      * @param secondsLeft the time left of an active quest, or the time to the end of an offer, in seconds
+     * @param story       the story of an offer, or empty
+     * @param details     the lines of the detail panel of an offer (as on the quest board), or empty for an active
+     *                    quest
      */
     public record Quest(String questId, boolean active, String villageId, String village, String itemId,
-            Component name, Component progress, Component reward, Component risk, int secondsLeft) {
+            Component name, Component progress, Component reward, Component risk, int secondsLeft, Component story,
+            List<QuestDetail> details) {
 
         static void write(RegistryFriendlyByteBuf buf, Quest quest) {
             buf.writeUtf(quest.questId);
@@ -53,6 +58,8 @@ public record JournalPayload(List<Village> villages, List<Faction> factions, lon
             ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, quest.reward);
             ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, quest.risk);
             buf.writeVarInt(quest.secondsLeft);
+            ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, quest.story);
+            QuestDetail.STREAM_CODEC.apply(ByteBufCodecs.list()).encode(buf, quest.details);
         }
 
         static Quest read(RegistryFriendlyByteBuf buf) {
@@ -60,7 +67,9 @@ public record JournalPayload(List<Village> villages, List<Faction> factions, lon
                     ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                     ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                     ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
-                    ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf), buf.readVarInt());
+                    ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf), buf.readVarInt(),
+                    ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
+                    QuestDetail.STREAM_CODEC.apply(ByteBufCodecs.list()).decode(buf));
         }
     }
 
