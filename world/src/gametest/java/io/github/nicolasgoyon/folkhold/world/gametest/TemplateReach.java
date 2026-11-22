@@ -70,15 +70,50 @@ final class TemplateReach {
      *         exactly 1 connector {@code house_front}
      */
     static List<String> unreachable(ServerLevel level, StructureTemplate template) {
-        List<StructureTemplate.StructureBlockInfo> fronts = template.filterBlocks(BlockPos.ZERO,
-                new StructurePlaceSettings(), Blocks.JIGSAW).stream()
-                .filter(info -> info.nbt() != null
-                        && HOUSE_FRONT.equals(info.nbt().getString(JigsawBlockEntity.NAME)))
-                .toList();
-        if (fronts.size() != 1) {
-            return List.of(fronts.size() + " connectors " + HOUSE_FRONT);
-        }
         Map<BlockPos, BlockState> states = new HashMap<>();
+        Optional<Set<BlockPos>> walk = reached(level, template, states);
+        if (walk.isEmpty()) {
+            return List.of(fronts(template).size() + " connectors " + HOUSE_FRONT);
+        }
+        Set<BlockPos> reached = walk.get();
+        List<String> blocks = new ArrayList<>();
+        states.forEach((pos, state) -> {
+            boolean bedHead = state.getBlock() instanceof BedBlock && state.getValue(BedBlock.PART) == BedPart.HEAD;
+            if ((isWorkBlock(state) || bedHead) && !isReached(reached, pos)) {
+                blocks.add(BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath() + " " + pos.toShortString());
+            }
+        });
+        blocks.sort(null);
+        return blocks;
+    }
+
+    /**
+     * True when the walk of {@link #reached} reaches a block: a reached position is next to the block, to the north,
+     * south, east or west, with the feet or the head at the level of the block.
+     *
+     * @param reached the positions of the walk
+     * @param pos     the position of the block
+     * @return true for a reached block
+     */
+    static boolean isReached(Set<BlockPos> reached, BlockPos pos) {
+        return Direction.Plane.HORIZONTAL.stream().map(pos::relative)
+                .anyMatch(next -> reached.contains(next) || reached.contains(next.below()));
+    }
+
+    /**
+     * The positions to stand that a walk from the front of a template reaches (see {@link #unreachable}).
+     *
+     * @param level    the level, for the block registry
+     * @param template the template of the piece
+     * @param states   the map that gets the blocks of the template by position
+     * @return the reached positions, or empty when the template has not exactly 1 connector {@code house_front}
+     */
+    static Optional<Set<BlockPos>> reached(ServerLevel level, StructureTemplate template,
+            Map<BlockPos, BlockState> states) {
+        List<StructureTemplate.StructureBlockInfo> fronts = fronts(template);
+        if (fronts.size() != 1) {
+            return Optional.empty();
+        }
         for (ConstructionTargets.TemplateBlock block : ConstructionTargets.templateBlocks(level, template)) {
             states.put(block.pos(), block.state());
         }
@@ -103,16 +138,15 @@ final class TemplateReach {
                 }
             }
         }
-        List<String> blocks = new ArrayList<>();
-        states.forEach((pos, state) -> {
-            boolean bedHead = state.getBlock() instanceof BedBlock && state.getValue(BedBlock.PART) == BedPart.HEAD;
-            if ((isWorkBlock(state) || bedHead) && Direction.Plane.HORIZONTAL.stream().map(pos::relative)
-                    .noneMatch(next -> reached.contains(next) || reached.contains(next.below()))) {
-                blocks.add(BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath() + " " + pos.toShortString());
-            }
-        });
-        blocks.sort(null);
-        return blocks;
+        return Optional.of(reached);
+    }
+
+    /** The jigsaw connectors {@code house_front} of a template. */
+    private static List<StructureTemplate.StructureBlockInfo> fronts(StructureTemplate template) {
+        return template.filterBlocks(BlockPos.ZERO, new StructurePlaceSettings(), Blocks.JIGSAW).stream()
+                .filter(info -> info.nbt() != null
+                        && HOUSE_FRONT.equals(info.nbt().getString(JigsawBlockEntity.NAME)))
+                .toList();
     }
 
     /**

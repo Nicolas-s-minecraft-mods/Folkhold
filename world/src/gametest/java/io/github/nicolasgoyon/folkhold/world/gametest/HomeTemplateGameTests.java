@@ -15,20 +15,22 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * In-game tests for the templates of the homes of the villages: the pieces of the pools {@code homes} and
- * {@code houses} of each style and each biome variant, written by {@code tools/structures/village.py}. The plan test
+ * In-game tests for the templates of the homes of the villages: the pieces of the pools {@code homes},
+ * {@code houses} and {@code cliff_houses} of each style and each biome variant, written by {@code tools/structures/village.py}. The plan test
  * of these pieces is {@link VillageTemplateGameTests#eachVillagePlanHasNoWarning}.
  */
 @GameTestHolder(FolkholdWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class HomeTemplateGameTests {
     /** The pools of the homes in the folder of a style and a variant. */
-    private static final List<String> HOME_POOLS = List.of("homes", "houses");
+    private static final List<String> HOME_POOLS = List.of("homes", "houses", VillagePieces.CLIFF_HOUSES);
     /**
      * The number of home pieces: 4 homes of all the cultures, 6 Valeholm homes, 5 Sunreach homes and 7 maritime
-     * homes, in each of the 6 variants, and the 4 carved homes of the cave village.
+     * homes, in each of the 6 variants, the 4 carved homes of the cave village, and the cliff houses of each style in
+     * each of the 6 variants.
      */
-    static final int HOME_PIECES = (4 + 6 + 5 + 7) * 6 + 4;
+    static final int HOME_PIECES = (4 + 6 + 5 + 7) * 6 + 4 + CliffHouseTemplateGameTests.CLIFF_HOUSES.size()
+            * JobBuildingTemplateGameTests.STYLES.size() * JobBuildingTemplateGameTests.VARIANTS.size();
 
     private HomeTemplateGameTests() {
     }

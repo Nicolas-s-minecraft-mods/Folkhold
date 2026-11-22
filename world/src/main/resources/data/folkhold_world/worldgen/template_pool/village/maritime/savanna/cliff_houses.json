@@ -1,0 +1,23 @@
+{
+  "fallback": "minecraft:empty",
+  "elements": [
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/cliff_house_2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/cliff_house_3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    }
+  ]
+}

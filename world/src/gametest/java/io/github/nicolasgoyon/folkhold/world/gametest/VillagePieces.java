@@ -40,6 +40,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       one of these pools has as its fallback.</li>
  *   <li>The pools of the planned streets of a variant ({@link #PLANNED_STREETS}), in the folder of the pool of its
  *       homes. No connector of the other pools targets them.</li>
+ *   <li>The pool of the cliff houses of a variant ({@link #CLIFF_HOUSES}), in the folder of the pool of its homes. No
+ *       connector targets it, and the growth does not use it.</li>
  *   <li>The pieces of the wall of a variant: the template of the tower and the template of the gate. The wall places
  *       them as rigid pieces.</li>
  * </ul>
@@ -52,6 +54,8 @@ final class VillagePieces {
      * and the start of a side street.
      */
     static final List<String> PLANNED_STREETS = List.of("streets_next", "streets_side");
+    /** The name of the pool of the cliff houses of a variant: the tall houses against a rock face. */
+    static final String CLIFF_HOUSES = "cliff_houses";
 
     private VillagePieces() {
     }
@@ -104,6 +108,7 @@ final class VillagePieces {
             open.add(homes);
             open.addAll(VillageGrowth.pools(homes));
             PLANNED_STREETS.forEach(name -> open.add(VillagePlots.sibling(homes, name)));
+            open.add(VillagePlots.sibling(homes, CLIFF_HOUSES));
             add(pieces, new Piece(variant.wall().tower(), Optional.empty(),
                     StructureTemplatePool.Projection.RIGID), problems);
             add(pieces, new Piece(variant.wall().gate(), Optional.empty(),

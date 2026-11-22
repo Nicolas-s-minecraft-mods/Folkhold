@@ -60,7 +60,10 @@ public final class VillageTemplateGameTests {
     private static final int HOME_STEP_PIECES = HomeStepTemplateGameTests.STEP_JOBS.values().stream()
             .mapToInt(Integer::intValue).sum() * VillageGrowth.HOME_STEPS.size()
             * JobBuildingTemplateGameTests.VARIANTS.size();
-    /** The number of the pieces that the plan test checks: all the rigid pieces of all the variants. */
+    /**
+     * The number of the pieces that the plan test checks: all the rigid pieces of all the variants. The home pieces
+     * include the cliff houses.
+     */
     private static final int PLAN_PIECES = (JOBS + OTHER_PIECES) * VARIANTS + HomeTemplateGameTests.HOME_PIECES
             + CAVE_PIECES + HOME_STEP_PIECES;
     /** The number of the pieces that the plan test does not check: the streets of all the variants. */
