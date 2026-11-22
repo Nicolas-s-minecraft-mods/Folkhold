@@ -350,10 +350,6 @@ public final class FortifiedVillageGameTests {
         // The compound of the GameTests is in the folder of the base variant. It is not a piece of the variants.
         Set<String> basePieces = new HashSet<>(pieceNames(templates, "village/"));
         basePieces.remove("center");
-        // The pieces of the steps of the homes are in the styles with homes that grow in place: the Valeholm and the
-        // Sunreach styles have no such pieces (see HomeStepTemplateGameTests).
-        Set<String> stepPieces = basePieces.stream().filter(name -> name.matches(".*_step\\d+")).collect(
-                java.util.stream.Collectors.toSet());
         helper.assertTrue(basePieces.contains("plaza") && basePieces.contains(TOWER),
                 "The base variant must have its pieces: " + basePieces);
         helper.assertFalse(structure.variants().isEmpty(), "The village must have variants");
@@ -364,11 +360,7 @@ public final class FortifiedVillageGameTests {
             String start = variant.startPool().unwrapKey().orElseThrow().location().getPath();
             String folder = start.substring(0, start.lastIndexOf('/') + 1);
             Set<String> pieces = pieceNames(templates, folder);
-            Set<String> expected = new HashSet<>(basePieces);
-            if (variant.culture().isPresent()) {
-                expected.removeAll(stepPieces);
-            }
-            helper.assertTrue(pieces.containsAll(expected), "The variant " + folder + " must have the pieces of the"
+            helper.assertTrue(pieces.containsAll(basePieces), "The variant " + folder + " must have the pieces of the"
                     + " base variant: " + pieces);
             // The base variant of a culture and the maritime base variant keep the spruce of the base variant.
             boolean spruce = (variant.culture().isPresent() || variant.maritime()) && variant.biomes().size() == 0;

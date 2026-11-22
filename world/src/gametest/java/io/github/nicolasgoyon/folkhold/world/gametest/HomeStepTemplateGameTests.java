@@ -42,10 +42,11 @@ public final class HomeStepTemplateGameTests {
     /** The beds of the step 1 piece of a home. Each step adds this number of beds. */
     private static final int STEP_BEDS = 2;
     /**
-     * The number of the jobs with homes that grow in place, by folder of the style: the house-workshops of the base
-     * style in a house shell of the full depth. The maritime villages have the house-workshops of the base style.
+     * The number of the jobs with homes that grow in place, by folder of the style: in the base style, the
+     * house-workshops in a house shell of the full depth, and in the Valeholm and the Sunreach styles, all the
+     * house-workshops. The maritime villages have the house-workshops of the base style.
      */
-    static final Map<String, Integer> STEP_JOBS = Map.of("", 13, "maritime/", 13, "valeholm/", 0, "sunreach/", 0);
+    static final Map<String, Integer> STEP_JOBS = Map.of("", 13, "maritime/", 13, "valeholm/", 34, "sunreach/", 34);
 
     private HomeStepTemplateGameTests() {
     }

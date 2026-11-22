@@ -2495,14 +2495,11 @@ def paper_mill():
 # the work blocks, the beds and the door do not move. Thus the builders add blocks and remove few. The pieces of the
 # steps have the size of the plot of the step 1 piece and a greater height.
 #
-# A storey is STOREY blocks high: 3 blocks of room and a floor. The new storey stands on the beam of the walls of the
-# storey below: its floor is at the height of this beam, its walls go STOREY blocks higher, and the roof of the house
-# goes on them. A stair of 3 steps in the storey below goes up to the new floor, through a hole of 3 blocks in it.
-STOREY = 4
+# The new storey has the walls of the storey below and the roof of the house on it (see add_storey). A stair in the
+# storey below goes up to the new floor, through a hole in it. The style of the house gives the height of a storey
+# (see StoreyStyle).
 # The beds of each step of a home.
 STEP_BEDS = {1: HOME_BEDS, 2: 2 * HOME_BEDS, 3: 3 * HOME_BEDS}
-# The blocks of the roof of the house shell (see house_shell): the roof of a step goes away in the next step.
-ROOF_BLOCKS = ("minecraft:dark_oak_stairs", "minecraft:dark_oak_slab")
 # The work blocks of the reach check (TemplateReach in the GameTests): the job sites of the vanilla professions, the
 # containers and the work tables, the cauldrons and the anvils.
 REACH_WORK_BLOCKS = {f"minecraft:{name}" for name in (
@@ -2512,6 +2509,39 @@ REACH_WORK_BLOCKS = {f"minecraft:{name}" for name in (
     "damaged_anvil")}
 # A step between 2 positions of the reach walk: the 4 sides, as (dx, dz) and the facing of a stair that goes up there.
 STEP_SIDES = (("north", 0, -1), ("south", 0, 1), ("west", -1, 0), ("east", 1, 0))
+
+
+# The stairs and the positions of a bed that the search of a new storey tries at most: the search stays short, and the
+# first positions along the walls fit in most homes.
+STAIR_TRIALS = 400
+BED_TRIALS = 8
+
+
+@dataclasses.dataclass(frozen=True)
+class StoreyStyle:
+    """The storeys of the homes of a style.
+
+    - wall_top: the layer of the top of the walls of the ground floor.
+    - storey: the height of a storey. The floor of the new storey is at the layer storey (step 2) or 2 * storey
+      (step 3), and its walls are the walls of the ground floor, storey blocks higher.
+    - roof_at_floor: true for a flat roof on the walls: the roof is the floor of the new storey, and a copy of the roof
+      goes on the new storey. Else the roof stands above the floor of the new storey, and goes up with the storey.
+    - floor: the block of a new floor. stair, support: the block of a step of the stair, and the block under it.
+    - porch: the block of a row over the porch at step 2, or None.
+    """
+    wall_top: int
+    storey: int
+    roof_at_floor: bool
+    floor: str
+    stair: str
+    support: str
+    porch: tuple | None
+
+
+SLAB_ROW = ("minecraft:dark_oak_slab", {"type": "bottom", "waterlogged": "false"})
+# The storeys of the base style (see house_shell): a beam at the top of the walls holds the floor of the new storey.
+BASE_STOREY = StoreyStyle(4, 4, False, "minecraft:spruce_planks", "minecraft:spruce_stairs", "minecraft:spruce_planks",
+                          SLAB_ROW)
 
 
 def walk(state):
@@ -2532,8 +2562,24 @@ def reach_free(t, pos):
 
 def unreachable(t):
     """The work blocks and the bed heads of a template that a walk from the front row (z = 0, at the height of the
-    connector, y = 1) does not reach, as TemplateReach.unreachable in the GameTests. A step goes 1 block to a side, at
-    the same level or 1 block higher or lower. A step 1 block higher needs a free block 2 blocks above the start."""
+    connector, y = 1) does not reach, as TemplateReach.unreachable in the GameTests (see reach)."""
+    reached = reach(t)
+    missing = []
+    for (x, y, z), ((name, props), _) in t.blocks.items():
+        head = name.endswith("_bed") and dict(props).get("part") == "head"
+        if (name in REACH_WORK_BLOCKS or head) and not near(reached, x, y, z):
+            missing.append(f"{name} {x} {y} {z}")
+    return sorted(missing)
+
+
+def near(reached, x, y, z):
+    """True if a reached position is next to the block, with the feet or the head at the layer of the block."""
+    return any((x + dx, y, z + dz) in reached or (x + dx, y - 1, z + dz) in reached for _, dx, dz in STEP_SIDES)
+
+
+def reach(t):
+    """The positions of a template that a walk from the front row reaches. A step goes 1 block to a side, at the same
+    level or 1 block higher or lower. A step 1 block higher needs a free block 2 blocks above the start."""
     sx, sy, sz = t.size
 
     def standable(p):
@@ -2552,13 +2598,7 @@ def unreachable(t):
                 if nxt not in reached and (dy <= 0 or reach_free(t, (x, y + 2, z))) and standable(nxt):
                     reached.add(nxt)
                     todo.append(nxt)
-    missing = []
-    for (x, y, z), ((name, props), _) in t.blocks.items():
-        head = name.endswith("_bed") and dict(props).get("part") == "head"
-        if (name in REACH_WORK_BLOCKS or head) and not any(
-                (x + dx, y, z + dz) in reached or (x + dx, y - 1, z + dz) in reached for _, dx, dz in STEP_SIDES):
-            missing.append(f"{name} {x} {y} {z}")
-    return sorted(missing)
+    return reached
 
 
 def bed_count(t):
@@ -2566,172 +2606,193 @@ def bed_count(t):
                if name.endswith("_bed") and dict(props).get("part") == "head")
 
 
-def shell_depth(t):
-    """The depth of the house shell of a house-workshop: the back wall is at z = depth - 1 (see house_shell)."""
-    return 1 + max(z for (x, y, z) in t.blocks if x == 0 and y == 1
-                   and state_at(t, x, y, z)[0] == "minecraft:stripped_spruce_log")
+def shell_depth(t, style):
+    """The depth of the house of a house-workshop: the back wall is the last row with a full top of the walls. The
+    yard behind a shed has no wall there."""
+    width = t.size[0]
+    rows = [z for z in range(1, t.size[2])
+            if all(state_at(t, x, style.wall_top, z)[0] != "minecraft:air" for x in range(width))]
+    return max(rows) + 1
 
 
-def wall_fill(t, depth):
-    """The block of the upper walls of a house shell: the most common block at y = 2 and y = 3 of the walls, with no
-    log, no window and no door."""
-    counts = {}
-    for y in (2, 3):
-        for x in range(1, W - 1):
-            name = state_at(t, x, y, depth - 1)[0]
-            if name != "minecraft:air" and "log" not in name and "pane" not in name and "door" not in name:
-                counts[name] = counts.get(name, 0) + 1
-    return max(sorted(counts), key=counts.get)
+def is_wall_block(name):
+    """True for a block of a wall that the new storey copies: not air, not a door, not a work block."""
+    return name != "minecraft:air" and "door" not in name and name not in REACH_WORK_BLOCKS
 
 
-def is_gable(x, y, z, base, depth):
-    """True for a position of the gable walls under the roof that stands on the beam at the height base."""
-    step = y - base - 1
-    return z in (1, depth - 1) and 0 <= step < 5 and step < x < W - 1 - step
-
-
-def stair_runs(t, base, depth, holes):
-    """The stairs that go up from a storey to the new floor at the height base: 3 cells, each a side of the one
-    before, then a cell of the new floor. t is the piece before the new storey. Each cell of the stair is free from
-    the floor of the storey (base - STOREY) up to the new floor, and stands on the floor of the storey. The runs along
-    the walls come first."""
-    floor = base - STOREY
-    cells = [(x, z) for z in range(2, depth - 1) for x in range(1, W - 1)]
+def stair_runs(t, style, base, depth, holes):
+    """The stairs that go up from a storey to the new floor at the layer base: storey - 1 cells, each a side of the
+    one before, then a cell of the new floor. t is the piece before the new storey. Each cell of the stair is free
+    from the floor of the storey up to the new floor, and stands on the floor of the storey. The runs along the walls
+    come first."""
+    width = t.size[0]
+    floor = base - style.storey
+    count = style.storey - 1
+    cells = [(x, z) for z in range(2, depth - 1) for x in range(1, width - 1)]
 
     def free(x, z):
-        return ((x, z) not in holes and walk(state_at(t, x, floor, z)) == "on"
-                and all(state_at(t, x, y, z)[0] == "minecraft:air" for y in range(floor + 1, base + 1)))
+        if (x, z) in holes or walk(state_at(t, x, floor, z)) != "on":
+            return False
+        if any(state_at(t, x, y, z)[0] != "minecraft:air" for y in range(floor + 1, base)):
+            return False
+        top = state_at(t, x, base, z)[0]
+        return top == "minecraft:air" or top == style.floor
 
     def walls(x, z):
-        return (x in (1, W - 2)) + (z in (2, depth - 2))
+        return (x in (1, width - 2)) + (z in (2, depth - 2))
 
     runs = []
+
+    def extend(run, facings):
+        if len(run) == count + 1:
+            land = run[-1]
+            if land in cells and land not in holes:
+                runs.append((-sum(walls(*c) for c in run[:-1]), tuple(run[:-1]), tuple(facings), land))
+            return
+        for facing, dx, dz in STEP_SIDES:
+            nxt = (run[-1][0] + dx, run[-1][1] + dz)
+            if nxt in run:
+                continue
+            if len(run) < count and not (nxt in cells and free(*nxt)):
+                continue
+            extend(run + [nxt], facings + [facing])
+
     for c1 in cells:
-        for f1, dx1, dz1 in STEP_SIDES:
-            c2 = (c1[0] + dx1, c1[1] + dz1)
-            for f2, dx2, dz2 in STEP_SIDES:
-                c3 = (c2[0] + dx2, c2[1] + dz2)
-                for f3, dx3, dz3 in STEP_SIDES:
-                    land = (c3[0] + dx3, c3[1] + dz3)
-                    run = (c1, c2, c3)
-                    if len({c1, c2, c3, land}) < 4 or not all(c in cells and free(*c) for c in run):
-                        continue
-                    if land not in cells or land in holes:
-                        continue
-                    runs.append((-sum(walls(*c) for c in run), run, (f1, f2, f3), land))
+        if free(*c1):
+            extend([c1], [])
     runs.sort()
     return [run[1:] for run in runs]
 
 
-def add_storey(t, step, bed_color=HOME_BED_COLOR):
-    """The piece of a step of a home: the piece of the step before with a new storey on it (see STOREY). The roof of
-    the step before goes away, and a new roof of the same shape goes on the new storey. A chimney goes up through the
-    new storey to the new roof. A stair in the storey below goes up to the new floor, and HOME_BEDS beds stand on it.
-    The stair and the beds go to the first positions where a walk from the porch reaches each work block and each bed
-    (see unreachable)."""
+def add_storey(t, step, style):
+    """The piece of a step of a home: the piece of the step before with a new storey on it (see StoreyStyle). The
+    roof of the step before goes up on the new storey. The walls of the new storey are the walls of the ground floor,
+    with a wall block in the place of a door, an opening or a work block. A chimney goes up through the new storey to
+    the new roof. A stair in the storey below goes up to the new floor, and HOME_BEDS beds stand on it. The stair and
+    the beds go to the first positions where a walk from the porch reaches each work block and each bed (see
+    unreachable)."""
     sx, sy, sz = t.size
-    depth = shell_depth(t)
-    base = STOREY * (step - 1)
-    fill = wall_fill(t, depth)
-    rng = random.Random(step)
-    out = Template(sx, sy + STOREY, sz)
+    depth = shell_depth(t, style)
+    base = style.storey * (step - 1)
+    below = base - style.storey
+    roof_from = base if style.roof_at_floor else base + 1
+    out = Template(sx, sy + style.storey, sz)
+    # The chimneys: a column of blocks in the house through the floor of the new storey.
     chimneys = {}
+    for z in range(2, depth - 1):
+        for x in range(1, sx - 1):
+            here, above = state_at(t, x, base, z)[0], state_at(t, x, base + 1, z)[0]
+            if here != "minecraft:air" and above != "minecraft:air":
+                top = max(y for y in range(base, sy) if state_at(t, x, y, z)[0] != "minecraft:air")
+                chimneys[(x, z)] = (t.blocks[(x, base + 1, z)], top)
+    for pos, entry in t.blocks.items():
+        if pos[1] <= base or pos[2] >= depth:
+            out.blocks[pos] = entry
+    out.fixed = {pos for pos in t.fixed if pos[1] <= base or pos[2] >= depth}
+    out.fill(0, base + 1, 0, sx - 1, sy + style.storey - 1, depth - 1, "minecraft:air")
+    # The roof goes up with the new storey.
     for (x, y, z), entry in t.blocks.items():
-        name = entry[0][0]
-        if y <= base:
-            out.blocks[(x, y, z)] = entry
-        elif name != "minecraft:air" and name not in ROOF_BLOCKS and not is_gable(x, y, z, base, depth):
-            chimneys[(x, z)] = entry
-    out.fixed = {pos for pos in t.fixed if pos[1] <= base}
-    out.fill(0, base + 1, 0, W - 1, sy + STOREY - 1, depth - 1, "minecraft:air")
-    top = base + STOREY + 5
-    # The porch: a row of slabs over the porch, on the posts.
-    if step == 2:
-        for x in range(W):
-            out.set(x, base + 1, 0, "minecraft:dark_oak_slab", {"type": "bottom", "waterlogged": "false"})
+        if y >= roof_from and z < depth and (x, z) not in chimneys and entry[0][0] != "minecraft:air":
+            if z > 0 or y > style.wall_top:
+                out.blocks[(x, y + style.storey, z)] = entry
+    if step == 2 and style.porch:
+        for x in range(sx):
+            out.set(x, style.wall_top + 1, 0, *style.porch)
     # The floor of the new storey.
     for z in range(2, depth - 1):
-        for x in range(1, W - 1):
+        for x in range(1, sx - 1):
             if state_at(out, x, base, z)[0] == "minecraft:air":
-                out.set(x, base, z, "minecraft:spruce_planks")
-    # The walls of the new storey: logs at the corners and at the top, the block of the walls between them.
-    for x in range(W):
+                out.set(x, base, z, style.floor)
+    # The walls of the new storey: the walls of the ground floor. A door, an opening or a work block gets the block of
+    # its row, and the first row gets the blocks of the second row.
+    for x in range(sx):
         for z in range(1, depth):
-            if not (x in (0, W - 1) or z in (1, depth - 1)):
+            if not (x in (0, sx - 1) or z in (1, depth - 1)):
                 continue
-            corner = x in (0, W - 1) and z in (1, depth - 1)
-            for y in range(base + 1, base + STOREY + 1):
-                if corner or y == base + STOREY:
-                    out.set(x, y, z, "minecraft:stripped_spruce_log",
-                            LOG_Y if corner else {"axis": "x" if z in (1, depth - 1) else "z"})
-                else:
-                    out.set(x, y, z, fill)
-    for z in (3, 6):
-        if z < depth - 1:
-            out.set(0, base + 2, z, "minecraft:glass_pane")
-            out.set(W - 1, base + 2, z, "minecraft:glass_pane")
-    for x in (2, 6):
-        out.set(x, base + 2, depth - 1, "minecraft:glass_pane")
-        out.set(x, base + 2, 1, "minecraft:glass_pane")
-    # The roof on the new storey, as the roof of the house shell.
-    roof = base + STOREY + 1
-    for i in range(5):
-        y = roof + i
-        left, right = i, W - 1 - i
-        for z in range(depth):
-            if left < right:
-                out.set(left, y, z, "minecraft:dark_oak_stairs", stairs("east"))
-                out.set(right, y, z, "minecraft:dark_oak_stairs", stairs("west"))
-            elif left == right:
-                out.set(left, y, z, "minecraft:dark_oak_slab", {"type": "bottom", "waterlogged": "false"})
-        for x in range(left + 1, right):
-            for z in (1, depth - 1):
-                out.set(x, y, z, fill)
+            for y in range(1, style.wall_top + 1):
+                source = y + 1 if y == 1 and style.wall_top > 2 else y
+                name = state_at(t, x, y, z)[0]
+                corner = x in (0, sx - 1) and z in (1, depth - 1)
+                entry = t.blocks.get((x, y if corner else source, z))
+                if entry is None or not is_wall_block(entry[0][0]) or not is_wall_block(name):
+                    entry = row_block(t, x, source, z, sx, depth)
+                out.blocks[(x, base + y, z)] = entry
     # The chimneys go up through the new storey and the new roof.
-    for (x, z), entry in chimneys.items():
-        for y in range(base + 1, top + 1):
+    for (x, z), (entry, top) in chimneys.items():
+        for y in range(base + 1, top + style.storey + 1):
             out.blocks[(x, y, z)] = entry
     taken = set(chimneys)
-    # The stair from the storey below, then the beds and the lights of the new storey.
-    for (c1, c2, c3), facings, land in stair_runs(t, base, depth, taken):
+    for run, facings, land in stair_runs(t, style, base, depth, taken)[:STAIR_TRIALS]:
         trial = Template(*out.size)
         trial.blocks = dict(out.blocks)
-        floor = base - STOREY
-        for height, cell, facing in ((1, c1, facings[0]), (2, c2, facings[1]), (3, c3, facings[2])):
-            for y in range(floor + 1, floor + height):
-                trial.set(cell[0], y, cell[1], "minecraft:spruce_planks")
-            trial.set(cell[0], floor + height, cell[1], "minecraft:spruce_stairs", stairs(facing))
+        for height, (cell, facing) in enumerate(zip(run, facings), start=1):
+            for y in range(below + 1, below + height):
+                trial.set(cell[0], y, cell[1], style.support)
+            trial.set(cell[0], below + height, cell[1], style.stair, stairs(facing))
             trial.set(cell[0], base, cell[1], "minecraft:air")
+        # In a low storey, the head of a villager that steps onto the stair goes through the new floor: the cell
+        # behind the first step also gets a hole.
+        entry = {side: (dx, dz) for side, dx, dz in STEP_SIDES}[facings[0]]
+        behind = (run[0][0] - entry[0], run[0][1] - entry[1])
+        if below + 3 >= base:
+            if behind in taken or state_at(trial, behind[0], base, behind[1])[0] != style.floor:
+                continue
+            trial.set(behind[0], base, behind[1], "minecraft:air")
         if unreachable(trial):
             continue
-        beds = place_beds(trial, base, depth, taken | {c1, c2, c3, land}, bed_color)
-        if beds is None:
+        if place_beds(trial, base, depth, taken | set(run) | {land, behind}) is None:
             continue
         light_storey(trial, base, depth)
         trial.fixed = set(out.fixed)
         return trial
-    raise SystemExit(f"No stair and no beds for the step {step} of a home of depth {depth}")
+    raise ValueError(f"no stair and no beds for the step {step}")
 
 
-def place_beds(t, base, depth, taken, color):
-    """Places HOME_BEDS beds on the floor at the height base, at the first positions where the walk from the porch
+def row_block(t, x, y, z, width, depth):
+    """The most common wall block of the row of a wall at a layer: the block of a wall in the place of a door or an
+    opening."""
+    if z in (1, depth - 1) and x not in (0, width - 1):
+        row = [(i, y, z) for i in range(1, width - 1)]
+    else:
+        row = [(x, y, i) for i in range(2, depth - 1)]
+    counts = {}
+    for pos in row:
+        entry = t.blocks.get(pos)
+        if entry and is_wall_block(entry[0][0]) and "pane" not in entry[0][0] and "bars" not in entry[0][0]:
+            counts[entry] = counts.get(entry, 0) + 1
+    if not counts:
+        return (("minecraft:spruce_planks", ()), None)
+    return max(sorted(counts, key=repr), key=counts.get)
+
+
+def place_beds(t, base, depth, taken):
+    """Places HOME_BEDS beds on the floor at the layer base, at the first positions where the walk from the porch
     reaches each bed head and each work block. Returns the template, or None when no position fits."""
     y = base + 1
-    cells = [(x, z) for z in range(depth - 2, 1, -1) for x in range(1, W - 1)]
+    width = t.size[0]
+    cells = [(x, z) for z in range(depth - 2, 1, -1) for x in range(1, width - 1)]
     for _ in range(HOME_BEDS):
         placed = False
+        trials = 0
+        reached = reach(t)
         for foot in cells:
+            if trials >= BED_TRIALS:
+                break
             for facing, dx, dz in STEP_SIDES:
                 head = (foot[0] + dx, foot[1] + dz)
                 if head not in cells or foot in taken or head in taken:
                     continue
                 if any(state_at(t, c[0], y, c[1])[0] != "minecraft:air"
-                       or state_at(t, c[0], base, c[1])[0] == "minecraft:air" for c in (foot, head)):
+                       or state_at(t, c[0], y + 1, c[1])[0] != "minecraft:air"
+                       or walk(state_at(t, c[0], base, c[1])) != "on" for c in (foot, head)):
                     continue
-                t.set(foot[0], y, foot[1], f"minecraft:{color}_bed",
+                if not near(reached, head[0], y, head[1]):
+                    continue
+                t.set(foot[0], y, foot[1], f"minecraft:{HOME_BED_COLOR}_bed",
                       {"facing": facing, "part": "foot", "occupied": "false"})
-                t.set(head[0], y, head[1], f"minecraft:{color}_bed",
+                t.set(head[0], y, head[1], f"minecraft:{HOME_BED_COLOR}_bed",
                       {"facing": facing, "part": "head", "occupied": "false"})
+                trials += 1
                 if not unreachable(t):
                     taken |= {foot, head}
                     placed = True
@@ -2748,7 +2809,8 @@ def place_beds(t, base, depth, taken, color):
 def light_storey(t, base, depth):
     """A wall torch on each side wall of the new storey, at the height of the head: no monster spawns in it."""
     y = base + 2
-    for x, facing in ((1, "east"), (W - 2, "west")):
+    width = t.size[0]
+    for x, facing in ((1, "east"), (width - 2, "west")):
         for z in (depth // 2, depth // 2 - 1, depth // 2 + 1):
             if state_at(t, x, y, z)[0] == "minecraft:air" and state_at(t, x, y - 1, z)[0] == "minecraft:air":
                 t.set(x, y, z, *wall_torch(facing))
@@ -2756,27 +2818,40 @@ def light_storey(t, base, depth):
 
 
 @functools.cache
-def home_step(job, step):
-    """The piece of a step of the house-workshop of a job (see HOME_STEP_JOBS)."""
+def home_step(culture, job, step):
+    """The piece of a step of the house-workshop of a job in the style of a culture (None for the base style), or
+    None when the home of the job does not grow in place: no stair and no beds fit in it."""
+    jobs, style = STEP_STYLES[culture]
     if step == 1:
-        return JOBS[job]()
-    return add_storey(home_step(job, step - 1), step)
+        return jobs[job]()
+    before = home_step(culture, job, step - 1)
+    if before is None:
+        return None
+    try:
+        return add_storey(before, step, style)
+    except ValueError:
+        return None
 
 
-def check_home_step(job, step):
-    """Stops the script when the piece of a step of a home moves a block of the step 1 piece below the new storeys,
-    or has not the beds of its step."""
-    first, grown = home_step(job, 1), home_step(job, step)
-    for (x, y, z), entry in first.blocks.items():
-        if y > STOREY or entry[0][0] in ROOF_BLOCKS:
+def check_home_step(culture, job, step):
+    """Stops the script when the piece of a step of a home changes a block of the step before below the new storey,
+    or has not the beds of its step, or has a work block or a bed with no walk from the porch."""
+    style = STEP_STYLES[culture][1]
+    before, grown = home_step(culture, job, step - 1), home_step(culture, job, step)
+    base = style.storey * (step - 1)
+    name = f"{culture or 'base'} job_{job}_step{step}"
+    for pos, entry in before.blocks.items():
+        if pos[1] > base or entry[0][0] == "minecraft:air" or grown.blocks.get(pos) == entry:
             continue
-        if grown.blocks.get((x, y, z)) != entry and entry[0][0] != "minecraft:air":
-            raise SystemExit(f"The step {step} of job_{job} changes the block {entry[0][0]} at {(x, y, z)}")
+        # Only the stair changes blocks of the step before: its steps and the hole in the new floor.
+        now = grown.blocks.get(pos, (("minecraft:air", ()), None))[0][0]
+        if now not in (style.stair, style.support, "minecraft:air") or pos[1] <= base - style.storey:
+            raise SystemExit(f"{name} changes the block {entry[0][0]} at {pos}")
     if bed_count(grown) != STEP_BEDS[step]:
-        raise SystemExit(f"The step {step} of job_{job} has {bed_count(grown)} beds, not {STEP_BEDS[step]}")
+        raise SystemExit(f"{name} has {bed_count(grown)} beds, not {STEP_BEDS[step]}")
     problems = unreachable(grown)
     if problems:
-        raise SystemExit(f"The step {step} of job_{job}: no walk to {problems}")
+        raise SystemExit(f"{name}: no walk to {problems}")
 
 
 # ---------------------------------------------------------------- house-workshops of the Valeholm style
@@ -4166,18 +4241,33 @@ check_style_jobs()
 # The jobs whose house-workshop of the base style grows in place (see add_storey): the house-workshops in a house shell
 # of the full depth D. The house-workshops with a shed and a yard (see job_building) have no space for a stair: their
 # shed has 2 rows, and the yard holds the work of the job.
-HOME_STEP_JOBS = tuple(job for job in JOBS if shell_depth(home_step(job, 1)) == D)
+# The storeys of the styles of the cultures: the Norse long house has walls of 3 blocks and a steep roof above the
+# new floor, and the Sunreach house has a flat roof on the walls, which is the floor of the new storey.
+NORSE_STOREY = StoreyStyle(LONG_WALL_TOP, LONG_WALL_TOP, False, "minecraft:spruce_planks", "minecraft:spruce_stairs",
+                           "minecraft:spruce_planks", SLAB_ROW)
+SUN_STOREY = StoreyStyle(FLAT_WALL_TOP, FLAT_WALL_TOP + 1, True, "minecraft:smooth_sandstone",
+                         "minecraft:smooth_sandstone_stairs", "minecraft:smooth_sandstone", None)
+# The house-workshops and the storeys of each style: the base style (None) and the styles of the cultures.
+STEP_STYLES = {None: (JOBS, BASE_STOREY), "valeholm": (NORSE_JOBS, NORSE_STOREY),
+               "sunreach": (SUNREACH_JOBS, SUN_STOREY)}
 # The steps of the homes that grow in place, after the step 1 piece.
 HOME_STEPS = (2, 3)
-# The pieces of the steps of the homes of the base style: job_<id>_step<step>, in the pool jobs_step<step>.
-STEP_PIECES = {f"job_{job}_step{step}": functools.partial(home_step, job, step)
-               for step in HOME_STEPS for job in HOME_STEP_JOBS}
+# The jobs whose house-workshop grows in place in each style: the house-workshops with a stair and beds in each step
+# (see add_storey). A shed of 2 rows has no space for a stair.
+HOME_STEP_JOBS = {culture: tuple(job for job in jobs if all(home_step(culture, job, step) for step in HOME_STEPS))
+                  for culture, (jobs, _) in STEP_STYLES.items()}
+# The pieces of the steps of the homes of each style: job_<id>_step<step>, in the pool jobs_step<step>.
+STEP_PIECES = {culture: {f"job_{job}_step{step}": functools.partial(home_step, culture, job, step)
+                         for step in HOME_STEPS for job in jobs}
+               for culture, jobs in HOME_STEP_JOBS.items()}
 
 
 def check_home_steps():
-    for step in HOME_STEPS:
-        for job in HOME_STEP_JOBS:
-            check_home_step(job, step)
+    for culture, jobs in HOME_STEP_JOBS.items():
+        for step in HOME_STEPS:
+            for job in jobs:
+                check_home_step(culture, job, step)
+
 
 PIECES = {
     "plaza": plaza,
@@ -4801,8 +4891,7 @@ class Variant:
         pieces only (see CAVE_PIECES)."""
         if self.cave:
             return CAVE_PIECES
-        steps = {} if self.culture else STEP_PIECES
-        return {**PIECES, **steps, **(MARITIME if self.maritime else STYLES.get(self.culture, {}))}
+        return {**PIECES, **STEP_PIECES[self.culture], **(MARITIME if self.maritime else STYLES.get(self.culture, {}))}
 
     def path(self, name):
         """The path of a file of the village for this variant, with no namespace and no extension. The files of the
@@ -4907,8 +4996,8 @@ def pools(v):
         "homes": pool([(1, house("house_cottage"))]),
         "bank": pool([(1, house("bank"))]),
         "jobs": pool([(1, house(f"job_{job}")) for job in JOBS]),
-        **{f"jobs_step{step}": pool([(1, house(f"job_{job}_step{step}")) for job in HOME_STEP_JOBS
-                                     if not v.culture]) for step in HOME_STEPS},
+        **{f"jobs_step{step}": pool([(1, house(f"job_{job}_step{step}")) for job in HOME_STEP_JOBS[v.culture]])
+           for step in HOME_STEPS},
         "market": pool([(1, house("market"))]),
         "fields": pool([(1, house(f"field_{size}")) for size in FIELDS]),
         "mills": pool([(1, house("mill"))]),

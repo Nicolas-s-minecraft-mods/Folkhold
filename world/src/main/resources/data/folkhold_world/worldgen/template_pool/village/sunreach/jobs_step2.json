@@ -1,4 +1,311 @@
 {
   "fallback": "minecraft:empty",
-  "elements": []
+  "elements": [
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_farmer_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_gardener_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_gardener_jungle_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_forager_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_rancher_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_acacia_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_birch_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_cherry_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_dark_oak_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_jungle_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_mangrove_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_lumberjack_spruce_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_sawyer_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_sawyer_spruce_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_miner_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_digger_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_mason_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_smelter_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_gold_smelter_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_blacksmith_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_tinker_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_fletcher_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_carpenter_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_tanner_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_shepherd_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_weaver_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_dyer_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_papermaker_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_beekeeper_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_fisher_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_baker_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_pastry_cook_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/sunreach/job_butcher_step2",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/sunreach/foundation"
+      }
+    }
+  ]
 }
