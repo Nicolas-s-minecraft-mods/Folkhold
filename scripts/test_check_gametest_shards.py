@@ -63,3 +63,33 @@ class CheckTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+LOG = """[17:51:40] [Server thread/ERROR] [minecraft/LogTestReporter]: heartfinds failed at 1, -60, 2! Expected 1 home: 6
+[17:51:40] [Server thread/ERROR] [minecraft/LogTestReporter]: (optional) raid failed at 3, -60, 4. A village must hold
+[17:51:41] [Server thread/ERROR] [minecraft/LogTestReporter]: quest failed at 5, -60, 6! No delivery
+[17:51:42] [Server thread/ERROR] [minecraft/LogTestReporter]: heartfinds failed at 1, -60, 2! Expected 1 home: 6
+"""
+
+
+class FailuresTest(unittest.TestCase):
+    def test_required_failures_of_the_log(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = os.path.join(folder, "ci.log")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write(LOG)
+            self.assertEqual(["heartfinds failed at 1, -60, 2! Expected 1 home: 6", "quest failed at 5, -60, 6! No delivery"],
+                             check_gametest_shards.failures(log))
+
+    def test_failed_tests_of_the_shards(self):
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, 1, ALL, ["a t1", "a t2"])
+            write(folder, 2, ALL, ["b t3", "c t4"])
+            log = os.path.join(folder, "ci.log")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write(LOG)
+            output = os.path.join(folder, "folkhold-gametest-shard-2", "failed-tests.txt")
+            check_gametest_shards.main(["x", "failures", log, output, "2/2"])
+            self.assertEqual({2: ["heartfinds failed at 1, -60, 2! Expected 1 home: 6",
+                                  "quest failed at 5, -60, 6! No delivery"]},
+                             check_gametest_shards.failed_tests(folder, 2))
