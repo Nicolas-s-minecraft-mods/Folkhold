@@ -149,6 +149,8 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue QUEST_FAILURE_REPUTATION;
     public static final ModConfigSpec.DoubleValue QUEST_START_ITEMS_PENALTY;
     public static final ModConfigSpec.IntValue QUEST_MAX_START_ITEM_QUESTS;
+    public static final ModConfigSpec.DoubleValue QUEST_MAX_NEED_SHARE;
+    public static final ModConfigSpec.IntValue QUEST_HUNT_RADIUS;
     public static final ModConfigSpec.BooleanValue QUEST_ESCORT_OFFERS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_WAIT_TICKS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_DISTANCE;
@@ -858,6 +860,15 @@ public final class WorldConfig {
                 .comment("Maximum number of active quests with start items of a player.")
                 .translation(KEY_PREFIX + "questMaxStartItemQuests")
                 .defineInRange("maxStartItemQuests", 1, 0, 20);
+        QUEST_MAX_NEED_SHARE = builder
+                .comment("Maximum share of the offers of a village for one type of quest (rounded, 1 offer at least).",
+                        "Thus a village with several offers has several types of quests.")
+                .translation(KEY_PREFIX + "questMaxNeedShare")
+                .defineInRange("maxNeedShare", 0.6, 0.0, 1.0);
+        QUEST_HUNT_RADIUS = builder
+                .comment("Distance in blocks from the middle of the village where the monsters of a hunt count.")
+                .translation(KEY_PREFIX + "questHuntRadius")
+                .defineInRange("huntRadius", 96, 16, 512);
         QUEST_ESCORT_OFFERS = builder
                 .comment("Each new trade caravan offers an escort quest and waits at its village.")
                 .translation(KEY_PREFIX + "questEscortOffers")

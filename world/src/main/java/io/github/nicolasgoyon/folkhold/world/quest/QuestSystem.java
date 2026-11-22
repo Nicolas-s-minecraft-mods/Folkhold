@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -93,7 +94,7 @@ public final class QuestSystem {
         if (tick.cycle()) {
             for (Settlement settlement : settlements.registry().all()) {
                 if (settlement.isActive()) {
-                    offerDeliveries(server, settlement, now);
+                    offerQuests(server, settlement, now);
                 }
             }
         }
@@ -101,7 +102,79 @@ public final class QuestSystem {
     }
 
     /**
-     * Makes the delivery offers of a village, up to its number of offers.
+     * Makes the new offers of a village at a cycle: first a hunt (see {@link #offerHunt}), then the deliveries of the
+     * inputs of the jobs (see {@link #offerDeliveries}).
+     *
+     * @param server     the server
+     * @param settlement the village
+     * @param now        the game time
+     * @return the new quests
+     */
+    public static List<Quest> offerQuests(MinecraftServer server, Settlement settlement, long now) {
+        List<Quest> created = new ArrayList<>(offerHunt(server, settlement, now));
+        created.addAll(offerDeliveries(server, settlement, now));
+        return created;
+    }
+
+    /**
+     * The need of a quest: the need of its definition. A quest with no definition (an old save) has the need of its
+     * kind: the inputs of the jobs for a delivery.
+     *
+     * @param quest the quest
+     * @return the need
+     */
+    public static QuestNeed needOf(Quest quest) {
+        QuestDefinition definition = QuestDefinitions.all().get(quest.definitionId());
+        if (definition != null) {
+            return definition.need();
+        }
+        return switch (quest.kind()) {
+            case DELIVERY -> QuestNeed.JOB_INPUTS;
+            case ESCORT -> QuestNeed.CARAVAN;
+            case HUNT -> QuestNeed.MONSTERS;
+        };
+    }
+
+    /**
+     * The number of new offers of a need that a village can make: its free offers, and not more than the share of
+     * one need ({@link WorldConfig#QUEST_MAX_NEED_SHARE}, see {@link QuestGenerator#needCap}).
+     */
+    private static int wanted(List<Quest> offers, int level, QuestNeed need) {
+        int count = QuestGenerator.offerCount(level);
+        long ofNeed = offers.stream().filter(quest -> needOf(quest) == need).count();
+        int cap = QuestGenerator.needCap(count, WorldConfig.QUEST_MAX_NEED_SHARE.get());
+        return (int) Math.max(0, Math.min(count - offers.size(), cap - ofNeed));
+    }
+
+    /**
+     * Makes the hunt offer of a village: kill monsters near the village (see {@link Hunts}). A village offers one hunt
+     * at most, with the first matching definition of the need {@link QuestNeed#MONSTERS}.
+     *
+     * @param server     the server
+     * @param settlement the village
+     * @param now        the game time
+     * @return the new quest, or an empty list
+     */
+    public static List<Quest> offerHunt(MinecraftServer server, Settlement settlement, long now) {
+        Quests quests = QuestData.get(server).quests();
+        List<Quest> offers = quests.offers(settlement.id());
+        Optional<QuestDefinition> definition = QuestDefinitions.matching(QuestNeed.MONSTERS, settlement.level())
+                .stream().findFirst();
+        if (definition.isEmpty() || Math.min(1, wanted(offers, settlement.level(), QuestNeed.MONSTERS)) <= 0
+                || offers.stream().anyMatch(quest -> quest.kind() == QuestKind.HUNT)) {
+            return List.of();
+        }
+        RewardRule rule = QuestRewards.choose(definition.get());
+        Quest quest = QuestGenerator.hunt(settlement.id(), settlement.factionId(), settlement.level(), now,
+                QuestRewards.settings(definition.get(), rule), definition.get().id());
+        QuestRewards.apply(quest, definition.get(), rule, settlement);
+        quests.add(quest);
+        QuestData.get(server).setDirty();
+        return List.of(quest);
+    }
+
+    /**
+     * Makes the delivery offers of a village, up to its number of offers and the share of one need.
      *
      * @param server     the server
      * @param settlement the village
@@ -114,7 +187,7 @@ public final class QuestSystem {
         }
         Quests quests = QuestData.get(server).quests();
         List<Quest> offers = quests.offers(settlement.id());
-        int wanted = QuestGenerator.offerCount(settlement.level()) - offers.size();
+        int wanted = wanted(offers, settlement.level(), QuestNeed.JOB_INPUTS);
         if (wanted <= 0) {
             return List.of();
         }

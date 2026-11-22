@@ -1326,7 +1326,7 @@ Spread: an action toward faction A changes the reputation with the allies of A (
 | --- | --- | --- |
 | Delivery | Implemented | A village asks for an input of its active jobs with a low stock. The builders ask for the materials of their sites. Linked to the economy. The reward follows the local price. The villages do not ask for food. |
 | Escort | Implemented | A real caravan leaves. The player protects it to its destination (against monsters in phase 1). |
-| Hunt | Planned | Monsters attack a trade route. In phase 2, also bandits. |
+| Hunt | Implemented | The player kills monsters near the village (see "Hunt"). Monsters on a trade route and bandits (phase 2) are planned. |
 | Diplomacy | Planned | Carry a message to improve the relation between two factions. |
 | Defense | Planned (phase 2) | An army on the road threatens an allied village. |
 
@@ -1351,6 +1351,20 @@ A quest has a giver, a success condition that the mod checks on the state of the
 - **Reputation**: no quest below the neutral tier. Some quests are only for the friend tier and the ally tier.
 - **Quest log**: the mod keeps the quests of each player (UUID). A player has a maximum number of active quests.
 
+### Types of the board
+
+- The board offers 4 types of quests (needs): the deliveries of the inputs of the jobs (`job_inputs`), the deliveries of the materials of the sites (`site_materials`), the escorts of the caravans (`caravan`) and the hunts of the monsters (`monsters`).
+- At each cycle, a village makes its new offers: first a hunt, then the deliveries of the inputs of the jobs (`QuestSystem.offerQuests`). The sites and the caravans make their offers at their own events.
+- **Share of one type** (`QuestGenerator.needCap`, config `maxNeedShare`, start value 0.6): a village has at most `max(1, round(offers × 0.6))` offers of one type. Thus a village with 2 offers or more has 2 types or more. The offers of a village are 1, 2, 3, 4 and 5 at the levels 1, 5, 10, 15 and 20.
+- Sample (GameTest `QuestTypeGameTests.noQuestTypeHasMoreThanItsShare`, villages of the levels 1, 4, 8, 12, 16 and 20 with a baker, a smelter and no stock): 9 deliveries and 5 hunts in each round, thus 64 % of deliveries and 36 % of hunts. The design maximum of one type in this sample is 70 %. With no hunt and no share, all the offers of the cycles are deliveries of the inputs of the jobs.
+
+### Hunt
+
+- A village of the level 3 or more offers one hunt at most (file `monster_hunt.json`): kill `3 + level / 5` monsters near the village.
+- A monster counts when the player of an accepted hunt kills it in the Overworld, at 96 blocks or less from the middle of the village (config `huntRadius`). A monster is a living entity of the category `MONSTER` (`Hunts`).
+- At the count of the quest, the quest is complete. The reward is 1 emerald for each monster (`reward.factor`), the reputation of the config and 15 experience points.
+- The board and the quest HUD show the progress. The saved data keeps it (`Progress`).
+
 ### Escort
 
 - When a caravan is ready to leave, its village offers an escort quest. The caravan waits until a player accepts or until a delay ends. Then it leaves.
@@ -1369,8 +1383,8 @@ All distances, delays and rewards are configurable.
 ### Quest definitions
 
 - The quests come from quest definitions (`QuestDefinition`, `QuestDefinitions`): one JSON file for each definition in `data/<namespace>/folkhold/quest/<path>.json`, with the id `<namespace>:<path>`. The format is in [Quest definitions for pack makers](quest-definitions.md).
-- A definition has a kind (`delivery`, `escort`), a need (`job_inputs`, `site_materials`, `caravan`), a switch `enabled`, the levels of the villages with offers, optional values of the reward and of the offer, and the reward rules (experience, items, goods, special reward). A value of the reward or of the offer that the file does not give comes from the server config. With no reward rule, the reward is the emeralds and the reputation.
-- The mod has 3 definitions: `folkhold_world:job_input_delivery`, `folkhold_world:site_material_delivery` and `folkhold_world:caravan_escort`. They give no values of the offer, so the offers follow the config. They give the reward rules (see "Reward" above).
+- A definition has a kind (`delivery`, `escort`, `hunt`), a need (`job_inputs`, `site_materials`, `caravan`, `monsters`), a switch `enabled`, the levels of the villages with offers, optional values of the reward and of the offer, and the reward rules (experience, items, goods, special reward). A value of the reward or of the offer that the file does not give comes from the server config. With no reward rule, the reward is the emeralds and the reputation.
+- The mod has 4 definitions: `folkhold_world:job_input_delivery`, `folkhold_world:site_material_delivery`, `folkhold_world:caravan_escort` and `folkhold_world:monster_hunt`. They give no values of the offer, so the offers follow the config. They give the reward rules (see "Reward" above).
 - A data pack replaces a definition with a file of the same path, and adds a definition with a new path. `/reload` reads them again. A file with an error gives an error in the log and no definition. The other files load.
 - The need `job_inputs` uses all its matching definitions: one offer for each definition in turn, in the order of their ids, up to the number of offers of the village. The needs `site_materials` and `caravan` use the first matching definition. A need with no matching definition makes no offer.
 - Each new quest saves the id of its definition (`Definition` in `folkhold_quests.dat`) and the parts of its reward (`RewardExperience`, `RewardItems`), its start items (`StartItems`) and its failure loss (`FailureReputation`). A quest of a save with no failure loss has no loss. A quest of a save with no definition id loads with an empty id, and its rules do not change. A quest or a waiting reward of a save with no experience and no items loads with none.

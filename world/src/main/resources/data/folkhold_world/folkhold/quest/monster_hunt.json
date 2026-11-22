@@ -1,0 +1,6 @@
+{
+  "kind": "hunt",
+  "need": "monsters",
+  "conditions": {"min_level": 3},
+  "reward": {"factor": 1.0, "experience": 15}
+}

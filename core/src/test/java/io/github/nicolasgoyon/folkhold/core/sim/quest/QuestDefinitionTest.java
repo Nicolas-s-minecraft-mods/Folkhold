@@ -99,4 +99,29 @@ class QuestDefinitionTest {
         assertEquals("", QuestGenerator.deliveries("village", "faction", Map.of("minecraft:coal", 10),
                 item -> 1.0, List.of(), 1, 0, CONFIG).get(0).definitionId());
     }
+
+    /** The share of one need: 0.6 of the offers, rounded, 1 at least. */
+    @Test
+    void needCapIsTheShareOfTheOffers() {
+        assertEquals(List.of(1, 1, 2, 2, 3), List.of(1, 2, 3, 4, 5).stream()
+                .map(offers -> QuestGenerator.needCap(offers, 0.6)).toList());
+        assertEquals(1, QuestGenerator.needCap(4, 0.0));
+        assertEquals(4, QuestGenerator.needCap(4, 1.0));
+    }
+
+    /** A hunt asks for 3 monsters, plus 1 for each 5 levels, up to the maximum count. Its reward follows the count. */
+    @Test
+    void huntCountFollowsTheLevel() {
+        assertEquals(3, QuestGenerator.huntCount(3, CONFIG));
+        assertEquals(7, QuestGenerator.huntCount(20, CONFIG));
+        QuestGenerator.Settings small = new QuestGenerator.Settings(24_000, 48_000, 1.0, 10, 4, 96);
+        assertEquals(4, QuestGenerator.huntCount(20, small));
+        Quest hunt = QuestGenerator.hunt("village", "faction", 10, 100, small, "a:hunt");
+        assertEquals(QuestKind.HUNT, hunt.kind());
+        assertEquals(Quest.MONSTERS, hunt.target());
+        assertEquals(4, hunt.count());
+        assertEquals(4, hunt.rewardEmeralds());
+        assertEquals(100 + 24_000, hunt.offerEnd());
+        assertEquals("a:hunt", hunt.definitionId());
+    }
 }

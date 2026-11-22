@@ -11,12 +11,17 @@ import java.util.UUID;
  * <ul>
  *   <li>Delivery: the target is an item id and the count is the quantity.</li>
  *   <li>Escort: the target is the id of a caravan. The count is not used.</li>
+ *   <li>Hunt: the target is {@link #MONSTERS} and the count is the number of monsters to kill. The progress is the
+ *       number of monsters that the player killed.</li>
  * </ul>
  *
  * <p>The times are game times in ticks. A quest keeps the id of the definition that made it (see
  * {@link QuestDefinition}). A quest of a save with no definition id has an empty id.
  */
 public final class Quest {
+    /** The target of a hunt: the monsters near the village. */
+    public static final String MONSTERS = "monsters";
+
     private final String id;
     private final QuestKind kind;
     private String settlementId;
@@ -28,6 +33,7 @@ public final class Quest {
     private List<RewardItem> rewardItems = List.of();
     private List<RewardItem> startItems = List.of();
     private int failureReputation;
+    private int progress;
     private final int rewardReputation;
     private ReputationTier minTier;
     private final long offerEnd;
@@ -190,6 +196,20 @@ public final class Quest {
         if (!startItems.isEmpty() && !minTier.isAtLeast(QuestRisk.START_ITEMS_TIER)) {
             minTier = QuestRisk.START_ITEMS_TIER;
         }
+    }
+
+    /** The progress of a hunt: the monsters that the player killed. 0 for the other kinds. */
+    public int progress() {
+        return progress;
+    }
+
+    /**
+     * Sets the progress of a hunt.
+     *
+     * @param progress the monsters that the player killed, 0 or more
+     */
+    public void setProgress(int progress) {
+        this.progress = Math.max(0, progress);
     }
 
     public int rewardReputation() {

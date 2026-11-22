@@ -55,6 +55,51 @@ public final class QuestGenerator {
     }
 
     /**
+     * The maximum number of the offers of a village for one need: the share of its offers, rounded, and 1 at least.
+     * Thus the list of a village with several offers has several types of quests.
+     *
+     * @param offers the number of offers of the village (see {@link #offerCount})
+     * @param share  the maximum share of one need (0 to 1)
+     * @return the maximum number of offers of one need
+     */
+    public static int needCap(int offers, double share) {
+        return Math.max(1, (int) Math.round(offers * Math.max(0.0, Math.min(1.0, share))));
+    }
+
+    /**
+     * The number of monsters of a hunt of a village: 3, plus 1 for each 5 levels, and not more than the maximum
+     * count of the settings.
+     *
+     * @param level    the level of the village
+     * @param settings the settings
+     * @return the number of monsters
+     */
+    public static int huntCount(int level, Settings settings) {
+        return Math.min(settings.maxDeliveryCount(), 3 + Math.max(0, level) / 5);
+    }
+
+    /**
+     * Makes a hunt quest: kill monsters near the village. The emerald reward is the number of monsters × the bonus of
+     * the settings.
+     *
+     * @param settlementId the id of the village
+     * @param factionId    the id of its faction
+     * @param level        the level of the village
+     * @param now          the game time
+     * @param settings     the settings
+     * @param definitionId the id of the definition of the quest
+     * @return the quest
+     */
+    public static Quest hunt(String settlementId, String factionId, int level, long now, Settings settings,
+            String definitionId) {
+        int count = huntCount(level, settings);
+        long reward = Math.max(1, Math.round(count * settings.deliveryBonus()));
+        return new Quest(UUID.randomUUID().toString(), QuestKind.HUNT, settlementId, factionId, Quest.MONSTERS, count,
+                reward, settings.deliveryReputation(), minTier(reward, settings), now + settings.offerLifetime(),
+                settings.deliveryDuration(), definitionId);
+    }
+
+    /**
      * The lowest reputation tier for a reward.
      *
      * @param rewardEmeralds the emerald reward
