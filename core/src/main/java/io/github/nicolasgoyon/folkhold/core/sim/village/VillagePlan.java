@@ -4,10 +4,12 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle.Home;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -84,8 +86,13 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             }
 
             @Override
-            public long climb(Box box, int rise) {
-                return 0;
+            public boolean lineFits(Box box, int rise, Set<Long> covered) {
+                return true;
+            }
+
+            @Override
+            public void cover(Box box, Set<Long> covered) {
+                // No point of the ground.
             }
         };
 
@@ -118,14 +125,24 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         double cost(int x, int z);
 
         /**
-         * The climb of the line of the first wall around a box: the sum, on the points of the line, of the blocks
-         * more than a rise above the plaza. 0 for a line on good ground.
+         * True when the line of the first wall can go around a box: each point of the ground near the box, at the
+         * distance of the line of the free outline (see {@link WallOutline}), is a rise or less above the plaza. A
+         * point that the boxes before it cover does not count: the line is there already, or inside the plan.
          *
-         * @param box  the box around all the pieces and the plots
-         * @param rise the largest difference of the ground with the plaza (see {@link Rules#rise()})
-         * @return the climb, 0 or more
+         * @param box     the box of a piece, of a street end or of a plot
+         * @param rise    the largest difference of the ground with the plaza (see {@link Rules#rise()})
+         * @param covered the points that the boxes before it cover (see {@link #cover})
+         * @return true when the box adds no point of the line on high ground
          */
-        long climb(Box box, int rise);
+        boolean lineFits(Box box, int rise, Set<Long> covered);
+
+        /**
+         * Adds the points of the ground near a box to the covered points (see {@link #lineFits}).
+         *
+         * @param box     the box of a piece, of a street end or of a plot of the plan
+         * @param covered the covered points
+         */
+        void cover(Box box, Set<Long> covered);
     }
 
     /**
@@ -647,10 +664,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final Ground ground;
         /** The rules of the ground that the plan obeys. */
         private final Rules rules;
-        /** The box around the plaza, the pieces, the street ends and the plots: the first wall goes around it. */
-        private Box bounds;
-        /** The climb of the line of the first wall around {@link #bounds}, or -1 before its first calculation. */
-        private long climb = -1;
+        /** The points of the ground near the plaza, the pieces, the street ends and the plots (see {@link Ground}). */
+        private final Set<Long> covered = new HashSet<>();
         private final List<Piece> pieces = new ArrayList<>();
         private final List<Slot> slots = new ArrayList<>();
         private final List<Tail> tails = new ArrayList<>();
@@ -672,7 +687,9 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             this.stagger = stagger;
             this.ground = ground;
             this.rules = rules;
-            this.bounds = axis ? blocked.get(0) : null;
+            if (axis) {
+                ground.cover(blocked.get(0), covered);
+            }
         }
 
         /** True when the plan obeys rules of the ground: the region and the cost, at least. */
@@ -681,18 +698,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         }
 
         /**
-         * True when a box adds no climb to the line of the first wall around the bounds (see {@link Ground#climb}), or
-         * with no outline rule.
+         * True when the line of the first wall can go around a box on good ground (see {@link Ground#lineFits}), or
+         * with no outline rule. A band has no outline rule: the line of its ring is fixed.
          */
         private boolean outlineOk(Box box) {
-            if (!rules.outline() || bounds == null) {
-                return true;
-            }
-            if (climb < 0) {
-                climb = ground.climb(bounds, rules.rise());
-            }
-            Box union = bounds.union(box);
-            return union.equals(bounds) || ground.climb(union, rules.rise()) <= climb;
+            return !rules.outline() || !axis || ground.lineFits(box, rules.rise(), covered);
         }
 
         /** True for an open end of the first piece of an axis street: it does not obey the rules of the ground. */
@@ -968,14 +978,10 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             return free(area, rulesApply) && (!rulesApply || outlineOk(area));
         }
 
-        /** Adds a box to the bounds of the plan. */
+        /** Adds the points near a box of the plan of the core to the covered points of the ground. */
         private void grow(Box box) {
-            if (bounds != null) {
-                Box union = bounds.union(box);
-                if (!union.equals(bounds)) {
-                    bounds = union;
-                    climb = -1;
-                }
+            if (axis) {
+                ground.cover(box, covered);
             }
         }
 

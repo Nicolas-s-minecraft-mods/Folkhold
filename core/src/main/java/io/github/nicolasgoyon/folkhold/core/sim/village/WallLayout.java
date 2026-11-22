@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.core.sim.village;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
@@ -12,29 +13,37 @@ import java.util.function.ToIntFunction;
  * between them. The calculation uses the horizontal plane only (block X and Z).
  *
  * <ul>
- *   <li>The outline is the rectangle around the boxes of the pieces, with a margin. The 4 sides of the rectangle are
- *       the lines of the palisade. The rectangle has no open end, thus the palisade has no gap.</li>
- *   <li>The wall goes around the village clockwise: the north side, then the east, the south and the west sides.
- *       A position on a side is a distance from the start of the side, in this direction ({@code along}).</li>
- *   <li>A tower is at the start of each side: the corner tower. Its stair goes along the side, inside the wall, after
- *       the tower. The last {@link #TOWER} blocks of a side are under the corner tower of the next side.</li>
- *   <li>More towers go on a side when the distance between the middles of 2 towers is more than the maximum. The
- *       side gets the fewest towers, with distances that are as equal as possible.</li>
- *   <li>A gate goes on a side, at its given position. A tower and its stair stay away from the gate.</li>
- *   <li>The palisade segments are the parts of the sides that the towers and the gates do not cover.</li>
+ *   <li>The outline is a closed orthogonal polygon: its edges are the lines of the palisade, along X or along Z. The
+ *       outline of {@link #plan} is the rectangle around the boxes of the pieces, with a margin. The free outline of
+ *       {@link #free} is this rectangle with its high ground cut out (see {@link WallOutline}). The outline has no
+ *       open end, thus the palisade has no gap.</li>
+ *   <li>The wall goes around the village clockwise. The first edge faces north and starts at the north-west corner of
+ *       the top row of the outline. A rectangle has 4 edges: the north side, then the east, the south and the west
+ *       sides. The number of an edge of a rectangle is {@link Side#edgeOfRectangle()}. A position on an edge is a distance from
+ *       the start of the edge, in this direction ({@code along}).</li>
+ *   <li>An outer corner turns to the right, an inner corner turns to the left. Only an outer corner gets a corner
+ *       tower. The corner tower is at the start of an edge: its stair goes along the edge, inside the wall, after the
+ *       tower. The last {@link #TOWER} blocks of an edge are under the corner tower of the next edge. The last block of
+ *       an edge before an inner corner is the first block of the next edge.</li>
+ *   <li>More towers go on an edge when the distance between the middles of 2 towers is more than the maximum. The edge
+ *       gets the fewest towers, with distances that are as equal as possible. A tower and its stair stay in the
+ *       outline.</li>
+ *   <li>A gate goes on an edge, at its given position. A tower and its stair stay away from the gate.</li>
+ *   <li>The palisade segments are the parts of the edges that the towers and the gates do not cover.</li>
  * </ul>
  *
  * <p>The towers of a village come from its garrison (see {@link #withTowers}): a tower next to each gate, then the
- * corners that see the most terrain, then the towers along the longest free parts of the wall. A corner with no tower
- * is a plain corner of palisade: its block belongs to the side that starts there.
+ * outer corners that see the most terrain, then the towers along the longest free parts of the wall. A corner with no
+ * tower is a plain corner of palisade: its block belongs to the edge that starts there.
  *
- * <p>The ring is the line of the palisade as one closed list of blocks, clockwise from the north-west corner (see
+ * <p>The ring is the line of the palisade as one closed list of blocks, clockwise from the first corner (see
  * {@link #ringSize()}).
  *
  * <p>An outer ring of the wall is a new wall around an inner wall (see {@link #ring} and {@link #rings}). Its outline is
- * the inner outline, larger by the band on each side. Its gates are on the same X (north and south sides) or Z (east
- * and west sides) as the gates of the inner wall: the streets of the arms go straight from an inner gate to the gate of
- * the ring. Its towers obey the tower spacing of the inner wall. A tower and its stair go inside the ring, in the band.
+ * the box around the inner outline, larger by the band on each side. Its gates are on the same X (north and south
+ * sides) or Z (east and west sides) as the gates of the inner wall: the streets of the arms go straight from an inner
+ * gate to the gate of the ring. Its towers obey the tower spacing of the inner wall. A tower and its stair go inside the
+ * ring, in the band.
  */
 public final class WallLayout {
     /** The size of a tower, in blocks. */
@@ -47,6 +56,16 @@ public final class WallLayout {
     public static final int GATE_CLEARANCE = 2;
     /** The shortest side: a corner tower, its stair, a gate with its clearances, and the next corner tower. */
     public static final int MIN_SIDE = TOWER + STAIR + 2 * GATE_CLEARANCE + GATE + TOWER;
+    /**
+     * The free blocks between an inner corner and a gate clearance: the palisade of the next edge goes out of the
+     * village there.
+     */
+    public static final int INNER_CLEARANCE = TOWER;
+    /**
+     * The half width of the passage that the free outline keeps on each side of the axis of a gate: a gate on its axis,
+     * with its clearances, fits between 2 corner towers and their stairs.
+     */
+    public static final int GATE_PASSAGE = TOWER + STAIR + GATE_CLEARANCE + GATE / 2;
     /**
      * The smallest maximum distance between the middles of 2 towers. With this distance or more, the towers can obey
      * the maximum at all positions of the gate. A tower and its stair go before the gate, or the first tower after the
@@ -62,7 +81,7 @@ public final class WallLayout {
     /** The towers of a village for each archer of its garrison: an archer changes its post between the towers. */
     public static final int TOWERS_PER_ARCHER = 2;
 
-    /** A side of the outline, named for its direction from the middle of the village. */
+    /** A direction of an edge of the outline: the direction from the middle of the village to the outside. */
     public enum Side {
         NORTH(0, 1),
         EAST(-1, 0),
@@ -87,6 +106,16 @@ public final class WallLayout {
             return insideZ;
         }
 
+        /** The X step along an edge of this side, clockwise: the inside is on the right. */
+        public int alongX() {
+            return insideZ;
+        }
+
+        /** The Z step along an edge of this side, clockwise. */
+        public int alongZ() {
+            return -insideX;
+        }
+
         /** The previous side, clockwise: the side that ends at the start of this side. */
         public Side previous() {
             return switch (this) {
@@ -105,6 +134,26 @@ public final class WallLayout {
                 case SOUTH -> WEST;
                 case WEST -> NORTH;
             };
+        }
+
+        /** The number of the edge of this side on a rectangle: north 0, east 1, south 2, west 3. */
+        public int edgeOfRectangle() {
+            return switch (this) {
+                case NORTH -> 0;
+                case EAST -> 1;
+                case SOUTH -> 2;
+                case WEST -> 3;
+            };
+        }
+
+        /** The side of an edge that goes in a direction, clockwise. */
+        static Side ofStep(int stepX, int stepZ) {
+            for (Side side : values()) {
+                if (side.alongX() == stepX && side.alongZ() == stepZ) {
+                    return side;
+                }
+            }
+            throw new IllegalArgumentException("No side goes along " + stepX + " " + stepZ);
         }
     }
 
@@ -152,34 +201,55 @@ public final class WallLayout {
     }
 
     /**
-     * A tower: its side, and the distance of its first block from the start of the side.
+     * A tower: its edge, and the distance of its first block from the start of the edge.
      *
-     * @param side  the side of the stair of the tower
-     * @param along the distance from the start of the side to the first block of the tower
+     * @param side  the side of the edge of the stair of the tower
+     * @param along the distance from the start of the edge to the first block of the tower
+     * @param edge  the number of the edge
      */
-    public record Tower(Side side, int along) {
+    public record Tower(Side side, int along, int edge) {
+        /** A tower on a side of a rectangle: the number of its edge is {@link Side#edgeOfRectangle()}. */
+        public Tower(Side side, int along) {
+            this(side, along, side.edgeOfRectangle());
+        }
     }
 
     /**
-     * A gate: its side, and the position of its middle.
+     * A gate: its edge, and the position of its middle.
      *
-     * @param side   the side
+     * @param side   the side of the edge
      * @param center the block X (north and south sides) or the block Z (east and west sides) of the middle of the gate
+     * @param edge   the number of the edge
      */
-    public record Gate(Side side, int center) {
+    public record Gate(Side side, int center, int edge) {
+        /** A gate on a side of a rectangle: the number of its edge is {@link Side#edgeOfRectangle()}. */
+        public Gate(Side side, int center) {
+            this(side, center, side.edgeOfRectangle());
+        }
     }
 
     /**
-     * A part of a side with a palisade.
+     * A part of an edge with a palisade.
      *
-     * @param side the side
-     * @param from the distance from the start of the side to the first block of the part
-     * @param to   the distance from the start of the side to the last block of the part
+     * @param side the side of the edge
+     * @param from the distance from the start of the edge to the first block of the part
+     * @param to   the distance from the start of the edge to the last block of the part
+     * @param edge the number of the edge
      */
-    public record Segment(Side side, int from, int to) {
+    public record Segment(Side side, int from, int to, int edge) {
+        /** A part of a side of a rectangle: the number of its edge is {@link Side#edgeOfRectangle()}. */
+        public Segment(Side side, int from, int to) {
+            this(side, from, to, side.edgeOfRectangle());
+        }
+
         /** The number of blocks of the part. */
         public int length() {
             return to - from + 1;
+        }
+
+        /** A part of the same edge between other distances. */
+        public Segment between(int first, int last) {
+            return new Segment(side, first, last, edge);
         }
     }
 
@@ -193,32 +263,83 @@ public final class WallLayout {
     }
 
     /**
-     * A side of the outline as a line, for a cut into parts.
+     * An edge of the outline as a line, for a cut into parts.
      *
-     * @param side   the side
-     * @param start  the first block of the side: the corner at the start of the side
-     * @param end    the last block of the side: the corner at the start of the next side
-     * @param length the number of blocks of the side, the 2 corners included
-     * @param towers the distances from the start of the side to the first block of each tower of the side, in order.
-     *               The corner tower at the start of the side, if the side has one, is the first tower (distance 0).
-     *               The last {@link #TOWER} blocks of the side are under the corner tower of the next side, if the
-     *               next side has one: this tower is not in the list
-     * @param gate   the distance from the start of the side to the middle of the gate, if the side has a gate
+     * @param side   the side of the edge
+     * @param start  the first block of the edge: the corner at the start of the edge
+     * @param end    the last block of the edge: the corner at the start of the next edge
+     * @param length the number of blocks of the edge, the 2 corners included
+     * @param towers the distances from the start of the edge to the first block of each tower of the edge, in order.
+     *               The corner tower at the start of the edge, if the edge has one, is the first tower (distance 0).
+     *               The last {@link #TOWER} blocks of the edge are under the corner tower of the next edge, if the
+     *               next edge has one: this tower is not in the list
+     * @param gate   the distance from the start of the edge to the middle of the gate, if the edge has a gate
+     * @param edge   the number of the edge
      */
-    public record SideLine(Side side, Cell start, Cell end, int length, List<Integer> towers, OptionalInt gate) {
+    public record SideLine(Side side, Cell start, Cell end, int length, List<Integer> towers, OptionalInt gate,
+            int edge) {
         public SideLine {
             towers = List.copyOf(towers);
         }
     }
 
     private final Box outline;
+    private final List<Cell> corners;
+    private final Side[] sides;
+    private final int[] lengths;
+    private final int[] offsets;
+    private final boolean[] outer;
+    private final int ringSize;
     private final int towerSpacing;
     private final List<Tower> towers;
     private final List<Gate> gates;
     private final List<Segment> segments;
 
-    private WallLayout(Box outline, int towerSpacing, List<Tower> towers, List<Gate> gates, List<Segment> segments) {
-        this.outline = outline;
+    private WallLayout(List<Cell> corners, int towerSpacing, List<Tower> towers, List<Gate> gates,
+            List<Segment> segments) {
+        this.corners = List.copyOf(corners);
+        int count = corners.size();
+        this.sides = new Side[count];
+        this.lengths = new int[count];
+        this.offsets = new int[count];
+        this.outer = new boolean[count];
+        int minX = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        int offset = 0;
+        for (int i = 0; i < count; i++) {
+            Cell start = corners.get(i);
+            Cell end = corners.get((i + 1) % count);
+            int dx = Integer.signum(end.x() - start.x());
+            int dz = Integer.signum(end.z() - start.z());
+            if ((dx == 0) == (dz == 0)) {
+                throw new IllegalArgumentException("An edge of the outline must go along X or Z: " + start + " "
+                        + end);
+            }
+            sides[i] = Side.ofStep(dx, dz);
+            lengths[i] = Math.abs(end.x() - start.x()) + Math.abs(end.z() - start.z()) + 1;
+            offsets[i] = offset;
+            offset += lengths[i] - 1;
+            minX = Math.min(minX, start.x());
+            minZ = Math.min(minZ, start.z());
+            maxX = Math.max(maxX, start.x());
+            maxZ = Math.max(maxZ, start.z());
+        }
+        this.ringSize = offset;
+        int turns = 0;
+        for (int i = 0; i < count; i++) {
+            Side before = sides[Math.floorMod(i - 1, count)];
+            outer[i] = before.next() == sides[i];
+            if (!outer[i] && before.previous() != sides[i]) {
+                throw new IllegalArgumentException("2 edges of the outline go along the same axis at " + corners.get(i));
+            }
+            turns += outer[i] ? 1 : -1;
+        }
+        if (turns != 4 || sides[0] != Side.NORTH) {
+            throw new IllegalArgumentException("The outline must go clockwise from a north edge: " + corners);
+        }
+        this.outline = new Box(minX, minZ, maxX, maxZ);
         this.towerSpacing = towerSpacing;
         this.towers = List.copyOf(towers);
         this.gates = List.copyOf(gates);
@@ -226,7 +347,7 @@ public final class WallLayout {
     }
 
     /**
-     * Calculates the wall around the pieces of a village.
+     * Calculates the wall around the pieces of a village: the rectangle around them.
      *
      * <p>Each side of the outline is at least {@link #MIN_SIDE} blocks long. A gate that is too near a corner moves
      * away from it. A gate on a side that has a gate already does not count.
@@ -239,6 +360,50 @@ public final class WallLayout {
      * @return the wall
      */
     public static WallLayout plan(List<Box> pieces, int margin, int towerSpacing, List<Gate> gates) {
+        return build(rectangle(rectangle(pieces, margin, towerSpacing)), towerSpacing, rectangleGates(gates));
+    }
+
+    /**
+     * Calculates the wall around the pieces of a village on the ground of its site: the free outline (see
+     * {@link WallOutline}). The outline is the rectangle of {@link #plan}, with its high ground cut out. Each box of a
+     * piece with the margin stays in the outline, and the outline keeps a passage of {@link #GATE_PASSAGE} blocks on
+     * each side of the axis of each gate, from the middle of the village to the last box on the axis.
+     *
+     * <p>A gate goes on the first edge of its side that the axis of the gate meets from the middle of the village. On
+     * flat ground, the outline is the rectangle and the wall is the wall of {@link #plan}. When the free outline has no
+     * edge with the space for a gate, the wall is the wall of {@link #plan}.
+     *
+     * @param pieces       the boxes of the pieces, at least one
+     * @param margin       the free blocks between the pieces and the palisade, 0 or more
+     * @param towerSpacing the maximum distance between the middles of 2 towers of an edge
+     * @param gates        the gates: a side, and the block X (north and south) or Z (east and west) of the axis
+     * @param middle       the middle of the village: the axes of the gates start there
+     * @param ground       the ground of the site
+     * @return the wall
+     */
+    public static WallLayout free(List<Box> pieces, int margin, int towerSpacing, List<Gate> gates, Cell middle,
+            WallOutline.Ground ground) {
+        Box rect = rectangle(pieces, margin, towerSpacing);
+        List<Box> keep = new ArrayList<>();
+        for (Box piece : pieces) {
+            keep.add(piece.grow(margin + 1));
+        }
+        for (Gate gate : gates) {
+            passage(gate, middle, pieces, margin).ifPresent(keep::add);
+        }
+        Optional<List<Cell>> corners = WallOutline.corners(rect, keep, middle, ground);
+        if (corners.isPresent()) {
+            WallLayout shape = new WallLayout(corners.get(), towerSpacing, List.of(), List.of(), List.of());
+            Optional<List<Gate>> placed = shape.gatesOnAxes(gates, middle);
+            if (placed.isPresent()) {
+                return build(corners.get(), towerSpacing, placed.get());
+            }
+        }
+        return build(rectangle(rect), towerSpacing, rectangleGates(gates));
+    }
+
+    /** The rectangle around the boxes of the pieces, with the margin and the line, and with sides of a valid size. */
+    private static Box rectangle(List<Box> pieces, int margin, int towerSpacing) {
         if (pieces.isEmpty()) {
             throw new IllegalArgumentException("A village needs at least one piece");
         }
@@ -250,17 +415,89 @@ public final class WallLayout {
         for (Box piece : pieces) {
             box = box.union(piece);
         }
-        return build(minimumSize(box.grow(margin + 1)), towerSpacing, gates);
+        return minimumSize(box.grow(margin + 1));
+    }
+
+    /** The 4 corners of a rectangle, clockwise from the north-west corner. */
+    private static List<Cell> rectangle(Box box) {
+        return List.of(new Cell(box.minX(), box.minZ()), new Cell(box.maxX(), box.minZ()),
+                new Cell(box.maxX(), box.maxZ()), new Cell(box.minX(), box.maxZ()));
+    }
+
+    /** The gates of a rectangle: each gate goes on the edge of its side. */
+    private static List<Gate> rectangleGates(List<Gate> gates) {
+        return gates.stream().map(gate -> new Gate(gate.side(), gate.center())).toList();
     }
 
     /**
-     * Calculates an outer ring around a wall. The outline of the ring is the inner outline, larger by the band on each
-     * side, thus each side of the ring is 2 bands longer than the inner side. Each gate of the inner wall gives a gate
-     * on the same side of the ring, at the same position. The towers of the ring obey the tower spacing of the inner
-     * wall, with a corner tower at the start of each side. The calculation is deterministic.
+     * The passage of a gate: the box of {@link #GATE_PASSAGE} blocks on each side of its axis, from the middle of the
+     * village to the last box of a piece with the margin on the axis. Empty when no box is on the axis.
+     */
+    private static Optional<Box> passage(Gate gate, Cell middle, List<Box> pieces, int margin) {
+        Side side = gate.side();
+        boolean alongZ = side == Side.NORTH || side == Side.SOUTH;
+        int startX = alongZ ? gate.center() : middle.x();
+        int startZ = alongZ ? middle.z() : gate.center();
+        int outX = -side.insideX();
+        int outZ = -side.insideZ();
+        int reach = -1;
+        for (Box piece : pieces) {
+            Box box = piece.grow(margin + 1);
+            // The farthest block of the box on the axis, out from the middle.
+            if (alongZ ? box.minX() <= startX && startX <= box.maxX() : box.minZ() <= startZ && startZ <= box.maxZ()) {
+                int far = alongZ ? (outZ < 0 ? startZ - box.minZ() : box.maxZ() - startZ)
+                        : (outX < 0 ? startX - box.minX() : box.maxX() - startX);
+                reach = Math.max(reach, far);
+            }
+        }
+        if (reach < 0) {
+            return Optional.empty();
+        }
+        int endX = startX + outX * reach;
+        int endZ = startZ + outZ * reach;
+        int halfX = alongZ ? GATE_PASSAGE : 0;
+        int halfZ = alongZ ? 0 : GATE_PASSAGE;
+        return Optional.of(new Box(Math.min(startX, endX) - halfX, Math.min(startZ, endZ) - halfZ,
+                Math.max(startX, endX) + halfX, Math.max(startZ, endZ) + halfZ));
+    }
+
+    /**
+     * The gates on the edges that their axes meet first from the middle. Empty when an axis meets no edge of its side,
+     * or when the edge has no space for a gate.
+     */
+    private Optional<List<Gate>> gatesOnAxes(List<Gate> requests, Cell middle) {
+        List<Gate> placed = new ArrayList<>();
+        for (Gate request : requests) {
+            Side side = request.side();
+            boolean alongZ = side == Side.NORTH || side == Side.SOUTH;
+            int x = alongZ ? request.center() : middle.x();
+            int z = alongZ ? middle.z() : request.center();
+            if (!contains(x, z)) {
+                return Optional.empty();
+            }
+            while (!onLine(x, z)) {
+                x -= side.insideX();
+                z -= side.insideZ();
+            }
+            int edge = edgeAt(x, z);
+            if (edge < 0 || sides[edge] != side || lastGate(edge) < firstGate(edge)) {
+                return Optional.empty();
+            }
+            if (placed.stream().noneMatch(gate -> gate.edge() == edge)) {
+                placed.add(new Gate(side, request.center(), edge));
+            }
+        }
+        return Optional.of(placed);
+    }
+
+    /**
+     * Calculates an outer ring around a wall. The outline of the ring is the box around the inner outline, larger by
+     * the band on each side. Each gate of the inner wall gives a gate on the same side of the ring, at the same
+     * position. The towers of the ring obey the tower spacing of the inner wall, with a corner tower at the start of
+     * each side. The calculation is deterministic.
      *
      * @param inner the inner wall: the first wall of the village, or the last ring
-     * @param band  the distance from the line of the inner wall to the line of the ring, from {@link #MIN_BAND} to
+     * @param band  the distance from the box of the inner wall to the line of the ring, from {@link #MIN_BAND} to
      *              {@link #MAX_BAND}
      * @return the ring
      */
@@ -269,7 +506,7 @@ public final class WallLayout {
             throw new IllegalArgumentException("The band of a ring must be " + MIN_BAND + " to " + MAX_BAND
                     + " blocks: " + band);
         }
-        return build(inner.outline.grow(band), inner.towerSpacing, inner.gates);
+        return build(rectangle(inner.outline.grow(band)), inner.towerSpacing, rectangleGates(inner.gates));
     }
 
     /**
@@ -307,14 +544,14 @@ public final class WallLayout {
 
     /**
      * This wall with other gates: the same outline and the same tower spacing. The towers and the segments of the
-     * palisade obey the new gates. A side with no gate in the list has no gate. The cliff side of a wall uses it (see
+     * palisade obey the new gates. An edge with no gate in the list has no gate. The cliff side of a wall uses it (see
      * {@link CliffSide}).
      *
-     * @param gates the gates, at most one for each side counts
+     * @param gates the gates, at most one for each edge counts
      * @return the wall with these gates
      */
     public WallLayout withGates(List<Gate> gates) {
-        return build(outline, towerSpacing, gates);
+        return build(corners, towerSpacing, gates);
     }
 
     /**
@@ -337,46 +574,48 @@ public final class WallLayout {
      *
      * <ol>
      *   <li>A tower next to each gate, also when {@code count} is less than the number of gates. The tower goes after
-     *       the gate, with its stair away from the gate. When the side has no space there, the tower goes before the
-     *       gate: this tower can be the corner tower at the start of the side.</li>
-     *   <li>The towers of the corners, the corner with the largest view first. With the same view, the corner that is
-     *       farthest from the nearest tower of the wall comes first, then the corner that is farthest from all the
-     *       towers of the wall (the sum of the distances), then the corner of the first side.</li>
-     *   <li>The towers along the sides: each new tower goes at the position that is farthest from the towers of the
+     *       the gate, with its stair away from the gate. When the edge has no space there, the tower goes before the
+     *       gate: this tower can be the corner tower at the start of the edge.</li>
+     *   <li>The towers of the outer corners, the corner with the largest view first. With the same view, the corner
+     *       that is farthest from the nearest tower of the wall comes first, then the corner that is farthest from all
+     *       the towers of the wall (the sum of the distances), then the corner of the first edge.</li>
+     *   <li>The towers along the edges: each new tower goes at the position that is farthest from the towers of the
      *       wall, along the ring. Thus the towers go first on the longest free parts of the wall.</li>
      * </ol>
      *
-     * <p>A tower and its stair do not cover another tower, its stair, a gate or the clearance of a gate. The last
-     * {@link #TOWER} blocks of a side stay for the corner tower of the next side. A corner with no tower is a plain
-     * corner of palisade. The calculation uses the outline and the gates only, not the size of the wall, and it is
-     * deterministic.
+     * <p>A tower and its stair do not cover another tower, its stair, a gate or the clearance of a gate, and they stay
+     * in the outline. The last {@link #TOWER} blocks of an edge stay for the corner tower of the next edge. A corner
+     * with no tower is a plain corner of palisade. The calculation uses the outline and the gates only, not the size of
+     * the wall, and it is deterministic.
      *
      * @param count   the number of towers, the towers of the gates included
-     * @param view    the view of the corner at the start of a side: a larger value is a better corner
+     * @param view    the view of an outer corner, from its corner tower: a larger value is a better corner
      * @param allowed true for a position where a tower can stand. A tower is never at another position
      * @return the wall with these towers
      */
-    public WallLayout withTowers(int count, ToIntFunction<Side> view, Predicate<Tower> allowed) {
+    public WallLayout withTowers(int count, ToIntFunction<Tower> view, Predicate<Tower> allowed) {
         List<Tower> chosen = new ArrayList<>();
         for (Gate gate : gates) {
             int middle = along(gate);
             int after = middle + GATE / 2 + GATE_CLEARANCE + 1;
             int before = middle - GATE / 2 - GATE_CLEARANCE - TOWER - STAIR;
             for (int along : new int[] {after, before}) {
-                Tower tower = new Tower(gate.side(), along);
+                Tower tower = new Tower(gate.side(), along, gate.edge());
                 if (isFree(tower, chosen, allowed)) {
                     chosen.add(tower);
                     break;
                 }
             }
         }
-        List<Tower> corners = new ArrayList<>();
-        for (Side side : Side.values()) {
-            corners.add(new Tower(side, 0));
+        List<Tower> cornerTowers = new ArrayList<>();
+        for (int edge = 0; edge < sides.length; edge++) {
+            if (outer[edge]) {
+                cornerTowers.add(new Tower(sides[edge], 0, edge));
+            }
         }
         while (chosen.size() < count) {
             Tower best = null;
-            for (Tower corner : corners) {
+            for (Tower corner : cornerTowers) {
                 if (isFree(corner, chosen, allowed) && (best == null || compareCorners(corner, best, chosen, view) > 0)) {
                     best = corner;
                 }
@@ -389,9 +628,9 @@ public final class WallLayout {
         while (chosen.size() < count) {
             Tower best = null;
             int bestDistance = -1;
-            for (Side side : Side.values()) {
-                for (int along = 1; along < length(outline, side); along++) {
-                    Tower tower = new Tower(side, along);
+            for (int edge = 0; edge < sides.length; edge++) {
+                for (int along = 1; along < lengths[edge]; along++) {
+                    Tower tower = new Tower(sides[edge], along, edge);
                     if (isFree(tower, chosen, allowed)) {
                         int distance = distance(tower, chosen);
                         if (distance > bestDistance) {
@@ -406,30 +645,34 @@ public final class WallLayout {
             }
             chosen.add(best);
         }
-        chosen.sort(Comparator.comparing(Tower::side).thenComparingInt(Tower::along));
+        chosen.sort(Comparator.comparingInt(Tower::edge).thenComparingInt(Tower::along));
         List<Segment> segments = new ArrayList<>();
-        for (Side side : Side.values()) {
-            List<Integer> sideTowers = chosen.stream().filter(tower -> tower.side() == side).map(Tower::along)
+        for (int edge = 0; edge < sides.length; edge++) {
+            int number = edge;
+            List<Integer> edgeTowers = chosen.stream().filter(tower -> tower.edge() == number).map(Tower::along)
                     .toList();
-            OptionalInt gate = gates.stream().filter(candidate -> candidate.side() == side).mapToInt(this::along)
-                    .findFirst();
-            boolean nextCorner = chosen.contains(new Tower(side.next(), 0));
-            segments.addAll(segmentsOfSide(side, length(outline, side), sideTowers, gate.orElse(-1), nextCorner));
+            boolean nextCorner = chosen.contains(new Tower(sides[next(edge)], 0, next(edge)));
+            segments.addAll(segmentsOfEdge(edge, edgeTowers, gateAlong(edge), nextCorner));
         }
-        return new WallLayout(outline, towerSpacing, chosen, gates, segments);
+        return new WallLayout(corners, towerSpacing, chosen, gates, segments);
     }
 
-    /** True if the corner at the start of a side has a tower. */
+    /** True if the corner at the start of an edge has a tower. */
+    public boolean hasCornerTower(int edge) {
+        return towers.contains(new Tower(sides[edge], 0, edge));
+    }
+
+    /** True if the corner at the start of a side of a rectangle has a tower. */
     public boolean hasCornerTower(Side side) {
-        return towers.contains(new Tower(side, 0));
+        return hasCornerTower(rectangleEdge(side));
     }
 
     /**
      * Compares 2 corners for the next tower: the larger view first, then the larger distance to the nearest chosen
-     * tower, then the larger sum of the distances to the chosen towers, then the first side.
+     * tower, then the larger sum of the distances to the chosen towers, then the first edge.
      */
-    private int compareCorners(Tower corner, Tower other, List<Tower> chosen, ToIntFunction<Side> view) {
-        int byView = Integer.compare(view.applyAsInt(corner.side()), view.applyAsInt(other.side()));
+    private int compareCorners(Tower corner, Tower other, List<Tower> chosen, ToIntFunction<Tower> view) {
+        int byView = Integer.compare(view.applyAsInt(corner), view.applyAsInt(other));
         if (byView != 0) {
             return byView;
         }
@@ -441,18 +684,17 @@ public final class WallLayout {
         if (byTotal != 0) {
             return byTotal;
         }
-        return other.side().compareTo(corner.side());
+        return Integer.compare(other.edge(), corner.edge());
     }
 
     /**
-     * True if a tower can go on the wall: its position is allowed, the tower and its stair fit on its side away from
-     * the gate, and they do not cover a chosen tower or its stair.
+     * True if a tower can go on the wall: its position is allowed, the tower and its stair fit on its edge away from
+     * the gate and in the outline, and they do not cover a chosen tower or its stair.
      */
     private boolean isFree(Tower tower, List<Tower> chosen, Predicate<Tower> allowed) {
-        int length = length(outline, tower.side());
-        OptionalInt gate = gates.stream().filter(candidate -> candidate.side() == tower.side())
-                .mapToInt(this::along).findFirst();
-        if (tower.along() < 0 || !fits(tower.along(), length, gate.orElse(-1)) || !allowed.test(tower)) {
+        int edge = tower.edge();
+        if (tower.along() < 0 || !fits(edge, tower.along(), gateAlong(edge)) || !inOutline(tower)
+                || !allowed.test(tower)) {
             return false;
         }
         int[] range = footprint(tower);
@@ -466,12 +708,34 @@ public final class WallLayout {
     }
 
     /**
+     * True if the box of a tower and of its stair is in the outline: the blocks behind the line of its edge are inside
+     * the line. The line of the edge before a corner tower goes along its first blocks. A rectangle holds each tower.
+     */
+    private boolean inOutline(Tower tower) {
+        if (isRectangle()) {
+            return true;
+        }
+        Side side = tower.side();
+        Cell start = cell(tower.edge(), tower.along());
+        for (int along = tower.along() == 0 ? 1 : 0; along < TOWER + STAIR; along++) {
+            for (int depth = 1; depth < TOWER; depth++) {
+                int x = start.x() + side.alongX() * along + side.insideX() * depth;
+                int z = start.z() + side.alongZ() * along + side.insideZ() * depth;
+                if (!contains(x, z) || onLine(x, z)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
      * The ring indices that a tower and its stair cover, as a range from the first index, with its number of blocks. A
-     * corner tower also covers the last blocks of the side before it.
+     * corner tower also covers the last blocks of the edge before it.
      */
     private int[] footprint(Tower tower) {
         int back = tower.along() == 0 ? TOWER - 1 : 0;
-        return new int[] {ringIndex(tower.side(), tower.along()) - back, TOWER + STAIR + back};
+        return new int[] {ringIndex(tower.edge(), tower.along()) - back, TOWER + STAIR + back};
     }
 
     /** True if 2 ranges of the ring have a common index. */
@@ -497,36 +761,46 @@ public final class WallLayout {
      */
     private int distance(Tower tower, List<Tower> chosen) {
         int size = ringSize();
-        int middle = ringIndex(tower.side(), tower.along() + TOWER / 2);
+        int middle = ringIndex(tower.edge(), tower.along() + TOWER / 2);
         int nearest = size;
         for (Tower other : chosen) {
-            int delta = Math.floorMod(middle - ringIndex(other.side(), other.along() + TOWER / 2), size);
+            int delta = Math.floorMod(middle - ringIndex(other.edge(), other.along() + TOWER / 2), size);
             nearest = Math.min(nearest, Math.min(delta, size - delta));
         }
         return nearest;
     }
 
     /** Calculates the towers, the gates and the segments of the palisade on an outline. */
-    private static WallLayout build(Box outline, int towerSpacing, List<Gate> gates) {
+    private static WallLayout build(List<Cell> corners, int towerSpacing, List<Gate> gates) {
+        WallLayout shape = new WallLayout(corners, towerSpacing, List.of(), List.of(), List.of());
         List<Gate> placed = new ArrayList<>();
-        List<Tower> towers = new ArrayList<>();
-        List<Segment> segments = new ArrayList<>();
-        for (Side side : Side.values()) {
-            int length = length(outline, side);
-            int gate = -1;
+        for (int edge = 0; edge < shape.sides.length; edge++) {
             for (Gate candidate : gates) {
-                if (candidate.side() == side && gate < 0) {
-                    gate = Math.clamp(along(outline, side, candidate.center()), firstGate(), lastGate(length));
-                    placed.add(new Gate(side, position(outline, side, gate)));
+                if (candidate.edge() == edge && candidate.side() == shape.sides[edge]
+                        && placed.stream().noneMatch(gate -> gate.edge() == candidate.edge())
+                        && shape.firstGate(edge) <= shape.lastGate(edge)) {
+                    int along = Math.clamp(shape.along(edge, candidate.center()), shape.firstGate(edge),
+                            shape.lastGate(edge));
+                    placed.add(new Gate(shape.sides[edge], shape.position(edge, along), edge));
                 }
             }
-            List<Integer> sideTowers = towersOfSide(length, towerSpacing, gate);
-            for (int along : sideTowers) {
-                towers.add(new Tower(side, along));
-            }
-            segments.addAll(segmentsOfSide(side, length, sideTowers, gate, true));
         }
-        return new WallLayout(outline, towerSpacing, towers, placed, segments);
+        WallLayout gated = new WallLayout(corners, towerSpacing, List.of(), placed, List.of());
+        List<Tower> towers = new ArrayList<>();
+        List<List<Integer>> alongs = new ArrayList<>();
+        for (int edge = 0; edge < gated.sides.length; edge++) {
+            List<Integer> edgeTowers = gated.towersOfEdge(edge, towerSpacing);
+            alongs.add(edgeTowers);
+            for (int along : edgeTowers) {
+                towers.add(new Tower(gated.sides[edge], along, edge));
+            }
+        }
+        List<Segment> segments = new ArrayList<>();
+        for (int edge = 0; edge < gated.sides.length; edge++) {
+            boolean nextCorner = alongs.get(gated.next(edge)).contains(0);
+            segments.addAll(gated.segmentsOfEdge(edge, alongs.get(edge), gated.gateAlong(edge), nextCorner));
+        }
+        return new WallLayout(corners, towerSpacing, towers, placed, segments);
     }
 
     /** The outline, with at least {@link #MIN_SIDE} blocks on each side. A short side grows on its two ends. */
@@ -537,14 +811,26 @@ public final class WallLayout {
                 box.maxZ() + growZ - growZ / 2);
     }
 
-    /** The first distance of the middle of a gate: after the corner tower, its stair and the clearance. */
-    static int firstGate() {
-        return TOWER + STAIR + GATE_CLEARANCE + GATE / 2;
+    /**
+     * The first distance of the middle of a gate on an edge: after the corner tower and its stair at an outer corner,
+     * or after {@link #INNER_CLEARANCE} blocks at an inner corner, and after the clearance.
+     *
+     * @param edge the number of the edge
+     * @return the distance from the start of the edge
+     */
+    public int firstGate(int edge) {
+        return (outer[edge] ? TOWER + STAIR : INNER_CLEARANCE) + GATE_CLEARANCE + GATE / 2;
     }
 
-    /** The last distance of the middle of a gate: before the clearance and the next corner tower. */
-    static int lastGate(int length) {
-        return length - 1 - TOWER - GATE_CLEARANCE - GATE / 2;
+    /**
+     * The last distance of the middle of a gate on an edge: before the clearance, and before the next corner tower at
+     * an outer corner or {@link #INNER_CLEARANCE} blocks at an inner corner.
+     *
+     * @param edge the number of the edge
+     * @return the distance from the start of the edge
+     */
+    public int lastGate(int edge) {
+        return lengths[edge] - 1 - (outer[next(edge)] ? TOWER : INNER_CLEARANCE) - GATE_CLEARANCE - GATE / 2;
     }
 
     /**
@@ -555,6 +841,10 @@ public final class WallLayout {
     private record Cost(int count, int largest, long squares) implements Comparable<Cost> {
         Cost after(int distance) {
             return new Cost(count + 1, Math.max(largest, distance), squares + (long) distance * distance);
+        }
+
+        static Cost end(int distance) {
+            return new Cost(0, distance, (long) distance * distance);
         }
 
         @Override
@@ -570,20 +860,25 @@ public final class WallLayout {
     }
 
     /**
-     * The positions of the towers of a side: the corner tower, then the fewest towers that obey the maximum distance
-     * between their middles. The distances are as equal as possible. The calculation starts at the end of the side:
-     * for each position, it finds the best towers after a tower at this position.
+     * The positions of the towers of an edge: the corner tower at an outer corner, then the fewest towers that obey the
+     * maximum distance between their middles. The distances are as equal as possible. The distance to the next edge
+     * goes to the middle of its corner tower at an outer corner, or to the inner corner. An edge after an inner corner
+     * counts its distances from the inner corner. The calculation starts at the end of the edge: for each position, it
+     * finds the best towers after a tower at this position.
      */
-    private static List<Integer> towersOfSide(int length, int spacing, int gate) {
-        int nextCorner = length - 1 - TOWER / 2;
+    private List<Integer> towersOfEdge(int edge, int spacing) {
+        int length = lengths[edge];
+        int gate = gateAlong(edge);
+        int end = outer[next(edge)] ? length - 1 - TOWER / 2 : length - 1;
         Cost[] best = new Cost[length];
         int[] next = new int[length];
         for (int along = length - 1; along >= 0; along--) {
-            if (along > 0 && !fits(along, length, gate)) {
+            if (along == 0 ? !outer[edge] : !fits(edge, along, gate) || !inOutline(new Tower(sides[edge], along,
+                    edge))) {
                 continue;
             }
-            int end = nextCorner - (along + TOWER / 2);
-            Cost cost = end <= spacing ? new Cost(0, end, (long) end * end) : null;
+            int rest = end - (along + TOWER / 2);
+            Cost cost = rest <= spacing ? Cost.end(rest) : null;
             next[along] = -1;
             for (int after = along + TOWER + STAIR; after <= along + spacing && after < length; after++) {
                 if (best[after] != null) {
@@ -597,19 +892,40 @@ public final class WallLayout {
             best[along] = cost;
         }
         List<Integer> towers = new ArrayList<>();
-        towers.add(0);
-        if (best[0] != null) {
-            for (int along = next[0]; along >= 0; along = next[along]) {
-                towers.add(along);
+        int first;
+        if (outer[edge]) {
+            towers.add(0);
+            first = best[0] == null ? -1 : next[0];
+        } else {
+            // The inner corner counts as a tower with its middle on the corner.
+            Cost cost = end <= spacing ? Cost.end(end) : null;
+            first = -1;
+            for (int after = 1; after + TOWER / 2 <= spacing && after < length; after++) {
+                if (best[after] != null) {
+                    Cost candidate = best[after].after(after + TOWER / 2);
+                    if (cost == null || candidate.compareTo(cost) < 0) {
+                        cost = candidate;
+                        first = after;
+                    }
+                }
             }
+        }
+        for (int along = first; along >= 0; along = next[along]) {
+            towers.add(along);
         }
         return towers;
     }
 
-    /** True if a tower and its stair fit on a side, before the next corner tower and away from the gate. */
-    private static boolean fits(int along, int length, int gate) {
+    /**
+     * True if a tower and its stair fit on an edge, before the next corner tower or the inner corner, and away from
+     * the gate. A tower at the start of an edge is the corner tower of an outer corner.
+     */
+    private boolean fits(int edge, int along, int gate) {
+        if (along == 0 && !outer[edge]) {
+            return false;
+        }
         int end = along + TOWER + STAIR - 1;
-        if (end > length - 1 - TOWER) {
+        if (end > lengths[edge] - 1 - (outer[next(edge)] ? TOWER : 1)) {
             return false;
         }
         if (gate < 0) {
@@ -621,12 +937,12 @@ public final class WallLayout {
     }
 
     /**
-     * The parts of a side that the towers and the gate do not cover, as segments. The last block of the side is the
-     * corner of the next side: the corner tower of the next side covers the last {@link #TOWER} blocks, and with no
-     * corner tower, the palisade of the next side starts on the corner.
+     * The parts of an edge that the towers and the gate do not cover, as segments. The last block of the edge is the
+     * corner of the next edge: the corner tower of the next edge covers the last {@link #TOWER} blocks, and with no
+     * corner tower, the palisade of the next edge starts on the corner.
      */
-    private static List<Segment> segmentsOfSide(Side side, int length, List<Integer> towers, int gate,
-            boolean nextCorner) {
+    private List<Segment> segmentsOfEdge(int edge, List<Integer> towers, int gate, boolean nextCorner) {
+        int length = lengths[edge];
         boolean[] covered = new boolean[length];
         for (int along = nextCorner ? length - TOWER : length - 1; along < length; along++) {
             covered[along] = true;
@@ -648,14 +964,19 @@ public final class WallLayout {
             if (free && start < 0) {
                 start = along;
             } else if (!free && start >= 0) {
-                segments.add(new Segment(side, start, along - 1));
+                segments.add(new Segment(sides[edge], start, along - 1, edge));
                 start = -1;
             }
         }
         return segments;
     }
 
-    /** The number of blocks of a side of an outline, the 2 corners included. */
+    /** The distance from the start of an edge to the middle of its gate, or -1 for an edge with no gate. */
+    private int gateAlong(int edge) {
+        return gates.stream().filter(gate -> gate.edge() == edge).mapToInt(this::along).findFirst().orElse(-1);
+    }
+
+    /** The number of blocks of a side of a rectangle, the 2 corners included. */
     public static int length(Box outline, Side side) {
         return switch (side) {
             case NORTH, SOUTH -> outline.width();
@@ -663,7 +984,7 @@ public final class WallLayout {
         };
     }
 
-    /** The distance from the start of a side to a block X (north and south) or Z (east and west). */
+    /** The distance from the start of a side of a rectangle to a block X (north and south) or Z (east and west). */
     static int along(Box outline, Side side, int position) {
         return switch (side) {
             case NORTH -> position - outline.minX();
@@ -673,7 +994,7 @@ public final class WallLayout {
         };
     }
 
-    /** The block X (north and south) or Z (east and west) at a distance from the start of a side. */
+    /** The block X (north and south) or Z (east and west) at a distance from the start of a side of a rectangle. */
     public static int position(Box outline, Side side, int along) {
         return switch (side) {
             case NORTH -> outline.minX() + along;
@@ -683,7 +1004,7 @@ public final class WallLayout {
         };
     }
 
-    /** The block of the line of a side at a distance from the start of the side. */
+    /** The block of the line of a side of a rectangle at a distance from the start of the side. */
     public static Cell cell(Box outline, Side side, int along) {
         int position = position(outline, side, along);
         return switch (side) {
@@ -694,113 +1015,219 @@ public final class WallLayout {
         };
     }
 
-    /** The outline: its sides are the lines of the palisade. */
+    /** The box around the outline. For a rectangle, its sides are the lines of the palisade. */
     public Box outline() {
         return outline;
     }
 
-    /** The maximum distance between the middles of 2 towers of a side. */
+    /** True when the outline is a rectangle: 4 edges. */
+    public boolean isRectangle() {
+        return corners.size() == 4;
+    }
+
+    /** The corners of the outline, clockwise from the start of the first edge. */
+    public List<Cell> corners() {
+        return corners;
+    }
+
+    /** The number of edges of the outline. */
+    public int edges() {
+        return sides.length;
+    }
+
+    /** The side of an edge. */
+    public Side side(int edge) {
+        return sides[edge];
+    }
+
+    /** The number of blocks of an edge, the 2 corners included. */
+    public int length(int edge) {
+        return lengths[edge];
+    }
+
+    /** True when the corner at the start of an edge is an outer corner: the line turns to the right there. */
+    public boolean outerCorner(int edge) {
+        return outer[edge];
+    }
+
+    /** The number of the edge after an edge, clockwise. */
+    public int next(int edge) {
+        return (edge + 1) % sides.length;
+    }
+
+    /** The number of the edge before an edge, clockwise. */
+    public int previous(int edge) {
+        return Math.floorMod(edge - 1, sides.length);
+    }
+
+    /** The maximum distance between the middles of 2 towers of an edge. */
     public int towerSpacing() {
         return towerSpacing;
     }
 
     /**
-     * The 4 sides of the outline as lines, clockwise from the north side. Each line has its towers and its gate. The
-     * end of a line is the start of the next line.
+     * The edges of the outline as lines, clockwise from the first edge. Each line has its towers and its gate. The end
+     * of a line is the start of the next line.
      */
     public List<SideLine> sides() {
         List<SideLine> lines = new ArrayList<>();
-        for (Side side : Side.values()) {
-            int length = length(outline, side);
-            List<Integer> alongs = towers.stream().filter(tower -> tower.side() == side).map(Tower::along).toList();
-            OptionalInt gate = gates.stream().filter(candidate -> candidate.side() == side).mapToInt(this::along)
-                    .findFirst();
-            lines.add(new SideLine(side, cell(side, 0), cell(side, length - 1), length, alongs, gate));
+        for (int edge = 0; edge < sides.length; edge++) {
+            int number = edge;
+            List<Integer> alongs = towers.stream().filter(tower -> tower.edge() == number).map(Tower::along)
+                    .toList();
+            int gate = gateAlong(edge);
+            lines.add(new SideLine(sides[edge], cell(edge, 0), cell(edge, lengths[edge] - 1), lengths[edge], alongs,
+                    gate < 0 ? OptionalInt.empty() : OptionalInt.of(gate), edge));
         }
         return List.copyOf(lines);
     }
 
-    /** The towers, side after side, in the order of the sides. */
+    /** The towers, edge after edge, in the order of the edges. */
     public List<Tower> towers() {
         return towers;
     }
 
-    /** The gates, in the order of the sides. */
+    /** The gates, in the order of the edges. */
     public List<Gate> gates() {
         return gates;
     }
 
-    /** The palisade segments, side after side. */
+    /** The palisade segments, edge after edge. */
     public List<Segment> segments() {
         return segments;
     }
 
-    /** The block of the line of a side at a distance from the start of the side. */
-    public Cell cell(Side side, int along) {
-        return cell(outline, side, along);
+    /** The block of the line of an edge at a distance from the start of the edge. */
+    public Cell cell(int edge, int along) {
+        Cell start = corners.get(edge);
+        Side side = sides[edge];
+        return new Cell(start.x() + side.alongX() * along, start.z() + side.alongZ() * along);
     }
 
-    /** The distance from the start of the side to the middle of a gate. */
+    /** The block of the line of a side of a rectangle at a distance from the start of the side. */
+    public Cell cell(Side side, int along) {
+        return cell(rectangleEdge(side), along);
+    }
+
+    /** The block X (north and south sides) or Z (east and west sides) at a distance from the start of an edge. */
+    public int position(int edge, int along) {
+        Cell cell = cell(edge, along);
+        return sides[edge] == Side.NORTH || sides[edge] == Side.SOUTH ? cell.x() : cell.z();
+    }
+
+    /** The distance from the start of an edge to a block X (north and south sides) or Z (east and west sides). */
+    public int along(int edge, int position) {
+        Cell start = corners.get(edge);
+        return switch (sides[edge]) {
+            case NORTH -> position - start.x();
+            case EAST -> position - start.z();
+            case SOUTH -> start.x() - position;
+            case WEST -> start.z() - position;
+        };
+    }
+
+    /** The distance from the start of the edge to the middle of a gate. */
     public int along(Gate gate) {
-        return along(outline, gate.side(), gate.center());
+        return along(gate.edge(), gate.center());
+    }
+
+    /** The number of the edge of a side of a rectangle (see {@link Side#edgeOfRectangle()}). */
+    private int rectangleEdge(Side side) {
+        if (!isRectangle()) {
+            throw new IllegalStateException("The outline is not a rectangle: " + corners);
+        }
+        return side.edgeOfRectangle();
     }
 
     /**
-     * The number of blocks of the ring: the line of the palisade, each block once. The ring starts at the north-west
-     * corner and goes clockwise.
+     * The number of blocks of the ring: the line of the palisade, each block once. The ring starts at the first corner
+     * and goes clockwise.
      */
     public int ringSize() {
-        return 2 * (outline.width() - 1) + 2 * (outline.depth() - 1);
+        return ringSize;
     }
 
     /**
-     * The index in the ring of a block of a side. The last block of a side is the first block of the next side.
+     * The index in the ring of a block of an edge. The last block of an edge is the first block of the next edge.
      *
-     * @param side  the side
-     * @param along the distance from the start of the side, from 0 to the length of the side - 1
+     * @param edge  the number of the edge
+     * @param along the distance from the start of the edge, from 0 to the length of the edge - 1
      * @return the index, from 0 to {@link #ringSize()} - 1
      */
+    public int ringIndex(int edge, int along) {
+        return Math.floorMod(offsets[edge] + along, ringSize);
+    }
+
+    /** The index in the ring of a block of a side of a rectangle (see {@link #ringIndex(int, int)}). */
     public int ringIndex(Side side, int along) {
-        int width = outline.width() - 1;
-        int depth = outline.depth() - 1;
-        int offset = switch (side) {
-            case NORTH -> 0;
-            case EAST -> width;
-            case SOUTH -> width + depth;
-            case WEST -> 2 * width + depth;
-        };
-        return Math.floorMod(offset + along, ringSize());
+        return ringIndex(rectangleEdge(side), along);
     }
 
     /** The block of the ring at an index (see {@link #ringIndex}). */
     public Cell ringCell(int index) {
-        int width = outline.width() - 1;
-        int depth = outline.depth() - 1;
-        int i = Math.floorMod(index, ringSize());
-        if (i < width) {
-            return cell(Side.NORTH, i);
-        }
-        if (i < width + depth) {
-            return cell(Side.EAST, i - width);
-        }
-        if (i < 2 * width + depth) {
-            return cell(Side.SOUTH, i - width - depth);
-        }
-        return cell(Side.WEST, i - 2 * width - depth);
+        int edge = ringEdge(index);
+        return cell(edge, Math.floorMod(index, ringSize) - offsets[edge]);
     }
 
-    /** The side of the ring at an index. A corner belongs to the side that starts there. */
+    /** The edge of the ring at an index. A corner belongs to the edge that starts there. */
+    public int ringEdge(int index) {
+        int i = Math.floorMod(index, ringSize);
+        int low = 0;
+        int high = offsets.length - 1;
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            if (offsets[middle] <= i) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return low;
+    }
+
+    /** The side of the edge of the ring at an index. A corner belongs to the edge that starts there. */
     public Side ringSide(int index) {
-        int width = outline.width() - 1;
-        int depth = outline.depth() - 1;
-        int i = Math.floorMod(index, ringSize());
-        if (i < width) {
-            return Side.NORTH;
+        return sides[ringEdge(index)];
+    }
+
+    /** True if the block (x, z) is on the line of the palisade. */
+    public boolean onLine(int x, int z) {
+        return edgeAt(x, z) >= 0;
+    }
+
+    /** The number of the edge of a block of the line, or -1 for a block that is not on the line. */
+    private int edgeAt(int x, int z) {
+        for (int edge = 0; edge < sides.length; edge++) {
+            Cell start = corners.get(edge);
+            Cell end = corners.get(next(edge));
+            if (x >= Math.min(start.x(), end.x()) && x <= Math.max(start.x(), end.x())
+                    && z >= Math.min(start.z(), end.z()) && z <= Math.max(start.z(), end.z())) {
+                // A corner belongs to the edge that starts there.
+                return x == end.x() && z == end.z() ? next(edge) : edge;
+            }
         }
-        if (i < width + depth) {
-            return Side.EAST;
+        return -1;
+    }
+
+    /** True if the block (x, z) is on the line of the palisade or inside it. */
+    public boolean contains(int x, int z) {
+        if (!outline.contains(x, z)) {
+            return false;
         }
-        return i < 2 * width + depth ? Side.SOUTH : Side.WEST;
+        if (isRectangle() || onLine(x, z)) {
+            return true;
+        }
+        // A ray to the east crosses the vertical edges: an odd number of crossings is inside.
+        boolean inside = false;
+        for (int edge = 0; edge < sides.length; edge++) {
+            Cell start = corners.get(edge);
+            Cell end = corners.get(next(edge));
+            if (start.x() == end.x() && start.x() > x && z >= Math.min(start.z(), end.z())
+                    && z < Math.max(start.z(), end.z())) {
+                inside = !inside;
+            }
+        }
+        return inside;
     }
 
     /**
@@ -810,8 +1237,8 @@ public final class WallLayout {
      * @return the box of its {@link #TOWER} x {@link #TOWER} blocks
      */
     public Box towerBox(Tower tower) {
-        Cell start = cell(tower.side(), tower.along());
-        Cell end = cell(tower.side(), tower.along() + TOWER - 1);
+        Cell start = cell(tower.edge(), tower.along());
+        Cell end = cell(tower.edge(), tower.along() + TOWER - 1);
         Side side = tower.side();
         int insideX = start.x() + side.insideX() * (TOWER - 1);
         int insideZ = start.z() + side.insideZ() * (TOWER - 1);
@@ -836,7 +1263,7 @@ public final class WallLayout {
         int middle = along(gate);
         List<Integer> indices = new ArrayList<>();
         for (int along = middle - GATE / 2; along <= middle + GATE / 2; along++) {
-            indices.add(ringIndex(gate.side(), along));
+            indices.add(ringIndex(gate.edge(), along));
         }
         return indices;
     }

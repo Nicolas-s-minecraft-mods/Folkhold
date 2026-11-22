@@ -61,6 +61,7 @@ public final class WallTowerGameTests {
      *   <li>Each ring has a tower next to each of its gates and no other tower: the first wall holds all the towers of
      *       the archers. Thus a ring has fewer towers than the first wall when the first wall has more than 4.</li>
      *   <li>The village has a tower for each archer of the tier, or more.</li>
+     *   <li>On the flat ground of the GameTest world, the first wall is a rectangle.</li>
      *   <li>The log has a line {@code Tower measure |} for each tier: a row of the table of the towers. The last
      *       column is the number of towers of the same walls with the towers of the full layout (see
      *       {@link WallLayout#plan}).</li>
@@ -101,6 +102,11 @@ public final class WallTowerGameTests {
                     problems.add(tier.id() + " ring " + w + ": " + towers + " towers, not fewer than the first wall ("
                             + first + ")");
                 }
+            }
+            // On flat ground, the free outline of the first wall is the rectangle (see WallLayout#free).
+            if (!layout.firstWall().layout().isRectangle()) {
+                problems.add(tier.id() + ": the first wall on flat ground is not a rectangle: "
+                        + layout.firstWall().layout().corners());
             }
             if (first != WallLayout.towers(archers)) {
                 problems.add(tier.id() + ": " + first + " towers on the first wall for " + archers + " archers");

@@ -13,19 +13,19 @@ import java.util.function.IntBinaryOperator;
  *
  * <ul>
  *   <li>The drop of a block of the ring is its level minus the lowest terrain at 1 to {@link #DISTANCE} blocks outside
- *       the line, on the axis out of its side. The level is the base of the column of the palisade (see
+ *       the line, on the axis out of its edge. The level is the base of the column of the palisade (see
  *       {@link PalisadeHeights}), or the terrain of the line. A block is a cliff block when its drop is {@link #DROP}
  *       blocks or more.</li>
  *   <li>A gate is on a cliff when its drop is {@link #DROP} blocks or more: its level minus the lowest terrain at 1 to
  *       {@link #DISTANCE} blocks in front of its blocks, its posts included. The level of a gate is the highest base
  *       under it, or the level that its street can reach (see {@link GateDrop}). Such a gate opens on the cliff, and
  *       the flat terrain in front of it ends at the edge.</li>
- *   <li>A gate of the first wall on a cliff moves along its side to the nearest position with no cliff block, at most
+ *   <li>A gate of the first wall on a cliff moves along its edge to the nearest position with no cliff block, at most
  *       {@link #MAX_SHIFT} blocks: at this distance, the gate stays on the axis of its street. A gate of a ring does
  *       not move: the path across the band goes straight from the gate of the inner wall to the gate of the ring.</li>
  *   <li>A gate on a cliff that does not move goes away when the wall keeps another gate.</li>
  *   <li>The wall keeps at least one gate. When each gate is on a cliff, the gate with the nearest free position on its
- *       side moves there (first wall only). When no side has a free position, the gate with the smallest drop
+ *       edge moves there (first wall only). When no edge has a free position, the gate with the smallest drop
  *       stays.</li>
  *   <li>A cliff block has a low palisade: {@link PalisadeHeights#LOW_LOGS} logs. The terrain below the cliff is too far
  *       down for a mob: the low palisade only keeps the inhabitants away from the edge.</li>
@@ -40,7 +40,7 @@ public final class CliffSide {
      * in this distance is too steep for them.
      */
     public static final int DISTANCE = 10;
-    /** A gate of the first wall on a cliff moves along its side by this number of blocks at most. */
+    /** A gate of the first wall on a cliff moves along its edge by this number of blocks at most. */
     public static final int MAX_SHIFT = 2;
 
     private CliffSide() {
@@ -140,17 +140,17 @@ public final class CliffSide {
         return cliff ? PalisadeHeights.LOW_LOGS : PalisadeHeights.LOGS;
     }
 
-    /** The drop of a gate at a position of a side: the level of the gate minus the lowest terrain in front of it. */
+    /** The drop of a gate at a position of an edge: the level of the gate minus the lowest terrain in front of it. */
     @FunctionalInterface
     public interface GateDrop {
         /**
          * The drop of a gate.
          *
-         * @param side  the side of the gate
-         * @param along the distance from the start of the side to the middle of the gate
+         * @param edge  the number of the edge of the gate (see {@link WallLayout})
+         * @param along the distance from the start of the edge to the middle of the gate
          * @return the drop, in blocks
          */
-        int drop(Side side, int along);
+        int drop(int edge, int along);
     }
 
     /**
@@ -163,12 +163,12 @@ public final class CliffSide {
      * @return the drop of a gate at each position
      */
     public static GateDrop gateDrop(WallLayout layout, int[] levels, IntBinaryOperator height) {
-        return (side, along) -> {
+        return (edge, along) -> {
             int level = Integer.MIN_VALUE;
             for (int position = along - WallLayout.GATE / 2; position <= along + WallLayout.GATE / 2; position++) {
-                level = Math.max(level, levels[layout.ringIndex(side, position)]);
+                level = Math.max(level, levels[layout.ringIndex(edge, position)]);
             }
-            return level - lowestInFront(layout, side, along, height);
+            return level - lowestInFront(layout, edge, along, height);
         };
     }
 
@@ -177,15 +177,16 @@ public final class CliffSide {
      * of the gate, its posts included.
      *
      * @param layout the wall
-     * @param side   the side of the gate
-     * @param along  the distance from the start of the side to the middle of the gate
+     * @param edge   the number of the edge of the gate
+     * @param along  the distance from the start of the edge to the middle of the gate
      * @param height the Y of the top block of the terrain at a position (X, Z)
      * @return the Y of the lowest top block
      */
-    public static int lowestInFront(WallLayout layout, Side side, int along, IntBinaryOperator height) {
+    public static int lowestInFront(WallLayout layout, int edge, int along, IntBinaryOperator height) {
+        Side side = layout.side(edge);
         int lowest = Integer.MAX_VALUE;
         for (int position = along - WallLayout.GATE / 2; position <= along + WallLayout.GATE / 2; position++) {
-            Cell cell = layout.cell(side, position);
+            Cell cell = layout.cell(edge, position);
             for (int distance = 1; distance <= DISTANCE; distance++) {
                 lowest = Math.min(lowest, height.applyAsInt(cell.x() - side.insideX() * distance,
                         cell.z() - side.insideZ() * distance));
@@ -195,7 +196,7 @@ public final class CliffSide {
     }
 
     /**
-     * The gates of the first wall of a village with the rules of the cliff side: a gate on a cliff moves along its side
+     * The gates of the first wall of a village with the rules of the cliff side: a gate on a cliff moves along its edge
      * or goes away.
      *
      * @param layout the wall
@@ -229,15 +230,15 @@ public final class CliffSide {
         for (int g = 0; g < gates.size(); g++) {
             Gate gate = gates.get(g);
             int along = layout.along(gate);
-            if (!kept(layout, gate.side(), along, keep)) {
+            if (!kept(layout, gate.edge(), along, keep)) {
                 chosen[g] = gate;
                 continue;
             }
-            int shift = nearest(layout, gate.side(), along, drop, keep, maxShift);
+            int shift = nearest(layout, gate.edge(), along, drop, keep, maxShift);
             if (shift == Integer.MIN_VALUE) {
                 onCliff.add(g);
             } else {
-                chosen[g] = at(layout, gate.side(), along + shift);
+                chosen[g] = at(layout, gate.edge(), along + shift);
                 open = true;
             }
         }
@@ -256,7 +257,7 @@ public final class CliffSide {
 
     /**
      * The index of the gate that stays when each gate is on a cliff: the gate with the nearest free position on its
-     * side, else the gate with the smallest drop. The first gate in the order of the wall wins a tie.
+     * edge, else the gate with the smallest drop. The first gate in the order of the wall wins a tie.
      */
     private static int last(WallLayout layout, List<Gate> gates, List<Integer> onCliff, GateDrop drop,
             boolean[] keep, boolean free) {
@@ -265,11 +266,11 @@ public final class CliffSide {
         for (int g : onCliff) {
             Gate gate = gates.get(g);
             int along = layout.along(gate);
-            int shift = free ? nearest(layout, gate.side(), along, drop, keep, WallLayout.length(layout.outline(),
-                    gate.side())) : Integer.MIN_VALUE;
+            int shift = free ? nearest(layout, gate.edge(), along, drop, keep, layout.length(gate.edge()))
+                    : Integer.MIN_VALUE;
             // A free position comes before any gate on a cliff: its cost is under the drops.
             long cost = shift != Integer.MIN_VALUE ? Math.abs(shift)
-                    : (long) Integer.MAX_VALUE + drop.drop(gate.side(), along);
+                    : (long) Integer.MAX_VALUE + drop.drop(gate.edge(), along);
             if (cost < bestCost) {
                 bestCost = cost;
                 best = g;
@@ -278,28 +279,28 @@ public final class CliffSide {
         return best;
     }
 
-    /** The last gate: at the nearest free position of its side, else at its position on the cliff. */
+    /** The last gate: at the nearest free position of its edge, else at its position on the cliff. */
     private static Gate lastGate(WallLayout layout, Gate gate, GateDrop drop, boolean[] keep, boolean free) {
         int along = layout.along(gate);
-        int shift = free ? nearest(layout, gate.side(), along, drop, keep, WallLayout.length(layout.outline(),
-                gate.side())) : Integer.MIN_VALUE;
-        return shift == Integer.MIN_VALUE ? gate : at(layout, gate.side(), along + shift);
+        int shift = free ? nearest(layout, gate.edge(), along, drop, keep, layout.length(gate.edge()))
+                : Integer.MIN_VALUE;
+        return shift == Integer.MIN_VALUE ? gate : at(layout, gate.edge(), along + shift);
     }
 
     /**
-     * The shift from a position of a gate to the nearest free position on its side: a drop under {@link #DROP} and a
+     * The shift from a position of a gate to the nearest free position on its edge: a drop under {@link #DROP} and a
      * block that keeps the palisade. A positive shift comes first. {@link Integer#MIN_VALUE} if no free position is in
      * the maximum shift.
      */
-    private static int nearest(WallLayout layout, Side side, int along, GateDrop drop, boolean[] keep,
+    private static int nearest(WallLayout layout, int edge, int along, GateDrop drop, boolean[] keep,
             int maxShift) {
-        int first = WallLayout.firstGate();
-        int last = WallLayout.lastGate(WallLayout.length(layout.outline(), side));
+        int first = layout.firstGate(edge);
+        int last = layout.lastGate(edge);
         for (int shift = 0; shift <= maxShift; shift++) {
             for (int sign : shift == 0 ? new int[] {1} : new int[] {1, -1}) {
                 int position = along + sign * shift;
-                if (position >= first && position <= last && kept(layout, side, position, keep)
-                        && !isCliff(drop.drop(side, position))) {
+                if (position >= first && position <= last && kept(layout, edge, position, keep)
+                        && !isCliff(drop.drop(edge, position))) {
                     return sign * shift;
                 }
             }
@@ -308,17 +309,17 @@ public final class CliffSide {
     }
 
     /** True if a block of a gate at a position keeps the palisade. */
-    private static boolean kept(WallLayout layout, Side side, int along, boolean[] keep) {
+    private static boolean kept(WallLayout layout, int edge, int along, boolean[] keep) {
         for (int position = along - WallLayout.GATE / 2; position <= along + WallLayout.GATE / 2; position++) {
-            if (keep[layout.ringIndex(side, position)]) {
+            if (keep[layout.ringIndex(edge, position)]) {
                 return true;
             }
         }
         return false;
     }
 
-    /** The gate at a distance from the start of a side. */
-    private static Gate at(WallLayout layout, Side side, int along) {
-        return new Gate(side, WallLayout.position(layout.outline(), side, along));
+    /** The gate at a distance from the start of an edge. */
+    private static Gate at(WallLayout layout, int edge, int along) {
+        return new Gate(layout.side(edge), layout.position(edge, along), edge);
     }
 }

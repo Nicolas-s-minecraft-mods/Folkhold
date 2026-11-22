@@ -550,10 +550,10 @@ public final class FortifiedVillageStructure extends Structure {
         long seed = VillagePlanPieces.seed(context.seed(), context.chunkPos());
         PlotTerrains plots = new PlotTerrains(start.terrain());
         Rotation turn = start.plaza().getRotation();
+        PlanGround ground = plots.core(start.center(), turn, radius, start.variant().wall().margin());
         VillagePlan plan = VillagePlan.plan(limited, bands ? size.corePlots(target) : target, style, plazaSize,
                 VillagePlan.Start.around(plazaSize), plots.plan(start.center(), turn),
-                plots.foundation(start.center(), turn),
-                plots.core(start.center(), turn, radius, start.variant().wall().margin()), seed, true);
+                plots.foundation(start.center(), turn), ground, seed, true);
         VillagePlanPieces.Posts posts = posts(context, start.center(), level, seed);
         int beds = Math.max(0, LevelTables.get().traits(level).maxPopulation() - VillageBeds.staff());
         PlotUses.Result uses = PlotUses.assign(plan, buildings, posts.count());
@@ -566,8 +566,10 @@ public final class FortifiedVillageStructure extends Structure {
         List<StructurePiece> village = new ArrayList<>(List.of(start.plaza()));
         village.addAll(core.pieces());
         List<BoundingBox> reserved = new ArrayList<>(core.reserved());
+        int rise = outlineRise(plan.rules());
         VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, core.reserved(),
-                start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)));
+                start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)),
+                (x, z) -> ground.high(x, z, rise));
         // The stairs of the streets on the slopes, after the paths of the gates: a path has its own stairs.
         List<StructurePiece> wallPieces = new ArrayList<>(wall.pieces());
         wallPieces.addAll(StreetStepsPiece.of(plan, start.center(), turn, start.terrain(), paths(wall.pieces()),
@@ -621,6 +623,18 @@ public final class FortifiedVillageStructure extends Structure {
         corePieces.addAll(core.pieces());
         return new Layout(level, size, style, plan, start.center(), corePieces, reserved, wallPieces, built, free,
                 pieces.postJobs(), problems, wall, bandPlans, rings);
+    }
+
+    /**
+     * The rise of the high ground for the free outline of the first wall (see {@link WallLayout#free}): the rise of
+     * the rules of the plan with the outline rule, else {@link PlanGround#HIGH_RISE}. The plan with the outline rule
+     * keeps the line of the wall on the ground of this rise (see {@link PlanGround}).
+     *
+     * @param rules the rules of the ground of the plan of the core
+     * @return the rise, in blocks
+     */
+    public static int outlineRise(VillagePlan.Rules rules) {
+        return rules.outline() ? rules.rise() : PlanGround.HIGH_RISE;
     }
 
     /**

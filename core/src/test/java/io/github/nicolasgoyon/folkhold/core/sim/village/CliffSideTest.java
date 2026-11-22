@@ -91,12 +91,12 @@ class CliffSideTest {
     void gateAtTheLevelOfItsStreetCanBeOnACliff() {
         IntBinaryOperator height = cliff(Side.NORTH, MIN, MAX, CliffSide.DROP - 2);
         CliffSide.GateDrop base = gateDrop(height);
-        CliffSide.GateDrop street = (side, along) -> base.drop(side, along) + (side == Side.NORTH ? 2 : 0);
+        CliffSide.GateDrop street = (edge, along) -> base.drop(edge, along) + (WALL.side(edge) == Side.NORTH ? 2 : 0);
 
         assertEquals(WALL.gates(), CliffSide.gates(WALL, base, all()));
         assertEquals(WALL.gates().subList(1, 4), CliffSide.gates(WALL, street, all()));
         int along = WALL.along(WALL.gates().get(0));
-        assertEquals(GROUND - CliffSide.DROP + 2, CliffSide.lowestInFront(WALL, Side.NORTH, along, height));
+        assertEquals(GROUND - CliffSide.DROP + 2, CliffSide.lowestInFront(WALL, Side.NORTH.edgeOfRectangle(), along, height));
     }
 
     /** A cliff side loses its gate: the other sides keep their gates. */

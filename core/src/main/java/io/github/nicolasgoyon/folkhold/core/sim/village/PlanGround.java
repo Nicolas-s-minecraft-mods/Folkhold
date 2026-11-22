@@ -30,10 +30,17 @@ import java.util.Set;
  *   <li>Cost of a position of the core: {@link #RISE_COST} for each block of difference with the plaza, and
  *       {@link #WATER_COST} on deep water. The plan adds this cost to the distance to the middle: on flat dry ground,
  *       the cost is 0. A band has no cost.</li>
- *   <li>Climb of the line of the first wall: the line around a box of the plan, with the margin of the wall, and the
- *       grid points at {@link #LINE} blocks or less from the line. The climb is the sum of the blocks of these points
- *       above the plaza and the rise. The line can go down: the cliff side of the wall uses a drop as a wall (see
- *       {@link CliffSide}).</li>
+ *   <li>Line of the first wall: the first wall has a free outline (see {@link WallOutline}). It goes around the
+ *       boxes of the plan, at the margin of the wall and at most one cell of the outline farther. A box of the plan can
+ *       go into the plan when each grid point at {@link #reach()} blocks or less from the box is the rise or less above
+ *       the plaza, or near a box before it (see {@link VillagePlan.Ground#lineFits}). Thus the line of the first wall
+ *       stays off the high ground, also where the plan of the core is not a rectangle. The line can go down: the cliff
+ *       side of the wall uses a drop as a wall (see {@link CliffSide}).</li>
+ *   <li>High ground of the first wall: a block of the world is high when its grid point is more than the rise above
+ *       the plaza (see {@link #high}). The free outline of the first wall cuts out the high ground.</li>
+ *   <li>Climb of a line: the grid points at {@link #LINE} blocks or less from a line, and the sum of the blocks of
+ *       these points above the plaza and the rise (see {@link #climb}). The tests measure the line of the walls with
+ *       it.</li>
  * </ul>
  *
  * <p>The ground reads each column one time. It is not thread-safe.
@@ -58,6 +65,8 @@ public final class PlanGround implements VillagePlan.Ground {
     public static final double WATER_COST = 16;
     /** The half width of the line of the wall for the outline rule, in blocks. */
     public static final int LINE = 2;
+    /** The distance in blocks between the boxes of the plan and the line of the first wall, at most, with no margin. */
+    public static final int OUTLINE_SLACK = WallOutline.CELL + LINE;
 
     private final PlotTerrain.Terrain terrain;
     private final int centerX;
@@ -170,6 +179,84 @@ public final class PlanGround implements VillagePlan.Ground {
     }
 
     @Override
+    public boolean lineFits(Box box, int rise, Set<Long> covered) {
+        if (!core) {
+            return true;
+        }
+        Box world = world(box).grow(reach());
+        for (int x : points(world.minX(), world.maxX())) {
+            for (int z : points(world.minZ(), world.maxZ())) {
+                if (!covered.contains(key(x, z)) && surface(x, z) - level > rise) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void cover(Box box, Set<Long> covered) {
+        if (!core) {
+            return;
+        }
+        Box world = world(box).grow(reach());
+        for (int x : points(world.minX(), world.maxX())) {
+            for (int z : points(world.minZ(), world.maxZ())) {
+                covered.add(key(x, z));
+            }
+        }
+    }
+
+    /** The distance from a box of the plan to the farthest grid point of the line of the first wall around it. */
+    private int reach() {
+        return margin + OUTLINE_SLACK;
+    }
+
+    /**
+     * True when the line of the first wall must not stand on a block of the world: its grid point is more than a
+     * rise above the plaza (see {@link WallOutline.Ground}).
+     *
+     * @param x    the block X in the world
+     * @param z    the block Z in the world
+     * @param rise the largest difference of the ground with the plaza
+     * @return true for high ground
+     */
+    public boolean high(int x, int z, int rise) {
+        return surface(snap(x), snap(z)) - level > rise;
+    }
+
+    /**
+     * The climb of a line of blocks of the world: the sum, on the grid points at {@link #LINE} blocks or less from a
+     * block of the line, of the blocks of these points above the plaza and the rise. Each point counts once.
+     *
+     * @param line the blocks of the line, as pairs (X, Z)
+     * @param rise the largest difference of the ground with the plaza
+     * @return the climb, 0 or more
+     */
+    public long climb(List<int[]> line, int rise) {
+        Set<Long> points = new HashSet<>();
+        long climb = 0;
+        for (int[] block : line) {
+            for (int x : points(block[0] - LINE, block[0] + LINE)) {
+                for (int z : points(block[1] - LINE, block[1] + LINE)) {
+                    if (Math.abs(x - block[0]) <= LINE && Math.abs(z - block[1]) <= LINE && points.add(key(x, z))) {
+                        climb += Math.max(0, surface(x, z) - level - rise);
+                    }
+                }
+            }
+        }
+        return climb;
+    }
+
+    /**
+     * The climb of the line of a rectangle around a box of the plan, with the margin of the wall: the sum, on the
+     * grid points at {@link #LINE} blocks or less from the line, of the blocks of these points above the plaza and the
+     * rise.
+     *
+     * @param box  the box of the plan
+     * @param rise the largest difference of the ground with the plaza
+     * @return the climb, 0 or more
+     */
     public long climb(Box box, int rise) {
         if (!core) {
             return 0;
