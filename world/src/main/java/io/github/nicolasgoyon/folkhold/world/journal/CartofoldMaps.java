@@ -63,7 +63,9 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *   <li>The layers show also on the chunks that the player did not explore: the journal knows these villages, and
  *       the map frames of the journal show them on the relief.</li>
  *   <li>The server sends a layer to a player only when its content changes. {@link TerritoryMaps} calls
- *       {@link #update} when it checks the map of the player.</li>
+ *       {@link #update} when it checks the map of the player. When only the areas change, the server sends only the
+ *       new and the changed areas, and the ids of the removed areas (see {@link LayerChanges}). A large layer goes in
+ *       some payloads.</li>
  * </ul>
  */
 public final class CartofoldMaps {
@@ -198,8 +200,11 @@ public final class CartofoldMaps {
         if (last == null || !last.source().equals(source)) {
             LayerContent next = content.get();
             layers.put(layer, new Sent(source, next));
-            if (last == null || !last.content().equals(next)) {
-                CartofoldLayers.set(player, next);
+            for (LayerChanges.Packet packet : LayerChanges.packets(last == null ? null : last.content(), next)) {
+                switch (packet) {
+                    case LayerChanges.Full full -> CartofoldLayers.set(player, full.content());
+                    case LayerChanges.Changes changes -> CartofoldLayers.update(player, layer, changes.update());
+                }
             }
         }
     }
