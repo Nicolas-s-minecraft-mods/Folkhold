@@ -62,7 +62,8 @@ final class TemplateReach {
      * stand 1 block to the north, south, east or west, at the same level or 1 block higher or lower. A step 1 block
      * higher also needs a free block 2 blocks above the start position: the head of the villager goes through it. A
      * block is reached when a reached position is next to it, to the north, south, east or west, with the feet or the
-     * head at the level of the block.
+     * head at the level of the block. A bed head is reached when a reached position is next to it with the feet at the
+     * level of the bed, on a side that is not the side of the foot (see {@link #isHeadReached}).
      *
      * @param level    the level, for the block registry
      * @param template the template of the piece
@@ -79,7 +80,7 @@ final class TemplateReach {
         List<String> blocks = new ArrayList<>();
         states.forEach((pos, state) -> {
             boolean bedHead = state.getBlock() instanceof BedBlock && state.getValue(BedBlock.PART) == BedPart.HEAD;
-            if ((isWorkBlock(state) || bedHead) && !isReached(reached, pos)) {
+            if (bedHead ? !isHeadReached(reached, pos, state) : isWorkBlock(state) && !isReached(reached, pos)) {
                 blocks.add(BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath() + " " + pos.toShortString());
             }
         });
@@ -98,6 +99,22 @@ final class TemplateReach {
     static boolean isReached(Set<BlockPos> reached, BlockPos pos) {
         return Direction.Plane.HORIZONTAL.stream().map(pos::relative)
                 .anyMatch(next -> reached.contains(next) || reached.contains(next.below()));
+    }
+
+    /**
+     * True when the walk of {@link #reached} reaches the head of a bed: a reached position is next to the head, with the
+     * feet at the level of the bed, on one of the 3 sides that are not the side of the foot. The vanilla behavior
+     * {@code SleepInBed} starts at 2 blocks or less from the head of the bed: a villager at the foot does not lie down.
+     *
+     * @param reached the positions of the walk
+     * @param head    the position of the bed head
+     * @param state   the state of the bed head
+     * @return true for a reached bed head
+     */
+    static boolean isHeadReached(Set<BlockPos> reached, BlockPos head, BlockState state) {
+        Direction foot = state.getValue(BedBlock.FACING).getOpposite();
+        return Direction.Plane.HORIZONTAL.stream().filter(side -> side != foot).map(head::relative)
+                .anyMatch(reached::contains);
     }
 
     /**

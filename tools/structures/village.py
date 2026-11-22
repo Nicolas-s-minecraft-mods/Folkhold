@@ -2694,8 +2694,10 @@ def unreachable(t):
     reached = reach(t)
     missing = []
     for (x, y, z), ((name, props), _) in t.blocks.items():
-        head = name.endswith("_bed") and dict(props).get("part") == "head"
-        if (name in REACH_WORK_BLOCKS or head) and not near(reached, x, y, z):
+        if is_bed_head(name, props):
+            if not near_head(reached, x, y, z, dict(props)["facing"]):
+                missing.append(f"{name} {x} {y} {z}")
+        elif name in REACH_WORK_BLOCKS and not near(reached, x, y, z):
             missing.append(f"{name} {x} {y} {z}")
     return sorted(missing)
 
@@ -2703,6 +2705,31 @@ def unreachable(t):
 def near(reached, x, y, z):
     """True if a reached position is next to the block, with the feet or the head at the layer of the block."""
     return any((x + dx, y, z + dz) in reached or (x + dx, y - 1, z + dz) in reached for _, dx, dz in STEP_SIDES)
+
+
+def is_bed_head(name, props):
+    return name.endswith("_bed") and dict(props).get("part") == "head"
+
+
+def near_head(reached, x, y, z, facing):
+    """True if a reached position is next to the head of a bed, with the feet at the layer of the bed, on one of the 3
+    sides that are not the side of the foot. The facing of a bed goes from the foot to the head. The vanilla behavior
+    SleepInBed starts at 2 blocks or less from the head: a villager at the foot of the bed does not lie down."""
+    foot = next((-dx, -dz) for side, dx, dz in STEP_SIDES if side == facing)
+    return any((x + dx, y, z + dz) in reached for _, dx, dz in STEP_SIDES if (dx, dz) != foot)
+
+
+def check_bed_heads(t, name):
+    """Each bed of a piece has a free position next to its head that a walk from the front row reaches (see
+    near_head)."""
+    heads = [(pos, dict(props)["facing"]) for pos, ((block, props), _) in t.blocks.items()
+             if is_bed_head(block, props)]
+    if not heads:
+        return
+    reached = reach(t)
+    missing = sorted(pos for pos, facing in heads if not near_head(reached, *pos, facing))
+    if missing:
+        raise SystemExit(f"{name}: no free position next to the head of the beds {missing}")
 
 
 def reach(t):
@@ -2914,7 +2941,7 @@ def place_beds(t, base, depth, taken):
                        or state_at(t, c[0], y + 1, c[1])[0] != "minecraft:air"
                        or walk(state_at(t, c[0], base, c[1])) != "on" for c in (foot, head)):
                     continue
-                if not near(reached, head[0], y, head[1]):
+                if not near_head(reached, head[0], y, head[1], facing):
                     continue
                 t.set(foot[0], y, foot[1], f"minecraft:{HOME_BED_COLOR}_bed",
                       {"facing": facing, "part": "foot", "occupied": "false"})
@@ -5912,8 +5939,9 @@ def main():
         for name, build in v.pieces.items():
             path = os.path.join(folder, *(name + ".nbt").split("/"))
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            t = build()
-            v.apply(cave_lit(t, name) if v.cave else t).write(path)
+            t = v.apply(cave_lit(build(), name) if v.cave else build())
+            check_bed_heads(t, v.path(name))
+            t.write(path)
             print("wrote", os.path.normpath(path))
         for name, data in pools(v).items():
             write_json(os.path.join(WORLDGEN, "template_pool", *v.path(name).split("/")) + ".json", data)
