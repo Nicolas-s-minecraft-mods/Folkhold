@@ -36,4 +36,4 @@ The operators have commands and an admin screen (`/folkhold admin`). They show t
 ### License and links
 
 - Code: MIT License. Assets: CC BY 4.0. All the structures, the models and the textures are original work.
-- Source, issues and design document: <https://github.com/nicolas-goyon/Folkhold>
+- Source, issues and design document: <https://github.com/Nicolas-s-minecraft-mods/Folkhold>

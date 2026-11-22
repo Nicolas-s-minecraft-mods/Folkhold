@@ -21,7 +21,7 @@ All the projects have these values:
 - Game version: Minecraft 1.21.1. Mod loader: NeoForge. Java 21.
 - License: MIT License (the code). The page of each project names the license of the assets: CC BY 4.0
   (see [ASSETS_LICENSES.md](../ASSETS_LICENSES.md)).
-- Source: <https://github.com/nicolas-goyon/Folkhold>. Issues: <https://github.com/nicolas-goyon/Folkhold/issues>.
+- Source: <https://github.com/Nicolas-s-minecraft-mods/Folkhold>. Issues: <https://github.com/Nicolas-s-minecraft-mods/Folkhold/issues>.
 - Languages: English and French.
 - The logo is `<module>/src/main/resources/folkhold_<module>_logo.png` (512 x 512 pixels, from
   `tools/textures/mod_logos.py`).

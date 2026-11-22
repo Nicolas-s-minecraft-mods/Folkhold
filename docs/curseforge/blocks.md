@@ -28,4 +28,4 @@ A builder of maps can use these blocks as decoration with no other Folkhold mod.
 ### License and links
 
 - Code: MIT License. Assets: CC BY 4.0. All the models and the textures are original work.
-- Source, issues and documentation: <https://github.com/nicolas-goyon/Folkhold>
+- Source, issues and documentation: <https://github.com/Nicolas-s-minecraft-mods/Folkhold>

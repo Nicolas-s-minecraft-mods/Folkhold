@@ -30,7 +30,7 @@ JARJAR = "META-INF/jarjar/metadata.json"
 MANIFEST = "META-INF/MANIFEST.MF"
 # The time limit of each download, in seconds.
 TIMEOUT = 120
-USER_AGENT = "nicolas-goyon/Folkhold modpack check"
+USER_AGENT = "Nicolas-s-minecraft-mods/Folkhold modpack check"
 # The order of the known qualifiers of a Maven version. A release has the empty qualifier.
 QUALIFIERS = ("alpha", "beta", "milestone", "rc", "snapshot", "", "sp")
 ALIASES = {"ga": "", "final": "", "release": "", "cr": "rc"}

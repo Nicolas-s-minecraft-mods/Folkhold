@@ -7,9 +7,9 @@
 NPC factions trade, defend their villages and hold territory. Caravans travel between the villages.<br>
 The reputation of the player decides how each village receives them.
 
-[![Build on develop](https://img.shields.io/github/actions/workflow/status/nicolas-goyon/Folkhold/build.yml?branch=develop&label=build%20%C2%B7%20develop&logo=github)](https://github.com/nicolas-goyon/Folkhold/actions/workflows/build.yml?query=branch%3Adevelop)
-[![Release workflow](https://img.shields.io/github/actions/workflow/status/nicolas-goyon/Folkhold/release.yml?label=release&logo=github)](https://github.com/nicolas-goyon/Folkhold/actions/workflows/release.yml)
-[![Latest version](https://img.shields.io/endpoint?url=https%3A%2F%2Fnicolas-goyon.github.io%2FFolkhold%2Fversion.json)](https://github.com/nicolas-goyon/Folkhold/releases)
+[![Build on develop](https://img.shields.io/github/actions/workflow/status/Nicolas-s-minecraft-mods/Folkhold/build.yml?branch=develop&label=build%20%C2%B7%20develop&logo=github)](https://github.com/Nicolas-s-minecraft-mods/Folkhold/actions/workflows/build.yml?query=branch%3Adevelop)
+[![Release workflow](https://img.shields.io/github/actions/workflow/status/Nicolas-s-minecraft-mods/Folkhold/release.yml?label=release&logo=github)](https://github.com/Nicolas-s-minecraft-mods/Folkhold/actions/workflows/release.yml)
+[![Latest version](https://img.shields.io/endpoint?url=https%3A%2F%2Fnicolas-s-minecraft-mods.github.io%2FFolkhold%2Fversion.json)](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases)
 
 [![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-62B47A)](https://www.minecraft.net)
 [![NeoForge 21.1](https://img.shields.io/badge/NeoForge-21.1-D7742F)](https://neoforged.net)
@@ -18,13 +18,13 @@ The reputation of the player decides how each village receives them.
 [![Code license: MIT](https://img.shields.io/badge/code-MIT-2EA44F)](LICENSE)
 [![Assets license: CC BY 4.0](https://img.shields.io/badge/assets-CC%20BY%204.0-8A8A8A)](docs/ASSETS_LICENSES.md)
 
-[Website](https://nicolas-goyon.github.io/Folkhold/) ·
-[Download](https://github.com/nicolas-goyon/Folkhold/releases) ·
-[Release notes](https://nicolas-goyon.github.io/Folkhold/#release-notes) ·
+[Website](https://nicolas-s-minecraft-mods.github.io/Folkhold/) ·
+[Download](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases) ·
+[Release notes](https://nicolas-s-minecraft-mods.github.io/Folkhold/#release-notes) ·
 [Design](docs/design.md) ·
 [Getting started](docs/getting-started.md) ·
 [Contributing](CONTRIBUTING.md) ·
-[Roadmap](https://github.com/nicolas-goyon/Folkhold/milestones)
+[Roadmap](https://github.com/Nicolas-s-minecraft-mods/Folkhold/milestones)
 
 </div>
 
@@ -44,12 +44,12 @@ The reputation of the player decides how each village receives them.
 
 The modpack is the simple way to play. It contains the Folkhold mods and a selection of mods for performance, nature, terrain, maps and inventory comfort.
 
-1. Download `folkhold-<version>.mrpack` from the [latest release](https://github.com/nicolas-goyon/Folkhold/releases).
+1. Download `folkhold-<version>.mrpack` from the [latest release](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases).
 2. Import the file in a launcher that reads Modrinth packs, for example [Prism Launcher](https://prismlauncher.org) or the [Modrinth App](https://modrinth.com/app).
 3. Start the game and create a new world.
 4. Optional: pre-generate the area around the spawn with Chunky. The game then generates fewer chunks during the play, for example with an elytra or a boat on ice. Use the commands `/chunky spawn`, `/chunky radius 2000` and `/chunky start` (cheats must be on). A radius of 2000 blocks is about 62,500 chunks: the generation takes time, and the world uses more disk space. Chunky continues after a restart of the game.
 
-To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance. The instance needs NeoForge 21.1.259 or later, [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later and [Cartofold](https://github.com/nicolas-goyon/Cartofold/releases) 0.33.12 or later.
+To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance. The instance needs NeoForge 21.1.259 or later, [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later and [Cartofold](https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases) 0.33.12 or later.
 
 ## Modules
 
@@ -76,7 +76,7 @@ The packwiz modpack (`modpack/`) adds existing mods for performance, nature and 
 
 ## Status
 
-Early development. The [milestones](https://github.com/nicolas-goyon/Folkhold/milestones) give the roadmap, and the [issues](https://github.com/nicolas-goyon/Folkhold/issues) give the work in progress. Each merge of `develop` into `main` makes a [release](https://github.com/nicolas-goyon/Folkhold/releases).
+Early development. The [milestones](https://github.com/Nicolas-s-minecraft-mods/Folkhold/milestones) give the roadmap, and the [issues](https://github.com/Nicolas-s-minecraft-mods/Folkhold/issues) give the work in progress. Each merge of `develop` into `main` makes a [release](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases).
 
 ## License
 
