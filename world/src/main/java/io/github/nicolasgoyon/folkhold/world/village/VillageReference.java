@@ -240,6 +240,12 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                 gateFronts);
     }
 
+    /** This reference with other segments of the palisade, for example the segments of a stone wall. */
+    public VillageReference withPalisades(List<Palisade> others) {
+        return new VillageReference(pieces, others, area, plots, homes, piers, streetColumns, streets, paths,
+                gateFronts);
+    }
+
     /** This reference with the surface blocks of its streets. */
     public VillageReference withStreets(Map<BlockPos, BlockState> blocks) {
         return new VillageReference(pieces, palisades, area, plots, homes, piers, streetColumns, blocks, paths,
