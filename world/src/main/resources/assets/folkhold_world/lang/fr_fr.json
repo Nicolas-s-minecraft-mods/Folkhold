@@ -212,6 +212,7 @@
   "folkhold_world.configuration.reputationDestroyVillage": "Destruction d'un village",
   "message.folkhold_world.village_entry": "%s · %s · %s · %s",
   "folkhold_world.configuration.villageMessageRadius": "Distance du message de village",
+  "folkhold_world.configuration.villageMessageMargin": "Marge du message de village",
   "folkhold_world.configuration.simulation": "Simulation",
   "folkhold_world.configuration.discoveryRadius": "Rayon de découverte des villages",
   "folkhold_world.configuration.adminDiscoveryRadius": "Rayon de découverte de l'écran admin",
