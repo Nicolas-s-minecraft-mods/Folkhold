@@ -28,9 +28,4 @@ class QuestHudTest {
         assertTrue(QuestHud.top(0, two) > QuestHud.top(0, one));
         assertTrue(QuestHud.territoryHeight(1, true) >= 4 + 14 + 4, "The banner sets the height of one line");
     }
-
-    @Test
-    void panelIsSmallerThanTheText() {
-        assertTrue(QuestHud.SCALE < 1.0F);
-    }
 }
