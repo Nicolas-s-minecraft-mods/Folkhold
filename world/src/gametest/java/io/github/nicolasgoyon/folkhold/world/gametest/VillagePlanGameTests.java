@@ -268,8 +268,8 @@ public final class VillagePlanGameTests {
      *       with this kind: the growth has no building step.</li>
      *   <li>the number of job posts (job signs) is the job slots of the level, or the number of jobs that the level and
      *       the biome allow when it is smaller.</li>
-     *   <li>each post has a job that the level and the biome allow, a post has a food job and a post trades: the growth
-     *       has no first post step.</li>
+     *   <li>each post has a job that the level and the biome allow, and a post trades: the growth has no first post
+     *       step.</li>
      *   <li>the job signs are the posts of the layout.</li>
      *   <li>the home beds and the places of the hall hold the maximum population of the level.</li>
      * </ul>
@@ -305,7 +305,7 @@ public final class VillagePlanGameTests {
                 || VillageGrowth.needsFirstPost(posts)
                 || !posts.stream().sorted().toList().equals(layout.posts().stream().sorted().toList())) {
             problems.add(name + ": the job posts " + posts + " (layout " + layout.posts() + ") are not " + expected
-                    + " posts of " + eligible + " with food and trade");
+                    + " posts of " + eligible + " with trade");
         }
     }
 

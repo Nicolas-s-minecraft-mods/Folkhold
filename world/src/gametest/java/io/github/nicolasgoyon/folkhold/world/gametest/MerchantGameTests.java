@@ -7,7 +7,6 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
-import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
@@ -442,8 +441,8 @@ public final class MerchantGameTests {
     }
 
     /**
-     * A blacksmith sells only the outputs of the blacksmith job in stock, and buys only its inputs and the food that
-     * the village needs most. A trade with the blacksmith changes the stock and the treasury.
+     * A blacksmith sells only the outputs of the blacksmith job in stock, and buys only its inputs. A trade with the
+     * blacksmith changes the stock and the treasury.
      */
     @GameTest(template = "arena", timeoutTicks = 20, batch = "worker_offers")
     public static void workerTradesTheGoodsOfItsJob(GameTestHelper helper) {
@@ -479,10 +478,8 @@ public final class MerchantGameTests {
         server.getPlayerList().remove(player);
         data.addTreasury(faction, original - treasury);
         helper.assertTrue(sold.equals(List.of(Items.IRON_SWORD)), "The blacksmith must sell only swords: " + sold);
-        List<String> otherBuys = bought.stream().filter(item -> !inputs.contains(item)).toList();
-        helper.assertTrue(!bought.isEmpty() && otherBuys.size() <= 1
-                        && otherBuys.stream().allMatch(item -> EconomyData.catalog().info(item).isFood()),
-                "The blacksmith must buy only its inputs and one food item: " + bought);
+        helper.assertTrue(!bought.isEmpty() && bought.stream().allMatch(inputs::contains),
+                "The blacksmith must buy only its inputs: " + bought);
         helper.assertTrue(sword != null && stock == 4, "The sword must leave the stock, found " + stock);
         helper.assertTrue(treasury == BUYER_TREASURY + sword.getCostA().getCount(),
                 "The emeralds must go into the treasury, found " + treasury);
@@ -500,7 +497,7 @@ public final class MerchantGameTests {
         village.settlement().economy().setJobs(List.of(TEST_SMITH));
         village.settlement().economy().stock().set("minecraft:iron_sword", 5);
         village.settlement().economy().setInitialized(true);
-        village.settlement().economy().setLastCycle(1.0, 1.0);
+        village.settlement().economy().setLastCycle(1.0);
         boolean unknownEmpty = Merchants.offers(server, village.settlement(), ReputationTier.NEUTRAL,
                 VillagerProfession.WEAPONSMITH).isEmpty();
         double activeProsperity = Economies.prosperity(server, village.settlement());
@@ -515,7 +512,7 @@ public final class MerchantGameTests {
         helper.assertTrue(!unknownEmpty, "With unknown posts, the smith must sell its swords");
         helper.assertTrue(inactive.isEmpty(), "The smith of an inactive job must offer nothing");
         helper.assertTrue(merchant.isEmpty(), "A villager with the merchant profession must offer nothing");
-        helper.assertTrue(Math.abs(activeProsperity - inactiveProsperity - 0.3) < 1e-9,
+        helper.assertTrue(Math.abs(activeProsperity - inactiveProsperity - 0.6) < 1e-9,
                 "No active job must remove the jobs share: " + activeProsperity + " -> " + inactiveProsperity);
         helper.succeed();
     }
@@ -562,11 +559,11 @@ public final class MerchantGameTests {
     }
 
     /**
-     * At level 1 and at level 5, each of the 2 traders has 1 sell offer or more and 1 buy offer or more, and not more
-     * offers than the level. The fisher has no input: it buys the food that the village needs most.
+     * At level 1 and at level 5, each of the 2 traders has 1 sell offer or more, and not more offers than the level.
+     * The baker also has 1 buy offer or more. The fisher has no input: it has no buy offer.
      */
     @GameTest(template = "arena", timeoutTicks = 20, batch = "worker_low_level")
-    public static void eachTraderSellsAndBuysAtALowLevel(GameTestHelper helper) {
+    public static void eachTraderSellsAtALowLevel(GameTestHelper helper) {
         Village village = village(helper);
         MinecraftServer server = helper.getLevel().getServer();
         village.settlement().economy().setJobs(List.of(BAKER, FISHER));
@@ -585,14 +582,15 @@ public final class MerchantGameTests {
                         profession);
                 long buys = offers.stream().filter(offer -> offer.getResult().is(Items.EMERALD)).count();
                 long sells = offers.size() - buys;
-                if (sells < 1 || buys < 1 || offers.size() > maxOffers) {
+                boolean buyer = profession != VillagerProfession.FISHERMAN;
+                if (sells < 1 || (buyer ? buys < 1 : buys != 0) || offers.size() > maxOffers) {
                     failures.add("level " + level + " " + profession + ": " + sells + " sell, " + buys + " buy");
                 }
             }
         }
         data.addTreasury(faction, original - data.treasury(faction));
 
-        helper.assertTrue(failures.isEmpty(), "Each trader must sell and buy: " + failures);
+        helper.assertTrue(failures.isEmpty(), "Each trader must sell, and only the baker must buy: " + failures);
         helper.succeed();
     }
 }

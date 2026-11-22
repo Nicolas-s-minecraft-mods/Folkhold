@@ -50,33 +50,32 @@ public final class FirstJobsGameTests {
 
     /** The villages of the base style: see {@link #checkStyle}. */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "first_jobs_village")
-    public static void generatedVillageHasAFoodHouseWorkshop(GameTestHelper helper) {
+    public static void generatedVillageHasItsHouseWorkshops(GameTestHelper helper) {
         checkStyle(helper, "", 0);
     }
 
     /** The villages of the Sunreach style: see {@link #checkStyle}. */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "first_jobs_village_sunreach")
-    public static void sunreachVillageHasAFoodHouseWorkshop(GameTestHelper helper) {
+    public static void sunreachVillageHasItsHouseWorkshops(GameTestHelper helper) {
         checkStyle(helper, "sunreach/", 1);
     }
 
     /** The villages of the Valeholm style: see {@link #checkStyle}. */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "first_jobs_village_valeholm")
-    public static void valeholmVillageHasAFoodHouseWorkshop(GameTestHelper helper) {
+    public static void valeholmVillageHasItsHouseWorkshops(GameTestHelper helper) {
         checkStyle(helper, "valeholm/", 2);
     }
 
     /** The maritime villages: see {@link #checkStyle}. The fishing huts of the pool of the houses do not count. */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "first_jobs_village_maritime")
-    public static void maritimeVillageHasAFoodHouseWorkshop(GameTestHelper helper) {
+    public static void maritimeVillageHasItsHouseWorkshops(GameTestHelper helper) {
         checkStyle(helper, "maritime/", 3);
     }
 
     /**
      * Each generated village of a style has the job posts of its start level (house-workshops and homes with a job
-     * sign): one for each job slot of the level, at most one for each job that the level and the biome allow. One of
-     * them is the house-workshop of a food job. Each job sign names a job of the level that trades. The jobs are the
-     * posts of the layout of the village.
+     * sign): one for each job slot of the level, at most one for each job that the level and the biome allow. Each job
+     * sign names a job of the level that trades. The jobs are the posts of the layout of the village.
      *
      * @param folder the folder of the pieces of the style
      * @param row    the row of the candidate chunks of the style
@@ -120,8 +119,6 @@ public final class FirstJobsGameTests {
             List<Job> jobs = ids.stream().map(EconomyData.jobs()::get).filter(job -> job != null
                     && job.minLevel() <= startLevel && trades(job)).toList();
             helper.assertTrue(jobs.size() == ids.size(), "Each job must be a job of the level that trades: " + ids);
-            helper.assertTrue(jobs.stream().anyMatch(job -> job.producesFood(EconomyData.catalog())),
-                    "The village " + folder + " in " + chunk + " must have a food job: " + ids);
         }
         helper.succeed();
     }

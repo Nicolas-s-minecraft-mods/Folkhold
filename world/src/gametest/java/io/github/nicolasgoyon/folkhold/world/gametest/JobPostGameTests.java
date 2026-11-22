@@ -125,11 +125,12 @@ public final class JobPostGameTests {
     }
 
     /**
-     * A new village of level 1 at its start population (2 inhabitants of the homes) has its food post active, also
-     * when the scan finds the sign of an other job that trades first. The mason comes first in the scan order.
+     * A new village of level 1 at its start population (2 inhabitants of the homes) has its first post active. The
+     * mason and the farmer trade, and the mason comes first in the scan order: the mason post is the first post. The
+     * farmer is a food job, and food jobs get no place of their own in the order.
      */
     @GameTest(template = "arena_large", timeoutTicks = 40, batch = "job_posts_start", skyAccess = true)
-    public static void newVillageHasItsFoodPostAtItsStartPopulation(GameTestHelper helper) {
+    public static void newVillageHasItsFirstPostAtItsStartPopulation(GameTestHelper helper) {
         startStaff(helper);
         Village village = village(helper, "", List.of("job_mason", "job_farmer"), 1, startPopulation(), List.of(),
                 false, "minecraft:plains");
@@ -137,9 +138,9 @@ public final class JobPostGameTests {
             List<String> jobs = Economies.activeJobIds(village.settlement());
             helper.assertTrue(Economies.homeInhabitants(village.settlement()) == 2,
                     "Expected 2 inhabitants of the homes: " + Economies.homeInhabitants(village.settlement()));
-            helper.assertTrue(village.settlement().jobPosts().orElseThrow().get(0).jobId().equals(FARMER),
-                    "The food post must be the first post: " + village.settlement().jobPosts());
-            helper.assertTrue(jobs.equals(List.of(FARMER)), "Expected the active food job: " + jobs);
+            helper.assertTrue(village.settlement().jobPosts().orElseThrow().get(0).jobId().equals(MASON),
+                    "The mason post must be the first post: " + village.settlement().jobPosts());
+            helper.assertTrue(jobs.equals(List.of(MASON)), "Expected the active mason job: " + jobs);
         } finally {
             end(helper, village);
         }
