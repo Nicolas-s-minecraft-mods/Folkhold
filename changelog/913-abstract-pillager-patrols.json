@@ -1,5 +1,5 @@
 {
   "category": "new",
-  "en_us": "Each pillager camp has 2 patrols that walk a loop around the camp in its territory, also with no player near. A player in the territory meets one of these patrols, with the health that it kept from the last fight. A camp sends no more patrols than it has. The command /folkhold pillagers patrols lists them.",
-  "fr_fr": "Chaque camp de pillards a 2 patrouilles qui font une boucle autour du camp dans son territoire, même sans joueur à proximité. Un joueur dans le territoire rencontre une de ces patrouilles, avec la santé qu'elle a gardée du dernier combat. Un camp n'envoie pas plus de patrouilles qu'il n'en a. La commande /folkhold pillagers patrols les liste."
+  "en_us": "Each pillager camp has 2 patrols that walk a loop in its territory, also with no player near. A player in the territory meets one of them, with the health that it kept from the last fight. The command /folkhold pillagers patrols lists them.",
+  "fr_fr": "Chaque camp de pillards a 2 patrouilles qui font une boucle dans son territoire, même sans joueur proche. Un joueur dans le territoire en rencontre une, avec la santé gardée du dernier combat. La commande /folkhold pillagers patrols les liste."
 }
