@@ -60,13 +60,18 @@ public final class EscortGameTests {
     private EscortGameTests() {
     }
 
-    /** The origin village of the test, with a heart. */
+    /**
+     * The origin village of the test, with a heart, at the level 1: the escorts of its short routes have the lowest
+     * difficulty, so their reward is for the neutral tier.
+     */
     private static Settlement village(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
         helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
         VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
         heart.ensureSettlement();
-        return Settlements.of(helper.getLevel().getServer(), heart).orElseThrow();
+        Settlement settlement = Settlements.of(helper.getLevel().getServer(), heart).orElseThrow();
+        settlement.setProgress(1, 0);
+        return settlement;
     }
 
     /** A waiting caravan of the village on a route along the arena: merchant, mule, guard, payment 20. */
