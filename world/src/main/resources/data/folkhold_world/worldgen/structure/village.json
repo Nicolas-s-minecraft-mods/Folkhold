@@ -507,13 +507,13 @@
           "gate": "folkhold_world:village/valeholm/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:mossy_stone_bricks"
             },
             "base": {
               "Name": "minecraft:cobblestone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:mossy_cobblestone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"
@@ -587,13 +587,13 @@
           "gate": "folkhold_world:village/valeholm/plains/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:mossy_stone_bricks"
             },
             "base": {
               "Name": "minecraft:cobblestone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:mossy_cobblestone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"
@@ -663,13 +663,13 @@
           "gate": "folkhold_world:village/valeholm/birch/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:mossy_stone_bricks"
             },
             "base": {
               "Name": "minecraft:cobblestone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:mossy_cobblestone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"
@@ -739,13 +739,13 @@
           "gate": "folkhold_world:village/valeholm/savanna/stone/gate",
           "palisade": {
             "log": {
-              "Name": "minecraft:stone_bricks"
+              "Name": "minecraft:mossy_stone_bricks"
             },
             "base": {
               "Name": "minecraft:cobblestone"
             },
             "point": {
-              "Name": "minecraft:stone_brick_wall"
+              "Name": "minecraft:mossy_cobblestone_wall"
             },
             "foundation": {
               "Name": "minecraft:cobblestone"

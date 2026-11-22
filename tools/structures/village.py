@@ -919,7 +919,12 @@ def gate_piece():
 # the same watch post. Thus the builders change a wooden piece into its stone piece block by block, and the archers,
 # the villagers and the raiders walk on it as on the wooden piece. The biome variants change the stone: stone bricks,
 # sandstone in the desert and mud bricks in the swamp.
-# A pair (name, ()) is a block with no properties (see plain).
+#
+# The stone of each culture (STONE_STYLES) gives the replacement of each wooden block of the tower and the gate:
+# - a name: the block with the same properties.
+# - a pair (name, ()): a block with no properties (see plain).
+# - a function of the position and the properties: it gives the pair (name, properties).
+# The other blocks stay: the cobblestone base, the fence gates, the dark oak roof, the lights and the watch post.
 STONE = {
     "minecraft:spruce_log": ("minecraft:stone_bricks", ()),
     "minecraft:stripped_spruce_log": ("minecraft:stone_bricks", ()),
@@ -929,36 +934,83 @@ STONE = {
 }
 
 
-def stone(t):
-    """The template in stone: each block of STONE changes to its stone block. The other blocks stay: the cobblestone
-    base, the fence gates, the dark oak roof, the lights and the watch post."""
+def norse_beam(_pos, props):
+    """A stripped spruce log of a Valeholm stone piece: a post (axis y) is mossy stone bricks, and a beam (axis x or z)
+    stays a beam of timber."""
+    if dict(props).get("axis") == "y":
+        return "minecraft:mossy_stone_bricks", ()
+    return "minecraft:stripped_spruce_log", props
+
+
+def norse_rubble(pos, _props):
+    """A plank of a Valeholm stone piece: cobblestone, with some mossy cobblestone. The choice depends on the position
+    only: each run of the script gives the same blocks."""
+    x, y, z = pos
+    mossy = random.Random(x * 1009 + y * 101 + z).random() < 0.3
+    return ("minecraft:mossy_cobblestone" if mossy else "minecraft:cobblestone"), ()
+
+
+# Valeholm: walls of rubble (cobblestone and mossy cobblestone), posts and corners of mossy stone bricks, beams of
+# stripped spruce logs under the parapet, and slabs and stairs of mossy cobblestone. The roof of dark oak stays.
+NORSE_STONE = {
+    "minecraft:spruce_log": ("minecraft:mossy_stone_bricks", ()),
+    "minecraft:stripped_spruce_log": norse_beam,
+    "minecraft:spruce_planks": norse_rubble,
+    "minecraft:spruce_slab": "minecraft:mossy_cobblestone_slab",
+    "minecraft:spruce_stairs": "minecraft:mossy_cobblestone_stairs",
+}
+STONE_STYLES = {None: STONE, "valeholm": NORSE_STONE}
+# The blocks of a stone column of the palisade of each culture: the block in place of the logs, and the block in
+# place of the fence of the point (see village_settings).
+STONE_COLUMNS = {
+    None: ("minecraft:stone_bricks", "minecraft:stone_brick_wall"),
+    "valeholm": ("minecraft:mossy_stone_bricks", "minecraft:mossy_cobblestone_wall"),
+}
+
+
+def stone(t, culture=None):
+    """The template in stone: each block of the stone of the culture (see STONE_STYLES) changes to its stone block."""
+    blocks = STONE_STYLES[culture]
     out = Template(*t.size)
     for pos, ((name, props), nbt) in t.blocks.items():
-        new = STONE.get(name, name)
-        out.blocks[pos] = ((new[0], ()) if isinstance(new, tuple) else (new, props), nbt)
+        new = blocks.get(name, name)
+        if callable(new):
+            new_name, new_props = new(pos, props)
+            out.blocks[pos] = ((new_name, tuple(new_props)), nbt)
+        else:
+            out.blocks[pos] = ((new[0], ()) if isinstance(new, tuple) else (new, props), nbt)
     return out
 
 
-def stone_tower_piece():
-    """The stone tower: the tower of the palisade (see tower_piece) in stone."""
-    return stone(tower_piece())
+def stone_tower_piece(culture=None):
+    """The stone tower: the tower of the palisade (see tower_piece) in the stone of the culture."""
+    return stone(tower_piece(), culture)
 
 
-def stone_gate_piece():
-    """The stone gate: the gate of the palisade (see gate_piece) in stone, with its wooden fence gates."""
-    return stone(gate_piece())
+def stone_gate_piece(culture=None):
+    """The stone gate: the gate of the palisade (see gate_piece) in the stone of the culture, with its wooden fence
+    gates."""
+    return stone(gate_piece(), culture)
+
+
+def stone_pieces(culture):
+    """The stone pieces of a culture with a stone of its own, for its style in STYLES."""
+    return {"stone/tower": functools.partial(stone_tower_piece, culture),
+            "stone/gate": functools.partial(stone_gate_piece, culture)}
 
 
 def check_stone_pieces():
-    """Each stone piece has the shape of its wooden piece: at each position, the two blocks have the same collision
-    shape (see collision). Stairs and slabs keep their properties."""
-    for wooden, stone_piece in ((tower_piece(), stone_tower_piece()), (gate_piece(), stone_gate_piece())):
-        assert wooden.size == stone_piece.size
-        assert wooden.blocks.keys() == stone_piece.blocks.keys()
-        for pos, ((name, props), _) in wooden.blocks.items():
-            (other, other_props), _ = stone_piece.blocks[pos]
-            same = collision(name, dict(props)) == collision(other, dict(other_props))
-            assert same, f"The stone block {other} at {pos} has another shape than {name}"
+    """Each stone piece of each culture has the shape of its wooden piece: at each position, the two blocks have the
+    same collision shape (see collision). Stairs and slabs keep their properties."""
+    for culture in STONE_STYLES:
+        for wooden, stone_piece in ((tower_piece(), stone_tower_piece(culture)),
+                                    (gate_piece(), stone_gate_piece(culture))):
+            assert wooden.size == stone_piece.size
+            assert wooden.blocks.keys() == stone_piece.blocks.keys()
+            for pos, ((name, props), _) in wooden.blocks.items():
+                (other, other_props), _ = stone_piece.blocks[pos]
+                same = collision(name, dict(props)) == collision(other, dict(other_props))
+                assert same, f"The stone block {other} of {culture or 'base'} at {pos} has another shape than {name}"
 
 
 # ---------------------------------------------------------------- houses
@@ -4126,10 +4178,19 @@ class LandStyle:
     blocks as in the other pieces (see Variant).
 
     - fence, gate: the fence around a field and the fence gate on its front side.
+    - post: the block of the 4 corner posts of the fence of a field, under the lanterns: a fence, or a full block.
+      The fence connects to the full faces of a full block: the fence has no gap.
+    - crops: the crops of the style in place of the crops of the layout (see FieldLayout), for example
+      {"carrots": "beetroots"}.
     - path: the ground of the front row and of the paths of a field.
     - base(rng): a block of the base course of the windmill.
-    - wall, corner: the walls of the windmill and its corner logs (axis y).
-    - roof: the stairs of the roof of the windmill. The top of the roof is a slab of the same wood.
+    - wall, logs, corner: the walls of the windmill and its corner logs (axis y). With logs, the wall block is a log
+      along its wall: axis x on the front and the back walls, axis z on the side walls.
+    - floor: the floor of the room of the windmill.
+    - roof, roof_slab: the stairs and the slab of the roof of the windmill. A pyramid roof (see windmill) has the slab
+      in its top ring.
+    - steep: the roof of the windmill is a steep roof of a long house (see steep_mill_roof), with gable walls of
+      roof_wall, a ridge of roof_ridge and carved horns of frame at the 2 ends of the ridge. The roof has no slab.
     - frame, cloth: the arms of the sails (a fence block) and the cloth of the sails.
     """
     fence: str
@@ -4142,6 +4203,21 @@ class LandStyle:
     roof_slab: str
     frame: str
     cloth: str
+    post: str | None = None
+    crops: dict[str, str] = dataclasses.field(default_factory=dict)
+    logs: bool = False
+    floor: str | None = None
+    steep: bool = False
+    roof_wall: str = "minecraft:spruce_planks"
+    roof_ridge: str = "minecraft:dark_oak_planks"
+
+    @property
+    def corner_post(self):
+        return self.post or self.fence
+
+    @property
+    def room_floor(self):
+        return self.floor or self.wall
 
 
 LAND = LandStyle(
@@ -4155,6 +4231,19 @@ LAND = LandStyle(
     roof_slab="minecraft:dark_oak_slab",
     frame="minecraft:spruce_fence",
     cloth="minecraft:white_wool",
+)
+# Valeholm: corner posts of mossy cobblestone on the fences of the fields, rows of beetroots in place of the carrots,
+# and a windmill with walls of horizontal spruce logs on a base of rubble, posts of stripped spruce logs at the
+# corners and the steep roof of a long house with carved horns.
+NORSE_LAND = dataclasses.replace(
+    LAND,
+    post="minecraft:mossy_cobblestone",
+    crops={"carrots": "beetroots"},
+    wall="minecraft:spruce_log",
+    logs=True,
+    corner="minecraft:stripped_spruce_log",
+    floor="minecraft:spruce_planks",
+    steep=True,
 )
 
 
@@ -4224,11 +4313,12 @@ def field(style, size):
                 t.set(x, 0, z, style.path)
             else:
                 t.set(x, 0, z, *FARMLAND)
-                name = spec.rows[x - 1]
+                name = style.crops.get(spec.rows[x - 1], spec.rows[x - 1])
                 t.set(x, 1, z, *crop(f"minecraft:{name}", rng, 3 if name == "beetroots" else 7))
     t.set(mid, 1, 1, style.gate, {"facing": "north", "in_wall": "false", "open": "false", "powered": "false"})
     for x in (0, width - 1):
         for z in (1, FIELD_DEPTH - 1):
+            t.set(x, 1, z, style.corner_post)
             lantern(t, x, 2, z)
     building_sign(t, mid + 2, 1, 0, "farm")
     return t
@@ -4243,13 +4333,48 @@ MILL_WALL_TOP = 9
 MILL_HUB_Y = 9
 MILL_ARM = 4
 MILL_HEIGHT = MILL_WALL_TOP + 5
+# The height of a windmill with a steep roof: the ridge is 2 blocks higher for each block from the walls, and the
+# carved horns are 2 blocks above the roof.
+STEEP_MILL_HEIGHT = MILL_WALL_TOP + 2 + 2 * (MILL_BODY // 2) + 1
+
+
+def steep_mill_top(x):
+    """The layer of the top block of the steep roof of a windmill over the column x of the tower (see
+    steep_roof_top): 2 blocks higher for each block from the side walls."""
+    k = min(x - 1, MILL_BODY - x)
+    return MILL_WALL_TOP + 2 + 2 * k
+
+
+def steep_mill_roof(t, style):
+    """The steep roof of a long house on the windmill (see long_house_shell): the ridge goes from the front to the
+    back. Each column of the tower has a block of roof_ridge under a stair of the roof. The middle column is the
+    ridge, with no stair on it: a builder on a scaffolding in the room places it. The gable walls fill the front and
+    the back under the roof, and the carved horns stand on the 2 ends of the ridge."""
+    mid = MILL_WIDTH // 2
+    z0, z1 = 1, MILL_DEPTH - 1
+    for x in range(1, MILL_WIDTH - 1):
+        top = steep_mill_top(x)
+        for z in range(z0, z1 + 1):
+            t.set(x, top - 1, z, style.roof_ridge)
+            if x != mid:
+                t.set(x, top, z, style.roof, stairs("east" if x < mid else "west"))
+        if 1 < x < MILL_WIDTH - 2:
+            for y in range(MILL_WALL_TOP + 1, top - 1):
+                for z in (z0, z1):
+                    t.set(x, y, z, style.roof_wall)
+    for z in (z0, z1):
+        for x in (mid - 1, mid + 1):
+            t.set(x, steep_mill_top(x) + 1, z, style.frame)
+            t.set(x, steep_mill_top(x) + 2, z, style.frame)
+        t.set(mid, steep_mill_top(mid), z, style.frame)
 
 
 def windmill(style):
     """The windmill: the mill of the grain of the fields.
 
-    - The tower: a base course of the style, walls of planks with a log at each corner, a door in the middle of the
-      front wall, windows on the sides and a pyramid roof (see roof_stairs) with a slab in its top ring.
+    - The tower: a base course of the style, walls of the style with a log at each corner, a door in the middle of
+      the front wall and windows on the sides. The roof is a pyramid roof (see roof_stairs) with a slab in its top
+      ring, or the steep roof of a long house (see steep_mill_roof).
     - The room: the grindstone of the miller on the floor, barrels of flour and hay bales, and a lantern on a barrel.
     - The sails: 4 arms of fences around the hub (a log on the front wall, axis z), in the front row. Each arm has a
       cloth of 3 blocks on one side, as the blades of a windmill. The lowest arm ends above the door.
@@ -4257,8 +4382,9 @@ def windmill(style):
     """
     rng = random.Random(97)
     mid = MILL_WIDTH // 2
-    t = Template(MILL_WIDTH, MILL_HEIGHT, MILL_DEPTH)
-    t.fill(0, 1, 0, MILL_WIDTH - 1, MILL_HEIGHT - 1, MILL_DEPTH - 1, "minecraft:air")
+    height = STEEP_MILL_HEIGHT if style.steep else MILL_HEIGHT
+    t = Template(MILL_WIDTH, height, MILL_DEPTH)
+    t.fill(0, 1, 0, MILL_WIDTH - 1, height - 1, MILL_DEPTH - 1, "minecraft:air")
     x0, x1 = 1, MILL_WIDTH - 2
     z0, z1 = 1, MILL_DEPTH - 1
     for x in range(MILL_WIDTH):
@@ -4268,19 +4394,22 @@ def windmill(style):
             if not x0 <= x <= x1:
                 t.set(x, 0, z, *GRASS)
                 continue
-            t.set(x, 0, z, style.wall if inside else style.base(rng))
+            t.set(x, 0, z, style.room_floor if inside else style.base(rng))
             if inside:
                 continue
             corner = x in (x0, x1) and z in (z0, z1)
+            along = {"axis": "x" if z in (z0, z1) else "z"} if style.logs else None
             for y in range(1, MILL_WALL_TOP + 1):
                 if corner:
                     t.set(x, y, z, style.corner, LOG_Y)
                 elif y == 1:
                     t.set(x, y, z, style.base(rng))
                 else:
-                    t.set(x, y, z, style.wall)
-    # The roof: rings of stairs from the top of the walls, and a slab on the top.
-    for ring in range(MILL_BODY // 2):
+                    t.set(x, y, z, style.wall, along)
+    if style.steep:
+        steep_mill_roof(t, style)
+    # The pyramid roof: rings of stairs from the top of the walls, and a slab on the top.
+    for ring in range(0 if style.steep else MILL_BODY // 2):
         y = MILL_WALL_TOP + 1 + ring
         low, high = ring, MILL_BODY - 1 - ring
         for dx in range(low, high + 1):
@@ -4288,8 +4417,9 @@ def windmill(style):
                 if dx in (low, high) or dz in (low, high):
                     t.set(x0 + dx, y, z0 + dz, style.roof, roof_stairs(dx, dz, low, high)[1])
     # The slab is in the middle of the top ring, not above it: a builder on a scaffolding in the room reaches it.
-    t.set(mid, MILL_WALL_TOP + MILL_BODY // 2, z0 + MILL_BODY // 2, style.roof_slab,
-          {"type": "bottom", "waterlogged": "false"})
+    if not style.steep:
+        t.set(mid, MILL_WALL_TOP + MILL_BODY // 2, z0 + MILL_BODY // 2, style.roof_slab,
+              {"type": "bottom", "waterlogged": "false"})
     # The door, and the windows on the sides and at the back.
     for y, half in ((1, "lower"), (2, "upper")):
         t.set(mid, y, z0, "minecraft:spruce_door",
@@ -4788,6 +4918,9 @@ STYLES = {
         "market": functools.partial(market, "deep", "valeholm"),
         **{f"job_{job}": build for job, build in NORSE_JOBS.items()},
         **CLIFF_PIECES["valeholm"],
+        **stone_pieces("valeholm"),
+        **{f"field_{size}": functools.partial(field, NORSE_LAND, size) for size in FIELDS},
+        "mill": functools.partial(windmill, NORSE_LAND),
     },
     "sunreach": {
         "street_cross": lambda: street_cross(CW),
@@ -5325,6 +5458,9 @@ DESERT = {
     "minecraft:stone_brick_stairs": "minecraft:sandstone_stairs",
     "minecraft:stone_brick_slab": "minecraft:cut_sandstone_slab",
     "minecraft:stone_brick_wall": "minecraft:sandstone_wall",
+    "minecraft:mossy_stone_bricks": "minecraft:cut_sandstone",
+    "minecraft:mossy_cobblestone_slab": "minecraft:sandstone_slab",
+    "minecraft:mossy_cobblestone_wall": "minecraft:sandstone_wall",
 }
 # The swamp: mangrove wood, and mud bricks for the stones of the base variant.
 SWAMP = {
@@ -5337,6 +5473,9 @@ SWAMP = {
     "minecraft:stone_brick_stairs": "minecraft:mud_brick_stairs",
     "minecraft:stone_brick_slab": "minecraft:mud_brick_slab",
     "minecraft:stone_brick_wall": "minecraft:mud_brick_wall",
+    "minecraft:mossy_stone_bricks": "minecraft:mud_bricks",
+    "minecraft:mossy_cobblestone_slab": "minecraft:mud_brick_slab",
+    "minecraft:mossy_cobblestone_wall": "minecraft:mud_brick_wall",
 }
 
 
@@ -5576,7 +5715,9 @@ def street_stairs(v):
 
 
 def village_settings(v):
-    """The settings of the village that change with the variant: the start pool, the wall and the homes."""
+    """The settings of the village that change with the variant: the start pool, the wall and the homes. The stone
+    column of the palisade has the stone of the culture (see STONE_COLUMNS)."""
+    column, point = STONE_COLUMNS.get(v.culture, STONE_COLUMNS[None])
     return {
         "start_pool": v.id("plaza"),
         "wall": {
@@ -5603,9 +5744,9 @@ def village_settings(v):
                 "tower": v.id("stone/tower"),
                 "gate": v.id("stone/gate"),
                 "palisade": {
-                    "log": v.state("minecraft:stone_bricks"),
+                    "log": v.state(column),
                     "base": v.state("minecraft:cobblestone"),
-                    "point": v.state("minecraft:stone_brick_wall"),
+                    "point": v.state(point),
                     "foundation": v.state("minecraft:cobblestone"),
                 },
             },
