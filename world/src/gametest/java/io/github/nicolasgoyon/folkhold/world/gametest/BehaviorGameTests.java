@@ -173,7 +173,7 @@ public final class BehaviorGameTests {
 
     /**
      * The village heart screen gives the player part (welcome, reputation, four services, advice) and the village,
-     * garrison, economy (with the market first), jobs and territory sections, with the village name.
+     * garrison, economy (with the market first), jobs, growth and territory sections, with the village name.
      */
     @GameTest(template = "arena", timeoutTicks = 20, batch = "behavior_village_info")
     public static void villageInfoHasAllSections(GameTestHelper helper) {
@@ -185,7 +185,10 @@ public final class BehaviorGameTests {
         scene.remove(helper);
 
         helper.assertTrue(info.title().getString().equals(name), "The title must be the village name");
-        helper.assertTrue(info.sections().size() == 5, "Expected 5 sections, found " + info.sections().size());
+        helper.assertTrue(info.sections().size() == 6, "Expected 6 sections, found " + info.sections().size());
+        helper.assertTrue(info.sections().get(4).heading().getContents() instanceof TranslatableContents growth
+                && growth.getKey().equals("screen.folkhold_world.village_heart.growth"),
+                "The fifth section must be the growth section");
         helper.assertTrue(info.sections().get(3).heading().getContents() instanceof TranslatableContents jobs
                 && jobs.getKey().equals("screen.folkhold_world.village_heart.jobs"),
                 "The fourth section must be the jobs section");
