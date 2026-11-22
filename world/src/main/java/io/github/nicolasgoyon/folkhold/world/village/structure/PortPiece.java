@@ -33,7 +33,8 @@ import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
  *   <li>The jetties go out from the outer edge of the quay: one on the axis of the gate, and one at
  *       {@link #JETTY_OFFSET} blocks on each side. A jetty is a deck of 3 blocks, {@link #JETTY_LENGTH} rows long, with
  *       rails and posts as a pier. At its end, a lantern stands on the rail on one side, and a mooring post on the other
- *       side.</li>
+ *       side. A moored boat floats on the water next to the last row, on the side of the lantern (see
+ *       {@link MooredBoats}).</li>
  *   <li>Each jetty has a flight of steps on its side of the higher X or Z, from the deck down to one block under the
  *       top block of the water, at its end (see {@link PierPiece}).</li>
  *   <li>Lanterns stand on the corners of the quay, and barrels on the 2 ends of the quay.</li>
@@ -55,6 +56,8 @@ public final class PortPiece extends StructurePiece implements PieceBeardifierMo
     public static final int JETTY_LENGTH = 10;
     /** The last row of the port, from the line of the wall: the end of the jetties. */
     public static final int REACH = QUAY_FROM + QUAY_DEPTH + JETTY_LENGTH - 1;
+    /** The distance from the middle of a jetty to its moored boat. */
+    public static final int BOAT_SIDE = 2;
     /** The blocks of the gate on each side of its axis: the quay has no rail there. */
     private static final int GATE_HALF = 2;
     /** A post goes under the edges every this number of blocks. */
@@ -202,6 +205,10 @@ public final class PortPiece extends StructurePiece implements PieceBeardifierMo
             BlockPos top = at(first + topStep, offset + 2);
             Decks.flight(level, box, top.getX(), top.getZ(), deckY, steps, outX, outZ, blocks.stairs());
         }
+        // The moored boat: on the water at the last row, on the side of the lantern, out of the rail.
+        BlockPos boat = at(first + JETTY_LENGTH - 1, offset - BOAT_SIDE);
+        MooredBoats.moor(level, box, boat.getX(), deckY, boat.getZ(), Direction.fromDelta(outX, 0, outZ),
+                blocks.deck());
     }
 
     /**
