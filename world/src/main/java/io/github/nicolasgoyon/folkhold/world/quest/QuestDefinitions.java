@@ -8,6 +8,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestRisk;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestTexts;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
@@ -52,7 +53,8 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  *              "special": {"chance": 0.25, "goods_share": 0.5, "experience": 5}},
  *   "offer": {"offer_minutes": 20, "duration_minutes": 40, "max_count": 64},
  *   "start_items": {"chance": 0.5, "items": [{"item": "minecraft:iron_pickaxe"}], "targets": ["minecraft:raw_iron"]},
- *   "penalty": {"reputation": 10, "start_items_factor": 2.0}
+ *   "penalty": {"reputation": 10, "start_items_factor": 2.0},
+ *   "texts": {"default": "quest.folkhold_world.story.default", "jobs": {"folkhold_world:baker": "..."}}
  * }
  * </pre>
  * {@code kind} and {@code need} are necessary. {@code enabled} is true by default. With no {@code min_level} the
@@ -64,7 +66,8 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
 public final class QuestDefinitions extends SimpleJsonResourceReloadListener {
     public static final String DIRECTORY = "folkhold/quest";
     private static final Set<String> FIELDS = Set.of("kind", "need", "enabled", "conditions", "reward", "offer",
-            "start_items", "penalty");
+            "start_items", "penalty", "texts");
+    private static final Set<String> TEXT_FIELDS = Set.of("default", "jobs");
     private static final Set<String> START_FIELDS = Set.of("chance", "items", "targets");
     private static final Set<String> PENALTY_FIELDS = Set.of("reputation", "start_items_factor");
     private static final Set<String> CONDITION_FIELDS = Set.of("min_level", "max_level");
@@ -189,9 +192,15 @@ public final class QuestDefinitions extends SimpleJsonResourceReloadListener {
                 penalty.has("start_items_factor")
                         ? OptionalDouble.of(GsonHelper.getAsDouble(penalty, "start_items_factor"))
                         : OptionalDouble.empty());
+        JsonObject texts = GsonHelper.getAsJsonObject(json, "texts", new JsonObject());
+        unknown(texts, TEXT_FIELDS, "texts.", warnings);
+        Map<String, String> jobTexts = new LinkedHashMap<>();
+        GsonHelper.getAsJsonObject(texts, "jobs", new JsonObject()).entrySet().forEach(entry ->
+                jobTexts.put(entry.getKey(), GsonHelper.convertToString(entry.getValue(), "texts.jobs")));
         return new QuestDefinition(id, kind, need, GsonHelper.getAsBoolean(json, "enabled", true),
                 GsonHelper.getAsInt(conditions, "min_level", 1),
-                GsonHelper.getAsInt(conditions, "max_level", Integer.MAX_VALUE), values, rewards, risk);
+                GsonHelper.getAsInt(conditions, "max_level", Integer.MAX_VALUE), values, rewards, risk,
+                new QuestTexts(GsonHelper.getAsString(texts, "default", ""), jobTexts));
     }
 
     /** Reads the experience, the items and the goods share of a reward rule. */

@@ -1,0 +1,42 @@
+{
+  "kind": "delivery",
+  "need": "job_story",
+  "reward": {
+    "experience": 10,
+    "goods_share": 1.0
+  },
+  "texts": {
+    "default": "quest.folkhold_world.story.default",
+    "jobs": {
+      "folkhold_world:baker": "quest.folkhold_world.story.baker",
+      "folkhold_world:beekeeper": "quest.folkhold_world.story.beekeeper",
+      "folkhold_world:blacksmith": "quest.folkhold_world.story.blacksmith",
+      "folkhold_world:butcher": "quest.folkhold_world.story.butcher",
+      "folkhold_world:carpenter": "quest.folkhold_world.story.carpenter",
+      "folkhold_world:digger": "quest.folkhold_world.story.digger",
+      "folkhold_world:dyer": "quest.folkhold_world.story.dyer",
+      "folkhold_world:fletcher": "quest.folkhold_world.story.fletcher",
+      "folkhold_world:gold_smelter": "quest.folkhold_world.story.gold_smelter",
+      "folkhold_world:lumberjack": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:lumberjack_acacia": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:lumberjack_birch": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:lumberjack_cherry": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:lumberjack_dark_oak": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:lumberjack_jungle": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:lumberjack_mangrove": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:lumberjack_spruce": "quest.folkhold_world.story.lumberjack",
+      "folkhold_world:mason": "quest.folkhold_world.story.mason",
+      "folkhold_world:miner": "quest.folkhold_world.story.miner",
+      "folkhold_world:papermaker": "quest.folkhold_world.story.papermaker",
+      "folkhold_world:pastry_cook": "quest.folkhold_world.story.pastry_cook",
+      "folkhold_world:rancher": "quest.folkhold_world.story.rancher",
+      "folkhold_world:sawyer": "quest.folkhold_world.story.sawyer",
+      "folkhold_world:sawyer_spruce": "quest.folkhold_world.story.sawyer",
+      "folkhold_world:shepherd": "quest.folkhold_world.story.shepherd",
+      "folkhold_world:smelter": "quest.folkhold_world.story.smelter",
+      "folkhold_world:tanner": "quest.folkhold_world.story.tanner",
+      "folkhold_world:tinker": "quest.folkhold_world.story.tinker",
+      "folkhold_world:weaver": "quest.folkhold_world.story.weaver"
+    }
+  }
+}

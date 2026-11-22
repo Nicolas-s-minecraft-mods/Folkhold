@@ -26,9 +26,28 @@ import java.util.OptionalInt;
  * @param values   the values of the offers
  * @param rewards  the rules of the reward, other than the emeralds and the reputation
  * @param risk     the start items and the failure penalty
+ * @param texts    the texts of the quests
  */
 public record QuestDefinition(String id, QuestKind kind, QuestNeed need, boolean enabled, int minLevel,
-        int maxLevel, Values values, RewardRule.Choice rewards, QuestRisk risk) {
+        int maxLevel, Values values, RewardRule.Choice rewards, QuestRisk risk, QuestTexts texts) {
+
+    /**
+     * Makes a definition with no texts.
+     *
+     * @param id       the id of the definition
+     * @param kind     the kind of the quests
+     * @param need     the need that makes the offers
+     * @param enabled  false for a definition that makes no offer
+     * @param minLevel the lowest level of a village with offers
+     * @param maxLevel the highest level of a village with offers
+     * @param values   the values of the offers
+     * @param rewards  the rules of the reward
+     * @param risk     the start items and the failure penalty
+     */
+    public QuestDefinition(String id, QuestKind kind, QuestNeed need, boolean enabled, int minLevel, int maxLevel,
+            Values values, RewardRule.Choice rewards, QuestRisk risk) {
+        this(id, kind, need, enabled, minLevel, maxLevel, values, rewards, risk, QuestTexts.NONE);
+    }
 
     /**
      * Makes a definition with no start items and the failure penalty of the server config.
@@ -66,6 +85,7 @@ public record QuestDefinition(String id, QuestKind kind, QuestNeed need, boolean
     public QuestDefinition {
         Objects.requireNonNull(rewards);
         Objects.requireNonNull(risk);
+        Objects.requireNonNull(texts);
         Objects.requireNonNull(id);
         Objects.requireNonNull(kind);
         Objects.requireNonNull(need);

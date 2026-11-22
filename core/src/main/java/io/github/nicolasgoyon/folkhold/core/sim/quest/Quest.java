@@ -34,6 +34,8 @@ public final class Quest {
     private List<RewardItem> startItems = List.of();
     private int failureReputation;
     private int progress;
+    private String giverJob = "";
+    private String text = "";
     private final int rewardReputation;
     private ReputationTier minTier;
     private final long offerEnd;
@@ -210,6 +212,27 @@ public final class Quest {
      */
     public void setProgress(int progress) {
         this.progress = Math.max(0, progress);
+    }
+
+    /** The job id of the worker that gives the quest (a job quest), or an empty text. */
+    public String giverJob() {
+        return giverJob;
+    }
+
+    /** The translation key of the story of the quest, or an empty text for a quest with no story. */
+    public String text() {
+        return text;
+    }
+
+    /**
+     * Sets the worker that gives the quest and the story of the quest.
+     *
+     * @param jobId the job id of the worker, or an empty text
+     * @param key   the translation key of the story, or an empty text
+     */
+    public void setGiver(String jobId, String key) {
+        this.giverJob = Objects.requireNonNull(jobId);
+        this.text = Objects.requireNonNull(key);
     }
 
     public int rewardReputation() {

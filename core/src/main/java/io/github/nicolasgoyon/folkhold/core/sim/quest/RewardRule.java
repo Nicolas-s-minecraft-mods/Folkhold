@@ -48,7 +48,7 @@ public record RewardRule(int experience, List<RewardItem> items, double goodsSha
     /**
      * Gives this rule to a new quest: its experience, its items and its goods. The goods are the item with the
      * largest stock of {@code goods}, worth {@code goodsShare} of the emerald reward at its price (rounded down, up
-     * to the stock). The emeralds go down by the value of the goods, to 1 emerald at least. With no goods, the
+     * to the stock). With a share above 0 and an item in stock, the goods are 1 item at least. The emeralds go down by the value of the goods, to 1 emerald at least. With no goods, the
      * emeralds do not change.
      *
      * @param quest the quest, with its emerald reward
@@ -66,7 +66,7 @@ public record RewardRule(int experience, List<RewardItem> items, double goodsSha
                             .thenComparing(Map.Entry::getKey));
             if (best.isPresent()) {
                 double unit = price.applyAsDouble(best.get().getKey());
-                int count = (int) Math.min(best.get().getValue(), Math.floor(value / unit));
+                int count = (int) Math.min(best.get().getValue(), Math.max(1.0, Math.floor(value / unit)));
                 if (count > 0) {
                     rewardItems.add(new RewardItem(best.get().getKey(), count, true));
                     emeralds = Math.max(1, emeralds - Math.round(count * unit));

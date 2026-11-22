@@ -11,6 +11,11 @@ public enum QuestNeed implements SerializedName {
     SITE_MATERIALS("site_materials", QuestKind.DELIVERY),
     /** A new caravan that waits for an escort. Kind {@link QuestKind#ESCORT}. */
     CARAVAN("caravan", QuestKind.ESCORT),
+    /**
+     * The story of a worker of an active job: it asks for an input of its job, and the reward is a product of its job.
+     * Kind {@link QuestKind#DELIVERY}.
+     */
+    JOB_STORY("job_story", QuestKind.DELIVERY),
     /** The monsters near a village. Kind {@link QuestKind#HUNT}. */
     MONSTERS("monsters", QuestKind.HUNT);
 
