@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -437,7 +438,19 @@ public final class StoneWall {
                 changed.add(pos);
             }
         });
-        changed.forEach(pos -> blocks.put(pos, stone.get(pos)));
+        // The blocks next to a changed block: a torch or a lantern on a changed block falls when the builders remove
+        // the wooden block, and the site puts it back.
+        Set<BlockPos> near = new LinkedHashSet<>(changed);
+        for (BlockPos pos : changed) {
+            for (Direction direction : Direction.values()) {
+                BlockPos next = pos.relative(direction);
+                BlockState block = stone.get(next);
+                if (block != null && !block.isAir()) {
+                    near.add(next);
+                }
+            }
+        }
+        near.forEach(pos -> blocks.put(pos, stone.get(pos)));
         return Optional.of(blocks);
     }
 }
