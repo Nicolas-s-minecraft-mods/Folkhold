@@ -6,21 +6,29 @@ import io.github.nicolasgoyon.folkhold.core.sim.construction.Plan;
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Reach;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.construction.ConstructionTargets;
+import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageGrowth;
+import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.WallSettings;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -38,9 +46,9 @@ public final class VillageTemplateGameTests {
     private static final int JOBS = 34;
     /**
      * The number of the other rigid pieces of each variant: the plaza, the bank, the market, the tower, the gate, the
-     * 2 fields and the mill.
+     * stone tower, the stone gate, the 2 fields and the mill.
      */
-    private static final int OTHER_PIECES = 8;
+    private static final int OTHER_PIECES = 10;
     /**
      * The number of the street pieces of each variant: {@code street}, {@code street_bank} and
      * {@code street_end}, and the planned streets {@code street_next}, {@code street_cross} and {@code street_side}
@@ -114,6 +122,57 @@ public final class VillageTemplateGameTests {
         helper.assertTrue(files.containsAll(TEST_TEMPLATES), "Missing templates of the GameTests: " + TEST_TEMPLATES);
         helper.assertTrue(unused.isEmpty(), "Template files of the village folder in no pool: " + unused);
         helper.succeed();
+    }
+
+    /**
+     * Each variant of the village structure has a stone wall (see {@link WallSettings.StoneWall}). The stone tower and
+     * the stone gate have the shape of the wooden tower and gate: the same positions, and at each position the same
+     * collision shape. Thus the watch post, the stair and the passage of the gate are at the same places.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_templates")
+    public static void stoneWallHasTheShapeOfThePalisade(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
+                .registryOrThrow(Registries.STRUCTURE).getOrThrow(Settlements.VILLAGE_STRUCTURE);
+        List<WallSettings> walls = new ArrayList<>(List.of(structure.wall()));
+        structure.variants().forEach(variant -> walls.add(variant.wall()));
+        List<String> problems = new ArrayList<>();
+        for (WallSettings wall : walls) {
+            Optional<WallSettings.StoneWall> stone = wall.stone();
+            if (stone.isEmpty()) {
+                problems.add(wall.tower() + ": no stone wall");
+                continue;
+            }
+            compareShapes(level, wall.tower(), stone.get().tower(), problems);
+            compareShapes(level, wall.gate(), stone.get().gate(), problems);
+        }
+        helper.assertTrue(problems.isEmpty(), "Stone pieces with another shape: " + problems);
+        helper.succeed();
+    }
+
+    /** Adds a problem for each position where 2 templates have blocks with another collision shape. */
+    private static void compareShapes(ServerLevel level, ResourceLocation wooden, ResourceLocation stone,
+            List<String> problems) {
+        Optional<StructureTemplate> first = level.getStructureManager().get(wooden);
+        Optional<StructureTemplate> second = level.getStructureManager().get(stone);
+        if (first.isEmpty() || second.isEmpty()) {
+            problems.add("no template " + (first.isEmpty() ? wooden : stone));
+            return;
+        }
+        if (!first.get().getSize().equals(second.get().getSize())) {
+            problems.add(stone + " has the size " + second.get().getSize());
+            return;
+        }
+        Map<BlockPos, BlockState> stoneBlocks = new HashMap<>();
+        ConstructionTargets.templateBlocks(level, second.get())
+                .forEach(block -> stoneBlocks.put(block.pos(), block.state()));
+        for (ConstructionTargets.TemplateBlock block : ConstructionTargets.templateBlocks(level, first.get())) {
+            BlockState other = stoneBlocks.get(block.pos());
+            if (other == null || Shapes.joinIsNotEmpty(block.state().getCollisionShape(level, BlockPos.ZERO),
+                    other.getCollisionShape(level, BlockPos.ZERO), BooleanOp.NOT_SAME)) {
+                problems.add(stone + " at " + block.pos() + ": " + other + " in place of " + block.state());
+            }
+        }
     }
 
     /**

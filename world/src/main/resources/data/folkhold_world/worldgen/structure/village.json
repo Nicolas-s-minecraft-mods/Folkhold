@@ -54,6 +54,24 @@
     },
     "street_stairs": {
       "Name": "minecraft:cobblestone_stairs"
+    },
+    "stone": {
+      "tower": "folkhold_world:village/stone/tower",
+      "gate": "folkhold_world:village/stone/gate",
+      "palisade": {
+        "log": {
+          "Name": "minecraft:stone_bricks"
+        },
+        "base": {
+          "Name": "minecraft:cobblestone"
+        },
+        "point": {
+          "Name": "minecraft:stone_brick_wall"
+        },
+        "foundation": {
+          "Name": "minecraft:cobblestone"
+        }
+      }
     }
   },
   "homes": "folkhold_world:village/homes",
@@ -115,6 +133,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/plains/stone/tower",
+          "gate": "folkhold_world:village/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/plains/homes"
@@ -172,6 +208,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/birch/stone/tower",
+          "gate": "folkhold_world:village/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/birch/homes"
@@ -229,6 +283,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/savanna/stone/tower",
+          "gate": "folkhold_world:village/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/savanna/homes"
@@ -280,6 +352,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/desert/stone/tower",
+          "gate": "folkhold_world:village/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:cut_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/desert/homes"
@@ -338,6 +428,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:mud_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/swamp/stone/tower",
+          "gate": "folkhold_world:village/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "base": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "point": {
+              "Name": "minecraft:mud_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/swamp/homes"
@@ -393,6 +501,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/stone/tower",
+          "gate": "folkhold_world:village/valeholm/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/valeholm/homes",
@@ -455,6 +581,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/plains/stone/tower",
+          "gate": "folkhold_world:village/valeholm/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/valeholm/plains/homes",
@@ -513,6 +657,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/birch/stone/tower",
+          "gate": "folkhold_world:village/valeholm/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/valeholm/birch/homes",
@@ -571,6 +733,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/savanna/stone/tower",
+          "gate": "folkhold_world:village/valeholm/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/valeholm/savanna/homes",
@@ -623,6 +803,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/desert/stone/tower",
+          "gate": "folkhold_world:village/valeholm/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:cut_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/valeholm/desert/homes",
@@ -682,6 +880,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:mud_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/swamp/stone/tower",
+          "gate": "folkhold_world:village/valeholm/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "base": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "point": {
+              "Name": "minecraft:mud_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/valeholm/swamp/homes",
@@ -738,6 +954,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/stone/tower",
+          "gate": "folkhold_world:village/sunreach/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/sunreach/homes",
@@ -800,6 +1034,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/plains/stone/tower",
+          "gate": "folkhold_world:village/sunreach/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/sunreach/plains/homes",
@@ -858,6 +1110,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/birch/stone/tower",
+          "gate": "folkhold_world:village/sunreach/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/sunreach/birch/homes",
@@ -916,6 +1186,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/savanna/stone/tower",
+          "gate": "folkhold_world:village/sunreach/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/sunreach/savanna/homes",
@@ -968,6 +1256,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/desert/stone/tower",
+          "gate": "folkhold_world:village/sunreach/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:cut_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/sunreach/desert/homes",
@@ -1027,6 +1333,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/swamp/stone/tower",
+          "gate": "folkhold_world:village/sunreach/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "base": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "point": {
+              "Name": "minecraft:mud_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/sunreach/swamp/homes",
@@ -1083,6 +1407,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/stone/tower",
+          "gate": "folkhold_world:village/maritime/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/maritime/homes",
@@ -1145,6 +1487,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/plains/stone/tower",
+          "gate": "folkhold_world:village/maritime/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/maritime/plains/homes",
@@ -1203,6 +1563,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/birch/stone/tower",
+          "gate": "folkhold_world:village/maritime/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/maritime/birch/homes",
@@ -1261,6 +1639,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/savanna/stone/tower",
+          "gate": "folkhold_world:village/maritime/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/maritime/savanna/homes",
@@ -1313,6 +1709,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/desert/stone/tower",
+          "gate": "folkhold_world:village/maritime/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:cut_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/maritime/desert/homes",
@@ -1372,6 +1786,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:mud_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/swamp/stone/tower",
+          "gate": "folkhold_world:village/maritime/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "base": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "point": {
+              "Name": "minecraft:mud_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/maritime/swamp/homes",
@@ -1428,6 +1860,24 @@
         },
         "street_stairs": {
           "Name": "minecraft:cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/stone/tower",
+          "gate": "folkhold_world:village/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
         }
       },
       "homes": "folkhold_world:village/cave/homes",
