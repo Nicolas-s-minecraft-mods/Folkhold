@@ -94,12 +94,12 @@ public final class GameTestShards {
      * @throws IllegalArgumentException for a value that is not valid
      */
     static int[] parse(String shard) {
-        String[] parts = shard.split("/");
-        if (parts.length != 2) {
+        int slash = shard.indexOf('/');
+        if (slash < 0 || slash != shard.lastIndexOf('/')) {
             throw new IllegalArgumentException("The shard must be i/n, not '" + shard + "'");
         }
-        int index = Integer.parseInt(parts[0].trim());
-        int count = Integer.parseInt(parts[1].trim());
+        int index = Integer.parseInt(shard.substring(0, slash).trim());
+        int count = Integer.parseInt(shard.substring(slash + 1).trim());
         if (count < 1 || index < 1 || index > count) {
             throw new IllegalArgumentException("The shard must be i/n with 1 <= i <= n, not '" + shard + "'");
         }

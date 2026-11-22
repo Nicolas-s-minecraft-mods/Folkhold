@@ -95,10 +95,11 @@ tasks.named('jar') {
 // the configuration files of an earlier run.
 def gameTestWorld = project.file('run-gametest/world')
 def gameTestConfig = project.file('run-gametest/config')
+def gameTestReport = project.file('run-gametest/shard-report')
 tasks.named('runGameTestServer') {
     doFirst {
         gameTestWorld.deleteDir()
         gameTestConfig.deleteDir()
-        project.file('run-gametest/shard-report').deleteDir()
+        gameTestReport.deleteDir()
     }
 }

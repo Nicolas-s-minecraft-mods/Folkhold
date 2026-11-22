@@ -190,6 +190,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p build
+          # The notice of the shard also comes after a failure of the tests.
+          set +e
           start=$(date +%s)
           ./gradlew :dev:runGameTestServer -Pmod_version="$VERSION" -PgametestShard="$SHARD" --stacktrace 2>&1 \
             | tee build/ci-gametest.log
