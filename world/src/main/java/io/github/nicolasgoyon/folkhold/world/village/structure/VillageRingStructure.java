@@ -67,7 +67,9 @@ public final class VillageRingStructure extends Structure {
         for (RingDistricts.District district : RingDistricts.all()) {
             ChunkPos start = new ChunkPos(anchor.x - RingDistricts.CELL * district.i(),
                     anchor.z - RingDistricts.CELL * district.j());
-            if (set.get().value().placement().isStructureChunk(state, start.x, start.z)) {
+            // A held village gets no new district: its saved first wall is not the first wall of its layout.
+            if (set.get().value().placement().isStructureChunk(state, start.x, start.z)
+                    && !RingDistrictHolds.isHeld(start)) {
                 pieces.addAll(VillageRings.districts(village, set.get(), context, start)
                         .getOrDefault(district, List.of()));
             }
