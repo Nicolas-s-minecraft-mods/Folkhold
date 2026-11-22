@@ -7,6 +7,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.group.GroupState;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MemberRole;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.EscortDifficulty;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
@@ -22,6 +23,7 @@ import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import io.github.nicolasgoyon.folkhold.world.quest.Deliveries;
+import io.github.nicolasgoyon.folkhold.world.quest.EscortDifficulties;
 import io.github.nicolasgoyon.folkhold.world.quest.Escorts;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
@@ -37,7 +39,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -55,13 +60,18 @@ public final class EscortGameTests {
     private EscortGameTests() {
     }
 
-    /** The origin village of the test, with a heart. */
+    /**
+     * The origin village of the test, with a heart, at the level 1: the escorts of its short routes have the lowest
+     * difficulty, so their reward is for the neutral tier.
+     */
     private static Settlement village(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
         helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
         VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
         heart.ensureSettlement();
-        return Settlements.of(helper.getLevel().getServer(), heart).orElseThrow();
+        Settlement settlement = Settlements.of(helper.getLevel().getServer(), heart).orElseThrow();
+        settlement.setProgress(1, 0);
+        return settlement;
     }
 
     /** A waiting caravan of the village on a route along the arena: merchant, mule, guard, payment 20. */
@@ -119,8 +129,11 @@ public final class EscortGameTests {
                 "The village must offer an escort of its caravan");
         helper.assertTrue(departure == 100 + WorldConfig.QUEST_ESCORT_WAIT_TICKS.get(),
                 "The caravan must wait for an escort: " + departure);
-        helper.assertTrue(quest.rewardEmeralds() == Math.max(1,
-                Math.round(20 * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())), "The reward comes from the cargo");
+        // The factor of the difficulty of the escort (see EscortDifficulty) multiplies the share of the cargo.
+        double factor = EscortDifficulties.get().level(quest.difficulty()).rewardFactor();
+        helper.assertTrue(quest.difficulty() >= 1 && quest.rewardEmeralds() == Math.max(1,
+                Math.round(20 * factor * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())),
+                "The reward comes from the cargo and the difficulty: " + quest.rewardEmeralds());
         helper.succeed();
     }
 
@@ -261,9 +274,12 @@ public final class EscortGameTests {
         helper.succeed();
     }
 
-    /** An ambush of monsters appears in front of the caravan and attacks the merchant. */
+    /**
+     * An ambush of the lowest difficulty: 2 or 3 pillagers appear in front of the caravan and attack the merchant. The
+     * highest difficulty adds vindicators, a ravager and a helmet. An escort of the lowest difficulty has one ambush.
+     */
     @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_ambush")
-    public static void ambushAttacksTheMerchant(GameTestHelper helper) {
+    public static void ambushOfPillagersAttacksTheMerchant(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Settlement origin = village(helper);
         MobileGroup caravan = caravan(helper, origin);
@@ -271,21 +287,88 @@ public final class EscortGameTests {
         GroupMaterializer.keep(caravan.id(), true);
         GroupMaterializer.materialize(level, caravan);
         Entity merchant = level.getEntity(caravan.merchant().orElseThrow().id());
+        EscortDifficulty difficulties = EscortDifficulties.get();
+        EscortDifficulty.Level lowest = difficulties.level(1);
+        EscortDifficulty.Level highest = difficulties.level(difficulties.levels().size());
 
-        List<Mob> monsters = Escorts.spawnAmbush(level, caravan, 3);
+        List<Mob> low = Escorts.spawnAmbush(level, caravan, lowest, 7);
+        List<Mob> high = Escorts.spawnAmbush(level, caravan, highest, 7);
 
-        boolean attack = !monsters.isEmpty() && monsters.stream().allMatch(mob -> mob.getTarget() == merchant
-                && mob.getPersistentData().getBoolean(Escorts.AMBUSH_TAG));
-        int count = monsters.size();
-        monsters.forEach(Entity::discard);
-        Quest none = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
+        boolean attack = !low.isEmpty() && low.stream().allMatch(mob -> mob.getTarget() == merchant
+                && mob.getPersistentData().getBoolean(Escorts.AMBUSH_TAG) && mob.getType() == EntityType.PILLAGER
+                && mob instanceof Raider raider && !raider.canJoinRaid());
+        int count = low.size();
+        boolean ravager = high.stream().anyMatch(mob -> mob.getType() == EntityType.RAVAGER);
+        long vindicators = high.stream().filter(mob -> mob.getType() == EntityType.VINDICATOR).count();
+        boolean helmets = high.stream().filter(mob -> mob.getType() != EntityType.RAVAGER)
+                .allMatch(mob -> !mob.getItemBySlot(EquipmentSlot.HEAD).isEmpty());
+        low.forEach(Entity::discard);
+        high.forEach(Entity::discard);
+        Quest easy = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
                 caravan.id(), 0, 1, 1, ReputationTier.NEUTRAL, 0, 0);
-        Deque<Double> plan = Escorts.plan(none, caravan);
-        clear(helper, caravan, none);
-        helper.assertTrue(count == 3 && attack, "3 monsters must attack the merchant: " + count);
-        helper.assertTrue(plan.size() >= 1 && plan.size() <= 3, "An escort has 1 to 3 ambushes: " + plan.size());
-        helper.assertTrue(Escorts.ambushSize(400, 1) == 2 && Escorts.ambushSize(1600, 10) == 7
-                && Escorts.ambushSize(10_000, 20) == 8, "The size of an ambush follows the route and the level");
+        easy.setDifficulty(1);
+        Deque<Double> plan = Escorts.plan(easy, caravan);
+        clear(helper, caravan, easy);
+        helper.assertTrue(attack && count >= 2 && count <= 3, "2 or 3 pillagers must attack the merchant: " + count);
+        helper.assertTrue(plan.size() == 1, "An escort of the lowest difficulty has 1 ambush: " + plan.size());
+        helper.assertTrue(highest.ravager() && ravager && vindicators == highest.vindicators() && helmets,
+                "The highest difficulty must add a ravager, the vindicators and the helmets");
         helper.succeed();
+    }
+
+    /** The escort fails when the merchant of the caravan dies, and the caravan ends with no arrival. */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_merchant_dies")
+    public static void deadMerchantFailsTheEscort(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+
+        caravan.onMemberDied(caravan.merchant().orElseThrow().id());
+        Escorts.onGroupFinished(server, caravan);
+
+        QuestState state = quest.state();
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertTrue(state == QuestState.FAILED, "The escort must fail: " + state);
+        helper.succeed();
+    }
+
+    /**
+     * The difficulty of an escort follows the data file: a short route of a small village has the lowest difficulty,
+     * no extra guard and the reward of the config. A higher difficulty adds guards and grows the reward.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_difficulty")
+    public static void difficultySetsTheGuardsAndTheReward(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement origin = village(helper);
+        origin.setProgress(1, 0);
+        MobileGroup small = caravan(helper, origin);
+        long guardsBefore = guards(small);
+        Quest easy = Escorts.offer(server, small, origin, 100).orElseThrow();
+        long smallGuards = guards(small) - guardsBefore;
+        long expectedEasy = Math.max(1, Math.round(small.payment() * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()));
+        clear(helper, small, easy);
+
+        origin.setProgress(20, 0);
+        MobileGroup large = caravan(helper, origin);
+        Quest hard = Escorts.offer(server, large, origin, 100).orElseThrow();
+        EscortDifficulty.Level level = EscortDifficulties.get().level(hard.difficulty());
+        long largeGuards = guards(large) - 1;
+        clear(helper, large, hard);
+        origin.setProgress(1, 0);
+
+        helper.assertTrue(easy.difficulty() == 1 && smallGuards == 0 && easy.rewardEmeralds() == expectedEasy,
+                "The lowest difficulty: no extra guard and the reward of the config: " + easy.difficulty() + ", "
+                        + smallGuards + ", " + easy.rewardEmeralds());
+        helper.assertTrue(hard.difficulty() > 1 && largeGuards == level.guards() && level.guards() > 0
+                && hard.rewardEmeralds() > easy.rewardEmeralds(), "A higher difficulty adds guards and reward: "
+                        + hard.difficulty() + ", " + largeGuards + ", " + hard.rewardEmeralds());
+        helper.succeed();
+    }
+
+    private static long guards(MobileGroup group) {
+        return group.members().stream().filter(member -> member.role() == MemberRole.GUARD).count();
     }
 }

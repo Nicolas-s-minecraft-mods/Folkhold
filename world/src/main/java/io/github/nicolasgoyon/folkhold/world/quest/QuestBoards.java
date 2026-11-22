@@ -620,6 +620,10 @@ public final class QuestBoards {
             icon = ESCORT_ICON;
             long blocks = Escorts.caravan(server, quest).map(group -> Math.round(group.route().length())).orElse(0L);
             info = Component.translatable("quest.folkhold_world.info.escort", kind, blocks, minutes);
+            if (quest.difficulty() > 0) {
+                info = Component.translatable("quest.folkhold_world.info.difficulty", info,
+                        difficultyMark(quest.difficulty(), EscortDifficulties.get().levels().size()));
+            }
             countdown = (int) Math.max(0, (quest.offerEnd() - now) / SharedConstants.TICKS_PER_SECOND);
         }
         if (quest.minTier() != ReputationTier.NEUTRAL) {
@@ -697,6 +701,13 @@ public final class QuestBoards {
             case STOPPED -> Component.translatable("quest.folkhold_world.caravan.stopped").withColor(TEXT_WARN);
             default -> Component.empty();
         };
+    }
+
+    /** The difficulty of an escort: filled stars for the difficulty, empty stars up to the highest difficulty. */
+    private static Component difficultyMark(int difficulty, int levels) {
+        int shown = Math.min(difficulty, levels);
+        return Component.literal("★".repeat(shown)).withColor(INK_BAD)
+                .append(Component.literal("☆".repeat(Math.max(0, levels - shown))).withColor(INK_MUTED));
     }
 
     /** The minimum tier of an offer: a tick and the name of the tier, in green. */

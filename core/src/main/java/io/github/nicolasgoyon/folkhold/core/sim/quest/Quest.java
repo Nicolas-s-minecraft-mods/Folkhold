@@ -36,6 +36,7 @@ public final class Quest {
     private int progress;
     private String giverJob = "";
     private String text = "";
+    private int difficulty;
     private final int rewardReputation;
     private ReputationTier minTier;
     private final long offerEnd;
@@ -233,6 +234,20 @@ public final class Quest {
     public void setGiver(String jobId, String key) {
         this.giverJob = Objects.requireNonNull(jobId);
         this.text = Objects.requireNonNull(key);
+    }
+
+    /** The difficulty of an escort (see {@link EscortDifficulty}), 0 for the other kinds and the old saves. */
+    public int difficulty() {
+        return difficulty;
+    }
+
+    /**
+     * Sets the difficulty of an escort.
+     *
+     * @param difficulty the difficulty, 0 or more
+     */
+    public void setDifficulty(int difficulty) {
+        this.difficulty = Math.max(0, difficulty);
     }
 
     public int rewardReputation() {

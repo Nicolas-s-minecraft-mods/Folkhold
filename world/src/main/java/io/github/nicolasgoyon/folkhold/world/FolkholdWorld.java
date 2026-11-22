@@ -38,6 +38,7 @@ import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.notice.Notices;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrols;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
+import io.github.nicolasgoyon.folkhold.world.quest.EscortDifficulties;
 import io.github.nicolasgoyon.folkhold.world.quest.Escorts;
 import io.github.nicolasgoyon.folkhold.world.quest.Hunts;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
@@ -217,6 +218,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(EconomyData::onAddReloadListener);
         NeoForge.EVENT_BUS.addListener(QuestDefinitions::onAddReloadListener);
         NeoForge.EVENT_BUS.addListener(StartMaterials::onAddReloadListener);
+        NeoForge.EVENT_BUS.addListener(EscortDifficulties::onAddReloadListener);
         SimulationTicker.addSystem("economy", Economies::tick);
         SimulationTicker.addSystem("level", SettlementLevels::tick);
         SimulationTicker.addWorldSystem("mobile groups", MobileGroupSystem::tick);
