@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.construction.Plan;
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Reach;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.construction.ConstructionTargets;
+import io.github.nicolasgoyon.folkhold.world.village.VillageGrowth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -52,9 +53,16 @@ public final class VillageTemplateGameTests {
      * pieces are rigid.
      */
     private static final int CAVE_PIECES = JOBS + 3 + STREET_PIECES + 2;
+    /**
+     * The number of the pieces of the steps of the homes that grow in place: for each style, its jobs with homes that
+     * grow in place, in each step and in each biome variant.
+     */
+    private static final int HOME_STEP_PIECES = HomeStepTemplateGameTests.STEP_JOBS.values().stream()
+            .mapToInt(Integer::intValue).sum() * VillageGrowth.HOME_STEPS.size()
+            * JobBuildingTemplateGameTests.VARIANTS.size();
     /** The number of the pieces that the plan test checks: all the rigid pieces of all the variants. */
     private static final int PLAN_PIECES = (JOBS + OTHER_PIECES) * VARIANTS + HomeTemplateGameTests.HOME_PIECES
-            + CAVE_PIECES;
+            + CAVE_PIECES + HOME_STEP_PIECES;
     /** The number of the pieces that the plan test does not check: the streets of all the variants. */
     private static final int SKIPPED_PIECES = STREET_PIECES * VARIANTS;
     /**
