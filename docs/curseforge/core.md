@@ -30,4 +30,4 @@ Folkhold is a set of mods for a single-player world that changes without the pla
 ### License and links
 
 - Code: MIT License. Assets: CC BY 4.0.
-- Source, issues and documentation: <https://github.com/nicolas-goyon/Folkhold>
+- Source, issues and documentation: <https://github.com/Nicolas-s-minecraft-mods/Folkhold>

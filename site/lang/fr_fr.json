@@ -47,7 +47,7 @@
   "download.mods.text": "Pour utiliser les mods sans le modpack, placez tous les jars Folkhold dans le dossier <code>mods</code> d’une instance Minecraft {minecraft}. L’instance a besoin de <a href=\"https://neoforged.net\">NeoForge</a> {neoforge} ou plus récent et de <a href=\"https://modrinth.com/mod/geckolib\">GeckoLib</a> {geckolib} ou plus récent.",
   "download.other.title": "Autres fichiers",
   "download.more": "Le <a href=\"{readme}\">README</a> (en anglais) donne plus d’informations sur l’installation.",
-  "download.mods.cartofold": "Folkhold a aussi besoin de <a href=\"https://github.com/nicolas-goyon/Cartofold/releases\">Cartofold</a> {cartofold} ou plus récent.",
+  "download.mods.cartofold": "Folkhold a aussi besoin de <a href=\"https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases\">Cartofold</a> {cartofold} ou plus récent.",
   "download.server.title": "Serveur",
   "download.server.text": "Le serveur et chaque joueur doivent utiliser la même version de Folkhold.",
   "download.server.step1": "Installez un serveur NeoForge {neoforge} pour Minecraft {minecraft} avec l’<a href=\"https://neoforged.net\">installateur NeoForge</a> (option «&nbsp;Install server&nbsp;»).",

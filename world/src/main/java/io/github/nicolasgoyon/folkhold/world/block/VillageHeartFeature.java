@@ -53,7 +53,7 @@ public final class VillageHeartFeature implements BlockFeature {
      * village on the map. Other items open the screen of the village.
      *
      * <p>Workaround 1 for Cartofold: a block that opens a screen with {@code useWithoutItem} never gets the use of a
-     * survey map (https://github.com/nicolas-goyon/Cartofold/issues/85). Folkhold checks the id of the item.
+     * survey map (https://github.com/Nicolas-s-minecraft-mods/Cartofold/issues/85). Folkhold checks the id of the item.
      */
     @Override
     public ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,

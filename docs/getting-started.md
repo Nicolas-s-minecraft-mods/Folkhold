@@ -37,7 +37,7 @@ Other IDEs: IntelliJ IDEA can also open a dev container. The support depends on 
 1. Clone the repository:
 
    ```powershell
-   git clone https://github.com/nicolas-goyon/Folkhold.git
+   git clone https://github.com/Nicolas-s-minecraft-mods/Folkhold.git
    cd Folkhold
    ```
 
@@ -337,10 +337,10 @@ The CI makes the same file for each build (artifact `folkhold-modpack`), with th
 
 ### Dev instance that updates itself
 
-After each green build of a push on `develop`, the site of the project contains the dev pack: <https://nicolas-goyon.github.io/Folkhold/dev/pack.toml>. A Prism Launcher instance updates itself from this pack before each start of the game:
+After each green build of a push on `develop`, the site of the project contains the dev pack: <https://nicolas-s-minecraft-mods.github.io/Folkhold/dev/pack.toml>. A Prism Launcher instance updates itself from this pack before each start of the game:
 
 1. In Prism Launcher, select **Add Instance**, then **Import**.
-2. Paste this URL: <https://nicolas-goyon.github.io/Folkhold/dev/folkhold-dev-instance.zip>. Select **OK**.
+2. Paste this URL: <https://nicolas-s-minecraft-mods.github.io/Folkhold/dev/folkhold-dev-instance.zip>. Select **OK**.
 3. Launch the instance. packwiz-installer installs the mods of the latest green build of `develop`, then the game opens.
 
 At each launch, packwiz-installer gets the latest build. It removes the jars of the earlier build. You do not import the instance again.
@@ -351,7 +351,7 @@ At each launch, packwiz-installer gets the latest build. It removes the jars of 
 
 ## Site of the project
 
-The site of the project is on GitHub Pages: <https://nicolas-goyon.github.io/Folkhold/>. It shows the downloads of the latest release and the notes of all the releases, in English and in French. `scripts/pages.py` builds the site from these files and from the releases of the GitHub API:
+The site of the project is on GitHub Pages: <https://nicolas-s-minecraft-mods.github.io/Folkhold/>. It shows the downloads of the latest release and the notes of all the releases, in English and in French. `scripts/pages.py` builds the site from these files and from the releases of the GitHub API:
 
 | File | Content |
 | --- | --- |
@@ -365,7 +365,7 @@ To build the site on your computer, run these commands. Then open `build/site/in
 
 ```bash
 git fetch --tags
-python3 scripts/pages.py --repo nicolas-goyon/Folkhold
+python3 scripts/pages.py --repo Nicolas-s-minecraft-mods/Folkhold
 ```
 
 With no token in `GH_TOKEN`, the GitHub API accepts 60 requests per hour. The script uses 2 requests when the repository has 100 releases or fewer.

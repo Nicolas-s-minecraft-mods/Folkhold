@@ -11,7 +11,7 @@ repositories {
             ivy {
                 name = 'Cartofold releases'
                 url = cartofoldDir != null ? rootProject.file(cartofoldDir).toURI()
-                        : 'https://github.com/nicolas-goyon/Cartofold/releases/download'
+                        : 'https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases/download'
                 patternLayout {
                     artifact 'v[revision]/[module]-[revision].[ext]'
                 }

@@ -22,7 +22,7 @@ if [ -z "$expected" ]; then
     exit 1
 fi
 
-url="https://github.com/nicolas-goyon/Cartofold/releases/download/v${version}/cartofold-${version}.jar"
+url="https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases/download/v${version}/cartofold-${version}.jar"
 jar="$dir/v${version}/cartofold-${version}.jar"
 mkdir -p "$(dirname "$jar")"
 curl -fsSL -o "$jar.part" "$url"

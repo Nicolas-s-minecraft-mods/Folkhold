@@ -3,6 +3,6 @@ filename = "cartofold-0.33.12.jar"
 side = "both"
 
 [download]
-url = "https://github.com/nicolas-goyon/Cartofold/releases/download/v0.33.12/cartofold-0.33.12.jar"
+url = "https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases/download/v0.33.12/cartofold-0.33.12.jar"
 hash-format = "sha256"
 hash = "c7ac97919e21714c83548527f8a32b8094f4b64ddc533db9c3e568c5159a03a7"
