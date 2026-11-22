@@ -50,7 +50,14 @@ public class QuestBoardScreen extends UiScreen {
     private static final int BOARD_COLOR = 0xFF6B4A2C;
     private static final int BOARD_TEXT = 0xFFE5D5B5;
     private static final int COLUMN_WIDTH = 150;
-    private static final int CARD_HEIGHT = 64;
+    /** The Y of the line of the reward in a card: below the name and the info. */
+    private static final int REWARD_Y = 28;
+    /** The space between two lines of a card below the info. */
+    private static final int LINE_STEP = 12;
+    /** The space between the last line of a card and its button. */
+    private static final int BUTTON_GAP = 6;
+    /** The space below the button of a card. */
+    private static final int BOTTOM = 5;
     private static final int ACTIVE_HEIGHT = 46;
     private static final int URGENT_SECONDS = 120;
 
@@ -71,6 +78,46 @@ public class QuestBoardScreen extends UiScreen {
         Component label() {
             return Component.translatable(KEY + "sort." + name().toLowerCase(Locale.ROOT));
         }
+    }
+
+    /**
+     * The number of the optional lines of a card below the reward: the start items and the loss of a failure.
+     *
+     * @param offer the offer
+     * @return 0 or 1
+     */
+    static int extraLines(Offer offer) {
+        return offer.risk().getString().isEmpty() ? 0 : 1;
+    }
+
+    /**
+     * The height of the card of an offer: the name, the info, the reward and the optional lines, then the button.
+     *
+     * @param offer the offer
+     * @return the height, in pixels
+     */
+    static int cardHeight(Offer offer) {
+        return cardHeight(extraLines(offer));
+    }
+
+    /**
+     * The height of a card with a number of optional lines below the reward.
+     *
+     * @param extraLines the optional lines
+     * @return the height, in pixels
+     */
+    static int cardHeight(int extraLines) {
+        return REWARD_Y + extraLines * LINE_STEP + UiTheme.LINE + BUTTON_GAP + UiTheme.CONTROL + BOTTOM;
+    }
+
+    /**
+     * The Y of the top of the button of a card, from the top of the card.
+     *
+     * @param height the height of the card
+     * @return the Y
+     */
+    static int buttonTop(int height) {
+        return height - BOTTOM - UiTheme.CONTROL;
     }
 
     /** One offer on the current page, with its rectangle. */
@@ -194,7 +241,9 @@ public class QuestBoardScreen extends UiScreen {
         UiRect grid = new UiRect(boardRect.x() + UiTheme.PADDING, header.bottom() + 6,
                 boardRect.width() - 2 * UiTheme.PADDING, boardRect.bottom() - header.bottom() - 10);
         int columns = grid.width() >= 260 ? 2 : 1;
-        int rows = Math.max(1, (grid.height() + UiTheme.GAP + 2) / (CARD_HEIGHT + UiTheme.GAP + 2));
+        // All the cards have the height of the highest card: the grid stays regular, and no line is behind a button.
+        int cardHeight = offers.stream().mapToInt(QuestBoardScreen::cardHeight).max().orElse(cardHeight(0));
+        int rows = Math.max(1, (grid.height() + UiTheme.GAP + 2) / (cardHeight + UiTheme.GAP + 2));
         int perPage = columns * rows;
         offerPages = Math.max(1, (offers.size() + perPage - 1) / perPage);
         offerPage = Mth.clamp(offerPage, 0, offerPages - 1);
@@ -216,11 +265,11 @@ public class QuestBoardScreen extends UiScreen {
         for (int i = first; i < Math.min(offers.size(), first + perPage); i++) {
             int index = i - first;
             UiRect cell = grid.column(index % columns, columns, UiTheme.GAP + 2);
-            UiRect rect = new UiRect(cell.x(), grid.y() + (index / columns) * (CARD_HEIGHT + UiTheme.GAP + 2),
-                    cell.width(), CARD_HEIGHT);
+            UiRect rect = new UiRect(cell.x(), grid.y() + (index / columns) * (cardHeight + UiTheme.GAP + 2),
+                    cell.width(), cardHeight);
             Offer offer = offers.get(i);
             cards.add(new Card(offer, rect));
-            UiRect buttonRect = new UiRect(rect.x() + 5, rect.bottom() - 5 - UiTheme.CONTROL, rect.width() - 10,
+            UiRect buttonRect = new UiRect(rect.x() + 5, rect.y() + buttonTop(rect.height()), rect.width() - 10,
                     UiTheme.CONTROL);
             UiButton button;
             if (offer.blocked().isPresent()) {
@@ -376,11 +425,14 @@ public class QuestBoardScreen extends UiScreen {
                     .withColor(UiTheme.WAX & 0xFFFFFF);
         }
         int rightWidth = font.width(right);
-        int y = rect.y() + 28;
+        int y = rect.y() + REWARD_Y;
         UiText.draw(graphics, font, offer.reward(), rect.x() + 5, y, rect.width() - 14 - rightWidth,
                 off ? UiTheme.INK_MUTED : UiTheme.INK);
         UiText.drawRight(graphics, font, right, rect.right() - 5, y, rect.width() / 2, UiTheme.INK_MUTED);
-        UiText.draw(graphics, font, offer.risk(), rect.x() + 5, y + 12, rect.width() - 10, UiTheme.INK_MUTED);
+        if (!offer.risk().getString().isEmpty()) {
+            UiText.draw(graphics, font, offer.risk(), rect.x() + 5, y + LINE_STEP, rect.width() - 10,
+                    UiTheme.INK_MUTED);
+        }
     }
 
     private void renderColumn(GuiGraphics graphics) {
