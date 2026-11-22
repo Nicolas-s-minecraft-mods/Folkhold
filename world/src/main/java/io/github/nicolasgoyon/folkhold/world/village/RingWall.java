@@ -1,6 +1,8 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSite;
@@ -15,9 +17,11 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.RingPlans;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,6 +31,7 @@ import java.util.Set;
 import java.util.function.IntBinaryOperator;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntArrayTag;
@@ -34,6 +39,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.StructureTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -65,6 +71,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       of the part (see {@link State#reference}): the area of the village, its scan and its repairs follow the new
  *       ring, and the repairs finish the part of a site that stops before its end.</li>
  *   <li>When each part of a ring has its site, a city plans its second ring in the same way.</li>
+ *   <li>A ring does not go where another village is (see {@link #isBlocked}): a faction village with another start, the
+ *       ring districts of another village, or a vanilla village. The village then keeps its walls, and the next plan
+ *       waits for another level.</li>
  *   <li>A level that goes down does not remove a ring. Under the town tier, the builders start no new part.</li>
  * </ul>
  */
@@ -93,6 +102,8 @@ public final class RingWall {
         /** The site of the village, read at the first plan, or set by a test. */
         @Nullable
         private Site site;
+        /** The level of the village at the last plan with no ring: the next plan waits for another level. */
+        private int noRingLevel = -1;
 
         /** True with no planned ring. */
         public boolean isEmpty() {
@@ -368,17 +379,60 @@ public final class RingWall {
                 area.maxZ() + reach)) {
             return false;
         }
+        if (state.noRingLevel == villageLevel) {
+            return false;
+        }
         Site site = state.site;
         Optional<VillageWall.Wall> ring = RingPlans.next(level.getStructureManager(), reference.get(), site.variant(),
                 villageLevel, site.start(), site.center(), RingPlans.worldHeight(level),
                 level.getChunkSource().getGenerator().getSeaLevel());
-        if (ring.isEmpty()) {
+        if (ring.isEmpty() || isBlocked(level, ring.get().layout().outline(), site.start())) {
+            // All the rings of the tier, an outer wall that is not closed, or another village in the way.
+            state.noRingLevel = villageLevel;
             return false;
         }
         FolkholdWorld.LOGGER.debug("Village {}: plan of a new ring with {} pieces", heartPos, ring.get().pieces().size());
         state.plan(level, ring.get().pieces());
         heart.onRingWallChanged(level);
         return !state.waiting(level).isEmpty();
+    }
+
+    /**
+     * True when the box of a ring, with its flat terrain and its exits ({@link #READY_MARGIN} blocks), touches the pieces
+     * of another village: a faction village with another start chunk, the ring districts of another village, or a
+     * vanilla village. The rule reads the structure references of the chunks of the box.
+     *
+     * @param level the level
+     * @param box   the box of the outline of the ring
+     * @param start the start chunk of the village
+     * @return true when the ring cannot go there
+     */
+    static boolean isBlocked(ServerLevel level, WallLayout.Box box, ChunkPos start) {
+        Registry<Structure> structures = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Structure village = structures.get(Settlements.VILLAGE_STRUCTURE);
+        Structure district = structures.get(VillageRings.STRUCTURE);
+        Set<Long> anchors = new HashSet<>();
+        for (RingDistricts.District cell : RingDistricts.all()) {
+            anchors.add(ChunkPos.asLong(cell.anchorX(start.x), cell.anchorZ(start.z)));
+        }
+        WallLayout.Box reach = box.grow(READY_MARGIN);
+        for (int x = reach.minX() >> 4; x <= reach.maxX() >> 4; x++) {
+            for (int z = reach.minZ() >> 4; z <= reach.maxZ() >> 4; z++) {
+                Map<Structure, LongSet> references = level.structureManager().getAllStructuresAt(
+                        new BlockPos(x << 4, 0, z << 4));
+                for (Map.Entry<Structure, LongSet> entry : references.entrySet()) {
+                    Structure structure = entry.getKey();
+                    boolean other = structure == village ? entry.getValue().longStream().anyMatch(ref -> ref != start
+                            .toLong()) : structure == district ? entry.getValue().longStream()
+                                    .anyMatch(ref -> !anchors.contains(ref))
+                                    : structures.wrapAsHolder(structure).is(StructureTags.VILLAGE);
+                    if (other) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**

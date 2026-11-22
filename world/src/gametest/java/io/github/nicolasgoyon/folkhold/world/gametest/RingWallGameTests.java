@@ -53,6 +53,8 @@ public final class RingWallGameTests {
     private static final int WALK_MARGIN = 12;
     /** The foot of the stair of a tower is this number of blocks after its origin along its edge, 1 block inside. */
     private static final int STAIR_FOOT = WallLayout.TOWER + WallLayout.STAIR - 1;
+    /** The test loads the chunks of the area of the hamlet and of this number of blocks around it. */
+    private static final int LOAD_REACH = 96;
 
     private RingWallGameTests() {
     }
@@ -105,6 +107,13 @@ public final class RingWallGameTests {
         BoundingBox firstArea = heart.repairReference(level).orElseThrow().area().orElseThrow();
 
         helper.assertTrue(RingWall.check(level, heart).isEmpty(), "A hamlet must start no ring");
+        // The plan waits for the chunks around the area: the test loads them.
+        int reach = LOAD_REACH;
+        for (int x = (firstArea.minX() - reach) >> 4; x <= (firstArea.maxX() + reach) >> 4; x++) {
+            for (int z = (firstArea.minZ() - reach) >> 4; z <= (firstArea.maxZ() + reach) >> 4; z++) {
+                level.getChunk(x, z);
+            }
+        }
         settlement.setProgress(TOWN_LEVEL, 0);
         int sites = 0;
         for (Optional<BuilderSite> site = RingWall.check(level, heart); site.isPresent();
