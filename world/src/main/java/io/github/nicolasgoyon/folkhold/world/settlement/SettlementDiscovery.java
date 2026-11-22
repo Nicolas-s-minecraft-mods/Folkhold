@@ -139,7 +139,7 @@ public final class SettlementDiscovery {
 
     /**
      * Starts the check of one placement region, as {@link #checkRegion} does, with the calculation of the start on a
-     * worker thread. A server tick later applies the result: the region is checked and the settlement is added. A
+     * worker thread. A later server tick applies the result: it marks the region checked and adds the settlement. A
      * candidate chunk that the placement rules reject, or with a known result in the structure check, gets the check
      * now. Use it on the server thread.
      *

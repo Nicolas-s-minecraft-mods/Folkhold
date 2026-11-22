@@ -214,7 +214,7 @@ public final class DiscoveryCheckGameTests {
         helper.succeed();
     }
 
-    /** A new structure check of a generator, with an empty storage: no chunk of the measure is generated. */
+    /** A new structure check of a generator, with an empty storage: the game did not generate the chunks of the measure. */
     private static StructureCheck check(ServerLevel level, NoiseBasedChunkGenerator generator, RandomState random) {
         return new StructureCheck((chunk, visitor) -> CompletableFuture.completedFuture(null), level.registryAccess(),
                 level.getStructureManager(), level.dimension(), generator, random, level, generator.getBiomeSource(),
