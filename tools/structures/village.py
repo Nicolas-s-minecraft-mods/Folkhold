@@ -3905,6 +3905,23 @@ AWNINGS = ("red", "yellow", "blue", "lime")
 COUNTER_SIDES = {"east": (1, 0), "west": (-1, 0), "north": (0, -1)}
 
 
+@dataclasses.dataclass(frozen=True)
+class MarketStyle:
+    """The materials of the market square of a style.
+
+    - paving, border: the blocks of the square and of its border, from rng.
+    - post, post_base: the market post (a block of the tag folkhold_world:market_posts) and the block under it.
+    - stall: the function that builds a stall (x0, z0, facing, color: see stall).
+    - lamp: the block of the post of a lamp at a corner of the square.
+    """
+    paving: Callable
+    border: Callable
+    post: tuple
+    post_base: str
+    stall: Callable
+    lamp: tuple
+
+
 def stall(t, x0, z0, facing, color):
     """A stall of 3 x 3 blocks: 4 fence posts at the corners, an awning of wool stripes, a counter of a top slab with a
     lantern on it, and a barrel in the middle of the stall.
@@ -3915,16 +3932,79 @@ def stall(t, x0, z0, facing, color):
         for z in (z0, z0 + 2):
             for y in (1, 2):
                 t.set(x, y, z, "minecraft:spruce_fence")
+    awning_stripes(t, x0, z0, facing, color)
+    stall_counter(t, x0, z0, facing, TOP_SLAB)
+
+
+def awning_stripes(t, x0, z0, facing, color):
+    """The awning of wool of a stall: a white stripe from the counter to the back of the stall, in the middle."""
     dx, dz = COUNTER_SIDES[facing]
     for x in range(x0, x0 + 3):
         for z in range(z0, z0 + 3):
-            # The white stripe goes from the counter to the back of the stall.
             stripe = (x == x0 + 1) if dx == 0 else (z == z0 + 1)
             t.set(x, 3, z, f"minecraft:{'white' if stripe else color}_wool")
+
+
+def stall_counter(t, x0, z0, facing, counter):
+    """The counter of a stall, with a lantern on it, and the barrel in the middle of the stall."""
+    dx, dz = COUNTER_SIDES[facing]
     mx, mz = x0 + 1, z0 + 1
-    t.set(mx + dx, 1, mz + dz, *TOP_SLAB)
+    t.set(mx + dx, 1, mz + dz, *counter)
     lantern(t, mx + dx, 2, mz + dz)
     t.set(mx, 1, mz, *BARREL)
+
+
+def norse_stall(t, x0, z0, facing, _color):
+    """A Norse stall: 4 carved posts of stripped spruce logs, a roof of a long house (dark oak stairs and a ridge of
+    planks along the direction of the counter, with a carved horn at each end of the ridge), and a timber counter."""
+    for x in (x0, x0 + 2):
+        for z in (z0, z0 + 2):
+            for y in (1, 2):
+                t.set(x, y, z, "minecraft:stripped_spruce_log", LOG_Y)
+    dx, dz = COUNTER_SIDES[facing]
+    for i in range(3):
+        for j in range(3):
+            # i goes across the ridge, j along it.
+            x, z = (x0 + i, z0 + j) if dx == 0 else (x0 + j, z0 + i)
+            if i == 1:
+                t.set(x, 3, z, "minecraft:dark_oak_planks")
+            else:
+                low = ("east" if i == 0 else "west") if dx == 0 else ("south" if i == 0 else "north")
+                t.set(x, 3, z, "minecraft:dark_oak_stairs", stairs(low))
+    for j in (0, 2):
+        x, z = (x0 + 1, z0 + j) if dx == 0 else (x0 + j, z0 + 1)
+        t.set(x, 4, z, "minecraft:spruce_fence")
+    stall_counter(t, x0, z0, facing, TOP_SLAB)
+
+
+SUN_COUNTER = ("minecraft:smooth_sandstone_slab", {"type": "top", "waterlogged": "false"})
+
+
+def sun_stall(t, x0, z0, facing, color):
+    """A Sunreach stall: 4 pillars of cut sandstone, an awning of wool stripes and a counter of smooth sandstone."""
+    for x in (x0, x0 + 2):
+        for z in (z0, z0 + 2):
+            for y in (1, 2):
+                t.set(x, y, z, "minecraft:cut_sandstone")
+    awning_stripes(t, x0, z0, facing, color)
+    stall_counter(t, x0, z0, facing, SUN_COUNTER)
+
+
+def sun_paving(rng):
+    return "minecraft:sandstone" if rng.random() < 0.25 else "minecraft:smooth_sandstone"
+
+
+MARKET_STYLES = {
+    None: MarketStyle(paving=cobble, border=lambda _rng: "minecraft:stone_bricks",
+                      post=("minecraft:stripped_spruce_log", LOG_Y), post_base="minecraft:chiseled_stone_bricks",
+                      stall=stall, lamp=("minecraft:spruce_fence", None)),
+    "valeholm": MarketStyle(paving=cobble, border=lambda _rng: "minecraft:spruce_planks",
+                            post=("minecraft:stripped_spruce_log", LOG_Y), post_base="minecraft:mossy_cobblestone",
+                            stall=norse_stall, lamp=("minecraft:stripped_spruce_log", LOG_Y)),
+    "sunreach": MarketStyle(paving=sun_paving, border=lambda _rng: "minecraft:terracotta",
+                            post=("minecraft:cut_sandstone", None), post_base="minecraft:chiseled_sandstone",
+                            stall=sun_stall, lamp=("minecraft:sandstone_wall", None)),
+}
 
 
 def caravan_yard(t):
@@ -3942,9 +4022,10 @@ def caravan_yard(t):
     t.set(3, 1, 3, "minecraft:hay_block", LOG_Y)
 
 
-def market(layout):
+def market(layout, culture=None):
     """The market square: the place where the workers of the village trade, and where a caravan stops. It takes the
-    plot of one house (see MARKET_LAYOUTS).
+    plot of one house (see MARKET_LAYOUTS). The style of a culture (see MARKET_STYLES) gives its materials and its
+    stalls: the positions of the post, of the stalls and of the caravan yard are the same in all the styles.
 
     - The square is paved: cobblestone with a border of stone bricks. It is open on all the sides, and the side on the
       street (z = 0) is free.
@@ -3957,6 +4038,7 @@ def market(layout):
     - A lamp post at each corner.
     """
     spec = MARKET_LAYOUTS[layout]
+    style = MARKET_STYLES[culture]
     width, depth = spec["size"]
     rng = random.Random(81)
     t = Template(width, MARKET_HEIGHT, depth)
@@ -3964,18 +4046,20 @@ def market(layout):
     for x in range(width):
         for z in range(depth):
             border = x in (0, width - 1) or z in (0, depth - 1)
-            t.set(x, 0, z, "minecraft:stone_bricks" if border else cobble(rng))
+            t.set(x, 0, z, style.border(rng) if border else style.paving(rng))
     px, pz = spec["post"]
-    t.set(px, 0, pz, "minecraft:chiseled_stone_bricks")
+    t.set(px, 0, pz, style.post_base)
     for y in (1, 2, 3):
-        t.set(px, y, pz, "minecraft:stripped_spruce_log", LOG_Y)
+        t.set(px, y, pz, *style.post)
     lantern(t, px, 4, pz)
     building_sign(t, px, 1, pz - 1, "market")
     for (x0, z0, facing), color in zip(spec["stalls"], AWNINGS):
-        stall(t, x0, z0, facing, color)
+        style.stall(t, x0, z0, facing, color)
     caravan_yard(t)
     for x, z in ((0, 0), (width - 1, 0), (0, depth - 1), (width - 1, depth - 1)):
-        lamp_post(t, x, z)
+        for y in (1, 2):
+            t.set(x, y, z, *style.lamp)
+        lantern(t, x, 3, z)
     t.jigsaw(width // 2, 1, 0, "north_up", HOUSE_FRONT, "minecraft:empty", "minecraft:empty", "minecraft:air")
     return t
 
@@ -4518,7 +4602,7 @@ STYLES = {
         "house_forge": norse_forge,
         "house_storehouse": norse_storehouse,
         "house_storehouse_side": norse_storehouse_side,
-        "market": functools.partial(market, "deep"),
+        "market": functools.partial(market, "deep", "valeholm"),
         **{f"job_{job}": build for job, build in NORSE_JOBS.items()},
     },
     "sunreach": {
@@ -4529,6 +4613,7 @@ STYLES = {
         "house_barracks": sun_barracks,
         "house_forge": sun_forge,
         "house_storehouse": sun_storehouse,
+        "market": functools.partial(market, "wide", "sunreach"),
         **{f"job_{job}": build for job, build in SUNREACH_JOBS.items()},
     },
 }

@@ -217,10 +217,10 @@ public final class MarketGameTests {
     }
 
     /**
-     * The market squares of the base, the desert and the Valeholm variants, and the fish market of a maritime village:
-     * the plans of the market squares have no warning. After the placement, each fence of a market square has the
-     * shape of its neighbors. The scan of the heart finds the market sign of each market square, counts 3 markets, and
-     * does not find the market sign of the fish market.
+     * The market squares of the base, the desert, the Valeholm and the Sunreach variants, and the fish market of a
+     * maritime village: the plans of the market squares have no warning. After the placement, each fence of a market
+     * square has the shape of its neighbors. The scan of the heart finds the market sign of each market square, counts
+     * 4 markets, and does not find the market sign of the fish market.
      */
     @GameTest(template = "arena_large", timeoutTicks = 40, batch = "market_scan", skyAccess = true)
     public static void heartFindsTheMarkets(GameTestHelper helper) {
@@ -228,9 +228,10 @@ public final class MarketGameTests {
         ServerLevel level = helper.getLevel();
         Block marketSign = ModBlocks.BUILDING_SIGNS.get(BuildingSignKind.MARKET).get();
         List<ResourceLocation> markets = List.of(piece("", "market"), piece("desert/", "market"),
-                piece(DEEP_STYLE, "market"));
-        List<BlockPos> origins = List.of(new BlockPos(1, 1, 1), new BlockPos(17, 1, 1), new BlockPos(1, 1, 12));
-        BlockPos fishOrigin = helper.absolutePos(new BlockPos(12, 1, 12));
+                piece(DEEP_STYLE, "market"), piece("sunreach/", "market"));
+        List<BlockPos> origins = List.of(new BlockPos(1, 1, 1), new BlockPos(17, 1, 1), new BlockPos(1, 1, 12),
+                new BlockPos(17, 1, 11));
+        BlockPos fishOrigin = helper.absolutePos(new BlockPos(12, 1, 22));
         StructurePlaceSettings settings = new StructurePlaceSettings()
                 .addProcessor(JigsawReplacementProcessor.INSTANCE).setKnownShape(true);
         List<BoundingBox> marketBoxes = new ArrayList<>();
