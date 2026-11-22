@@ -87,6 +87,8 @@ public final class CartofoldGameTests {
                 "The layer must have a ring for the discovered village: " + marker);
         helper.assertTrue(territories.areas().stream().anyMatch(area -> area.id().equals(settlement.id())
                 && !area.chunks().isEmpty()), "The layer must have the territory of the village");
+        helper.assertTrue(territories.areas().stream().allMatch(area -> area.onlyExplored()),
+                "A territory must show only on the explored chunks");
         helper.assertTrue(same, "A check with no change must keep the layers");
         helper.succeed();
     }

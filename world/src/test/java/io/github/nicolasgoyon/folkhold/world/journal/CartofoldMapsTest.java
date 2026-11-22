@@ -67,7 +67,18 @@ class CartofoldMapsTest {
         assertEquals(0x40AA5500, area.fillColor());
         assertEquals(0xCCAA5500, area.borderColor());
         assertEquals(1, area.tooltip().size());
+        assertTrue(area.onlyExplored(), "A territory shows only on the explored chunks");
         assertEquals(layer, CartofoldMaps.territories(map, CLAIMANTS), "The same map gives the same layer");
+    }
+
+    /** The areas for the admin map show also on the chunks that the player did not explore. */
+    @Test
+    void areasOfTheAdminMapShowOnAllTheChunks() {
+        List<ChunkArea> areas = CartofoldMaps.areas(
+                List.of(new TerritoryMapPayload.Village(NORTHAM, "Northam", "Ash", 0xAA5500)), CLAIMANTS);
+
+        assertEquals(1, areas.size());
+        assertFalse(areas.get(0).onlyExplored());
     }
 
     /** The cache of the chunks keeps only the settlements that claim chunks now. */
@@ -143,6 +154,6 @@ class CartofoldMapsTest {
         assertFalse(area.contains(12, 0), "The chunk (12, 0) is out of the disc");
 
         LayerContent layer = CartofoldMaps.territories(TerritoryMapPayload.EMPTY, CLAIMANTS, areas);
-        assertEquals(List.of(area), layer.areas());
+        assertEquals(List.of(area.withOnlyExplored(true)), layer.areas(), "The pillager territory shows only on the explored chunks");
     }
 }

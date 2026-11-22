@@ -60,8 +60,10 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *       opens the journal at the village.</li>
  *   <li>{@link #ROUTE}: the last route that the player selected in the tab "Routes" of the journal, with a color for
  *       each surface.</li>
- *   <li>The layers show also on the chunks that the player did not explore: the journal knows these villages, and
- *       the map frames of the journal show them on the relief.</li>
+ *   <li>The territories show only on the chunks that the player explored: the other chunks of a territory stay dark
+ *       (fog of war). The village markers and the route show also on the chunks that the player did not explore: the
+ *       journal knows these villages. The admin map shows all the territories (see
+ *       {@link io.github.nicolasgoyon.folkhold.world.admin.AdminMap}).</li>
  *   <li>The server sends a layer to a player only when its content changes. {@link TerritoryMaps} calls
  *       {@link #update} when it checks the map of the player. When only the areas change, the server sends only the
  *       new and the changed areas, and the ids of the removed areas (see {@link LayerChanges}). A large layer goes in
@@ -222,7 +224,7 @@ public final class CartofoldMaps {
 
     /**
      * The layer of the territories: one area for each discovered village with a territory, and the pillager
-     * territories.
+     * territories. Each area shows only on the chunks that the player explored ({@link ChunkArea#onlyExplored()}).
      *
      * @param map       the discovered territories of a player
      * @param claimants the claims of all the settlements now
@@ -231,8 +233,9 @@ public final class CartofoldMaps {
      */
     public static LayerContent territories(TerritoryMapPayload map, List<Claimant> claimants,
             List<ChunkArea> pillagers) {
-        List<ChunkArea> areas = new ArrayList<>(areas(map.villages(), claimants));
-        areas.addAll(pillagers);
+        List<ChunkArea> areas = new ArrayList<>();
+        areas(map.villages(), claimants).forEach(area -> areas.add(area.withOnlyExplored(true)));
+        pillagers.forEach(area -> areas.add(area.withOnlyExplored(true)));
         return new LayerContent(info(TERRITORIES, 10), areas, List.of(), List.of());
     }
 

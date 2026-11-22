@@ -613,6 +613,8 @@ public final class AdminGameTests {
         helper.assertTrue(active.info().views().equals(Set.of(MapViewKind.FRAME)), "Only the frames show the layer");
         helper.assertTrue(active.areas().stream().anyMatch(area -> area.id().equals(settlement.id())),
                 "The layer must have the territory of the village");
+        helper.assertTrue(active.areas().stream().noneMatch(area -> area.onlyExplored()),
+                "The admin map must show the territories on all the chunks");
         helper.assertTrue(ruined.marker(Kind.RUIN.markerId(settlement.id())).isPresent(), "A ruin is a ruin on the map");
         helper.assertTrue(ruined.areas().stream().noneMatch(area -> area.id().equals(settlement.id())),
                 "A ruin has no territory");
