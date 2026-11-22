@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallOutline;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.faction.CultureMap;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
@@ -435,6 +436,9 @@ public final class PlotTerrainGameTests {
      *   <li>For a core plan with the outline rule, the line of the first wall (its free outline, see
      *       {@link WallLayout#free}) climbs no more than the line of the rectangle around the plaza and the first pieces
      *       of the axis streets (see {@link PlanGround#climb}).</li>
+     *   <li>Each ring has no more blocks of its line on high ground than the rectangle around the wall inside it,
+     *       larger by the band (see {@link WallLayout#ring} and {@link WallLayout#highBlocks}). One ring at least has
+     *       fewer: it goes around the high ground of its band.</li>
      *   <li>One site at least has a steep side: a grid point in the radius of the core is not in the region of the
      *       ground with the small rise.</li>
      * </ul>
@@ -449,6 +453,8 @@ public final class PlotTerrainGameTests {
         Map<String, Integer> rules = new TreeMap<>();
         int sites = 0;
         int steep = 0;
+        int cutRings = 0;
+        int lowerRings = 0;
         for (int i = 0; i < TRIES && sites < MOUNTAIN_SITES; i++) {
             Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
                     (i / ROW) * LAND_STEP));
@@ -516,6 +522,28 @@ public final class PlotTerrainGameTests {
                             + first + " blocks of the first pieces");
                 }
             }
+            // Each ring has no more blocks of its line on high ground than the rectangle around the wall inside it,
+            // larger by the band.
+            int rise = FortifiedVillageStructure.outlineRise(plan.rules());
+            WallOutline.Ground high = (x, z) -> core.high(x, z, rise);
+            WallLayout inside = layout.firstWall().layout();
+            for (int r = 0; r < layout.rings().size(); r++) {
+                WallLayout ring = layout.rings().get(r).layout();
+                WallLayout.Box box = inside.outline().grow(FortifiedVillageStructure.bandOf(layout.size(), variant));
+                int highBlocks = ring.highBlocks(high);
+                int rectangleBlocks = rectangle(box).highBlocks(high);
+                if (highBlocks > rectangleBlocks) {
+                    problems.add(name + ": the ring " + r + " has " + highBlocks + " blocks on high ground, more than"
+                            + " the " + rectangleBlocks + " blocks of the rectangle");
+                }
+                cutRings += ring.outline().equals(box) && ring.isRectangle() ? 0 : 1;
+                lowerRings += highBlocks < rectangleBlocks ? 1 : 0;
+                FolkholdWorld.LOGGER.info("Ground of the ring {} {}: {} edges, box {} of {}, {} blocks on high ground,"
+                        + " {} for the rectangle, climb {}, climb of the rectangle {}", name, r, ring.edges(),
+                        ring.outline(), box, highBlocks, rectangleBlocks, core.climb(line(ring), rise),
+                        core.climb(line(rectangle(box)), rise));
+                inside = ring;
+            }
             boolean cut = false;
             for (int dx = -radius; dx <= radius && !cut; dx += PlanGround.STEP) {
                 for (int dz = -radius; dz <= radius && !cut; dz += PlanGround.STEP) {
@@ -526,10 +554,12 @@ public final class PlotTerrainGameTests {
             steep += cut ? 1 : 0;
             FolkholdWorld.LOGGER.info("Ground of the plan {}: rules {}, steep side {}", name, rules(layout), cut);
         }
-        FolkholdWorld.LOGGER.info("Ground of the plan: {} mountain sites, {} with a steep side, rules {}, problems {}",
-                sites, steep, rules, problems);
+        FolkholdWorld.LOGGER.info("Ground of the plan: {} mountain sites, {} with a steep side, rules {}, {} rings"
+                + " cut, {} rings with less high ground than the rectangle, problems {}", sites, steep, rules, cutRings,
+                lowerRings, problems);
         helper.assertTrue(sites == MOUNTAIN_SITES, "Only " + sites + " mountain sites of " + MOUNTAIN_SITES);
         helper.assertTrue(steep > 0, "No mountain site has a steep side");
+        helper.assertTrue(lowerRings > 0, "No ring of the mountain sites goes around the high ground of its band");
         helper.assertTrue(problems.isEmpty(), "Problems of the ground: " + problems);
         helper.succeed();
     }
@@ -560,6 +590,13 @@ public final class PlotTerrainGameTests {
         int free = 0;
         int climbing = 0;
         int climbingRectangles = 0;
+        int ringCount = 0;
+        int cutRings = 0;
+        int climbingRings = 0;
+        int climbingBoxes = 0;
+        int missingBand = 0;
+        int highRings = 0;
+        int highBoxes = 0;
         for (int i = 0; i < TRIES && sites < MEASURE_MOUNTAIN_SITES; i++) {
             Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
                     (i / ROW) * LAND_STEP));
@@ -594,12 +631,46 @@ public final class PlotTerrainGameTests {
                 FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {}: rules {}, free outline {} ({} edges),"
                         + " climb {}, climb of the rectangle {}", context.chunkPos(), layout.style().name(), level,
                         layout.plan().rules(), !wall.isRectangle(), wall.edges(), climb, rectangleClimb);
+                int rise = FortifiedVillageStructure.outlineRise(layout.plan().rules());
+                WallLayout inside = wall;
+                for (int r = 0; r < layout.rings().size() && r + 1 < layout.plans().size(); r++) {
+                    WallLayout ring = layout.rings().get(r).layout();
+                    WallLayout.Box box = inside.outline().grow(FortifiedVillageStructure.bandOf(layout.size(),
+                            variant));
+                    long ringClimb = core.climb(line(ring), rise);
+                    long boxClimb = core.climb(line(rectangle(box)), rise);
+                    WallOutline.Ground high = (x, z) -> core.high(x, z, rise);
+                    highRings += ring.highBlocks(high) > 0 ? 1 : 0;
+                    highBoxes += rectangle(box).highBlocks(high) > 0 ? 1 : 0;
+                    VillagePlan band = layout.plans().get(r + 1);
+                    ringCount++;
+                    cutRings += ring.outline().equals(box) && ring.isRectangle() ? 0 : 1;
+                    climbingRings += ringClimb > 0 ? 1 : 0;
+                    climbingBoxes += boxClimb > 0 ? 1 : 0;
+                    missingBand += band.missingPlots() + band.missingHomes() > 0 ? 1 : 0;
+                    FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {} ring {}: {} edges, {} blocks on"
+                            + " high ground ({} for the rectangle), climb {}, climb of the rectangle {}, band rules {}, {}"
+                            + " plots of {}, {} missing homes", context.chunkPos(), layout.style().name(), level, r,
+                            ring.edges(), ring.highBlocks(high), rectangle(box).highBlocks(high), ringClimb, boxClimb,
+                            band.rules(), band.plots().size(), band.target(), band.missingHomes());
+                    inside = ring;
+                }
             }
         }
         FolkholdWorld.LOGGER.info("Mountain measure | {} sites | {} plans | rules {} | {} free outlines | {} walls"
                 + " climb | {} rectangles climb |", sites, plans, rules, free, climbing, climbingRectangles);
+        FolkholdWorld.LOGGER.info("Mountain ring measure | {} rings | {} cut | {} rings climb | {} rectangles climb |"
+                + " {} rings on high ground | {} rectangles on high ground | {} bands miss plots or homes |", ringCount,
+                cutRings, climbingRings, climbingBoxes, highRings, highBoxes, missingBand);
         helper.assertTrue(sites == MEASURE_MOUNTAIN_SITES, "Only " + sites + " mountain sites");
         helper.succeed();
+    }
+
+    /** The outline of a rectangle. */
+    private static WallLayout rectangle(WallLayout.Box box) {
+        return WallLayout.outline(List.of(new WallLayout.Cell(box.minX(), box.minZ()),
+                new WallLayout.Cell(box.maxX(), box.minZ()), new WallLayout.Cell(box.maxX(), box.maxZ()),
+                new WallLayout.Cell(box.minX(), box.maxZ())));
     }
 
     /** The blocks of the line of a wall, as pairs (X, Z). */

@@ -549,9 +549,11 @@ public final class WallLayout {
      *       this side that the axis meets from the middle of the village.</li>
      * </ul>
      *
-     * <p>When the cut outline has no edge with the space for a gate, the ring is the offset of the inner outline with
-     * no cut. When this outline also has no space for a gate, the ring is the rectangle around the inner outline, larger
-     * by the band. The towers of the ring obey the tower spacing of the inner wall, with a corner tower at the start of
+     * <p>The ring takes the outline with the fewest blocks of its line on high ground (see {@link #highBlocks}), from
+     * this list: the cut outline, the offset of the inner outline with no cut, and the rectangle around the inner
+     * outline, larger by the band. With the same number of blocks, the first outline of the list comes first. An
+     * outline with no edge with the space for a gate is not in the list. Thus on a hill near the inner wall, the ring
+     * can go around the hill on its outer side. The towers of the ring obey the tower spacing of the inner wall, with a corner tower at the start of
      * each edge after an outer corner. The calculation is deterministic.
      *
      * @param inner  the inner wall: the first wall of the village, or the last ring
@@ -568,24 +570,51 @@ public final class WallLayout {
         }
         Box rect = inner.outline.grow(band);
         List<Gate> requests = rectangleGates(inner.gates);
-        if (!inner.isRectangle() || ground != WallOutline.Ground.FLAT) {
-            List<Box> passages = inner.gates.stream().map(gate -> inner.passage(gate, RING_GAP)).toList();
-            List<WallOutline.Ground> grounds = ground == WallOutline.Ground.FLAT ? List.of(ground)
-                    : List.of(ground, WallOutline.Ground.FLAT);
-            for (WallOutline.Ground cut : grounds) {
-                Optional<List<Cell>> corners = WallOutline.ring(rect, inner::contains, band, RING_GAP, passages,
-                        middle, cut);
-                if (corners.isPresent()) {
-                    WallLayout shape = new WallLayout(corners.get(), inner.towerSpacing, List.of(), List.of(),
-                            List.of());
-                    Optional<List<Gate>> placed = shape.gatesOnAxes(requests, middle);
-                    if (placed.isPresent()) {
-                        return build(corners.get(), inner.towerSpacing, placed.get());
-                    }
-                }
+        WallLayout best = build(rectangle(rect), inner.towerSpacing, requests);
+        if (inner.isRectangle() && ground == WallOutline.Ground.FLAT) {
+            return best;
+        }
+        List<Box> passages = inner.gates.stream().map(gate -> inner.passage(gate, RING_GAP)).toList();
+        List<WallLayout> candidates = new ArrayList<>();
+        for (WallOutline.Ground cut : ground == WallOutline.Ground.FLAT ? List.of(ground)
+                : List.of(ground, WallOutline.Ground.FLAT)) {
+            Optional<List<Cell>> corners = WallOutline.ring(rect, inner::contains, band, RING_GAP, passages, middle,
+                    cut);
+            if (corners.isPresent()) {
+                WallLayout shape = new WallLayout(corners.get(), inner.towerSpacing, List.of(), List.of(), List.of());
+                shape.gatesOnAxes(requests, middle)
+                        .ifPresent(placed -> candidates.add(build(corners.get(), inner.towerSpacing, placed)));
             }
         }
-        return build(rectangle(rect), inner.towerSpacing, requests);
+        candidates.add(best);
+        // The outline with the fewest blocks of its line on high ground, the first outline of the list first.
+        int fewest = Integer.MAX_VALUE;
+        for (WallLayout candidate : candidates) {
+            int high = candidate.highBlocks(ground);
+            if (high < fewest) {
+                fewest = high;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The number of blocks of the line of the palisade on high ground.
+     *
+     * @param ground the ground of the site
+     * @return the number of blocks, 0 or more
+     */
+    public int highBlocks(WallOutline.Ground ground) {
+        if (ground == WallOutline.Ground.FLAT) {
+            return 0;
+        }
+        int high = 0;
+        for (int i = 0; i < ringSize; i++) {
+            Cell cell = ringCell(i);
+            high += ground.high(cell.x(), cell.z()) ? 1 : 0;
+        }
+        return high;
     }
 
     /**
