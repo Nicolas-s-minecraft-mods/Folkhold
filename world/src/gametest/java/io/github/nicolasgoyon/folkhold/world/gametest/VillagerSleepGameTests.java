@@ -48,8 +48,8 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
  * In-game tests for the sleep of the villagers of a generated village. Each test generates a village, places it in the
- * level, makes its settlement with the start level of the structure and activates its heart. Each run of a test thus
- * has the same village with the same number of villagers. The heart gives the beds of the homes to the villagers. At night, each villager with
+ * level, makes its settlement with the start level of the structure and activates its heart. Each bed of the homes
+ * gets a villager, thus each run of a test has the same village with the same number of villagers. The heart gives the beds of the homes to the villagers. At night, each villager with
  * a bed walks to its bed and sleeps in it. A second test runs extra ticks of the level in each server tick, as a fast
  * night of Slumber does.
  */
@@ -78,6 +78,8 @@ public final class VillagerSleepGameTests {
     private static final int MONSTER_DIRECTIONS = 16;
     /** The units fight the monster for this time, in ticks. */
     private static final int MONSTER_TICKS = 400;
+    /** A population target that is more than the places of each test village: all the beds get a villager. */
+    private static final int FULL_POPULATION = 1000;
 
     private VillagerSleepGameTests() {
     }
@@ -215,8 +217,9 @@ public final class VillagerSleepGameTests {
                     List<Villager> villagers = VillageFolk.inhabitants(level, heartPos);
                     helper.assertTrue(villagers.stream().anyMatch(villager -> bed(level, villager).isPresent()),
                             "The villagers must get beds: " + villagers.size() + " villagers");
-                    FolkholdWorld.LOGGER.info("Villager sleep: level {}, {} villagers at the start of the night",
-                            startLevel, villagers.size());
+                    FolkholdWorld.LOGGER.info("Villager sleep: level {}, {} beds, {} villagers at the start of the "
+                            + "night", startLevel, Settlements.of(level.getServer(), heart).orElseThrow().beds(),
+                            villagers.size());
                     dayTime[0] = NIGHT;
                     night[0] = true;
                 })
@@ -256,8 +259,11 @@ public final class VillagerSleepGameTests {
      * Makes the settlement of a generated village with the start level of its structure, as the discovery of the
      * world generation does. The test does not put the structure start in the chunks, thus the heart has no known
      * structure start. With no settlement, the heart makes a settlement with a start level from its random id, and the
-     * number of villagers changes from one run to the next. With this settlement, the village has the same size in
-     * each run.
+     * number of villagers changes from one run to the next.
+     *
+     * <p>The population target of the settlement is more than the places of the village (see
+     * {@link VillageFolk#inhabitantCount}): each bed of the homes gets a villager. Thus the village has the same
+     * number of villagers in each run, and the test checks each bed of the village.
      *
      * @return the start level of the settlement
      */
@@ -265,6 +271,7 @@ public final class VillagerSleepGameTests {
         int startLevel = Settlements.startLevel(level.getSeed(), start.getChunkPos());
         Settlement settlement = Settlements.create(level.getServer(), heart.getVillageId(), start.getChunkPos(),
                 heart.getBlockPos(), startLevel);
+        settlement.economy().setPopulation(FULL_POPULATION);
         SettlementData data = SettlementData.get(level.getServer());
         data.registry().add(settlement);
         data.setDirty();
