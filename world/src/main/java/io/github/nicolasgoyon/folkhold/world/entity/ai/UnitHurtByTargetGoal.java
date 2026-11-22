@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.entity.ai;
 
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
+import io.github.nicolasgoyon.folkhold.world.village.MonsterThreats;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.player.Player;
@@ -44,6 +45,8 @@ public class UnitHurtByTargetGoal extends HurtByTargetGoal {
                 other.setTarget(attacker);
             }
         }
-        unit.getVillageHeart().ifPresent(heart -> heart.reportThreat(attacker));
+        if (MonsterThreats.startsAlert(attacker)) {
+            unit.getVillageHeart().ifPresent(heart -> heart.reportThreat(attacker));
+        }
     }
 }
