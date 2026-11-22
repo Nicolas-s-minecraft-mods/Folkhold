@@ -83,28 +83,28 @@ class JobPostsTest {
     }
 
     @Test
-    void foodPostThatTradesComesFirst() {
+    void postThatTradesComesFirst() {
         Post smithFirst = new Post("smith", 0, 64, 0, 2);
         Post farmer = new Post("farmer", 10, 64, 0, 2);
         Post digger = new Post("digger", 20, 64, 0, 2);
         List<Post> ordered = JobPosts.order(Optional.empty(), List.of(digger, smithFirst, farmer),
-                job -> job.equals("farmer"), job -> !job.equals("digger"));
-        assertEquals(List.of(farmer, smithFirst, digger), ordered);
-        // A small village (2 inhabitants of the homes) has its food post active.
-        assertEquals(List.of("farmer"), JobPosts.activeJobs(ordered, JobPostsTest::allValid, 2));
+                job -> !job.equals("digger"));
+        assertEquals(List.of(smithFirst, farmer, digger), ordered);
+        // A small village (2 inhabitants of the homes) has its first post that trades active.
+        assertEquals(List.of("smith"), JobPosts.activeJobs(ordered, JobPostsTest::allValid, 2));
     }
 
     @Test
     void laterScanKeepsTheOrderInEachGroupAndAddsTheNewPosts() {
         Post mason = new Post("mason", 10, 64, 0, 3);
         List<Post> ordered = JobPosts.order(Optional.of(List.of(MASON, SMITH)), List.of(FARMER, SMITH, mason),
-                JobPostsTest::none, JobPostsTest::allValid);
+                JobPostsTest::allValid);
         assertEquals(List.of(mason, SMITH, FARMER), ordered);
-        List<Post> withFood = JobPosts.order(Optional.of(List.of(MASON, SMITH)), List.of(FARMER, SMITH, mason),
-                job -> job.equals("farmer"), JobPostsTest::allValid);
-        assertEquals(List.of(FARMER, mason, SMITH), withFood);
+        List<Post> traders = JobPosts.order(Optional.of(List.of(MASON, SMITH)), List.of(FARMER, SMITH, mason),
+                job -> job.equals("farmer"));
+        assertEquals(List.of(FARMER, mason, SMITH), traders);
         assertEquals(List.of(SMITH), JobPosts.order(Optional.of(List.of(MASON, SMITH)), List.of(SMITH),
-                JobPostsTest::none, JobPostsTest::allValid));
+                JobPostsTest::allValid));
     }
 
     @Test
@@ -116,9 +116,5 @@ class JobPostsTest {
 
     private static boolean allValid(String job) {
         return true;
-    }
-
-    private static boolean none(String job) {
-        return false;
     }
 }

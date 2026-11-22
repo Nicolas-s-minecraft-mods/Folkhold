@@ -44,9 +44,4 @@ public record Job(String id, Recipe recipe, int minLevel, int weight, List<Strin
         int multiplier = culture == null ? 1 : cultures.getOrDefault(culture, 1);
         return multiplier == 1 ? this : new Job(id, recipe, minLevel, weight * multiplier, biomes, cultures);
     }
-
-    /** True if one output of the job is food. */
-    public boolean producesFood(ItemCatalog catalog) {
-        return recipe.outputs().stream().anyMatch(output -> catalog.info(output.item()).isFood());
-    }
 }

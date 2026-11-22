@@ -4,20 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
-import java.util.Map;
 import java.util.SplittableRandom;
 import org.junit.jupiter.api.Test;
 
 class EconomyTest {
-    private static final ItemCatalog CATALOG = new ItemCatalog(Map.of(
-            "wheat", new ItemInfo("wheat", 0.2, 0, 64),
-            "bread", new ItemInfo("bread", 1.0, 5, 32),
-            "carrot", new ItemInfo("carrot", 0.3, 3, 32),
-            "ore", new ItemInfo("ore", 1.0, 0, 32),
-            "coal", new ItemInfo("coal", 0.5, 0, 32),
-            "ingot", new ItemInfo("ingot", 2.0, 0, 32)));
     /** No decay, so the tests can count the items. */
-    private static final EconomySettings SETTINGS = new EconomySettings(2, 4, 0.0, 0.1, 0.5, 0.5, 3.0, 1.15, 0.85);
+    private static final EconomySettings SETTINGS = new EconomySettings(2, 0.0, 0.1, 0.5, 0.5, 3.0, 1.15, 0.85);
 
     private static Job job(String id, List<Recipe.Input> inputs, List<Recipe.Output> outputs) {
         return new Job(id, new Recipe(inputs, outputs), 1, 1, List.of());
@@ -42,9 +34,8 @@ class EconomyTest {
         EconomyState state = state(2, "smelter");
         state.stock().add("ore", 10, 100);
         state.stock().add("coal", 5, 100);
-        state.stock().add("bread", 100, 1000);
 
-        CycleReport report = Economy.runCycle(state, List.of(SMELTER), 2, 100, CATALOG, SETTINGS,
+        CycleReport report = Economy.runCycle(state, List.of(SMELTER), 2, 100, SETTINGS,
                 new SplittableRandom(1));
 
         assertEquals(4, state.stock().count("ore"));
@@ -59,7 +50,7 @@ class EconomyTest {
         EconomyState state = state(2, "smelter");
         state.stock().add("ore", 10, 100);
 
-        CycleReport report = Economy.runCycle(state, List.of(SMELTER), 2, 100, CATALOG, SETTINGS,
+        CycleReport report = Economy.runCycle(state, List.of(SMELTER), 2, 100, SETTINGS,
                 new SplittableRandom(1));
 
         assertEquals(10, state.stock().count("ore"));
@@ -72,7 +63,7 @@ class EconomyTest {
     void populationLimitsTheActiveJobs() {
         EconomyState state = state(3, "farmer", "farmer", "farmer");
 
-        CycleReport report = Economy.runCycle(state, List.of(FARMER, FARMER, FARMER), 3, 1000, CATALOG, SETTINGS,
+        CycleReport report = Economy.runCycle(state, List.of(FARMER, FARMER, FARMER), 3, 1000, SETTINGS,
                 new SplittableRandom(1));
 
         assertEquals(1, report.activeJobs());
@@ -82,24 +73,23 @@ class EconomyTest {
     void stockCapacityLimitsTheProduction() {
         EconomyState state = state(2, "farmer");
 
-        Economy.runCycle(state, List.of(FARMER), 2, 5, CATALOG, SETTINGS, new SplittableRandom(1));
+        Economy.runCycle(state, List.of(FARMER), 2, 5, SETTINGS, new SplittableRandom(1));
 
         assertEquals(5, state.stock().count("wheat"));
     }
 
+    /** The population eats nothing: the food stays in the stock as a trade good. */
     @Test
-    void populationEatsTheLargestFoodStockFirst() {
-        EconomyState state = state(5, "farmer");
-        state.setJobs(List.of());
+    void populationDoesNotEatTheFood() {
+        EconomyState state = state(5);
         state.stock().add("bread", 10, 100);
         state.stock().add("carrot", 2, 100);
 
-        CycleReport report = Economy.runCycle(state, List.of(), 5, 100, CATALOG, SETTINGS, new SplittableRandom(1));
+        CycleReport report = Economy.runCycle(state, List.of(), 5, 100, SETTINGS, new SplittableRandom(1));
 
-        // Need 5 × 4 = 20 points: 4 bread.
-        assertEquals(6, state.stock().count("bread"));
+        assertEquals(10, state.stock().count("bread"));
         assertEquals(2, state.stock().count("carrot"));
-        assertEquals(1.0, report.foodCovered());
+        assertTrue(report.consumed().isEmpty(), "Nothing is consumed: " + report.consumed());
     }
 
     @Test
@@ -108,13 +98,12 @@ class EconomyTest {
         EconomyState state = state(2, "smelter", "farmer");
         state.stock().add("ore", 100, 1000);
         state.stock().add("coal", 100, 1000);
-        state.stock().add("bread", 100, 1000);
 
-        CycleReport first = Economy.runCycle(state, List.of(SMELTER, FARMER), 2, 1000, CATALOG, SETTINGS,
+        CycleReport first = Economy.runCycle(state, List.of(SMELTER, FARMER), 2, 1000, SETTINGS,
                 new SplittableRandom(1));
-        CycleReport second = Economy.runCycle(state, List.of(SMELTER, FARMER), 2, 1000, CATALOG, SETTINGS,
+        CycleReport second = Economy.runCycle(state, List.of(SMELTER, FARMER), 2, 1000, SETTINGS,
                 new SplittableRandom(1));
-        CycleReport third = Economy.runCycle(state, List.of(SMELTER, FARMER), 2, 1000, CATALOG, SETTINGS,
+        CycleReport third = Economy.runCycle(state, List.of(SMELTER, FARMER), 2, 1000, SETTINGS,
                 new SplittableRandom(1));
 
         assertEquals(1, first.activeJobs());
@@ -128,23 +117,25 @@ class EconomyTest {
     void emptyPopulationGetsANewcomer() {
         EconomyState state = state(0);
 
-        CycleReport report = Economy.runCycle(state, List.of(), 5, 100, CATALOG, SETTINGS, new SplittableRandom(1));
+        CycleReport report = Economy.runCycle(state, List.of(), 5, 100, SETTINGS, new SplittableRandom(1));
 
-        assertEquals(1.0, report.foodCovered(), "No inhabitant: no food need");
         assertEquals(1, state.population());
     }
 
+    /** The population grows with no food in the stock, up to the maximum. A population above it goes down. */
     @Test
-    void fedPopulationGrowsAndHungryPopulationShrinks() {
-        EconomyState fed = state(10);
-        fed.stock().add("bread", 100, 1000);
-        Economy.runCycle(fed, List.of(), 20, 1000, CATALOG, SETTINGS, new SplittableRandom(1));
-        assertEquals(11, fed.population());
+    void populationGrowsUpToTheMaximum() {
+        EconomyState small = state(10);
+        Economy.runCycle(small, List.of(), 20, 1000, SETTINGS, new SplittableRandom(1));
+        assertEquals(11, small.population());
 
-        EconomyState hungry = state(10);
-        Economy.runCycle(hungry, List.of(), 20, 1000, CATALOG, SETTINGS, new SplittableRandom(1));
-        assertEquals(9, hungry.population());
-        assertEquals(0.0, hungry.foodCovered());
+        EconomyState full = state(20);
+        Economy.runCycle(full, List.of(), 20, 1000, SETTINGS, new SplittableRandom(1));
+        assertEquals(20, full.population());
+
+        EconomyState large = state(25);
+        Economy.runCycle(large, List.of(), 20, 1000, SETTINGS, new SplittableRandom(1));
+        assertEquals(20, large.population());
     }
 
     @Test
@@ -159,16 +150,17 @@ class EconomyTest {
         assertEquals(10, stock.count("coal"));
     }
 
+    /** The start stock has the outputs of the jobs for some cycles and 2 times the inputs of each job. */
     @Test
-    void hamletWithAFarmerAndABakerDoesNotStarve() {
+    void seedStockGivesTheOutputsAndTheInputsOfTheJobs() {
         EconomyState state = state(6, "farmer", "baker");
-        List<Job> jobs = List.of(FARMER, BAKER);
-        Economy.seedStock(state, jobs, 3, 512, CATALOG, EconomySettings.DEFAULT);
-        SplittableRandom random = new SplittableRandom(7);
-        for (int cycle = 0; cycle < 60; cycle++) {
-            Economy.runCycle(state, jobs, 9, 512, CATALOG, EconomySettings.DEFAULT, random);
-            assertTrue(state.foodCovered() >= 0.9, "The hamlet starves at the cycle " + cycle);
-        }
+
+        Economy.seedStock(state, List.of(FARMER, BAKER), 3, 512);
+
+        assertEquals(12 * 3 + 6 * 2, state.stock().count("wheat"));
+        assertEquals(6 * 3, state.stock().count("carrot"));
+        assertEquals(4 * 3, state.stock().count("bread"));
+        assertEquals(3, state.stock().asMap().size());
     }
 
     @Test
@@ -187,41 +179,35 @@ class EconomyTest {
     void toolIsNeededAndWearsWithItsChance() {
         Job miner = job("miner", List.of(new Recipe.Input("pickaxe", 1, 0.1)), List.of(new Recipe.Output("ore", 1, 1.0)));
         EconomyState without = state(2, "miner");
-        CycleReport noTool = Economy.runCycle(without, List.of(miner), 2, 100, CATALOG, SETTINGS,
+        CycleReport noTool = Economy.runCycle(without, List.of(miner), 2, 100, SETTINGS,
                 new SplittableRandom(1));
         assertEquals(List.of("pickaxe"), noTool.needs());
 
         EconomyState with = state(2, "miner");
         with.stock().add("pickaxe", 1, 10);
-        // Food for the 2 inhabitants, so the job keeps its workers.
-        with.stock().add("bread", 2000, 2000);
         SplittableRandom random = new SplittableRandom(2);
         int cycles = 0;
         while (with.stock().count("pickaxe") == 1 && cycles < 1000) {
-            Economy.runCycle(with, List.of(miner), 2, 1000, CATALOG, SETTINGS, random);
+            Economy.runCycle(with, List.of(miner), 2, 1000, SETTINGS, random);
             cycles++;
         }
         assertTrue(cycles > 1 && cycles < 1000, "The tool must wear after some cycles, not " + cycles);
         assertEquals(cycles, with.stock().count("ore"));
     }
 
-    /**
-     * With no population, no job works and nothing is eaten. The need of food is covered, so the village gets its
-     * first inhabitant.
-     */
+    /** With no population, no job works and nothing is consumed. The village gets its first inhabitant. */
     @Test
     void emptyVillageRunsACycle() {
         EconomyState state = state(0, "farmer");
         state.stock().add("bread", 10, 100);
 
-        CycleReport report = Economy.runCycle(state, List.of(FARMER), 10, 100, CATALOG, SETTINGS,
+        CycleReport report = Economy.runCycle(state, List.of(FARMER), 10, 100, SETTINGS,
                 new SplittableRandom(1));
 
         assertEquals(0, report.activeJobs());
         assertEquals(0, report.workingJobs());
         assertTrue(report.produced().isEmpty(), "No job works with no workers");
-        assertEquals(10, state.stock().count("bread"), "Nobody eats");
-        assertEquals(1.0, report.foodCovered());
+        assertEquals(10, state.stock().count("bread"), "Nothing is consumed");
         assertEquals(1, report.population(), "The village gets its first inhabitant");
     }
 }
