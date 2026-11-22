@@ -1,4 +1,311 @@
 {
   "fallback": "minecraft:empty",
-  "elements": []
+  "elements": [
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_farmer_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_gardener_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_gardener_jungle_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_forager_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_rancher_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_acacia_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_birch_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_cherry_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_dark_oak_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_jungle_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_mangrove_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_lumberjack_spruce_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_sawyer_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_sawyer_spruce_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_miner_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_digger_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_mason_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_smelter_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_gold_smelter_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_blacksmith_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_tinker_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_fletcher_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_carpenter_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_tanner_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_shepherd_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_weaver_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_dyer_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_papermaker_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_beekeeper_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_fisher_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_baker_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_pastry_cook_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/valeholm/birch/job_butcher_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/valeholm/birch/foundation"
+      }
+    }
+  ]
 }
