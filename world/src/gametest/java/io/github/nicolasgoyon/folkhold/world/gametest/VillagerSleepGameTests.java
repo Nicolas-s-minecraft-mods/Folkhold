@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
+import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
@@ -153,10 +154,19 @@ public final class VillagerSleepGameTests {
                     heart.ensureGarrison(level.getGameTime());
                 })
                 .thenIdle(DAY_TICKS)
+                // The heart adds the villagers in groups. The night starts when the village is full and each place
+                // of a home has its villager, so that no villager appears at the heart during the night.
+                .thenWaitUntil(() -> {
+                    Settlement settlement = Settlements.of(level.getServer(), heart).orElseThrow();
+                    int expected = VillageFolk.inhabitantCount(settlement);
+                    int count = VillageFolk.inhabitants(level, heartPos).size();
+                    helper.assertTrue(count >= expected, "The village must be full: " + count + " of " + expected);
+                })
                 .thenExecute(() -> {
                     List<Villager> villagers = VillageFolk.inhabitants(level, heartPos);
                     helper.assertTrue(villagers.stream().anyMatch(villager -> bed(level, villager).isPresent()),
                             "The villagers must get beds: " + villagers.size() + " villagers");
+                    FolkholdWorld.LOGGER.info("Villager sleep: {} villagers at the start of the night", villagers.size());
                     dayTime[0] = NIGHT;
                     night[0] = true;
                 })

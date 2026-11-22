@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -108,20 +109,27 @@ public final class QuestRewards {
      */
     public static List<Component> risks(Quest quest) {
         List<Component> parts = new ArrayList<>();
-        if (!quest.startItems().isEmpty()) {
-            MutableComponent items = null;
-            for (Component item : extras(0, quest.startItems())) {
-                items = items == null ? item.copy() : Component.translatable("quest.folkhold_world.reward.more",
-                        items, item);
-            }
-            if (items != null) {
-                parts.add(Component.translatable("quest.folkhold_world.start_items", items));
-            }
-        }
+        startItems(quest).ifPresent(items -> parts.add(Component.translatable("quest.folkhold_world.start_items",
+                items)));
         if (quest.failureReputation() > 0) {
             parts.add(Component.translatable("quest.folkhold_world.failure", quest.failureReputation()));
         }
         return parts;
+    }
+
+    /**
+     * The text of the start items of a quest: the items that the player gets at the acceptance.
+     *
+     * @param quest the quest
+     * @return the items joined with the separator of the rewards, or empty for no start items
+     */
+    public static Optional<Component> startItems(Quest quest) {
+        MutableComponent items = null;
+        for (Component item : extras(0, quest.startItems())) {
+            items = items == null ? item.copy() : Component.translatable("quest.folkhold_world.reward.more", items,
+                    item);
+        }
+        return Optional.ofNullable(items);
     }
 
     /**

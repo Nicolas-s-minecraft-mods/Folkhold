@@ -152,10 +152,11 @@ class PayloadCodecsTest {
         JournalPayload payload = new JournalPayload(List.of(), List.of(), 12, "", List.of(
                 new JournalPayload.Quest("q-1", true, "v-1", "Northam", "minecraft:bread", Component.literal("Bring"),
                         Component.literal("4 / 8"), Component.literal("5 emeralds"), Component.literal("Failure"),
-                        600),
+                        600, Component.empty(), List.of()),
                 new JournalPayload.Quest("q-2", false, "v-2", "Southam", "minecraft:iron_sword",
-                        Component.literal("Hunt"), Component.literal("Hunt · 20 min"), Component.literal("4 emeralds"),
-                        Component.empty(), 90)));
+                        Component.literal("Hunt"), Component.empty(), Component.literal("4 emeralds"),
+                        Component.empty(), 90, Component.literal("The wolves came back."),
+                        List.of(new QuestDetail(Component.literal("Time"), Component.literal("20 min"))))));
         assertEquals(payload, roundTrip(JournalPayload.STREAM_CODEC, payload));
     }
 
@@ -163,11 +164,13 @@ class PayloadCodecsTest {
     void questBoard() {
         QuestBoardPayload payload = new QuestBoardPayload(Component.literal("Northam"), "id-1", "neutral", 3, 20,
                 List.of(new QuestBoardPayload.Offer("q-1", "delivery", "minecraft:bread", Component.literal("Bring"),
-                        Component.literal("Delivery · 20 min"), Component.literal("5 emeralds"),
-                        Component.literal("Start: 1 Iron Pickaxe · Failure: -16 rep."), Component.literal("4 / 8"), -1, 5, 20, Optional.empty()),
+                        Component.literal("The baker needs bread."),
+                        List.of(new QuestDetail(Component.literal("Time"), Component.literal("20 min")),
+                                new QuestDetail(Component.literal("Failure"), Component.literal("-16 rep."))),
+                        Component.literal("4 / 8"), -1, 5, 20, Optional.empty()),
                         new QuestBoardPayload.Offer("q-2", "escort", "minecraft:chest", Component.literal("Escort"),
-                                Component.literal("Escort · 500 blocks"), Component.literal("12 emeralds"),
-                                Component.empty(), Component.empty(), 90, 12, 30, Optional.of(Component.literal("Friends only")))),
+                                Component.empty(), List.of(), Component.empty(), 90, 12, 30,
+                                Optional.of(Component.literal("Friends only")))),
                 List.of(new QuestBoardPayload.Active("q-3", "minecraft:bread", Component.literal("Bring"),
                         Component.literal("Northam · 5"), 600, QuestBoardPayload.ACTION_DELIVER,
                         Optional.of(Component.literal("Missing 2")), false)),
