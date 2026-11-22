@@ -84,9 +84,16 @@ public final class CaravanRoutes {
     /** Extra cost for each block of distance in a boat. */
     private static final double BOAT_COST = 1.0;
     /** Extra cost each time the group gets into or out of the boats. */
-    private static final double EMBARK_COST = 64.0;
+    private static final double EMBARK_COST = 160.0;
     /** The cost of a move on a road of a detailed route, as a multiple of its length. */
     private static final double ROAD_FACTOR = 0.7;
+    /**
+     * Extra cost for each block in a boat next to the land, on a detailed route. The cost goes down to 0 at
+     * {@link #BANK_CELLS} + 1 cells from the bank: on a wide river, the boats stay in the middle.
+     */
+    private static final double BANK_COST = 3.0;
+    /** The distance of the bank cost from the land, in cells of the detailed route. */
+    private static final int BANK_CELLS = 2;
     /** Weight of the heuristic of the coarse search: fewer examined cells, a route a little longer than the best. */
     private static final double HEURISTIC_WEIGHT = 1.5;
     /** Weight of the heuristic of the detailed search. */
@@ -627,12 +634,16 @@ public final class CaravanRoutes {
                 WorldConfig.ROUTE_MAX_LENGTH.get(), WorldConfig.ROUTE_MAX_NODES.get(), HEURISTIC_WEIGHT);
     }
 
-    /** The settings of the detailed search from the server configuration. */
+    /**
+     * The settings of the detailed search from the server configuration: the roads cost less, the water near the
+     * banks costs more, and the route loses the turns that a straight line can replace.
+     */
     public static RouteFinder.Settings detailSettings() {
         return new RouteFinder.Settings(WorldConfig.ROUTE_DETAIL_STEP.get(), FORD_DEPTH,
                 WorldConfig.ROUTE_MAX_RISE.get(), SLOPE_COST, FORD_COST, WorldConfig.ROUTE_BOATS.get(), BOAT_COST,
                 EMBARK_COST, WorldConfig.ROUTE_MAX_LENGTH.get() * DETAIL_LENGTH_FACTOR,
-                WorldConfig.ROUTE_DETAIL_MAX_NODES.get(), DETAIL_HEURISTIC_WEIGHT, ROAD_FACTOR);
+                WorldConfig.ROUTE_DETAIL_MAX_NODES.get(), DETAIL_HEURISTIC_WEIGHT, ROAD_FACTOR, BANK_COST, BANK_CELLS,
+                true);
     }
 
     /**
