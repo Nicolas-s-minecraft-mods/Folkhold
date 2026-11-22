@@ -72,6 +72,7 @@ The packwiz modpack (`modpack/`) adds existing mods for performance, nature and 
 | [Design document](docs/design.md) | Vision, rules of the simulation, the features that the mods have and the features of the plan |
 | [Getting started](docs/getting-started.md) | Prerequisites, first build, daily workflow, CI and releases |
 | [UI framework](docs/ui-framework.md) | The shared widgets and the look of the screens |
+| [Quest definitions](docs/quest-definitions.md) | The JSON format of the quests, for the makers of data packs |
 | [Contributing](CONTRIBUTING.md) | Branches, commit titles and versions, pull requests, translations |
 
 ## Status

@@ -1361,6 +1361,16 @@ A quest has a giver, a success condition that the mod checks on the state of the
 
 All distances, delays and rewards are configurable.
 
+### Quest definitions
+
+- The quests come from quest definitions (`QuestDefinition`, `QuestDefinitions`): one JSON file for each definition in `data/<namespace>/folkhold/quest/<path>.json`, with the id `<namespace>:<path>`. The format is in [Quest definitions for pack makers](quest-definitions.md).
+- A definition has a kind (`delivery`, `escort`), a need (`job_inputs`, `site_materials`, `caravan`), a switch `enabled`, the levels of the villages with offers, and optional values of the reward and of the offer. A value that the file does not give comes from the server config.
+- The mod has 3 definitions: `folkhold_world:job_input_delivery`, `folkhold_world:site_material_delivery` and `folkhold_world:caravan_escort`. They give no values, so the offers follow the config.
+- A data pack replaces a definition with a file of the same path, and adds a definition with a new path. `/reload` reads them again. A file with an error gives an error in the log and no definition. The other files load.
+- The need `job_inputs` uses all its matching definitions: one offer for each definition in turn, in the order of their ids, up to the number of offers of the village. The needs `site_materials` and `caravan` use the first matching definition. A need with no matching definition makes no offer.
+- Each new quest saves the id of its definition (`Definition` in `folkhold_quests.dat`). A quest of a save with no definition id loads with an empty id, and its rules do not change.
+- The API for other mods (#978) and the admin screen of the definitions (#979) are planned.
+
 ### Lore
 
 Each culture has a short history. Players find it in books in villages and ruins. The text is in the language files (`en_us.json`, `fr_fr.json`), like all other text that the player sees. Past wars leave real ruins in the world, so each game gets its own lore.

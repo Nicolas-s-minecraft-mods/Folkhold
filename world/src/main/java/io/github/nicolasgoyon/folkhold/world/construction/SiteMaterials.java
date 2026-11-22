@@ -2,8 +2,10 @@ package io.github.nicolasgoyon.folkhold.world.construction;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Stock;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestGenerator;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
@@ -11,6 +13,7 @@ import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderMaterials.Kind;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderMaterials.Material;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
+import io.github.nicolasgoyon.folkhold.world.quest.QuestDefinitions;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestSystem;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
@@ -19,6 +22,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -308,7 +312,9 @@ final class SiteMaterials {
             boolean urgent) {
         QuestData data = QuestData.get(server);
         Quests all = data.quests();
-        QuestGenerator.Settings settings = QuestSystem.settings();
+        Optional<QuestDefinition> definition = QuestDefinitions.matching(QuestNeed.SITE_MATERIALS,
+                settlement.level()).stream().findFirst();
+        QuestGenerator.Settings settings = definition.map(QuestSystem::settings).orElseGet(QuestSystem::settings);
         long questTime = server.overworld().getGameTime();
         long delay = WorldConfig.CONSTRUCTION_MATERIAL_QUEST_MINUTES.get() * (long) SharedConstants.TICKS_PER_MINUTE;
         quests.values().removeIf(questId -> !isOpen(all, questId));
@@ -330,7 +336,8 @@ final class SiteMaterials {
             int lacking = need.count() - settlement.economy().stock().count(item);
             Long since = waitingSince.get(item);
             boolean ask = urgent || need.rare() || (delay > 0 && since != null && now - since >= delay);
-            if (lacking <= 0 || !ask || quests.containsKey(item) || villageAsksFor(all, settlement, item)) {
+            if (definition.isEmpty() || lacking <= 0 || !ask || quests.containsKey(item)
+                    || villageAsksFor(all, settlement, item)) {
                 continue;
             }
             int count = Math.min(lacking, settings.maxDeliveryCount());
@@ -338,7 +345,7 @@ final class SiteMaterials {
             Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.DELIVERY, settlement.id(),
                     settlement.factionId(), item, count, reward, settings.deliveryReputation(),
                     QuestGenerator.minTier(reward, settings), questTime + settings.offerLifetime(),
-                    settings.deliveryDuration());
+                    settings.deliveryDuration(), definition.get().id());
             all.add(quest);
             quests.put(item, quest.id());
             changed = true;

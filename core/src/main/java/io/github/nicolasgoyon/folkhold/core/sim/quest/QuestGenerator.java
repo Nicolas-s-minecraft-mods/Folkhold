@@ -76,11 +76,31 @@ public final class QuestGenerator {
      * @param wanted        the maximum number of new quests
      * @param now           the game time
      * @param settings      the settings
-     * @return the new quests
+     * @return the new quests, with no definition id
      */
     public static List<Quest> deliveries(String settlementId, String factionId, Map<String, Integer> needs,
             ToDoubleFunction<String> price, Collection<String> offeredItems, int wanted, long now,
             Settings settings) {
+        return deliveries(settlementId, factionId, needs, price, offeredItems, wanted, now, settings, "");
+    }
+
+    /**
+     * Makes delivery quests of a definition for the needs of a village.
+     *
+     * @param settlementId  the id of the village
+     * @param factionId     the id of its faction
+     * @param needs         the needs: the missing quantity of each item
+     * @param price         the local price of one item
+     * @param offeredItems  the items of the deliveries that the village already offers
+     * @param wanted        the maximum number of new quests
+     * @param now           the game time
+     * @param settings      the settings
+     * @param definitionId  the id of the definition of the quests (see {@link QuestDefinition})
+     * @return the new quests
+     */
+    public static List<Quest> deliveries(String settlementId, String factionId, Map<String, Integer> needs,
+            ToDoubleFunction<String> price, Collection<String> offeredItems, int wanted, long now,
+            Settings settings, String definitionId) {
         List<Map.Entry<String, Integer>> candidates = needs.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0 && !offeredItems.contains(entry.getKey()))
                 .sorted(Comparator.comparingDouble((Map.Entry<String, Integer> entry) ->
@@ -97,7 +117,7 @@ public final class QuestGenerator {
             long reward = Math.max(1, Math.round(value * settings.deliveryBonus()));
             quests.add(new Quest(UUID.randomUUID().toString(), QuestKind.DELIVERY, settlementId, factionId,
                     need.getKey(), count, reward, settings.deliveryReputation(), minTier(reward, settings),
-                    now + settings.offerLifetime(), settings.deliveryDuration()));
+                    now + settings.offerLifetime(), settings.deliveryDuration(), definitionId));
         }
         return quests;
     }
