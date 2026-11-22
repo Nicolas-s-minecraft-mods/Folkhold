@@ -60,6 +60,9 @@ public final class BalanceConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ANVIL_LEVEL_CAPS;
     public static final ModConfigSpec.IntValue ANVIL_ABSOLUTE_MAX_LEVEL;
 
+    public static final ModConfigSpec.IntValue SLEEP_MAX_EXTRA_TICKS;
+    public static final ModConfigSpec.IntValue SLEEP_EXTRA_TICK_BUDGET;
+
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         Coupling defaults = Coupling.DEFAULTS;
@@ -267,6 +270,25 @@ public final class BalanceConfig {
                 .comment("Largest level of all enchantments in the anvil. The game stores a maximum of 255.")
                 .translation(KEY_PREFIX + "absoluteMaxLevel")
                 .defineInRange("absoluteMaxLevel", 255, 1, 255);
+        builder.pop();
+
+        builder.comment("Sleep with the optional mod Slumber: while all the players sleep, Slumber runs extra game ticks",
+                        "at the end of each server tick, until the morning. These values limit the extra ticks in one",
+                        "server tick: the night ends in more server ticks, and the server answers the players during",
+                        "the night. With no Slumber, these values have no effect.")
+                .translation(KEY_PREFIX + "sleep")
+                .push("sleep");
+        SLEEP_MAX_EXTRA_TICKS = builder
+                .comment("Largest number of extra game ticks in one server tick. With 20, the night goes 21 times",
+                        "faster at most. 1000 gives the number of Slumber (up to about 280 at the start of a night).")
+                .translation(KEY_PREFIX + "maxExtraTicks")
+                .defineInRange("maxExtraTicks", 20, 1, 1000);
+        SLEEP_EXTRA_TICK_BUDGET = builder
+                .comment("Time budget in milliseconds for the extra ticks of one server tick. The mod measures the time",
+                        "of the extra ticks and runs the number that fits in this time, 1 at least. A server tick",
+                        "with no sleep has 50 ms. A higher value makes the night shorter and each server tick longer.")
+                .translation(KEY_PREFIX + "extraTickBudget")
+                .defineInRange("extraTickBudget", 50, 1, 1000);
         builder.pop();
 
         SPEC = builder.build();
