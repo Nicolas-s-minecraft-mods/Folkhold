@@ -39,6 +39,22 @@ class PlanGroundTest {
         return new PlotTerrain.Column(surface, surface, false);
     }
 
+    /**
+     * A valley from north to south: flat ground up to {@link #VALLEY} blocks from x = 0, then a cliff of 10 blocks for
+     * each block up to 40 blocks high.
+     */
+    private static PlotTerrain.Column valley(int x, int z) {
+        int out = Math.abs(x) - VALLEY;
+        int surface = out <= 0 ? LEVEL : LEVEL + Math.min(40, out * 10);
+        return new PlotTerrain.Column(surface, surface, false);
+    }
+
+    /**
+     * The half width of the flat ground of {@link #valley}. With the line of the first wall around it (the margin and the
+     * slack of the outline), a home of 10 blocks fits, and a home of 17 blocks does not.
+     */
+    private static final int VALLEY = 24;
+
     private static VillageSize village() {
         return VillageSizeTable.DEFAULT.sizes().stream().filter(size -> size.tier().equals("village")).findFirst()
                 .orElseThrow();
@@ -146,6 +162,34 @@ class PlanGroundTest {
         assertTrue(plan.rules().compareTo(Rules.ALL) > 0 && plan.rules() != Rules.NONE, plan.rules().name());
         for (Box box : boxes(plan)) {
             assertTrue(slope(2 * box.maxX(), 0).surface() - LEVEL <= plan.rules().rise() + 1, box.toString());
+        }
+    }
+
+    /**
+     * In a narrow valley, the long houses of Valeholm (17 blocks deep) do not fit next to the street on the axis of the
+     * valley. The greedy growth takes the side long houses there (10 blocks deep): each plot of the plan stays on the
+     * flat ground, and the plan keeps the rules of the ground.
+     */
+    @Test
+    void smallGroundTakesALessDeepHome() {
+        for (long seed = 0; seed < 4; seed++) {
+            String name = "seed " + seed;
+            PlanGround ground = PlanGround.core(PlanGroundTest::valley, 0, 0, 0, LEVEL, village().maxRadius(),
+                    MARGIN);
+            VillagePlan plan = plan(village(), StreetStyle.VALEHOLM, ground, seed);
+            assertTrue(plan.rules() != Rules.NONE && plan.rules() != Rules.REGION, name + ": " + plan.rules());
+            long shallow = plan.plots().stream().filter(plot -> plot.wide() && plot.homes().get(1).depth()
+                    < StreetStyle.VALEHOLM.home().depth() && plot.area().equals(plot.area())
+                    && Math.min(plot.area().maxX() - plot.area().minX(), plot.area().maxZ() - plot.area().minZ()) + 1
+                    == plot.homes().get(1).depth()).count();
+            assertTrue(shallow > 0, name + ": no less deep home, " + plan.rules() + ", " + plan.plots().size() + " plots, "
+                    + plan.missingHomes() + " missing homes, wide " + plan.plots().stream().filter(Plot::wide).count());
+            for (Plot plot : plan.plots()) {
+                if (plan.pieces().get(plot.piece()).parent() >= 0) {
+                    assertTrue(Math.abs(plot.area().minX()) <= VALLEY && Math.abs(plot.area().maxX()) <= VALLEY,
+                            name + ": " + plot.area() + " on the cliff");
+                }
+            }
         }
     }
 
