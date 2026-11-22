@@ -16,7 +16,7 @@ metafile = true
 
 [[files]]
 file = "mods/cartofold.pw.toml"
-hash = "5dd564dd6628d9018c7eed5ab11aa3613520be212256bcb258fb4825cd1b42f1"
+hash = "fc3cce21448fe399d7e4d1b48ff8afef9b463465e223e8f568b63806d5795763"
 metafile = true
 
 [[files]]

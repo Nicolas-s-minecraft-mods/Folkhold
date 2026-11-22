@@ -38,7 +38,7 @@ The relations of each CurseForge file. They are the required dependencies of `ne
 | Folkhold World | Folkhold Core | the same version |
 | Folkhold World | Folkhold Blocks | the same version |
 | Folkhold World | GeckoLib | 4.9.3 |
-| Folkhold World | Cartofold | 0.33.12 |
+| Folkhold World | Cartofold | 0.39.3 |
 | Folkhold World | Confee | 0.2.0 |
 | Folkhold Balance | none | |
 | Folkhold Events | Folkhold Core | the same version |

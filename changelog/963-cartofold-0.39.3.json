@@ -1,0 +1,5 @@
+{
+  "category": "changed",
+  "en_us": "The modpack has Cartofold 0.39.3: the minimap and the map of the world show the loaded entities, a player can share the map with another player, and the client keeps a cache of the map on its disk.",
+  "fr_fr": "Le modpack contient Cartofold 0.39.3 : la minicarte et la carte du monde montrent les entités chargées, un joueur peut partager la carte avec un autre joueur, et le client garde un cache de la carte sur son disque."
+}

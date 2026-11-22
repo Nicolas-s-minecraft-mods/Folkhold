@@ -1,8 +1,8 @@
 name = "Cartofold"
-filename = "cartofold-0.33.12.jar"
+filename = "cartofold-0.39.3.jar"
 side = "both"
 
 [download]
-url = "https://github.com/nicolas-goyon/Cartofold/releases/download/v0.33.12/cartofold-0.33.12.jar"
+url = "https://github.com/nicolas-goyon/Cartofold/releases/download/v0.39.3/cartofold-0.39.3.jar"
 hash-format = "sha256"
-hash = "c7ac97919e21714c83548527f8a32b8094f4b64ddc533db9c3e568c5159a03a7"
+hash = "c6f2d6860cd99077a4b7fa633f2804a210b13a298236dad0c64049a05c97a63f"
