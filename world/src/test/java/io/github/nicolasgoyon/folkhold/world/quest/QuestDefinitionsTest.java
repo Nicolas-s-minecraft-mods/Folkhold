@@ -151,6 +151,42 @@ class QuestDefinitionsTest {
         }
     }
 
+    /**
+     * The job quests of the mod: each job with an input has a story of its own, and each story has a text in English
+     * and in French.
+     */
+    @Test
+    void modJobStoriesHaveTheirTexts() throws IOException {
+        QuestDefinition story;
+        try (Reader reader = new InputStreamReader(QuestDefinitionsTest.class.getResourceAsStream(
+                "/data/folkhold_world/folkhold/quest/job_story_delivery.json"), StandardCharsets.UTF_8)) {
+            story = QuestDefinitions.parse("folkhold_world:job_story_delivery",
+                    JsonParser.parseReader(reader).getAsJsonObject(), warning -> { });
+        }
+        assertEquals(QuestNeed.JOB_STORY, story.need());
+        java.nio.file.Path jobs = java.nio.file.Path.of("src/main/resources/data/folkhold_world/folkhold/jobs");
+        List<String> missing = new ArrayList<>();
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(jobs)) {
+            for (java.nio.file.Path file : files.sorted().toList()) {
+                JsonObject job = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
+                String id = "folkhold_world:" + file.getFileName().toString().replace(".json", "");
+                if (job.has("inputs") && !job.getAsJsonArray("inputs").isEmpty()
+                        && !story.texts().jobs().containsKey(id)) {
+                    missing.add(id);
+                }
+            }
+        }
+        assertEquals(List.of(), missing, "Jobs with an input and no story");
+        for (String lang : List.of("en_us", "fr_fr")) {
+            try (Reader reader = new InputStreamReader(QuestDefinitionsTest.class.getResourceAsStream(
+                    "/assets/folkhold_world/lang/" + lang + ".json"), StandardCharsets.UTF_8)) {
+                JsonObject texts = JsonParser.parseReader(reader).getAsJsonObject();
+                assertTrue(texts.has(story.texts().defaultKey()), lang + ": " + story.texts().defaultKey());
+                story.texts().jobs().values().forEach(key -> assertTrue(texts.has(key), lang + ": " + key));
+            }
+        }
+    }
+
     /** The 3 definitions of the mod are valid, with no warning and no value: all their values come from the config. */
     @Test
     void modDefinitionsAreValid() throws IOException {
