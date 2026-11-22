@@ -64,6 +64,7 @@ public final class FolkholdBalance {
         // Lowest priority: the anvil recipes of other mods set their output first.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, AnvilRules::onAnvilUpdate);
         if (ModList.get().isLoaded(SLUMBER_ID)) {
+            NeoForge.EVENT_BUS.addListener(SleepTicks::onServerTickStart);
             NeoForge.EVENT_BUS.addListener(SleepTicks::onServerTick);
         }
         LOGGER.info("{} {} loaded", MOD_ID, modContainer.getModInfo().getVersion());

@@ -49,6 +49,7 @@
   "folkhold_balance.configuration.sleep": "Sleep (Slumber)",
   "folkhold_balance.configuration.maxExtraTicks": "Maximum extra ticks in one server tick",
   "folkhold_balance.configuration.extraTickBudget": "Time budget of the extra ticks (ms)",
+  "folkhold_balance.configuration.nightSeconds": "Target time of a night (s)",
   "folkhold_balance.chain.first": "First minecart: %s. Use the chain on a second minecart.",
   "folkhold_balance.chain.linked": "The minecarts are linked.",
   "folkhold_balance.chain.same_cart": "Use the chain on a different minecart.",
