@@ -225,13 +225,13 @@ public final class PlanGround implements VillagePlan.Ground {
      * is a cliff plot when:
      *
      * <ul>
-     *   <li>each grid point less than {@link #STEP} blocks from the front is {@link #MAX_PLOT_RISE} blocks or less
-     *       above or below the street at the connector, and is a point of the region of the core (no region test in a
-     *       band);</li>
+     *   <li>each grid point of the plot in front of its last {@link #STEP} blocks (at least the first {@link #STEP}
+     *       blocks) is {@link #MAX_PLOT_RISE} blocks or less above or below the street at the connector, and is a point
+     *       of the region of the core (no region test in a band);</li>
      *   <li>no grid point of the plot is more than {@link #MAX_PLOT_RISE} blocks below the street: no drop under the
      *       house;</li>
-     *   <li>the face, the highest grid point {@link #STEP} blocks or more from the front, in the plot or up to
-     *       {@link #STEP} blocks behind it, is {@link #CLIFF_FACE} blocks or more above the street;</li>
+     *   <li>the face, the highest grid point of the last {@link #STEP} blocks of the plot or up to {@link #STEP}
+     *       blocks behind it, is {@link #CLIFF_FACE} blocks or more above the street;</li>
      *   <li>no grid point of the plot and of the row behind it has lava or water deeper than
      *       {@link VillageSite#MAX_SHALLOW_DEPTH} blocks.</li>
      * </ul>
@@ -249,6 +249,8 @@ public final class PlanGround implements VillagePlan.Ground {
             return 0;
         }
         int street = column(connector[0], connector[1]).surface();
+        int plotDepth = dx != 0 ? world.maxX() - world.minX() + 1 : world.maxZ() - world.minZ() + 1;
+        int front = Math.max(STEP, plotDepth - STEP);
         Box reach = Box.of(dx < 0 ? world.minX() - STEP : world.minX(), dz < 0 ? world.minZ() - STEP : world.minZ(),
                 dx > 0 ? world.maxX() + STEP : world.maxX(), dz > 0 ? world.maxZ() + STEP : world.maxZ());
         Set<Long> flood = core ? region(rise) : Set.of();
@@ -266,7 +268,7 @@ public final class PlanGround implements VillagePlan.Ground {
                 if (inPlot && height < -MAX_PLOT_RISE) {
                     return 0;
                 }
-                if (depth < STEP) {
+                if (depth < front) {
                     if (inPlot && (Math.abs(height) > MAX_PLOT_RISE || (core && !flood.contains(key(px, pz))))) {
                         return 0;
                     }

@@ -18,6 +18,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
+import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
@@ -48,6 +49,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.ChunkPos;
@@ -432,7 +434,11 @@ public final class PlotTerrainGameTests {
      *   <li>Each town has all its plots and homes.</li>
      *   <li>For a plan with the level rule, each grid point of each plot with a building is
      *       {@link PlanGround#MAX_PLOT_RISE} blocks or less above or below the surface at its connector. The plots of
-     *       the first pieces of the axis streets (the bank and the first jobs) do not obey this rule.</li>
+     *       the first pieces of the axis streets (the bank and the first jobs) do not obey this rule. A cliff plot obeys
+     *       the rule of the cliff plots in place of this rule: its front is at the level of the street, and it has a rock
+     *       face behind it (see {@link PlanGround#cliff}).</li>
+     *   <li>Each cliff plot of a plan has no setback and no shift. The core of the layout has a cliff house (a piece
+     *       {@code cliff_house_<n>}) for each cliff plot of the core with a home.</li>
      *   <li>For a core plan with the outline rule, the line of the first wall (its free outline, see
      *       {@link WallLayout#free}) climbs no more than the line of the rectangle around the plaza and the first pieces
      *       of the axis streets (see {@link PlanGround#climb}).</li>
@@ -443,7 +449,8 @@ public final class PlotTerrainGameTests {
      *       ground with the small rise.</li>
      * </ul>
      *
-     * <p>The log has a line {@code Ground of the plan} for each town, with the rules of its plans.
+     * <p>The log has a line {@code Ground of the plan} for each town, with the rules of its plans, its cliff plots and
+     * its cliff houses.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_ground")
     public static void mountainPlansFollowTheGround(GameTestHelper helper) {
@@ -455,6 +462,8 @@ public final class PlotTerrainGameTests {
         int steep = 0;
         int cutRings = 0;
         int lowerRings = 0;
+        int allCliffPlots = 0;
+        int allCliffHouses = 0;
         for (int i = 0; i < TRIES && sites < MOUNTAIN_SITES; i++) {
             Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
                     (i / ROW) * LAND_STEP));
@@ -476,6 +485,8 @@ public final class PlotTerrainGameTests {
                     structure.maxDistanceFromCenter());
             PlanGround core = plots.core(center, rotation, radius, variant.wall().margin());
             PlanGround band = plots.band(center, rotation);
+            int cliffPlots = 0;
+            int cliffHomes = 0;
             for (int p = 0; p < layout.plans().size(); p++) {
                 VillagePlan plan = layout.plans().get(p);
                 rules.merge(plan.rules().name(), 1, Integer::sum);
@@ -485,7 +496,15 @@ public final class PlotTerrainGameTests {
                 PlanGround ground = p == 0 ? core : band;
                 for (VillagePlan.Plot plot : plan.plots()) {
                     boolean first = p == 0 && plan.pieces().get(plot.piece()).parent() < 0;
-                    if (plan.rules().level() && !first && !plot.spare()
+                    if (plot.onCliff()) {
+                        cliffPlots++;
+                        cliffHomes += p == 0 && !plot.spare() ? 1 : 0;
+                        if (ground.cliff(plot.area(), plot.x(), plot.z(), plan.rules().rise()) != plot.cliff()
+                                || plot.setback() != 0 || plot.shift() != 0) {
+                            problems.add(name + ": the cliff plot at " + plot.x() + " " + plot.z() + " of the plan "
+                                    + p + " is not against a rock face");
+                        }
+                    } else if (plan.rules().level() && !first && !plot.spare()
                             && !ground.level(plot.area(), plot.x(), plot.z())) {
                         problems.add(name + ": the plot at " + plot.x() + " " + plot.z() + " of the plan " + p
                                 + " is far above or below its street");
@@ -552,11 +571,23 @@ public final class PlotTerrainGameTests {
                 }
             }
             steep += cut ? 1 : 0;
-            FolkholdWorld.LOGGER.info("Ground of the plan {}: rules {}, steep side {}", name, rules(layout), cut);
+            // The pieces of the core: the ring districts place the pieces of the bands.
+            long cliffHouses = layout.village().stream()
+                    .map(piece -> VillageReference.templateOf(helper.getLevel(), piece.getElement())
+                            .map(ResourceLocation::getPath).orElse(""))
+                    .filter(path -> path.substring(path.lastIndexOf('/') + 1).startsWith("cliff_house_")).count();
+            if (cliffHouses != cliffHomes) {
+                problems.add(name + ": " + cliffHouses + " cliff houses for " + cliffHomes
+                        + " cliff plots of the core with a home");
+            }
+            allCliffPlots += cliffPlots;
+            allCliffHouses += (int) cliffHouses;
+            FolkholdWorld.LOGGER.info("Ground of the plan {}: rules {}, steep side {}, cliff plots {}, cliff houses {}",
+                    name, rules(layout), cut, cliffPlots, cliffHouses);
         }
         FolkholdWorld.LOGGER.info("Ground of the plan: {} mountain sites, {} with a steep side, rules {}, {} rings"
-                + " cut, {} rings with less high ground than the rectangle, problems {}", sites, steep, rules, cutRings,
-                lowerRings, problems);
+                + " cut, {} rings with less high ground than the rectangle, cliff plots {}, cliff houses {}, problems {}",
+                sites, steep, rules, cutRings, lowerRings, allCliffPlots, allCliffHouses, problems);
         helper.assertTrue(sites == MOUNTAIN_SITES, "Only " + sites + " mountain sites of " + MOUNTAIN_SITES);
         helper.assertTrue(steep > 0, "No mountain site has a steep side");
         helper.assertTrue(lowerRings > 0, "No ring of the mountain sites goes around the high ground of its band");

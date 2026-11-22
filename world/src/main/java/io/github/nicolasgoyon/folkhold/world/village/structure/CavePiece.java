@@ -15,10 +15,11 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
 
 /**
- * A piece of a cave village (see {@link CaveVillage}): a pool element with no terrain adaptation. The village structure
- * has the terrain adaptation {@code beard_thin}: it shapes the terrain around its pieces before the generation of the
- * blocks. The rock around a cave piece must stay, thus the piece tells the game to change no terrain for it, and its
- * junctions add no terrain too.
+ * A pool element with no terrain adaptation: a piece of a cave village (see {@link CaveVillage}), or a cliff house on a
+ * cliff plot (see {@link VillagePlanPieces}). The village structure has the terrain adaptation {@code beard_thin}: it
+ * shapes the terrain around its pieces before the generation of the blocks. The rock around a cave piece and behind a
+ * cliff house must stay, thus the piece tells the game to change no terrain for it, and its junctions add no terrain
+ * too.
  *
  * <p>The piece places no water in its blocks: a cave piece in an aquifer does not get waterlogged blocks.
  */

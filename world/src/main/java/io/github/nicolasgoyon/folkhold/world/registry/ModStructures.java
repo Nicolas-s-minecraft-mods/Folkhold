@@ -70,7 +70,7 @@ public final class ModStructures {
     public static final DeferredHolder<StructurePieceType, StructurePieceType> GROUND_FILL =
             PIECES.register("ground_fill", () -> (StructurePieceType.ContextlessType) GroundFillPiece::new);
 
-    /** A piece of a cave village with no terrain adaptation ({@link CavePiece}). */
+    /** A piece with no terrain adaptation: a piece of a cave village, or a cliff house ({@link CavePiece}). */
     public static final DeferredHolder<StructurePieceType, StructurePieceType> CAVE_PIECE =
             PIECES.register("cave_piece", () -> CavePiece::new);
 

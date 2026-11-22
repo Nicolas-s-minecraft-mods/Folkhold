@@ -1,6 +1,9 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.construction.ConstructionTargets;
+import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.TemplateSigns;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import java.util.ArrayList;
@@ -14,6 +17,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.templatesystem.JigsawReplacementProcessor;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorList;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -47,6 +58,27 @@ public final class CliffHouseTemplateGameTests {
     private static final int STOREY_BEDS = 2;
     /** The width of the body of the house, from x = 0: the stair of the upper doors is east of it. */
     private static final int BODY = 7;
+    /** The cliff house of the walk test: 3 storeys, in the base variant of all the cultures. */
+    private static final ResourceLocation WALK_HOUSE = ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
+            "village/cliff_house_3");
+    /** The processor list of the houses of the base variant: the foundation under the house. */
+    private static final ResourceKey<StructureProcessorList> FOUNDATION = ResourceKey.create(
+            Registries.PROCESSOR_LIST, ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
+                    "village/foundation"));
+    /** The size of the floor of the walk test. */
+    private static final int WALK_FLOOR = 32;
+    /** The origin of the cliff house in the walk test: its floor layer replaces the floor of the arena. */
+    private static final BlockPos WALK_ORIGIN = new BlockPos(12, 0, 12);
+    /** The rock face of the walk test: a block of stone from this row of the house to 5 blocks behind it. */
+    private static final int ROCK_FROM = 4;
+    /** The height of the rock face above the floor of the walk test, in blocks: above the walls of the house. */
+    private static final int ROCK_HEIGHT = 14;
+    /** The rock goes this number of blocks to the sides of the house and behind it. */
+    private static final int ROCK_MARGIN = 4;
+    /** The rows of the house in front of the face that stand over a hole of 2 blocks in the floor. */
+    private static final int HOLE_ROWS = 2;
+    /** The position of the villager of the walk test: in front of the house, on the street. */
+    private static final BlockPos HEART = new BlockPos(16, 1, 1);
 
     private CliffHouseTemplateGameTests() {
     }
@@ -107,6 +139,94 @@ public final class CliffHouseTemplateGameTests {
         helper.assertTrue(problems.isEmpty(), "Problems of the cliff houses: " + problems);
         helper.assertTrue(pieces == expected, "Expected " + expected + " cliff houses: " + pieces);
         helper.succeed();
+    }
+
+    /**
+     * A cliff house against a rock face, as on a cliff plot: a villager of a faction village walks from a position in
+     * front of the house (the street, toward the heart) into each storey through its door. The path finder of the
+     * villagers keeps away from the pits and the drops (see {@link FolkNavigation#hasWay}).
+     *
+     * <ul>
+     *   <li>The scene: a floor of stone, and a block of stone from the middle of the house to {@link #ROCK_MARGIN}
+     *       blocks behind it and to its sides, {@link #ROCK_HEIGHT} blocks high. The front rows of the house stand
+     *       over a hole of 2 blocks in the floor.</li>
+     *   <li>The test places the template with the foundation processor of the houses, as the generation does with no
+     *       terrain adaptation: the air of the template removes the rock in its box.</li>
+     *   <li>Each door of the house has a way from the villager to the position inside it. The rock stays behind and
+     *       beside the box of the house. No block of the floor layer of the house has air under it: the foundation
+     *       fills the hole.</li>
+     * </ul>
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 100, batch = "cliff_house_walk", skyAccess = true)
+    public static void villagersWalkToEachDoorOfACliffHouse(GameTestHelper helper) {
+        TestSupport.buildFloor(helper, WALK_FLOOR);
+        ServerLevel level = helper.getLevel();
+        StructureTemplate template = level.getStructureManager().get(WALK_HOUSE).orElseThrow();
+        Vec3i size = template.getSize();
+        BoundingBox rock = BoundingBox.fromCorners(helper.absolutePos(WALK_ORIGIN.offset(-ROCK_MARGIN, 1, ROCK_FROM)),
+                helper.absolutePos(WALK_ORIGIN.offset(size.getX() - 1 + ROCK_MARGIN, ROCK_HEIGHT,
+                        size.getZ() - 1 + ROCK_MARGIN)));
+        BlockPos.betweenClosed(rock.minX(), rock.minY(), rock.minZ(), rock.maxX(), rock.maxY(), rock.maxZ())
+                .forEach(pos -> level.setBlock(pos, Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS));
+        for (int x = 0; x < size.getX(); x++) {
+            for (int z = 0; z < HOLE_ROWS; z++) {
+                for (int y = -1; y <= 0; y++) {
+                    level.setBlock(helper.absolutePos(WALK_ORIGIN.offset(x, y, z)), Blocks.AIR.defaultBlockState(),
+                            Block.UPDATE_CLIENTS);
+                }
+            }
+        }
+        StructurePlaceSettings settings = new StructurePlaceSettings().addProcessor(JigsawReplacementProcessor.INSTANCE)
+                .setKnownShape(true);
+        level.registryAccess().registryOrThrow(Registries.PROCESSOR_LIST).getOrThrow(FOUNDATION).list()
+                .forEach(settings::addProcessor);
+        BlockPos origin = helper.absolutePos(WALK_ORIGIN);
+        template.placeInWorld(level, origin, origin, settings, level.getRandom(), Block.UPDATE_CLIENTS);
+        Villager villager = helper.spawn(EntityType.VILLAGER, HEART);
+        villager.getPersistentData().putLong(Merchants.VILLAGE_TAG, helper.absolutePos(HEART).asLong());
+        Map<BlockPos, BlockState> states = new HashMap<>();
+        ConstructionTargets.templateBlocks(level, template).forEach(block -> states.put(block.pos(), block.state()));
+        helper.startSequence().thenIdle(2).thenExecute(() -> {
+            List<String> problems = new ArrayList<>();
+            int doors = 0;
+            for (Map.Entry<BlockPos, BlockState> block : states.entrySet()) {
+                BlockState state = block.getValue();
+                if (!(state.getBlock() instanceof DoorBlock) || state.getValue(DoorBlock.HALF) != DoubleBlockHalf.LOWER) {
+                    continue;
+                }
+                doors++;
+                BlockPos inside = origin.offset(block.getKey())
+                        .relative(state.getValue(DoorBlock.FACING).getOpposite());
+                if (!FolkNavigation.hasWay(villager, inside, 0)) {
+                    problems.add("no way to the door at " + block.getKey().toShortString());
+                }
+            }
+            if (doors != 3) {
+                problems.add(doors + " doors, not 3");
+            }
+            // The rock behind the back wall and beside the box stays.
+            BlockPos behind = origin.offset(BODY / 2, ROCK_HEIGHT - 1, size.getZ());
+            BlockPos beside = origin.offset(-1, ROCK_HEIGHT - 1, size.getZ() - 1);
+            for (BlockPos pos : List.of(behind, beside)) {
+                if (!level.getBlockState(pos).is(Blocks.STONE)) {
+                    problems.add("no rock at " + pos.subtract(origin).toShortString());
+                }
+            }
+            for (int x = 0; x < size.getX(); x++) {
+                for (int z = 0; z < size.getZ(); z++) {
+                    BlockPos below = origin.offset(x, -1, z);
+                    if (level.getBlockState(below).isAir()) {
+                        problems.add("air under the floor at " + x + ", " + z);
+                    }
+                }
+            }
+            villager.discard();
+            // The scene goes away: the rock and the house above the floor.
+            BlockPos.betweenClosed(rock.minX(), rock.minY(), origin.getZ(), rock.maxX(), origin.getY() + size.getY(),
+                    rock.maxZ()).forEach(pos -> level.setBlock(pos, Blocks.AIR.defaultBlockState(),
+                            Block.UPDATE_CLIENTS));
+            helper.assertTrue(problems.isEmpty(), "Problems of the walk to the cliff house: " + problems);
+        }).thenSucceed();
     }
 
     /** Checks one cliff house: see {@link #eachCliffHouseHasADoorOnEachStorey}. */

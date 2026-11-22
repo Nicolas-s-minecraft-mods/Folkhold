@@ -68,6 +68,11 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       that is not wide takes a piece that fits the home of the style. A wide plot takes a piece that fits the wide
  *       home and not the home of the style. A free plot stays free: the wall keeps its space. A plot with no building
  *       for its use is a problem of the result.</li>
+ *   <li>A cliff plot of the plan (see {@link Plot#cliff()}) holds a cliff house: the piece {@code cliff_house_<n>}
+ *       of the pool {@code cliff_houses} with the storeys of the plot, else the piece with the most storeys under them
+ *       (see {@link Builder#cliff}). The house stands at the back of the plot, against the rock face, and its door at
+ *       the level of the street. It has no terrain adaptation ({@link CavePiece}): the rock behind it and beside it
+ *       stays. With no cliff house that fits the plot, the plot gets a home of the pool {@code houses}.</li>
  *   <li>The job posts come first, in the order of the posts: the plot of the first food job gets the first job. Then
  *       come the bank and the buildings of the level, then the homes. The homes give the home beds of the maximum
  *       population of the level: a home with no bed comes only on top of these beds.</li>
@@ -90,6 +95,10 @@ final class VillagePlanPieces {
     /** The name of the template of a house-workshop: this text and the path of the job id. */
     private static final String JOB = "job_";
     private static final String HOUSES = "houses";
+    /** The pool of the cliff houses of a variant. */
+    static final String CLIFF_HOUSES = "cliff_houses";
+    /** The name of the template of a cliff house: this text and the number of its storeys. */
+    private static final String CLIFF_HOUSE = "cliff_house_";
 
     /**
      * The pieces of a plan.
@@ -321,7 +330,7 @@ final class VillagePlanPieces {
                     case BANK -> build(site, shuffled("bank", random), "the bank");
                     case BUILDING -> build(site, candidates(use.kind(), style), "the building " + use.kind());
                     case POST -> (postJobs.size() < postLimit && post(site, posts(), random)) || home(site, random);
-                    case HOME -> home(site, random);
+                    case HOME -> (plot.onCliff() && cliff(site, plot, style)) || home(site, random);
                 };
                 if (use.type() == PlotUses.Type.HOME) {
                     homesLeft--;
@@ -554,6 +563,42 @@ final class VillagePlanPieces {
         }
 
         /**
+         * Places a cliff house on a cliff plot: the piece {@code cliff_house_<n>} of the pool {@link #CLIFF_HOUSES}
+         * with the most storeys n, and n not more than the storeys of the plot. The house goes to the back of the plot:
+         * its back wall stands against the rock face. It has no terrain adaptation (see {@link CavePiece}).
+         *
+         * @return true if the plot has a cliff house
+         */
+        private boolean cliff(Site site, Plot plot, StreetStyle style) {
+            List<StructurePoolElement> houses = elements(CLIFF_HOUSES).stream()
+                    .filter(element -> storeys(element) > 0 && storeys(element) <= plot.cliff())
+                    .sorted(Comparator.comparingInt(this::storeys).reversed()).toList();
+            for (StructurePoolElement house : houses) {
+                int back = style.home().depth() - house.getSize(templates, Rotation.NONE).getZ();
+                BlockPos offset = site.offset().offset(new BlockPos(plot.facing().dx() * back, 0,
+                        plot.facing().dz() * back).rotate(rotation));
+                Site atBack = new Site(site.fits(), site.street(), site.connector(), site.area(), offset);
+                if (place(atBack, List.of(house), true).isPresent()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** The storeys of a cliff house: n in the name {@code cliff_house_<n>} of its template, else 0. */
+        private int storeys(StructurePoolElement element) {
+            String name = name(element);
+            if (!name.startsWith(CLIFF_HOUSE)) {
+                return 0;
+            }
+            try {
+                return Integer.parseInt(name.substring(CLIFF_HOUSE.length()));
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+
+        /**
          * True if posts with some jobs make the posts of a village of 2 posts or more one job only: the last posts,
          * after posts of the same job. A maritime village with fishing huts keeps a post that is not a fisher.
          */
@@ -573,6 +618,16 @@ final class VillagePlanPieces {
          * @return the placed element, or empty if no element fits the plot
          */
         private Optional<StructurePoolElement> place(Site site, List<StructurePoolElement> elements) {
+            return place(site, elements, false);
+        }
+
+        /**
+         * Places the first element of a list that fits a plot, with the junctions of a jigsaw connection. A piece on the
+         * rock has no terrain adaptation (see {@link CavePiece}), as each piece of a cave village.
+         *
+         * @return the placed element, or empty if no element fits the plot
+         */
+        private Optional<StructurePoolElement> place(Site site, List<StructurePoolElement> elements, boolean onRock) {
             int ground = floor.isPresent() ? floor.getAsInt() : height(site.connector().connector());
             for (StructurePoolElement element : elements) {
                 if (!site.fits().test(element.getSize(templates, Rotation.NONE))) {
@@ -586,7 +641,7 @@ final class VillagePlanPieces {
                 if (placement.isEmpty() || !inside(placement.get().box(), site.area())) {
                     continue;
                 }
-                PoolElementStructurePiece building = floor.isPresent()
+                PoolElementStructurePiece building = floor.isPresent() || onRock
                         ? new CavePiece(templates, element, placement.get().origin(), placement.get().rotation())
                         : new PoolElementStructurePiece(templates, element, placement.get().origin(),
                                 site.street().getGroundLevelDelta(), placement.get().rotation(),
