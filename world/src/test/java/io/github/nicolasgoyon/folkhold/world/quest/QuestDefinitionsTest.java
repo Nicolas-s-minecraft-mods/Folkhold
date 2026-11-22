@@ -9,6 +9,7 @@ import com.google.gson.JsonParser;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestRisk;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import java.io.IOException;
@@ -80,17 +81,33 @@ class QuestDefinitionsTest {
                 + " \"reward\": {\"goods_share\": 2}}");
     }
 
+    /** The start items and the penalty of a definition. */
+    @Test
+    void startItemsAndPenaltyGiveTheRisk() {
+        List<String> warnings = new ArrayList<>();
+        QuestDefinition definition = parse("""
+                {"kind": "delivery", "need": "job_inputs",
+                 "start_items": {"items": [{"item": "minecraft:iron_pickaxe"}], "targets": ["minecraft:raw_iron"]},
+                 "penalty": {"reputation": 7, "start_items_factor": 3.0}}
+                """, warnings);
+
+        assertEquals(new QuestRisk(1.0, List.of(new RewardItem("minecraft:iron_pickaxe", 1, false)),
+                List.of("minecraft:raw_iron"), OptionalInt.of(7), OptionalDouble.of(3.0)), definition.risk());
+        assertEquals(List.of(), warnings);
+        assertEquals(QuestRisk.CONFIG, parse("{\"kind\": \"escort\", \"need\": \"caravan\"}", warnings).risk());
+    }
+
     /** A field that this version does not use gives a warning with its path. The definition loads. */
     @Test
     void unknownFieldGivesAWarning() {
         List<String> warnings = new ArrayList<>();
         parse("""
-                {"kind": "delivery", "need": "site_materials", "start_items": [],
+                {"kind": "delivery", "need": "site_materials", "texts": [],
                  "reward": {"title": 5}, "conditions": {"tier": "town"}}
                 """, warnings);
 
         assertEquals(3, warnings.size(), "Warnings: " + warnings);
-        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'start_items'")), "Warnings: " + warnings);
+        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'texts'")), "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'reward.title'")),
                 "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'conditions.tier'")),
