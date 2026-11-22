@@ -716,6 +716,73 @@ public final class PlotTerrainGameTests {
         helper.succeed();
     }
 
+    /** A steep start of the measured world, with flatter ground 32 blocks to the west. */
+    private static final ChunkPos STEEP_START = new ChunkPos(1739, 74);
+
+    /**
+     * At a steep start, the heart of the village moves to flatter ground (see {@link HeartSearch}):
+     *
+     * <ul>
+     *   <li>The flood region of the core with the strict rules is larger at the heart than at the start.</li>
+     *   <li>The offset is at the largest shift or nearer, and the plan of the tier stays in the range of the
+     *       structure on each axis.</li>
+     *   <li>The layout of the generation has its plaza at the heart, and all its pieces are in the range of 8 chunks
+     *       around the start chunk.</li>
+     *   <li>In a world with no search (a world of an earlier version), the layout has its plaza at the start.</li>
+     * </ul>
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_heart_shift")
+    public static void heartMovesToFlatterGroundAtASteepStart(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        Structure.GenerationContext context = measure.context(STEEP_START);
+        boolean search = HeartSearch.enabled();
+        FortifiedVillageStructure.Start origin;
+        FortifiedVillageStructure.Start heart;
+        FortifiedVillageStructure.Layout before;
+        FortifiedVillageStructure.Layout after;
+        try {
+            HeartSearch.setEnabled(false);
+            origin = structure.generatedStart(context).orElseThrow();
+            before = structure.layout(context).orElseThrow();
+            HeartSearch.setEnabled(true);
+            heart = structure.generatedStart(context).orElseThrow();
+            after = structure.layout(context).orElseThrow();
+        } finally {
+            HeartSearch.setEnabled(search);
+        }
+        int dx = heart.center().getX() - origin.center().getX();
+        int dz = heart.center().getZ() - origin.center().getZ();
+        helper.assertTrue(dx != 0 || dz != 0, "The heart must move from the steep start " + origin.center());
+        helper.assertTrue(dx * dx + dz * dz <= HeartSearch.MAX_SHIFT * HeartSearch.MAX_SHIFT,
+                "The heart must be at the largest shift or nearer: " + dx + " " + dz);
+        int radius = Math.min(FortifiedVillageStructure.firstRadius(FortifiedVillageStructure.sizeAt(SEED,
+                STEEP_START)), structure.maxDistanceFromCenter());
+        helper.assertTrue(Math.max(Math.abs(dx), Math.abs(dz)) <= structure.maxDistanceFromCenter() - radius,
+                "The plan of the tier must stay in the range of the structure: " + dx + " " + dz);
+        PlotTerrains plots = new PlotTerrains(TerrainCache.of(context));
+        Rotation rotation = origin.plaza().getRotation();
+        int margin = origin.variant().wall().margin();
+        int startRegion = FortifiedVillageStructure.regionSize(plots.core(origin.center(), rotation, radius, margin),
+                origin.center(), radius);
+        int heartRegion = FortifiedVillageStructure.regionSize(plots.core(heart.center(), rotation, radius, margin),
+                heart.center(), radius);
+        helper.assertTrue(heartRegion > startRegion, "The region at the heart (" + heartRegion
+                + ") must be larger than the region at the start (" + startRegion + ")");
+        helper.assertTrue(before.center().equals(origin.center()),
+                "With no search, the plaza must stay at the start: " + before.center());
+        helper.assertTrue(after.center().equals(heart.center()),
+                "The plaza of the layout must be at the heart: " + after.center());
+        int range = 8;
+        for (StructurePiece piece : after.pieces()) {
+            BoundingBox box = piece.getBoundingBox();
+            helper.assertTrue((box.minX() >> 4) >= STEEP_START.x - range && (box.maxX() >> 4) <= STEEP_START.x + range
+                    && (box.minZ() >> 4) >= STEEP_START.z - range && (box.maxZ() >> 4) <= STEEP_START.z + range,
+                    "The piece " + box + " must be in the range of the start chunk " + STEEP_START);
+        }
+        helper.succeed();
+    }
+
     /**
      * The measure of the search of the heart (see {@link HeartSearch}) at the first {@link #MEASURE_MOUNTAIN_SITES}
      * mountain sites, with the start level of each chunk. For each site, the log has a line {@code Heart measure:}:

@@ -132,6 +132,15 @@ public final class DiscoveryCheckGameTests {
                         List<Settlement> found = data.registry().byStart(candidates.get(i).x, candidates.get(i).z);
                         helper.assertTrue(found.isEmpty() != expected.get(i), "The region " + regions.get(i)
                                 + " must have a settlement: " + expected.get(i) + ", found " + found.size());
+                        // The settlement is at the middle of the plaza, as the generation places it.
+                        BlockPos plaza = StartCheck.middle(StartCheck.of(level), structure, candidates.get(i))
+                                .orElse(null);
+                        for (Settlement settlement : found) {
+                            helper.assertTrue(plaza != null && settlement.x() == plaza.getX()
+                                    && settlement.z() == plaza.getZ(), "The settlement of " + candidates.get(i)
+                                    + " must be at the middle of the plaza " + plaza + ": " + settlement.x() + " "
+                                    + settlement.z());
+                        }
                         found.forEach(settlement -> settlement.setState(SettlementState.RUINS));
                     }
                     data.setDirty();

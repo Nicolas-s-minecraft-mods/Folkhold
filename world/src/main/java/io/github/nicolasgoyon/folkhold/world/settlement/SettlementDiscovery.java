@@ -58,7 +58,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * <p>A new settlement is at the middle of the plaza of its village, as the generation places it: after the search of
  * the heart (see {@link io.github.nicolasgoyon.folkhold.world.village.structure.HeartSearch}). The worker thread
  * calculates this middle with the start. Thus the settlement keeps its position when the chunks of its village
- * generate.
+ * generate. A check on the server thread (an operator discovery, the fixed start chunk) adds the settlement at the
+ * middle of its start chunk, and a worker thread calculates the middle of the plaza: a later server tick moves the
+ * settlement there.
  *
  * <p>An operator can check all the regions around a position now, with a larger distance
  * ({@link #discoverAround}).
@@ -86,6 +88,10 @@ public final class SettlementDiscovery {
     private static final Set<RegionPos> PENDING = new HashSet<>();
     /** The results of the worker threads, for the server thread. */
     private static final ConcurrentLinkedQueue<Result> RESULTS = new ConcurrentLinkedQueue<>();
+    /** The middles of the plazas from the worker threads, for the settlements that a server thread check added. */
+    private static final ConcurrentLinkedQueue<Placement> PLACEMENTS = new ConcurrentLinkedQueue<>();
+    /** The number of calculations of a middle in progress on a worker thread. The server thread uses it. */
+    private static int placing;
     /** The number of the server run: a result of an earlier run does not apply. */
     private static int run;
 
@@ -108,6 +114,17 @@ public final class SettlementDiscovery {
             @Nullable Throwable error) {
     }
 
+    /**
+     * The middle of the plaza of a village from a worker thread.
+     *
+     * @param run    the number of the server run at the start of the calculation
+     * @param level  the Overworld
+     * @param chunk  the start chunk of the village
+     * @param middle the middle of the plaza, or null if the calculation found no village
+     */
+    private record Placement(int run, ServerLevel level, ChunkPos chunk, @Nullable BlockPos middle) {
+    }
+
     private SettlementDiscovery() {
     }
 
@@ -123,6 +140,8 @@ public final class SettlementDiscovery {
         QUEUED.clear();
         PENDING.clear();
         RESULTS.clear();
+        PLACEMENTS.clear();
+        placing = 0;
         run++;
     }
 
@@ -192,7 +211,7 @@ public final class SettlementDiscovery {
 
     /** True if the discovery has checks in progress on a worker thread. */
     public static boolean hasChecksInProgress() {
-        return !PENDING.isEmpty() || !RESULTS.isEmpty();
+        return !PENDING.isEmpty() || !RESULTS.isEmpty() || placing > 0;
     }
 
     /**
@@ -200,6 +219,19 @@ public final class SettlementDiscovery {
      * an error, the check of the region calculates the start on the server thread.
      */
     private static void applyResults() {
+        for (Placement placement = PLACEMENTS.poll(); placement != null; placement = PLACEMENTS.poll()) {
+            if (placement.run() != run) {
+                continue;
+            }
+            placing--;
+            if (placement.middle() != null) {
+                SettlementData data = SettlementData.get(placement.level().getServer());
+                for (Settlement settlement : data.registry().byStart(placement.chunk().x, placement.chunk().z)) {
+                    settlement.setPlannedPosition(placement.middle().getX(), placement.middle().getZ());
+                }
+                data.setDirty();
+            }
+        }
         for (Result result = RESULTS.poll(); result != null; result = RESULTS.poll()) {
             if (result.run() != run) {
                 continue;
@@ -382,14 +414,35 @@ public final class SettlementDiscovery {
         if (!known.isEmpty()) {
             return Optional.of(known.get(0));
         }
-        BlockPos plaza = middle != null ? middle : StartCheck.middle(StartCheck.of(level), structure, candidate)
-                .orElse(candidate.getMiddleBlockPosition(0));
+        BlockPos plaza = middle != null ? middle : candidate.getMiddleBlockPosition(0);
         BlockPos pos = new BlockPos(plaza.getX(), Settlements.seaLevel(level), plaza.getZ());
         Settlement settlement = Settlements.create(level.getServer(), UUID.randomUUID(), candidate, pos);
         data.registry().add(settlement);
         data.setDirty();
+        if (middle == null) {
+            placeLater(level, structure, candidate);
+        }
         FolkholdWorld.LOGGER.debug("Discovered the settlement {}", settlement);
         return Optional.of(settlement);
+    }
+
+    /**
+     * Calculates the middle of the plaza of a village on a worker thread (see {@link StartCheck#middle}). A later
+     * server tick moves the settlements of the start chunk there.
+     */
+    private static void placeLater(ServerLevel level, Structure structure, ChunkPos chunk) {
+        StructureCheck check = StartCheck.of(level);
+        int started = run;
+        placing++;
+        Util.backgroundExecutor().execute(() -> {
+            BlockPos middle = null;
+            try {
+                middle = StartCheck.middle(check, structure, chunk).orElse(null);
+            } catch (RuntimeException e) {
+                FolkholdWorld.LOGGER.warn("The calculation of the middle of the village of {} failed", chunk, e);
+            }
+            PLACEMENTS.add(new Placement(started, level, chunk, middle));
+        });
     }
 
     /** The structure state of the chunk generator of a level. */
