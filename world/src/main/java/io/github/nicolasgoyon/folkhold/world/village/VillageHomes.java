@@ -14,11 +14,15 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
+import net.minecraft.world.entity.schedule.Activity;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * The beds of the inhabitants: the household of a home sleeps in the home. The vanilla memory {@code HOME} of a
@@ -36,9 +40,15 @@ import net.minecraft.world.entity.npc.VillagerProfession;
  *   <li>A villager that holds the bed of an other villager (an inhabitant with no place, a vanilla villager that
  *       claims a free bed) loses this bed. A bed with no villager of its place stays with its holder.</li>
  *   <li>The memory {@code HOME} stays in the save of the villager: it is the persistent home of the villager.</li>
+ *   <li>At night, a villager near its free bed lies down in it (see {@link #lieDown}).</li>
  * </ul>
  */
 public final class VillageHomes {
+    /** A villager at this horizontal distance or less from the head of its bed lies down, in blocks. */
+    public static final double LIE_DOWN_DISTANCE = 3.0;
+    /** A villager that woke up this number of ticks ago or less does not lie down, as in {@code SleepInBed}. */
+    private static final long WOKEN_TICKS = 100L;
+
     private VillageHomes() {
     }
 
@@ -123,6 +133,46 @@ public final class VillageHomes {
             }
         }
         return claimed;
+    }
+
+    /**
+     * A villager with the activity {@code REST} near its bed lies down in it. The vanilla behavior
+     * {@code SleepInBed} needs the villager at less than 2 blocks from the head of the bed. In a small house, the
+     * only free places at this distance can be between two beds or on the foot of the bed, and a villager can stay
+     * at the foot of its bed with no path to them. A villager at {@value #LIE_DOWN_DISTANCE} blocks or less from the
+     * head of its bed (horizontal distance, and 1 block or less up or down) lies down when the bed is free. A
+     * villager that woke up less than {@value #WOKEN_TICKS} ticks ago stays awake, as with the vanilla behavior.
+     *
+     * @param level       the level
+     * @param inhabitants the loaded inhabitants of the village
+     * @return the number of villagers that lie down
+     */
+    public static int lieDown(ServerLevel level, List<Villager> inhabitants) {
+        int count = 0;
+        for (Villager villager : inhabitants) {
+            if (villager.isSleeping() || villager.isPassenger() || !villager.getBrain().isActive(Activity.REST)
+                    || villager.getBrain().getMemory(MemoryModuleType.LAST_WOKEN)
+                            .filter(woken -> level.getGameTime() - woken < WOKEN_TICKS).isPresent()) {
+                continue;
+            }
+            Optional<BlockPos> bed = home(level, villager);
+            if (bed.isEmpty() || !level.isLoaded(bed.get())) {
+                continue;
+            }
+            BlockPos pos = bed.get();
+            double dx = villager.getX() - (pos.getX() + 0.5);
+            double dz = villager.getZ() - (pos.getZ() + 0.5);
+            BlockState state = level.getBlockState(pos);
+            if (dx * dx + dz * dz > LIE_DOWN_DISTANCE * LIE_DOWN_DISTANCE
+                    || Math.abs(villager.getBlockY() - pos.getY()) > 1 || !state.is(BlockTags.BEDS)
+                    || state.getValue(BedBlock.OCCUPIED)) {
+                continue;
+            }
+            villager.getNavigation().stop();
+            villager.startSleeping(pos);
+            count++;
+        }
+        return count;
     }
 
     /** The bed of a villager in this level, from its memory {@code HOME}. */
