@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.IntBinaryOperator;
 import org.junit.jupiter.api.Test;
 
 class HeartSiteTest {
@@ -17,7 +16,9 @@ class HeartSiteTest {
     private static final int LEVEL = 80;
 
     /** A slope that goes up to the east: 1 block for each block. Flat ground to the west of X = -40. */
-    private static final IntBinaryOperator SLOPE_WITH_FLAT_WEST = (dx, dz) -> dx < -40 ? LEVEL - 40 : LEVEL + dx;
+    private static int slopeWithFlatWest(int dx, int dz) {
+        return dx < -40 ? LEVEL - 40 : LEVEL + dx;
+    }
 
     /** The positions are on the grid, in the largest shift and in the limit on each axis, with no start. */
     @Test
@@ -82,7 +83,7 @@ class HeartSiteTest {
     /** A steep start moves to the flat ground near it. */
     @Test
     void steepStartMovesToFlatGround() {
-        Offset offset = HeartSite.search(48, 46, SLOPE_WITH_FLAT_WEST, position -> true,
+        Offset offset = HeartSite.search(48, 46, HeartSiteTest::slopeWithFlatWest, position -> true,
                 position -> position.dx() <= -32 ? 900 : 300);
 
         assertTrue(offset.dx() <= -32, "The heart goes west: " + offset);
@@ -93,7 +94,7 @@ class HeartSiteTest {
     void searchLimitsTheFloods() {
         List<Offset> floods = new ArrayList<>();
 
-        HeartSite.search(48, 46, SLOPE_WITH_FLAT_WEST, position -> true, position -> {
+        HeartSite.search(48, 46, HeartSiteTest::slopeWithFlatWest, position -> true, position -> {
             floods.add(position);
             return 100 + floods.size();
         });
@@ -107,7 +108,7 @@ class HeartSiteTest {
     void refusedPositionGetsNoFlood() {
         Set<Offset> floods = new HashSet<>();
 
-        Offset offset = HeartSite.search(48, 46, SLOPE_WITH_FLAT_WEST, position -> position.dx() > -32,
+        Offset offset = HeartSite.search(48, 46, HeartSiteTest::slopeWithFlatWest, position -> position.dx() > -32,
                 position -> {
                     floods.add(position);
                     return position.dx() <= -32 ? 900 : 300;
@@ -120,7 +121,7 @@ class HeartSiteTest {
     /** A small gain of the region keeps the start. */
     @Test
     void smallGainKeepsTheStart() {
-        Offset offset = HeartSite.search(48, 46, SLOPE_WITH_FLAT_WEST, position -> true,
+        Offset offset = HeartSite.search(48, 46, HeartSiteTest::slopeWithFlatWest, position -> true,
                 position -> position.equals(Offset.ZERO) ? 1000 : 1000 + HeartSite.MIN_GAIN_PERCENT * 10 - 1);
 
         assertEquals(Offset.ZERO, offset);
@@ -133,7 +134,7 @@ class HeartSiteTest {
 
         HeartSite.search(48, 46, (dx, dz) -> {
             reads.add(((long) dx << 32) ^ (dz & 0xFFFFFFFFL));
-            return SLOPE_WITH_FLAT_WEST.applyAsInt(dx, dz);
+            return slopeWithFlatWest(dx, dz);
         }, position -> true, position -> 100);
 
         assertEquals(new HashSet<>(reads).size(), reads.size());

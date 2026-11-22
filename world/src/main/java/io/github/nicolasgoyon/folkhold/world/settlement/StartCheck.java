@@ -96,7 +96,7 @@ public final class StartCheck {
     @Nullable
     public static Boolean knownResult(StructureCheck check, Structure structure, ChunkPos chunk) {
         Long2BooleanMap results = ((StructureCheckAccessor) check).folkhold_world$featureChecks().get(structure);
-        return results != null && results.containsKey(chunk.toLong()) ? results.get(chunk.toLong()) : null;
+        return (results != null && results.containsKey(chunk.toLong())) ? results.get(chunk.toLong()) : null;
     }
 
     /** The context of the generation of a structure in a chunk, with the values of the structure check. */
