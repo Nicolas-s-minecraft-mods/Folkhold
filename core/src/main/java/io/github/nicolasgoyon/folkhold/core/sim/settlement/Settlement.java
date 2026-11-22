@@ -117,6 +117,20 @@ public final class Settlement {
         return z;
     }
 
+    /**
+     * Sets the position of a settlement with no known heart: the middle of the plaza of its village before the chunks
+     * generate. A settlement with a known heart keeps its position.
+     *
+     * @param x block X of the middle of the plaza
+     * @param z block Z of the middle of the plaza
+     */
+    public void setPlannedPosition(int x, int z) {
+        if (!hasHeart) {
+            this.x = x;
+            this.z = z;
+        }
+    }
+
     /** True after the heart of the village loaded once. */
     public boolean hasHeart() {
         return hasHeart;

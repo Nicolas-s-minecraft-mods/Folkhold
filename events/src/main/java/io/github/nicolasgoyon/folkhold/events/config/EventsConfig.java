@@ -18,6 +18,9 @@ public final class EventsConfig {
     public static final ModConfigSpec SPEC;
 
     public static final ModConfigSpec.IntValue MAX_ACTIVE_EVENTS;
+    public static final ModConfigSpec.IntValue REGION_SIZE;
+    public static final ModConfigSpec.IntValue REGION_MIN_DAYS;
+    public static final ModConfigSpec.IntValue REGION_MAX_DAYS;
 
     public static final ModConfigSpec.DoubleValue FRAGILE_BELOW;
     public static final ModConfigSpec.DoubleValue RESISTANT_FROM;
@@ -79,6 +82,22 @@ public final class EventsConfig {
                         "The cap of each type also applies.")
                 .translation(KEY_PREFIX + "maxActiveEvents")
                 .defineInRange("maxActiveEvents", 3, 1, 16);
+        REGION_SIZE = builder
+                .comment("Size in blocks of the regions of the natural events: squares of a grid from the origin of",
+                        "the level. After a natural event, its region has no other natural event of any type for",
+                        "regionMinDays to regionMaxDays game days.")
+                .translation(KEY_PREFIX + "regionSize")
+                .defineInRange("regionSize", 1024, 64, 16384);
+        REGION_MIN_DAYS = builder
+                .comment("Shortest pause of a region after a natural event, in game days. The time of each type",
+                        "(minDays and maxDays of its section) also applies: an event that is due waits for the end",
+                        "of the pause.")
+                .translation(KEY_PREFIX + "regionMinDays")
+                .defineInRange("regionMinDays", 7, 0, 1000);
+        REGION_MAX_DAYS = builder
+                .comment("Longest pause of a region after a natural event, in game days.")
+                .translation(KEY_PREFIX + "regionMaxDays")
+                .defineInRange("regionMaxDays", 15, 0, 1000);
         builder.pop();
 
         builder.comment("Classes of the blocks for the natural events. The block tags folkhold_events:fragile,",

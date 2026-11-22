@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.events.FolkholdEvents;
 import io.github.nicolasgoyon.folkhold.events.common.ActiveEvents;
 import io.github.nicolasgoyon.folkhold.events.common.EventMath;
 import io.github.nicolasgoyon.folkhold.events.common.EventPlacement;
+import io.github.nicolasgoyon.folkhold.events.common.EventRegions;
 import io.github.nicolasgoyon.folkhold.events.common.EventSchedule;
 import io.github.nicolasgoyon.folkhold.events.config.EventsConfig;
 import java.util.List;
@@ -132,10 +133,16 @@ public final class Storms {
             return;
         }
         ACTIVE.tick(level, storm -> logEnd(level, storm));
+        int minDays = EventsConfig.STORM_MIN_DAYS.get();
+        int maxDays = EventsConfig.STORM_MAX_DAYS.get();
         if (level.getGameTime() % SCHEDULE_INTERVAL == 0 && hasNaturalStorms(level)
-                && schedule(level).isDue(level, EventsConfig.STORM_MIN_DAYS.get(), EventsConfig.STORM_MAX_DAYS.get())
-                && startNatural(level).isEmpty()) {
-            FolkholdEvents.LOGGER.debug("No storm in {}: no player near a loaded center", level.dimension().location());
+                && schedule(level).isDue(level, minDays, maxDays)) {
+            if (startNatural(level).isPresent()) {
+                schedule(level).started(level, minDays, maxDays);
+            } else {
+                FolkholdEvents.LOGGER.debug("No storm in {}: no player near a loaded center in an open region",
+                        level.dimension().location());
+            }
         }
     }
 
@@ -144,16 +151,20 @@ public final class Storms {
      * direction.
      *
      * @param level the level
-     * @return the storm, or empty with no player or no loaded center
+     * @return the storm, or empty with no player, no loaded center or a center in a paused region (see
+     *         {@link EventRegions})
      */
     public static Optional<Storm> startNatural(ServerLevel level) {
-        return EventPlacement.nearRandomPlayer(level, EventsConfig.STORM_CENTER_DISTANCE.get()).flatMap(center -> {
-            double strength = EventMath.between(level.getRandom().nextDouble(), EventsConfig.STORM_MIN_STRENGTH.get(),
-                    EventsConfig.STORM_MAX_STRENGTH.get());
-            double windAngle = level.getRandom().nextDouble() * 360.0;
-            return start(level, center, StormSettings.fromConfig(EventsConfig.STORM_RADIUS.get(), strength,
-                    windAngle));
-        });
+        return EventPlacement.nearRandomPlayer(level, EventsConfig.STORM_CENTER_DISTANCE.get())
+                .filter(center -> EventRegions.isOpen(level, center)).flatMap(center -> {
+                    double strength = EventMath.between(level.getRandom().nextDouble(),
+                            EventsConfig.STORM_MIN_STRENGTH.get(), EventsConfig.STORM_MAX_STRENGTH.get());
+                    double windAngle = level.getRandom().nextDouble() * 360.0;
+                    Optional<Storm> storm = start(level, center,
+                            StormSettings.fromConfig(EventsConfig.STORM_RADIUS.get(), strength, windAngle));
+                    storm.ifPresent(started -> EventRegions.pause(level, center));
+                    return storm;
+                });
     }
 
     private static void logEnd(ServerLevel level, Storm storm) {

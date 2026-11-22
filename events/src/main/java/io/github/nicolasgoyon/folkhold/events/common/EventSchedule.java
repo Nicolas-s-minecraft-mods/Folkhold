@@ -46,20 +46,32 @@ public final class EventSchedule extends SavedData {
 
     /**
      * Examines the time of the next event. With no time, the schedule gets a time and the method returns false. At
-     * the time or after it, the schedule gets the time of the event after it, and the method returns true.
+     * the time or after it, the method returns true and the schedule keeps its time: the event waits for a center in
+     * an open region (see {@link EventRegions}). Then {@link #started} gives the time of the event after it.
      *
      * @param level   the level
      * @param minDays the shortest time between two events, in game days
      * @param maxDays the longest time between two events, in game days
-     * @return true if an event must start now
+     * @return true if an event is due
      */
     public boolean isDue(ServerLevel level, int minDays, int maxDays) {
-        long now = level.getGameTime();
-        boolean due = EventMath.isDue(nextTime, now);
-        if (nextTime < 0L || due) {
-            setNextTime(now + EventMath.nextDelayTicks(level.getRandom().nextDouble(), minDays, maxDays));
+        if (nextTime < 0L) {
+            started(level, minDays, maxDays);
+            return false;
         }
-        return due;
+        return EventMath.isDue(nextTime, level.getGameTime());
+    }
+
+    /**
+     * Records the start of a natural event: the schedule gets the time of the event after it.
+     *
+     * @param level   the level
+     * @param minDays the shortest time between two events, in game days
+     * @param maxDays the longest time between two events, in game days
+     */
+    public void started(ServerLevel level, int minDays, int maxDays) {
+        setNextTime(level.getGameTime() + EventMath.nextDelayTicks(level.getRandom().nextDouble(), minDays,
+                maxDays));
     }
 
     private static EventSchedule load(CompoundTag tag, HolderLookup.Provider registries) {
