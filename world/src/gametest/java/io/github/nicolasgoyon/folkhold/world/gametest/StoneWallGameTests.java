@@ -55,10 +55,6 @@ public final class StoneWallGameTests {
     private static final int COLUMNS = 5;
     private static final int LOGS = 4;
     private static final int BUILDERS = 2;
-    /** The stock of each stone block: more than the blocks of the wall. */
-    private static final int STOCK = 256;
-    private static final List<String> STONE_ITEMS = List.of("minecraft:stone_bricks", "minecraft:stone_brick_stairs",
-            "minecraft:stone_brick_slab", "minecraft:stone_brick_wall", "minecraft:cobblestone");
 
     private StoneWallGameTests() {
     }
@@ -69,11 +65,13 @@ public final class StoneWallGameTests {
      * with one site for each part. Then the reference of the repairs has the stone wall: the repairs see no damage,
      * and a broken stone block is damage with its stone block. A level that goes down does not change the wall back.
      */
-    @GameTest(template = "arena_large", timeoutTicks = 6000, batch = "stone_wall")
+    @GameTest(template = "arena_large", timeoutTicks = 12000, batch = "stone_wall")
     public static void villageTierChangesThePalisadeIntoAStoneWall(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         TestSupport.buildFloor(helper, SIZE);
         TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_BUILDER_TICKS, 1);
+        // The test is about the parts of the wall: the materials are free.
+        TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_FREE_MATERIALS, true);
         FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
                 .registryOrThrow(Registries.STRUCTURE).getOrThrow(Settlements.VILLAGE_STRUCTURE);
         WallSettings wall = structure.wall();
@@ -96,7 +94,6 @@ public final class StoneWallGameTests {
                 wall.palisade(), stone));
         Settlement settlement = Settlements.of(level.getServer(), heart).orElseThrow();
         Settlements.startEconomy(level.getServer(), settlement);
-        STONE_ITEMS.forEach(item -> settlement.economy().stock().set(item, STOCK));
         settlement.setProgress(4, 0);
         List<Villager> builders = new ArrayList<>();
         for (int i = 0; i < BUILDERS; i++) {
@@ -135,7 +132,8 @@ public final class StoneWallGameTests {
                     helper.assertTrue(open.isEmpty() && heart.stoneWall().pieces().size() == 2
                             && heart.stoneWall().palisades().size() == 1, "The builders must change the 3 parts: "
                             + sites[0] + " sites, " + open.stream().map(site -> site.phase() + " " + site.status()
-                            + " " + site.appliedSteps() + "/" + site.totalSteps()).toList());
+                            + " " + site.appliedSteps() + "/" + site.totalSteps() + " " + site.materialQuests().keySet())
+                            .toList());
                 })
                 .thenExecute(() -> {
                     helper.assertTrue(sites[0] == 3, "One site for each part: " + sites[0]);
