@@ -433,7 +433,8 @@ public final class PlotTerrainGameTests {
      * ground of the site (see {@link PlanGround}). The test reads the terrain from a new terrain cache.
      *
      * <ul>
-     *   <li>Each town has all its plots and homes.</li>
+     *   <li>Each town has its plaza with the heart, one home and one job post at least. A town on small ground is
+     *       narrower: the greedy growth of the plan leaves the plots that the ground does not hold.</li>
      *   <li>For a plan with the level rule, each grid point of each plot with a building is
      *       {@link PlanGround#MAX_PLOT_RISE} blocks or less above or below the surface at its connector. The plots of
      *       the first pieces of the axis streets (the bank and the first jobs) do not obey this rule. A cliff plot obeys
@@ -478,7 +479,8 @@ public final class PlotTerrainGameTests {
             FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, TOWN_LEVEL)
                     .orElseThrow();
             String name = "chunk " + context.chunkPos() + " town " + layout.style().name();
-            measure.check(context, layout, " ground", problems);
+            // A plan on small ground is narrower: it can miss plots and homes (decision of the owner on #969).
+            measure.check(context, layout, " ground", problems, true);
             TerrainCache terrain = TerrainCache.of(context);
             PlotTerrains plots = new PlotTerrains(terrain);
             BlockPos center = layout.center();
@@ -662,10 +664,12 @@ public final class PlotTerrainGameTests {
                 climbing += climb > 0 ? 1 : 0;
                 climbingRectangles += rectangleClimb > 0 ? 1 : 0;
                 FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {}: rules {}, free outline {} ({} edges),"
-                        + " climb {}, climb of the rectangle {}, {} plots of {}, {} missing plots, {} missing homes",
-                        context.chunkPos(), layout.style().name(), level, layout.plan().rules(), !wall.isRectangle(),
-                        wall.edges(), climb, rectangleClimb, layout.plan().plots().size(), layout.plan().target(),
-                        layout.plan().missingPlots(), layout.plan().missingHomes());
+                        + " climb {}, climb of the rectangle {}, {} plots of {}, {} missing plots, {} missing homes,"
+                        + " {} home beds, {} job posts", context.chunkPos(), layout.style().name(), level,
+                        layout.plan().rules(), !wall.isRectangle(), wall.edges(), climb, rectangleClimb,
+                        layout.plan().plots().size(), layout.plan().target(), layout.plan().missingPlots(),
+                        layout.plan().missingHomes(), VillagePlanGameTests.homeBeds(helper.getLevel(), layout),
+                        layout.posts().size());
                 int rise = FortifiedVillageStructure.outlineRise(layout.plan().rules());
                 WallLayout inside = wall;
                 for (int r = 0; r < layout.rings().size() && r + 1 < layout.plans().size(); r++) {
@@ -886,12 +890,28 @@ public final class PlotTerrainGameTests {
         /** Measures a village and adds its problems. */
         void check(Structure.GenerationContext context, FortifiedVillageStructure.Layout layout, String forced,
                 List<String> problems) {
+            check(context, layout, forced, problems, false);
+        }
+
+        /**
+         * As {@link #check(Structure.GenerationContext, FortifiedVillageStructure.Layout, String, List)}. A narrow
+         * village (a plan on small ground, see {@link VillagePlan#plan}) can miss plots and homes: it has its plaza
+         * with the heart, one home and one job post at least.
+         */
+        void check(Structure.GenerationContext context, FortifiedVillageStructure.Layout layout, String forced,
+                List<String> problems, boolean narrow) {
             PoolElementStructurePiece plaza = layout.village().get(0);
             String name = "chunk " + context.chunkPos() + " level " + layout.level() + forced + " "
                     + layout.size().tier() + " " + layout.style().name();
             int missingPlots = layout.plans().stream().mapToInt(VillagePlan::missingPlots).sum();
             int missingHomes = layout.plans().stream().mapToInt(VillagePlan::missingHomes).sum();
-            if (missingHomes > 0 || missingPlots > 0) {
+            if (narrow) {
+                boolean home = layout.plots().stream()
+                        .anyMatch(plot -> !plot.spare() && plot.role() == VillagePlan.PlotRole.HOME);
+                if (layout.village().isEmpty() || !home || layout.posts().isEmpty()) {
+                    problems.add(name + ": a narrow village needs its heart, a home and a job post");
+                }
+            } else if (missingHomes > 0 || missingPlots > 0) {
                 problems.add(name + ": " + missingPlots + " missing plots, " + missingHomes + " missing homes");
             }
             layout.problems().forEach(problem -> problems.add(name + ": " + problem));
