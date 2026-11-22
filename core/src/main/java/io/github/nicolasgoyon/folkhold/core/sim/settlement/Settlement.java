@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -37,6 +38,7 @@ public final class Settlement {
     private List<Gate> gates = List.of();
     private int beds = VillagePlaces.UNKNOWN;
     private List<JobPosts.Post> jobPosts;
+    private Map<String, Integer> buildings;
     private boolean legacyJobs;
     private long lastFallPenalty = NO_FALL_PENALTY;
 
@@ -252,6 +254,29 @@ public final class Settlement {
             return false;
         }
         jobPosts = value;
+        return true;
+    }
+
+    /**
+     * The number of buildings of each kind in the village, for example {@code storehouse}, as the heart counted the
+     * building signs the last time. Empty if the heart did not scan the village.
+     */
+    public Optional<Map<String, Integer>> buildings() {
+        return Optional.ofNullable(buildings);
+    }
+
+    /**
+     * Sets the number of buildings of each kind in the village.
+     *
+     * @param counts the counts, or empty if the buildings are unknown
+     * @return true if the counts changed
+     */
+    public boolean setBuildings(Optional<Map<String, Integer>> counts) {
+        Map<String, Integer> value = counts.map(Map::copyOf).orElse(null);
+        if (Objects.equals(value, buildings)) {
+            return false;
+        }
+        buildings = value;
         return true;
     }
 

@@ -214,6 +214,11 @@ public final class SettlementData extends SavedData {
                 entry.putIntArray("Gates", gates);
             }
             entry.putInt("Beds", settlement.beds());
+            settlement.buildings().ifPresent(counts -> {
+                CompoundTag buildings = new CompoundTag();
+                counts.forEach(buildings::putInt);
+                entry.put("Buildings", buildings);
+            });
             settlement.jobPosts().ifPresent(posts -> {
                 ListTag jobPosts = new ListTag();
                 for (JobPosts.Post post : posts) {
@@ -279,6 +284,12 @@ public final class SettlementData extends SavedData {
             }
             settlement.setGates(loadedGates);
             settlement.setBeds(entry.contains("Beds") ? entry.getInt("Beds") : VillagePlaces.UNKNOWN);
+            if (entry.contains("Buildings", Tag.TAG_COMPOUND)) {
+                CompoundTag buildings = entry.getCompound("Buildings");
+                Map<String, Integer> counts = new HashMap<>();
+                buildings.getAllKeys().forEach(kind -> counts.put(kind, Math.max(0, buildings.getInt(kind))));
+                settlement.setBuildings(Optional.of(counts));
+            }
             boolean hasPosts = entry.contains("JobPosts", Tag.TAG_LIST);
             if (hasPosts) {
                 settlement.setJobPosts(Optional.of(loadPosts(entry.getList("JobPosts", Tag.TAG_COMPOUND))));

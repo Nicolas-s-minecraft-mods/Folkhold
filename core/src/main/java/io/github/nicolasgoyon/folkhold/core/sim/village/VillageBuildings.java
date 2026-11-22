@@ -110,13 +110,47 @@ public final class VillageBuildings {
      */
     public static List<Step> steps(List<Requirement> requirements, int level, Map<String, Integer> counts,
             boolean scanned, boolean needsHome, boolean needsFirstPost) {
+        return steps(requirements, level, counts, scanned, needsHome, needsFirstPost, List.of());
+    }
+
+    /**
+     * The steps of the growth of a village, in their order, with the missing buildings of the next tier (see
+     * {@code TierGate}). The builders do the first step with a free plot.
+     *
+     * <ol>
+     *   <li>A house-workshop, when the village has no food post or no post that trades.</li>
+     *   <li>The market, when the level of the village or the next tier needs one and the village has none.</li>
+     *   <li>The other missing buildings of the next tier, in their order. Inside a tier, they come before the homes:
+     *       else the homes can take all the plots, and the village stays at its tier.</li>
+     *   <li>A new home, when the village needs a home (see {@link HomeNeed}), with no first post step.</li>
+     *   <li>Else, the first missing building of the level, other than the market and the buildings of the next
+     *       tier.</li>
+     * </ol>
+     *
+     * <p>A village with no scan has no counts: its steps are only the home.
+     *
+     * @param requirements  the requirements, in their order
+     * @param level         the level of the village
+     * @param counts        the number of buildings of each kind in the village
+     * @param scanned       true if the counts come from a scan of the village
+     * @param needsHome     true if the village needs a new home (see {@link HomeNeed})
+     * @param needsFirstPost true if the scanned village has no food post or no post that trades
+     * @param nextTier      the kinds of the missing buildings of the next tier, in their order
+     * @return the steps, in their order. Empty when the village needs nothing
+     */
+    public static List<Step> steps(List<Requirement> requirements, int level, Map<String, Integer> counts,
+            boolean scanned, boolean needsHome, boolean needsFirstPost, List<String> nextTier) {
         List<Step> steps = new ArrayList<>();
         boolean firstPost = scanned && needsFirstPost;
         if (firstPost) {
             steps.add(new Step(StepType.FIRST_POST, ""));
         }
-        if (scanned && needsMarket(requirements, level, counts)) {
+        if (scanned && (needsMarket(requirements, level, counts) || nextTier.contains(MARKET))) {
             steps.add(new Step(StepType.MARKET, MARKET));
+        }
+        if (scanned) {
+            nextTier.stream().filter(kind -> !kind.equals(MARKET)).distinct()
+                    .forEach(kind -> steps.add(new Step(StepType.BUILDING, kind)));
         }
         if (needsHome && !firstPost) {
             steps.add(new Step(StepType.HOME, ""));
@@ -124,7 +158,8 @@ public final class VillageBuildings {
             List<Requirement> others = requirements.stream()
                     .filter(requirement -> !requirement.kind().equals(MARKET))
                     .toList();
-            missing(others, level, counts).ifPresent(kind -> steps.add(new Step(StepType.BUILDING, kind)));
+            missing(others, level, counts).filter(kind -> !nextTier.contains(kind))
+                    .ifPresent(kind -> steps.add(new Step(StepType.BUILDING, kind)));
         }
         return steps;
     }

@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.github.nicolasgoyon.folkhold.core.sim.level.TierGate;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings.Requirement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
@@ -28,7 +29,8 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  * <p>Format:
  * <pre>
  * {"buildings": [{"kind": "storehouse", "min_level": 3}, {"kind": "barracks", "min_level": 9}, ...],
- *  "land": [{"kind": "field", "min_level": 5}, {"kind": "mill", "min_level": 9}, ...]}
+ *  "land": [{"kind": "field", "min_level": 5}, {"kind": "mill", "min_level": 9}, ...],
+ *  "next_tier": [{"tier": "hamlet", "buildings": ["market", "storehouse"]}, ...]}
  * </pre>
  * {@code kind} is the kind of the building sign of the building. The growth builds the piece {@code house_<kind>} of
  * the pool {@code houses} of the variant of the village. The generation uses a piece of this pool with the building
@@ -38,6 +40,9 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  *
  * <p>{@code land} is optional: the fields and the mills outside the palisade (see {@link VillageLand}). Its kinds are
  * {@link VillageLand#FIELD} and {@link VillageLand#MILL}.
+ *
+ * <p>{@code next_tier} is optional: the buildings that a village needs before it leaves a tier (see
+ * {@link TierGate}). A kind can come more than one time.
  */
 public final class VillageBuildingTable extends SimplePreparableReloadListener<VillageBuildingTable.Table> {
     public static final ResourceLocation FILE =
@@ -48,13 +53,15 @@ public final class VillageBuildingTable extends SimplePreparableReloadListener<V
      *
      * @param buildings the buildings of the levels, in their order
      * @param land      the fields and the mills of the levels, in their order
+     * @param gates     the buildings that a village needs before it leaves a tier
      */
-    public record Table(List<Requirement> buildings, List<Requirement> land) {
-        static final Table EMPTY = new Table(List.of(), List.of());
+    public record Table(List<Requirement> buildings, List<Requirement> land, List<TierGate.Gate> gates) {
+        static final Table EMPTY = new Table(List.of(), List.of(), List.of());
 
         public Table {
             buildings = List.copyOf(buildings);
             land = List.copyOf(land);
+            gates = List.copyOf(gates);
         }
     }
 
@@ -71,6 +78,11 @@ public final class VillageBuildingTable extends SimplePreparableReloadListener<V
         return current.land();
     }
 
+    /** The current buildings that a village needs before it leaves a tier (see {@link TierGate}). */
+    public static List<TierGate.Gate> gates() {
+        return current.gates();
+    }
+
     public static void onAddReloadListener(AddReloadListenerEvent event) {
         event.addListener(new VillageBuildingTable());
     }
@@ -84,7 +96,7 @@ public final class VillageBuildingTable extends SimplePreparableReloadListener<V
         }
         try (Reader reader = resource.get().openAsReader()) {
             JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-            return new Table(parse(json), parseLand(json));
+            return new Table(parse(json), parseLand(json), parseGates(json));
         } catch (IOException | RuntimeException e) {
             FolkholdWorld.LOGGER.error("The village building table {} is not valid: the villages need no building",
                     FILE, e);
@@ -117,6 +129,29 @@ public final class VillageBuildingTable extends SimplePreparableReloadListener<V
      */
     public static List<Requirement> parseLand(JsonObject json) {
         return json.has("land") ? requirements(GsonHelper.getAsJsonArray(json, "land")) : List.of();
+    }
+
+    /**
+     * Reads the buildings that a village needs before it leaves a tier.
+     *
+     * @param json the content of the file
+     * @return the gates of the tiers. Empty when the file has no {@code next_tier}
+     * @throws RuntimeException if the content is not valid
+     */
+    public static List<TierGate.Gate> parseGates(JsonObject json) {
+        if (!json.has("next_tier")) {
+            return List.of();
+        }
+        List<TierGate.Gate> gates = new ArrayList<>();
+        for (JsonElement element : GsonHelper.getAsJsonArray(json, "next_tier")) {
+            JsonObject gate = element.getAsJsonObject();
+            List<String> kinds = new ArrayList<>();
+            for (JsonElement kind : GsonHelper.getAsJsonArray(gate, "buildings")) {
+                kinds.add(GsonHelper.convertToString(kind, "building"));
+            }
+            gates.add(new TierGate.Gate(GsonHelper.getAsString(gate, "tier"), kinds));
+        }
+        return List.copyOf(gates);
     }
 
     private static List<Requirement> requirements(JsonArray array) {

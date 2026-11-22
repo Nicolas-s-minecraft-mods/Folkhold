@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
+import io.github.nicolasgoyon.folkhold.blocks.block.BuildingSignKind;
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HomeNeed;
@@ -486,6 +487,9 @@ public final class MarketGrowthGameTests {
         farm.placeInWorld(level, farmOrigin, farmOrigin, new StructurePlaceSettings()
                 .addProcessor(JigsawReplacementProcessor.INSTANCE).setKnownShape(true), level.getRandom(),
                 Block.UPDATE_CLIENTS);
+        // A barracks sign: a village of the level 5 has the building of its next tier, so a new home comes after the
+        // market.
+        helper.setBlock(HEART.north(2), ModBlocks.buildingSign(BuildingSignKind.BARRACKS));
         helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
         VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
         heart.ensureSettlement();

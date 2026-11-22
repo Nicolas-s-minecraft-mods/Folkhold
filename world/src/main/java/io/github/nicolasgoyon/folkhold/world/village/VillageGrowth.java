@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.village;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.level.TierGate;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HomeNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
@@ -67,6 +68,10 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>A village that needs a home gets a new home (see {@link #homeNeed} and {@link HomeNeed}): a job slot of its
  *       level has no job post, or a resource of the village has a surplus (see {@link SurplusSource}). The population
  *       of the level is a maximum, not a target. The home is a house-workshop.</li>
+ *   <li>Inside a tier, the missing buildings of the next tier come before the homes (see {@link TierGate}): the
+ *       market of the next tier, then the other buildings, with the setting {@code construction.growth}. A village with
+ *       a missing building of the next tier keeps the top level of its tier (see
+ *       {@link io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels}).</li>
  *   <li>Else, a village with a missing building of its level gets this building (see {@link VillageBuildings} and
  *       {@link VillageBuildingTable}). The scan of the heart counts the building signs of each kind. The building comes
  *       from the pool of the houses of the variant of the village: the piece {@code house_<kind>}. A variant with no
@@ -168,9 +173,11 @@ public final class VillageGrowth {
         VillageLayout layout = heart.getLayout();
         List<String> posts = postJobs(level.getServer(), settlement.get());
         boolean needsHome = homeNeed(level, heart, settlement.get()) != HomeNeed.Cause.NONE;
+        List<String> nextTier = growth && layout.isScanned() ? TierGate.missing(VillageBuildingTable.gates(),
+                LevelTables.get(), settlement.get().level(), layout.buildings()) : List.of();
         List<VillageBuildings.Step> steps = VillageBuildings.steps(VillageBuildingTable.get(),
                 settlement.get().level(), layout.buildings(), layout.isScanned(), needsHome,
-                settlement.get().jobPosts().isPresent() && needsFirstPost(posts)).stream()
+                settlement.get().jobPosts().isPresent() && needsFirstPost(posts), nextTier).stream()
                 .filter(step -> growth || (step.type() != VillageBuildings.StepType.HOME
                         && step.type() != VillageBuildings.StepType.BUILDING))
                 .toList();
