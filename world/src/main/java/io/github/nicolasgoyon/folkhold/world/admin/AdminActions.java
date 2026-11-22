@@ -446,7 +446,7 @@ public final class AdminActions {
     }
 
     /** Teleports a player to the surface at the position of a caravan or a traveling merchant of the admin map. */
-    static Result teleportToGroup(ServerPlayer player, String id) {
+    public static Result teleportToGroup(ServerPlayer player, String id) {
         Optional<MobileGroup> group = MobileGroupData.get(player.server).groups().byId(id);
         if (group.isEmpty()) {
             return Result.refused("group_unknown");
