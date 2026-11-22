@@ -327,10 +327,24 @@ public final class VillageWall {
     public static List<Wall> rings(Structure.GenerationContext context, TerrainCache heights, Wall first, int count,
             int band, WallSettings settings, boolean maritime, ChunkPos start, BlockPos center,
             WallOutline.Ground ground) {
+        return rings(context.structureTemplateManager(), context.chunkGenerator().getSeaLevel(),
+                new Terrain(heights)::height, first, count, band, settings, maritime, start, center, ground);
+    }
+
+    /**
+     * As {@link #rings(Structure.GenerationContext, TerrainCache, Wall, int, int, WallSettings, boolean, ChunkPos,
+     * BlockPos, WallOutline.Ground)}, with a height function: the rings of a village at runtime read the terrain of the
+     * world (see {@link RingPlans}).
+     *
+     * @param templates the structure templates
+     * @param seaLevel  the sea level
+     * @param height    the Y of the top block of the terrain at a position (X, Z), water included
+     */
+    public static List<Wall> rings(StructureTemplateManager templates, int seaLevel, IntBinaryOperator height,
+            Wall first, int count, int band, WallSettings settings, boolean maritime, ChunkPos start, BlockPos center,
+            WallOutline.Ground ground) {
         Cell middle = new Cell(center.getX(), center.getZ());
-        Terrain terrain = new Terrain(heights);
-        int seaLevel = context.chunkGenerator().getSeaLevel();
-        StructureTemplateManager templates = context.structureTemplateManager();
+        Terrain terrain = new Terrain(height);
         List<Wall> rings = new ArrayList<>();
         Wall inner = first;
         for (int ring = 0; ring < count; ring++) {
@@ -1195,10 +1209,14 @@ public final class VillageWall {
      * each chunk calculates them (see {@link TerrainCache}). The noise of the vanilla terrain also has cells of 4
      * blocks: the interpolation stays near the height of the column.
      */
-    private record Terrain(TerrainCache heights) {
+    private record Terrain(IntBinaryOperator top) {
+        Terrain(TerrainCache heights) {
+            this((x, z) -> HeightGrid.interpolate(x, z, TerrainCache.GRID, (cornerX, cornerZ) -> heights.surface(
+                    cornerX, cornerZ) - 1));
+        }
+
         int height(int x, int z) {
-            return HeightGrid.interpolate(x, z, TerrainCache.GRID, (cornerX, cornerZ) -> heights.surface(cornerX,
-                    cornerZ) - 1);
+            return top.applyAsInt(x, z);
         }
     }
 }
