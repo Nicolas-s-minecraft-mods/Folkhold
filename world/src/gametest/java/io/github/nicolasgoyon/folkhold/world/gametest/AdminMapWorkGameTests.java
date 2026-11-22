@@ -4,11 +4,14 @@ import io.github.nicolasgoyon.cartofold.api.LayerContent;
 import io.github.nicolasgoyon.folkhold.core.sim.group.GroupKind;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
+import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamp;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.admin.AdminActions;
 import io.github.nicolasgoyon.folkhold.world.admin.AdminMap;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
+import io.github.nicolasgoyon.folkhold.world.journal.CartofoldMaps;
 import io.github.nicolasgoyon.folkhold.world.network.AdminActionPayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerData;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -85,6 +88,27 @@ public final class AdminMapWorkGameTests {
         helper.assertTrue(first.get(0).markers().size() == LayerContent.MAX_ELEMENTS,
                 "The layer must have the limit of markers: " + first.get(0).markers().size());
         helper.assertTrue(changed == 0, "A check with no change must keep the layers: " + changed + " changed");
+        helper.succeed();
+    }
+
+    /** The admin map shows the territory of each pillager camp of the world, also a camp that no player entered. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "admin_map_pillagers")
+    public static void mapHasThePillagerTerritories(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos pos = helper.absolutePos(new BlockPos(2, 1, 2)).offset(0, 0, FAR_Z);
+        PillagerCamp camp = new PillagerCamp(PillagerCamp.id(pos.getX() >> 4, pos.getZ() >> 4), pos.getX(),
+                pos.getY(), pos.getZ(), 3);
+        PillagerData.get(server).addCamp(camp);
+        ServerPlayer operator = operator(helper);
+        AdminActions.handle(operator, new AdminActionPayload("map", "", 0));
+        LayerContent layer = AdminMap.shown(operator).orElseThrow();
+        PillagerData.get(server).removeCamp(camp.id());
+        logOut(server, operator);
+
+        helper.assertTrue(layer.areas().stream()
+                .anyMatch(area -> area.id().equals(CartofoldMaps.PILLAGER_AREA_PREFIX + camp.id())
+                        && !area.chunks().isEmpty() && !area.onlyExplored()),
+                "The admin map must have the territory of the camp " + camp.id());
         helper.succeed();
     }
 

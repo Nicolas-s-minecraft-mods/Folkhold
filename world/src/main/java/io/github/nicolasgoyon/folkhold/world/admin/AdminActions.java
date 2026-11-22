@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.world.admin;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
+import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
@@ -303,7 +304,9 @@ public final class AdminActions {
                         SettlementLevels.tierName(settlement.level()), settlement.isActive(), settlement.x(),
                         settlement.z(), settlement.economy().population(),
                         (int) Math.round(Math.sqrt((double) settlement.distanceSquared(pos.getX(), pos.getZ()))),
-                        settlement.hasHeart()))
+                        settlement.hasHeart(), settlement.factionId(),
+                        FactionVisuals.faction(server, settlement.factionId()).map(FactionSpec::color).orElse(0x808080),
+                        FactionVisuals.faction(server, settlement.factionId()).map(FactionSpec::cultureId).orElse("")))
                 .toList();
         return new AdminListPayload(summaries);
     }

@@ -24,6 +24,8 @@ public final class ClientJournalMap {
     static final int POLL_TICKS = 100;
 
     private static List<TerritoryMapPayload.Village> territories = List.of();
+    /** The entries of the legend of the last payload. */
+    private static List<TerritoryMapPayload.LegendEntry> legend = List.of();
     /** The number of the last territories: a new payload gives a new number. */
     private static int version;
     @Nullable
@@ -39,12 +41,18 @@ public final class ClientJournalMap {
     /** Keeps the discovered territories of a payload. Called by the network handler. */
     public static void setTerritories(TerritoryMapPayload payload) {
         territories = payload.villages();
+        legend = payload.legend();
         version++;
     }
 
     /** The discovered villages with a territory. */
     static List<TerritoryMapPayload.Village> territories() {
         return territories;
+    }
+
+    /** The entries of the legend of the map (see {@link TerritoryMapPayload#legend}). */
+    static List<TerritoryMapPayload.LegendEntry> legend() {
+        return legend;
     }
 
     /** Keeps the relief of a payload. Called by the network handler. */
