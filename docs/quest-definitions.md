@@ -55,9 +55,9 @@ These files give only the kind and the need. All their values come from the serv
 
 ## Rules of the offers
 
-- A village makes the offers of the need `job_inputs` with all the matching definitions, in the order of their ids.
-  The number of offers of the village (1, plus 1 for each 5 levels) stays the maximum for all the definitions
-  together. A village does not offer two deliveries of the same item.
+- A village makes the offers of the need `job_inputs` with all the matching definitions: one offer for each
+  definition in turn, in the order of their ids. The number of offers of the village (1, plus 1 for each 5 levels)
+  stays the maximum for all the definitions together. A village does not offer two deliveries of the same item.
 - The needs `site_materials` and `caravan` use the first matching definition, in the order of the ids.
 - A need with no matching definition makes no offer. Thus a file with `"enabled": false` at the path of a definition
   of Folkhold turns these quests off.

@@ -36,7 +36,7 @@ import net.minecraft.server.MinecraftServer;
  *       (see {@link Quests#expire(long)}). The offers of a village that is not active end.</li>
  *   <li>On each cycle, each active village with an economy makes new delivery offers from its needs, up to its
  *       number of offers (see {@link QuestGenerator}). The definitions of the need {@link QuestNeed#JOB_INPUTS} make
- *       the offers, in the order of their ids (see {@link QuestDefinitions}).</li>
+ *       the offers: one offer each in turn, in the order of their ids (see {@link QuestDefinitions}).</li>
  *   <li>The listeners get each quest that changes state here (for the messages to the players).</li>
  * </ul>
  */
@@ -123,17 +123,25 @@ public final class QuestSystem {
                 VillageTrade.usedItems(settlement));
         Set<String> offered = offers.stream().filter(quest -> quest.kind() == QuestKind.DELIVERY)
                 .map(Quest::target).collect(Collectors.toCollection(HashSet::new));
+        List<QuestDefinition> definitions = QuestDefinitions.matching(QuestNeed.JOB_INPUTS, settlement.level());
         List<Quest> created = new ArrayList<>();
-        for (QuestDefinition definition : QuestDefinitions.matching(QuestNeed.JOB_INPUTS, settlement.level())) {
-            if (created.size() >= wanted) {
-                break;
+        // The definitions make one offer each in turn, until the village has its offers or no definition makes one.
+        boolean made = true;
+        while (made && created.size() < wanted) {
+            made = false;
+            for (QuestDefinition definition : definitions) {
+                if (created.size() >= wanted) {
+                    break;
+                }
+                for (Quest quest : QuestGenerator.deliveries(settlement.id(), settlement.factionId(), needs,
+                        item -> Prices.price(catalog.info(item), settlement.economy().stock().count(item),
+                                population, Economies.settings()), offered, 1, now, settings(definition),
+                        definition.id())) {
+                    offered.add(quest.target());
+                    created.add(quest);
+                    made = true;
+                }
             }
-            List<Quest> made = QuestGenerator.deliveries(settlement.id(), settlement.factionId(), needs,
-                    item -> Prices.price(catalog.info(item), settlement.economy().stock().count(item), population,
-                            Economies.settings()), offered, wanted - created.size(), now, settings(definition),
-                    definition.id());
-            made.forEach(quest -> offered.add(quest.target()));
-            created.addAll(made);
         }
         created.forEach(quests::add);
         QuestData.get(server).setDirty();

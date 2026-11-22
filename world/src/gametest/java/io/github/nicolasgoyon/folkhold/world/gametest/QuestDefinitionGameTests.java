@@ -113,8 +113,8 @@ public final class QuestDefinitionGameTests {
 
     /**
      * A test data pack replaces the delivery of the inputs of the jobs (a reward factor of 10, 3 items at most) and
-     * adds a delivery of its own. The village of the level 5 has 2 offers: one of each definition, in the order of
-     * the ids. Each quest keeps the id of its definition.
+     * adds a delivery of its own. The village of the level 5 has 2 offers: the definitions make one offer each in
+     * turn, in the order of the ids. Each quest keeps the id of its definition.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_definitions_pack")
     public static void dataPackReplacesOneDefinitionAndAddsOne(GameTestHelper helper) {
