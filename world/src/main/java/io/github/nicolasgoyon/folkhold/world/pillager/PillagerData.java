@@ -27,6 +27,7 @@ import net.minecraft.world.level.saveddata.SavedData;
  *   <li>the camps of the world (see {@link PillagerTerritories}).</li>
  *   <li>the reputation of each player with the pillagers (see {@link PillagerFaction}).</li>
  *   <li>the camps that each player entered: the maps show their territories.</li>
+ *   <li>the placement regions that the discovery of the camps checked (see {@link PillagerDiscovery}).</li>
  * </ul>
  */
 public final class PillagerData extends SavedData {
@@ -35,6 +36,7 @@ public final class PillagerData extends SavedData {
     private final Map<String, PillagerCamp> camps = new TreeMap<>();
     private final Map<UUID, Integer> reputations = new HashMap<>();
     private final Map<UUID, Set<String>> discovered = new HashMap<>();
+    private final Set<String> checkedRegions = new HashSet<>();
 
     private PillagerData() {
     }
@@ -65,6 +67,33 @@ public final class PillagerData extends SavedData {
         }
         setDirty();
         return true;
+    }
+
+    /**
+     * Records a camp from its structure start, in the place of a camp with the same id: the box of the structure gives
+     * a better center than the discovery (see {@link PillagerDiscovery}).
+     *
+     * @param camp the camp
+     * @return true if the data changed
+     */
+    public boolean setCamp(PillagerCamp camp) {
+        if (camp.equals(camps.put(camp.id(), camp))) {
+            return false;
+        }
+        setDirty();
+        return true;
+    }
+
+    /** True if the discovery checked a placement region (see {@link PillagerDiscovery#regionKey}). */
+    public boolean isRegionChecked(String region) {
+        return checkedRegions.contains(region);
+    }
+
+    /** Records that the discovery checked a placement region. */
+    public void markRegionChecked(String region) {
+        if (checkedRegions.add(region)) {
+            setDirty();
+        }
     }
 
     /**
@@ -148,6 +177,9 @@ public final class PillagerData extends SavedData {
             players.add(entry);
         }
         tag.put("Players", players);
+        ListTag regions = new ListTag();
+        checkedRegions.stream().sorted().forEach(region -> regions.add(StringTag.valueOf(region)));
+        tag.put("CheckedRegions", regions);
         return tag;
     }
 
@@ -178,6 +210,10 @@ public final class PillagerData extends SavedData {
             if (!campIds.isEmpty()) {
                 data.discovered.put(id, campIds);
             }
+        }
+        ListTag regions = tag.getList("CheckedRegions", Tag.TAG_STRING);
+        for (int i = 0; i < regions.size(); i++) {
+            data.checkedRegions.add(regions.getString(i));
         }
         return data;
     }

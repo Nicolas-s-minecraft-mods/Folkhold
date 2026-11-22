@@ -62,6 +62,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.ModConfigSpec;
@@ -203,6 +204,28 @@ final class TestSupport {
         BlockPos absolute = helper.absolutePos(foot);
         level.setBlock(absolute, bed.setValue(BedBlock.PART, BedPart.FOOT), Block.UPDATE_CLIENTS);
         level.setBlock(absolute.relative(direction), bed.setValue(BedBlock.PART, BedPart.HEAD), Block.UPDATE_CLIENTS);
+    }
+
+    /**
+     * Removes the blocks of the earlier tests in the scan area of a village heart, outside the structure of the test
+     * and above its floor. The tests of the earlier batches use the same cells. A test structure is higher or larger
+     * than the arena of a later test (for example a house template), and the framework removes only the blocks in the
+     * structure of the later test. Thus a scan of the heart can find a sign or a bed of an earlier test. The batch of
+     * the test must have no other test: the area can reach the cell of a test of the same batch.
+     *
+     * @param helper the test
+     * @param area   the scan area, in absolute positions
+     */
+    static void clearEarlierBlocks(GameTestHelper helper, BoundingBox area) {
+        ServerLevel level = helper.getLevel();
+        AABB bounds = helper.getBounds();
+        int floor = helper.absolutePos(BlockPos.ZERO).getY() + 1;
+        for (BlockPos pos : BlockPos.betweenClosed(area.minX(), Math.max(floor, area.minY()), area.minZ(),
+                area.maxX(), area.maxY(), area.maxZ())) {
+            if (!bounds.contains(pos.getCenter()) && !level.getBlockState(pos).isAir()) {
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            }
+        }
     }
 
     /**
