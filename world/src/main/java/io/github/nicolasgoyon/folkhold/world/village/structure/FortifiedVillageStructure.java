@@ -10,6 +10,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.CaveSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HeartSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlanGround;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotUses;
+import io.github.nicolasgoyon.folkhold.core.sim.village.RoleStreets;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
@@ -74,7 +75,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>On a steep start, the plaza moves to flatter ground near it, before the plan (see {@link HeartSearch}). The
  *       site check at the start decides if a village starts, and the biome check reads the biome at the middle of the
  *       plaza of the start. The plaza moves only to a position that the site check, the biome rule and the variant of
- *       the start accept. The shift keeps the plan of the tier of the start level in the range of the structure.</li>
+ *       the start accept. The shift keeps the plan of the tier of the start level in the range of the structure.
+ *       Then the plaza turns so that its role streets (the bank and the first jobs) go on the best ground (see
+ *       {@link RoleStreets}).</li>
  *   <li>The start level of the village comes from the world seed and the start chunk (see
  *       {@link Settlements#startLevel(long, ChunkPos)}). Its tier gives the size of the village (see
  *       {@link VillageSizes}): the plot target and the maximum radius of the plan (see {@link VillagePlan}).</li>
@@ -258,26 +261,67 @@ public final class FortifiedVillageStructure extends Structure {
     }
 
     /**
-     * The start of a village after the search of the heart (see {@link HeartSite}): the plaza moves to flatter ground
-     * near a steep start. A cave village, a maritime village and a village in a world with no search stay at their
-     * start. The largest offset on one axis keeps the plan of the tier of a start level in the range of the
-     * structure ({@code max_distance_from_center}).
+     * The start of a village after the search of the heart (see {@link HeartSite}) and the choice of the turn of the
+     * plaza (see {@link RoleStreets}). The plaza moves to flatter ground near a steep start, then it turns so that its
+     * role streets (the bank and the first jobs) go on the best ground. A cave village, a maritime village and a village
+     * in a world with no search (see {@link HeartSearch#enabled()}) stay at their start, with their random turn. The
+     * largest offset on one axis keeps the plan of the tier of a start level in the range of the structure
+     * ({@code max_distance_from_center}).
      */
     private Start shifted(GenerationContext context, Start start, int level) {
-        int shift = HeartSearch.shift();
-        if (shift == 0 || start.cave().isPresent() || start.maritime()) {
+        if (!HeartSearch.enabled() || start.cave().isPresent() || start.maritime()) {
             return start;
         }
-        int radius = Math.min(firstRadius(VillageSizes.forLevel(level)), maxDistanceFromCenter);
-        int limit = maxDistanceFromCenter - radius;
-        HeartSearch.Key key = new HeartSearch.Key(context.chunkGenerator(), context.randomState(), context.seed(),
-                context.chunkPos().toLong(), shift, limit);
-        HeartSite.Offset offset = HeartSearch.offset(key, () -> search(context, start, shift, limit, radius));
-        if (offset.equals(HeartSite.Offset.ZERO)) {
-            return start;
+        int shift = HeartSearch.shift();
+        HeartSite.Offset offset = HeartSite.Offset.ZERO;
+        if (shift > 0) {
+            int radius = Math.min(firstRadius(VillageSizes.forLevel(level)), maxDistanceFromCenter);
+            int limit = maxDistanceFromCenter - radius;
+            HeartSearch.Key key = new HeartSearch.Key(context.chunkGenerator(), context.randomState(), context.seed(),
+                    context.chunkPos().toLong(), shift, limit);
+            offset = HeartSearch.offset(key, () -> search(context, start, shift, limit, radius));
+        }
+        Start moved = start;
+        if (!offset.equals(HeartSite.Offset.ZERO)) {
+            restartRandom(context);
+            moved = plaza(context, start.terrain(), start.variant(), false, Optional.empty(), offset).orElse(start);
+        }
+        Rotation turn = roleTurn(moved);
+        if (turn == moved.plaza().getRotation()) {
+            return moved;
         }
         restartRandom(context);
-        return plaza(context, start.terrain(), start.variant(), false, Optional.empty(), offset).orElse(start);
+        return plaza(context, start.terrain(), start.variant(), false, Optional.of(turn), offset).orElse(moved);
+    }
+
+    /** The turn of the plaza of a start that puts its role streets on the best ground (see {@link RoleStreets}). */
+    private static Rotation roleTurn(Start start) {
+        TerrainCache terrain = start.terrain();
+        BlockPos middle = start.center();
+        int turns = RoleStreets.bestTurns((dx, dz) -> terrain.column(gridColumn(middle.getX() + dx),
+                gridColumn(middle.getZ() + dz)).surface(), middle.getY(), start.plaza().getBoundingBox().getXSpan(),
+                styleOf(start.variant()), turns(start.plaza().getRotation()));
+        return switch (turns) {
+            case 1 -> Rotation.CLOCKWISE_90;
+            case 2 -> Rotation.CLOCKWISE_180;
+            case 3 -> Rotation.COUNTERCLOCKWISE_90;
+            default -> Rotation.NONE;
+        };
+    }
+
+    /** The clockwise quarter turns of a rotation. */
+    private static int turns(Rotation rotation) {
+        return switch (rotation) {
+            case NONE -> 0;
+            case CLOCKWISE_90 -> 1;
+            case CLOCKWISE_180 -> 2;
+            case COUNTERCLOCKWISE_90 -> 3;
+        };
+    }
+
+    /** The grid column of the terrain cache at or before a block (see {@link TerrainCache#GRID}). */
+    private static int gridColumn(int block) {
+        return Math.floorDiv(block, TerrainCache.GRID) * TerrainCache.GRID;
     }
 
     /** The search of the heart of a village around its start, with the terrain cache of the start. */
