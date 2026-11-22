@@ -22,6 +22,7 @@ import io.github.nicolasgoyon.folkhold.world.network.QuestActionPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Active;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Offer;
+import io.github.nicolasgoyon.folkhold.world.network.QuestDetail;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import io.github.nicolasgoyon.folkhold.world.notice.Notices;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
@@ -576,7 +577,7 @@ public final class QuestBoards {
             Active active = active(server, player, quest, now, village.get());
             result.add(new JournalPayload.Quest(quest.id(), true, quest.settlementId(), village.get().name(),
                     active.itemId(), active.name(), active.info(), QuestRewards.describe(quest),
-                    joined(QuestRewards.risks(quest)), active.secondsLeft()));
+                    joined(QuestRewards.risks(quest)), active.secondsLeft(), Component.empty(), List.of()));
         }
         for (String villageId : visited) {
             Optional<Settlement> village = settlements.registry().byId(villageId).filter(Settlement::isActive);
@@ -589,7 +590,8 @@ public final class QuestBoards {
                 Offer offer = offer(server, player, quest, now, tier, mine.size(), maxActive);
                 int seconds = (int) Math.max(0, (quest.offerEnd() - now) / SharedConstants.TICKS_PER_SECOND);
                 result.add(new JournalPayload.Quest(quest.id(), false, villageId, village.get().name(),
-                        offer.itemId(), offer.name(), offer.info(), offer.reward(), offer.risk(), seconds));
+                        offer.itemId(), offer.name(), Component.empty(), QuestRewards.describe(quest),
+                        joined(QuestRewards.risks(quest)), seconds, offer.story(), offer.details()));
             }
         }
         return result;
@@ -598,37 +600,31 @@ public final class QuestBoards {
     private static Offer offer(MinecraftServer server, ServerPlayer player, Quest quest, long now,
             ReputationTier playerTier, int activeCount, int maxActive) {
         int minutes = (int) (quest.duration() / SharedConstants.TICKS_PER_MINUTE);
-        Component kind = Component.translatable("quest.folkhold_world.kind." + quest.kind().serializedName());
-        Component info;
+        Component story = Component.empty();
         Component progress = Component.empty();
         int countdown = -1;
+        long routeBlocks = 0L;
         String icon;
         if (quest.kind() == QuestKind.DELIVERY) {
             icon = quest.target();
-            info = quest.text().isEmpty() ? Component.translatable("quest.folkhold_world.info.delivery", kind, minutes)
-                    : Component.translatable("quest.folkhold_world.info.story", Component.translatable(quest.text(),
-                            Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
-                                    itemName(quest.target()))), minutes);
+            if (!quest.text().isEmpty()) {
+                story = Component.translatable(quest.text(), Component.translatable(
+                        "quest.folkhold_world.active.delivery", quest.count(), itemName(quest.target())));
+            }
             int have = Deliveries.count(player.getInventory(), ItemIds.item(quest.target()).orElse(Items.AIR));
             progress = Component.translatable("quest.folkhold_world.have", have, quest.count())
                     .withColor(have >= quest.count() ? INK_GOOD : have > 0 ? INK_BAD : INK_MUTED);
         } else if (quest.kind() == QuestKind.HUNT) {
             icon = HUNT_ICON;
-            info = Component.translatable("quest.folkhold_world.info.hunt", kind, WorldConfig.QUEST_HUNT_RADIUS.get(),
-                    minutes);
         } else {
             icon = ESCORT_ICON;
-            long blocks = Escorts.caravan(server, quest).map(group -> Math.round(group.route().length())).orElse(0L);
-            info = Component.translatable("quest.folkhold_world.info.escort", kind, blocks, minutes);
-            if (quest.difficulty() > 0) {
-                info = Component.translatable("quest.folkhold_world.info.difficulty", info,
-                        difficultyMark(quest.difficulty(), EscortDifficulties.get().levels().size()));
-            }
+            routeBlocks = Escorts.caravan(server, quest).map(group -> Math.round(group.route().length())).orElse(0L);
             countdown = (int) Math.max(0, (quest.offerEnd() - now) / SharedConstants.TICKS_PER_SECOND);
         }
-        if (quest.minTier() != ReputationTier.NEUTRAL) {
-            info = Component.translatable("quest.folkhold_world.info.tier", info, tierMark(quest.minTier()));
-        }
+        List<QuestDetail> details = QuestOfferDetails.lines(new QuestOfferDetails.Facts(quest.kind(), minutes,
+                routeBlocks, WorldConfig.QUEST_HUNT_RADIUS.get(), villageName(server, quest.settlementId()),
+                quest.difficulty(), EscortDifficulties.get().levels().size(), quest.minTier(),
+                QuestRewards.describe(quest), QuestRewards.startItems(quest), quest.failureReputation()));
         Optional<Component> blocked = Optional.empty();
         if (activeCount >= maxActive) {
             blocked = Optional.of(Component.translatable("quest.folkhold_world.blocked.full", activeCount,
@@ -637,8 +633,7 @@ public final class QuestBoards {
             blocked = Optional.of(Component.translatable("quest.folkhold_world.blocked.tier",
                     FactionVisuals.tierName(quest.minTier())));
         }
-        return new Offer(quest.id(), quest.kind().serializedName(), icon, name(server, quest), info,
-                QuestRewards.describe(quest), joined(QuestRewards.risks(quest)),
+        return new Offer(quest.id(), quest.kind().serializedName(), icon, name(server, quest), story, details,
                 progress, countdown, (int) Math.min(Integer.MAX_VALUE, quest.rewardEmeralds()), minutes, blocked);
     }
 
@@ -702,19 +697,6 @@ public final class QuestBoards {
             default -> Component.empty();
         };
     }
-
-    /** The difficulty of an escort: filled stars for the difficulty, empty stars up to the highest difficulty. */
-    private static Component difficultyMark(int difficulty, int levels) {
-        int shown = Math.min(difficulty, levels);
-        return Component.literal("★".repeat(shown)).withColor(INK_BAD)
-                .append(Component.literal("☆".repeat(Math.max(0, levels - shown))).withColor(INK_MUTED));
-    }
-
-    /** The minimum tier of an offer: a tick and the name of the tier, in green. */
-    private static Component tierMark(ReputationTier tier) {
-        return Component.literal("✓ ").append(FactionVisuals.tierName(tier)).withColor(INK_GOOD);
-    }
-
 
     /** The text of a quest: what to do. */
     public static Component name(MinecraftServer server, Quest quest) {

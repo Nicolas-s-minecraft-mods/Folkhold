@@ -31,8 +31,11 @@ import java.util.PriorityQueue;
  *       grid). So a search on a fine grid examines fewer cells.</li>
  *   <li>A route that is longer than {@code maxLength} is not valid. The search also stops after
  *       {@code maxNodes} cells.</li>
+ *   <li>In a boat, a cell near the land costs more ({@code bankCost}, {@code bankCells}): on a wide river, the route
+ *       stays in the middle.</li>
  *   <li>The result keeps only the points where the direction or the surface changes. The last point is the exact
- *       end position.</li>
+ *       end position. With {@code smooth}, the result also loses the turns that a straight line can replace (see
+ *       {@link #smooth}).</li>
  * </ul>
  */
 public final class RouteFinder {
@@ -98,18 +101,32 @@ public final class RouteFinder {
      * @param maxNodes   maximum number of cells that the search examines
      * @param weight     weight of the heuristic (1 or more)
      * @param roadFactor the cost of a move on a road, as a multiple of its length (above 0, 1 or less)
+     * @param bankCost   extra cost for each block of distance in a boat on a cell near the land (see
+     *                   {@code bankCells}). The cost goes down from the bank to the middle of the water.
+     * @param bankCells  the distance of the bank cost from the land, in cells (0 for no bank cost)
+     * @param smooth     true to remove the turns of the route that a straight line can replace (see
+     *                   {@link #smooth})
      */
     public record Settings(int step, int fordDepth, int maxRise, double slopeCost, double fordCost, boolean boats,
-            double boatCost, double embarkCost, double maxLength, int maxNodes, double weight, double roadFactor) {
+            double boatCost, double embarkCost, double maxLength, int maxNodes, double weight, double roadFactor,
+            double bankCost, int bankCells, boolean smooth) {
         public Settings {
             if (step < 1 || fordDepth < 0 || maxRise < 0 || slopeCost < 0 || fordCost < 0 || boatCost < 0
                     || embarkCost < 0 || maxLength <= 0 || maxNodes < 1 || weight < 1.0 || roadFactor <= 0.0
-                    || roadFactor > 1.0) {
+                    || roadFactor > 1.0 || bankCost < 0 || bankCells < 0) {
                 throw new IllegalArgumentException("Invalid route settings");
             }
         }
 
-        /** Settings with no reduction of the cost on the roads. */
+        /** Settings with no bank cost and no smoothing. */
+        public Settings(int step, int fordDepth, int maxRise, double slopeCost, double fordCost, boolean boats,
+                double boatCost, double embarkCost, double maxLength, int maxNodes, double weight,
+                double roadFactor) {
+            this(step, fordDepth, maxRise, slopeCost, fordCost, boats, boatCost, embarkCost, maxLength, maxNodes,
+                    weight, roadFactor, 0.0, 0, false);
+        }
+
+        /** Settings with no reduction of the cost on the roads, no bank cost and no smoothing. */
         public Settings(int step, int fordDepth, int maxRise, double slopeCost, double fordCost, boolean boats,
                 double boatCost, double embarkCost, double maxLength, int maxNodes, double weight) {
             this(step, fordDepth, maxRise, slopeCost, fordCost, boats, boatCost, embarkCost, maxLength, maxNodes,
@@ -391,7 +408,71 @@ public final class RouteFinder {
         points.add(new Route.Point(endX, endZ));
         surfaces.add(previousSurface);
         Route route = new Route(points, surfaces);
+        if (settings.smooth()) {
+            route = smooth(route, grid.heights, settings);
+        }
         return route.length() <= settings.maxLength() ? Optional.of(route) : Optional.empty();
+    }
+
+    /**
+     * Removes the turns of a route that a straight line can replace. A point between two segments of the same surface
+     * (land or water) goes away when the straight line from the point before it to the point after it stays on this
+     * surface: each sample of the line, at half a cell of distance, has this surface, and the height change between
+     * two samples on land is {@code maxRise} or less. The first point, the last point, the points of a road and the
+     * points where the surface changes stay. Thus the route has fewer sharp turns, and it keeps its boat changes.
+     *
+     * @param route    the route
+     * @param heights  the height source
+     * @param settings the settings
+     * @return the smooth route
+     */
+    static Route smooth(Route route, HeightSource heights, Settings settings) {
+        List<Route.Point> points = route.points();
+        List<Route.Surface> surfaces = route.surfaces();
+        if (points.size() < 3) {
+            return route;
+        }
+        List<Route.Point> kept = new ArrayList<>();
+        List<Route.Surface> keptSurfaces = new ArrayList<>();
+        kept.add(points.get(0));
+        for (int index = 1; index < points.size() - 1; index++) {
+            Route.Surface before = surfaces.get(index - 1);
+            Route.Surface after = surfaces.get(index);
+            boolean smoothable = before == after && (before == Route.Surface.LAND || before == Route.Surface.WATER);
+            if (smoothable && isClear(kept.get(kept.size() - 1), points.get(index + 1), before, heights, settings)) {
+                continue;
+            }
+            keptSurfaces.add(before);
+            kept.add(points.get(index));
+        }
+        kept.add(points.get(points.size() - 1));
+        keptSurfaces.add(surfaces.get(surfaces.size() - 1));
+        return new Route(kept, keptSurfaces);
+    }
+
+    /** True if each sample of a straight line has a surface and the height changes on land are small. */
+    private static boolean isClear(Route.Point from, Route.Point to, Route.Surface surface, HeightSource heights,
+            Settings settings) {
+        double length = Math.hypot(to.x() - from.x(), to.z() - from.z());
+        int samples = Math.max(1, (int) Math.ceil(length / Math.max(1.0, settings.step() / 2.0)));
+        Integer last = null;
+        for (int sample = 1; sample < samples; sample++) {
+            double t = sample / (double) samples;
+            Column column = heights.column((int) Math.round(from.x() + (to.x() - from.x()) * t),
+                    (int) Math.round(from.z() + (to.z() - from.z()) * t));
+            Route.Surface found = surface(column, settings);
+            boolean dry = found == Route.Surface.LAND;
+            if (surface == Route.Surface.WATER ? found != Route.Surface.WATER : !dry) {
+                return false;
+            }
+            if (surface == Route.Surface.LAND) {
+                if (last != null && Math.abs(column.floor() - last) > settings.maxRise()) {
+                    return false;
+                }
+                last = column.floor();
+            }
+        }
+        return true;
     }
 
     private static double heuristic(int i, int j, int goalI, int goalJ, Settings settings) {
@@ -407,6 +488,7 @@ public final class RouteFinder {
         private final Corridor corridor;
         private final Map<Long, Column> columns = new HashMap<>();
         private final Map<Long, Boolean> inCorridor = new HashMap<>();
+        private final Map<Long, Double> bankShares = new HashMap<>();
 
         Grid(int startX, int startZ, Settings settings, HeightSource heights, Corridor corridor) {
             this.startX = startX;
@@ -447,6 +529,31 @@ public final class RouteFinder {
         }
 
         /**
+         * The part of the bank cost of a water cell: 1 next to the land, then down by {@code 1 / bankCells} for each
+         * cell of distance, 0 at {@code bankCells + 1} cells or more. The distance is the largest of the 2 axes.
+         */
+        double bankShare(int i, int j) {
+            int cells = settings.bankCells();
+            if (cells <= 0) {
+                return 0.0;
+            }
+            return bankShares.computeIfAbsent(IntPair.pack(i, j), k -> {
+                for (int distance = 1; distance <= cells; distance++) {
+                    for (int di = -distance; di <= distance; di++) {
+                        for (int dj = -distance; dj <= distance; dj++) {
+                            if (Math.max(Math.abs(di), Math.abs(dj)) == distance
+                                    && RouteFinder.surface(column(i + di, j + dj), settings)
+                                            != Route.Surface.WATER) {
+                                return (cells - distance + 1) / (double) cells;
+                            }
+                        }
+                    }
+                }
+                return 0.0;
+            });
+        }
+
+        /**
          * The cost of a move, or a negative value if the move is not possible.
          *
          * @param free true for the first move and the move to the end: no limits for the corridor, the water and
@@ -473,6 +580,7 @@ public final class RouteFinder {
             double cost = road ? length * settings.roadFactor() : length;
             if (surface == Route.Surface.WATER) {
                 cost += settings.boatCost() * length;
+                cost += settings.bankCost() * length * bankShare(toI, toJ);
             } else {
                 cost += settings.slopeCost() * rise;
                 if (surface == Route.Surface.FORD || toSurface == Route.Surface.WATER

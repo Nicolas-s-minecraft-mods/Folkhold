@@ -34,6 +34,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue CALM_DELAY_SECONDS;
     public static final ModConfigSpec.IntValue BUILDERS;
     public static final ModConfigSpec.IntValue HANDYMEN;
+    public static final ModConfigSpec.IntValue HEART_SHIFT;
 
 
     public static final ModConfigSpec.IntValue CAPTAIN_AURA_RADIUS;
@@ -72,6 +73,8 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue RAID_HEART_RADIUS;
     public static final ModConfigSpec.IntValue RAID_SPAWN_MIN_DISTANCE;
     public static final ModConfigSpec.IntValue RAID_SPAWN_MAX_DISTANCE;
+    public static final ModConfigSpec.IntValue RAID_CAMP_SIDE_DISTANCE;
+    public static final ModConfigSpec.IntValue RAID_CAMP_SIDE_SPREAD;
     public static final ModConfigSpec.IntValue RAID_EXTRA_RAVAGERS_LEVEL_4;
     public static final ModConfigSpec.IntValue RAID_EXTRA_RAVAGERS_LEVEL_5;
     public static final ModConfigSpec.IntValue RAID_GATE_FORCE_SECONDS;
@@ -298,6 +301,14 @@ public final class WorldConfig {
                         "They light the braziers of the village in the evening and put them out in the morning.")
                 .translation(KEY_PREFIX + "handymen")
                 .defineInRange("handymen", 1, 0, 16);
+        HEART_SHIFT = builder
+                .comment("Largest distance in blocks of the heart of a new village from its structure start. On a",
+                        "steep start, the plaza moves to flatter ground at this distance or nearer. The range of the",
+                        "structure can give a smaller limit. 0 turns off the search. Only a world that a version with",
+                        "the search creates moves its villages. The value applies to the villages that the game did not",
+                        "generate.")
+                .translation(KEY_PREFIX + "heartShift")
+                .defineInRange("heartShift", 48, 0, 48);
         builder.pop();
 
         builder.comment("Garrison of each village. The level table sets the number of units and their equipment",
@@ -539,6 +550,18 @@ public final class WorldConfig {
                         "loads more chunks and finds fewer paths to the village.")
                 .translation(KEY_PREFIX + "raidSpawnMaxDistance")
                 .defineInRange("spawnMaxDistance", 56, 16, 80);
+        RAID_CAMP_SIDE_DISTANCE = builder
+                .comment("A raid at a faction village comes from the side of the nearest pillager camp when the center",
+                        "of the camp is this distance or less from the heart, in blocks. 0 turns it off: the waves come",
+                        "from a random direction.")
+                .translation(KEY_PREFIX + "raidCampSideDistance")
+                .defineInRange("campSideDistance", 512, 0, 4096);
+        RAID_CAMP_SIDE_SPREAD = builder
+                .comment("Largest angle in degrees between the direction of the camp and the direction of the spawn",
+                        "position of a wave, seen from the heart. When no position on this side is good, the wave",
+                        "spawns in another direction.")
+                .translation(KEY_PREFIX + "raidCampSideSpread")
+                .defineInRange("campSideSpread", 45, 0, 180);
         RAID_EXTRA_RAVAGERS_LEVEL_4 = builder
                 .comment("Ravagers that each wave of a raid of level 4 gets more than the vanilla wave.")
                 .translation(KEY_PREFIX + "raidExtraRavagersLevel4")

@@ -49,6 +49,7 @@
   "folkhold_balance.configuration.sleep": "Sommeil (Slumber)",
   "folkhold_balance.configuration.maxExtraTicks": "Ticks supplémentaires maximum par tick serveur",
   "folkhold_balance.configuration.extraTickBudget": "Budget de temps des ticks supplémentaires (ms)",
+  "folkhold_balance.configuration.nightSeconds": "Durée visée d'une nuit (s)",
   "folkhold_balance.chain.first": "Premier wagonnet : %s. Utilisez la chaîne sur un second wagonnet.",
   "folkhold_balance.chain.linked": "Les wagonnets sont liés.",
   "folkhold_balance.chain.same_cart": "Utilisez la chaîne sur un autre wagonnet.",

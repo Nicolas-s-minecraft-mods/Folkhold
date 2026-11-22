@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.events.FolkholdEvents;
 import io.github.nicolasgoyon.folkhold.events.common.ActiveEvents;
 import io.github.nicolasgoyon.folkhold.events.common.EventMath;
 import io.github.nicolasgoyon.folkhold.events.common.EventPlacement;
+import io.github.nicolasgoyon.folkhold.events.common.EventRegions;
 import io.github.nicolasgoyon.folkhold.events.common.EventSchedule;
 import io.github.nicolasgoyon.folkhold.events.config.EventsConfig;
 import java.util.List;
@@ -105,12 +106,16 @@ public final class Earthquakes {
             return;
         }
         ACTIVE.tick(level, earthquake -> logEnd(level, earthquake));
+        int minDays = EventsConfig.EARTHQUAKE_MIN_DAYS.get();
+        int maxDays = EventsConfig.EARTHQUAKE_MAX_DAYS.get();
         if (level.getGameTime() % SCHEDULE_INTERVAL == 0 && hasNaturalEarthquakes(level)
-                && schedule(level).isDue(level, EventsConfig.EARTHQUAKE_MIN_DAYS.get(),
-                        EventsConfig.EARTHQUAKE_MAX_DAYS.get())
-                && startNatural(level).isEmpty()) {
-            FolkholdEvents.LOGGER.debug("No earthquake in {}: no player near a loaded epicenter",
-                    level.dimension().location());
+                && schedule(level).isDue(level, minDays, maxDays)) {
+            if (startNatural(level).isPresent()) {
+                schedule(level).started(level, minDays, maxDays);
+            } else {
+                FolkholdEvents.LOGGER.debug("No earthquake in {}: no player near a loaded epicenter in an open "
+                        + "region", level.dimension().location());
+            }
         }
     }
 
@@ -118,15 +123,18 @@ public final class Earthquakes {
      * Starts a natural earthquake near a random player of a level, with the values of the config.
      *
      * @param level the level
-     * @return the earthquake, or empty with no player or no loaded epicenter
+     * @return the earthquake, or empty with no player, no loaded epicenter or an epicenter in a paused region (see
+     *         {@link EventRegions})
      */
     public static Optional<Earthquake> startNatural(ServerLevel level) {
         return EventPlacement.nearRandomPlayer(level, EventsConfig.EARTHQUAKE_EPICENTER_DISTANCE.get())
-                .flatMap(center -> {
+                .filter(center -> EventRegions.isOpen(level, center)).flatMap(center -> {
                     double strength = EventMath.between(level.getRandom().nextDouble(),
                             EventsConfig.EARTHQUAKE_MIN_STRENGTH.get(), EventsConfig.EARTHQUAKE_MAX_STRENGTH.get());
-                    return start(level, center,
+                    Optional<Earthquake> earthquake = start(level, center,
                             EarthquakeSettings.fromConfig(EventsConfig.EARTHQUAKE_RADIUS.get(), strength));
+                    earthquake.ifPresent(started -> EventRegions.pause(level, center));
+                    return earthquake;
                 });
     }
 
