@@ -17,6 +17,7 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import io.github.nicolasgoyon.folkhold.world.journal.CartofoldMaps;
+import io.github.nicolasgoyon.folkhold.world.journal.LayerChanges;
 import io.github.nicolasgoyon.folkhold.world.journal.TerritoryMaps;
 import io.github.nicolasgoyon.folkhold.world.network.AdminMapPayload;
 import io.github.nicolasgoyon.folkhold.world.network.AdminMapPayload.Kind;
@@ -25,11 +26,13 @@ import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -54,8 +57,12 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *       route, with its journey as its name.</li>
  *   <li>The identifier of a marker gives its kind (see {@link Kind}). The markers are not clickable: the screen gets
  *       the clicks on the client, and the server gets no click.</li>
- *   <li>Every {@link #CHECK_TICKS} ticks, the server sends the layer again when a settlement or a claim changes.
- *       Else it sends only the markers of the groups that move, start or end ({@link LayerUpdate}).</li>
+ *   <li>Every {@link #CHECK_TICKS} ticks, the server makes the markers one time for all the operators
+ *       ({@link Snapshot}). It sends the layer again when a settlement or a claim changes: only the changed parts, in
+ *       payloads below the limit (see {@link LayerChanges}). Else it sends only the markers of the groups that move,
+ *       start or end ({@link LayerUpdate}).</li>
+ *   <li>A layer has {@link LayerContent#MAX_ELEMENTS} markers at most. The settlements come first, then the groups in
+ *       the order of their data, up to this limit. The other groups do not show.</li>
  * </ul>
  */
 public final class AdminMap {
@@ -75,7 +82,28 @@ public final class AdminMap {
     /** The layer that each operator has, with the settlements and the claims that gave it. */
     private static final Map<UUID, Shown> SHOWN = new HashMap<>();
 
-    private record Shown(Object settlements, LayerContent content) {
+    /**
+     * The layer that an operator has.
+     *
+     * @param settlements the claims and the markers of the settlements that gave the layer
+     * @param groups      the markers of the groups in the layer: the list of a {@link Snapshot}
+     * @param content     the layer
+     */
+    private record Shown(Object settlements, List<MapMarker> groups, LayerContent content) {
+    }
+
+    /**
+     * The data of the layer at one check, for all the operators.
+     *
+     * @param source      the claims and the markers of the settlements: a change sends the layer again
+     * @param settlements the markers of the settlements
+     * @param groups      the markers of the groups, after the settlements up to the limit of the markers
+     * @param content     the full layer, made only when an operator needs it
+     * @param changes     the change of the groups from the groups of a layer, for each list of groups: the operators
+     *                    with the same groups get the same change
+     */
+    private record Snapshot(Object source, List<MapMarker> settlements, List<MapMarker> groups,
+            Supplier<LayerContent> content, Map<List<MapMarker>, Optional<LayerUpdate>> changes) {
     }
 
     private AdminMap() {
@@ -88,7 +116,7 @@ public final class AdminMap {
      */
     public static void open(ServerPlayer player) {
         SHOWN.remove(player.getUUID());
-        update(player);
+        update(player, snapshot(player.server));
         ModNetwork.send(player, box(SettlementData.get(player.server)));
     }
 
@@ -144,6 +172,7 @@ public final class AdminMap {
 
     /** Updates the layer of each operator, and removes it from a player who is not an operator now. */
     public static void check(MinecraftServer server) {
+        Snapshot snapshot = null;
         for (UUID id : List.copyOf(SHOWN.keySet())) {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player == null) {
@@ -151,7 +180,10 @@ public final class AdminMap {
             } else if (!AdminActions.isAllowed(player)) {
                 close(player);
             } else {
-                update(player);
+                if (snapshot == null) {
+                    snapshot = snapshot(server);
+                }
+                update(player, snapshot);
             }
         }
     }
@@ -166,30 +198,55 @@ public final class AdminMap {
         SHOWN.clear();
     }
 
-    /** Sends all the layer when a settlement or a claim changed, else the changes of the groups. */
-    private static void update(ServerPlayer player) {
-        MinecraftServer server = player.server;
+    /** The data of the layer now. The full layer comes only at the first call of its supplier. */
+    private static Snapshot snapshot(MinecraftServer server) {
         List<Claimant> claimants = SettlementData.get(server).claimants();
         List<MapMarker> settlements = settlementMarkers(server);
+        if (settlements.size() > LayerContent.MAX_ELEMENTS) {
+            settlements = settlements.subList(0, LayerContent.MAX_ELEMENTS);
+        }
         List<MapMarker> groups = groupMarkers(server);
-        Object source = List.of(claimants, settlements);
+        int room = LayerContent.MAX_ELEMENTS - settlements.size();
+        if (groups.size() > room) {
+            groups = groups.subList(0, room);
+        }
+        List<MapMarker> settlementMarkers = settlements;
+        List<MapMarker> groupMarkers = groups;
+        LayerContent[] made = new LayerContent[1];
+        Supplier<LayerContent> content = () -> {
+            if (made[0] == null) {
+                List<MapMarker> markers = new ArrayList<>(settlementMarkers);
+                markers.addAll(groupMarkers);
+                made[0] = new LayerContent(INFO, CartofoldMaps.areas(villages(server, claimants), claimants),
+                        List.of(), markers);
+            }
+            return made[0];
+        };
+        return new Snapshot(List.of(claimants, settlements), settlements, groups, content, new IdentityHashMap<>());
+    }
+
+    /** Sends the changes of the layer when a settlement or a claim changed, else the changes of the groups. */
+    private static void update(ServerPlayer player, Snapshot snapshot) {
         Shown last = SHOWN.get(player.getUUID());
-        boolean full = last == null || !last.settlements().equals(source)
-                || settlements.size() + groups.size() > LayerContent.MAX_ELEMENTS;
-        if (full) {
-            List<MapMarker> markers = new ArrayList<>(settlements);
-            markers.addAll(groups);
-            LayerContent content = new LayerContent(INFO, CartofoldMaps.areas(villages(server, claimants), claimants),
-                    List.of(), markers.subList(0, Math.min(markers.size(), LayerContent.MAX_ELEMENTS)));
-            SHOWN.put(player.getUUID(), new Shown(source, content));
-            CartofoldLayers.set(player, content);
+        if (last == null || !last.settlements().equals(snapshot.source())) {
+            LayerContent content = snapshot.content().get();
+            SHOWN.put(player.getUUID(), new Shown(snapshot.source(), snapshot.groups(), content));
+            for (LayerChanges.Packet packet : LayerChanges.packets(last == null ? null : last.content(), content)) {
+                switch (packet) {
+                    case LayerChanges.Full full -> CartofoldLayers.set(player, full.content());
+                    case LayerChanges.Changes changes -> CartofoldLayers.update(player, LAYER, changes.update());
+                }
+            }
             return;
         }
-        Optional<LayerUpdate> change = groupChange(last.content(), groups);
-        if (change.isPresent()) {
-            SHOWN.put(player.getUUID(), new Shown(source, last.content().apply(change.get())));
-            CartofoldLayers.update(player, LAYER, change.get());
+        if (last.groups() == snapshot.groups()) {
+            return;
         }
+        Optional<LayerUpdate> change = snapshot.changes().computeIfAbsent(last.groups(),
+                groups -> groupChange(last.content(), snapshot.groups()));
+        LayerContent content = change.map(last.content()::apply).orElse(last.content());
+        SHOWN.put(player.getUUID(), new Shown(snapshot.source(), snapshot.groups(), content));
+        change.ifPresent(update -> CartofoldLayers.update(player, LAYER, update));
     }
 
     /**
@@ -200,8 +257,9 @@ public final class AdminMap {
      * @return the change, or empty when no group changed
      */
     static Optional<LayerUpdate> groupChange(LayerContent content, List<MapMarker> groups) {
-        List<MapMarker> changed = groups.stream()
-                .filter(marker -> !content.marker(marker.id()).equals(Optional.of(marker))).toList();
+        Map<String, MapMarker> shown = new HashMap<>();
+        content.markers().forEach(marker -> shown.put(marker.id(), marker));
+        List<MapMarker> changed = groups.stream().filter(marker -> !marker.equals(shown.get(marker.id()))).toList();
         Set<String> ids = groups.stream().map(MapMarker::id).collect(Collectors.toSet());
         List<String> removed = content.markers().stream().map(MapMarker::id)
                 .filter(id -> Kind.of(id).map(kind -> !kind.settlement()).orElse(false) && !ids.contains(id))
