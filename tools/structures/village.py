@@ -959,12 +959,37 @@ NORSE_STONE = {
     "minecraft:spruce_slab": "minecraft:mossy_cobblestone_slab",
     "minecraft:spruce_stairs": "minecraft:mossy_cobblestone_stairs",
 }
-STONE_STYLES = {None: STONE, "valeholm": NORSE_STONE}
-# The blocks of a stone column of the palisade of each culture: the block in place of the logs, and the block in
-# place of the fence of the point (see village_settings).
+
+
+def sun_beam(_pos, props):
+    """A stripped spruce log of a Sunreach stone piece: a post (axis y) is cut sandstone, and a beam (axis x or z) is
+    a band of terracotta."""
+    if dict(props).get("axis") == "y":
+        return "minecraft:cut_sandstone", ()
+    return "minecraft:terracotta", ()
+
+
+# Sunreach: walls of smooth sandstone on a base of sandstone, pillars of cut sandstone at the corners and at the gate,
+# a band of terracotta under the parapet, and slabs, stairs and the roof of smooth sandstone. The roof keeps the
+# shape of the pyramid roof of the tower.
+SUN_STONE = {
+    "minecraft:cobblestone": "minecraft:sandstone",
+    "minecraft:mossy_cobblestone": "minecraft:sandstone",
+    "minecraft:spruce_log": ("minecraft:cut_sandstone", ()),
+    "minecraft:stripped_spruce_log": sun_beam,
+    "minecraft:spruce_planks": "minecraft:smooth_sandstone",
+    "minecraft:spruce_slab": "minecraft:smooth_sandstone_slab",
+    "minecraft:spruce_stairs": "minecraft:smooth_sandstone_stairs",
+    "minecraft:dark_oak_stairs": "minecraft:smooth_sandstone_stairs",
+    "minecraft:dark_oak_slab": "minecraft:smooth_sandstone_slab",
+}
+STONE_STYLES = {None: STONE, "valeholm": NORSE_STONE, "sunreach": SUN_STONE}
+# The blocks of a stone column of the palisade of each culture: the block in place of the logs, the block in place
+# of the fence of the point and the block of the base (see village_settings).
 STONE_COLUMNS = {
-    None: ("minecraft:stone_bricks", "minecraft:stone_brick_wall"),
-    "valeholm": ("minecraft:mossy_stone_bricks", "minecraft:mossy_cobblestone_wall"),
+    None: ("minecraft:stone_bricks", "minecraft:stone_brick_wall", "minecraft:cobblestone"),
+    "valeholm": ("minecraft:mossy_stone_bricks", "minecraft:mossy_cobblestone_wall", "minecraft:cobblestone"),
+    "sunreach": ("minecraft:smooth_sandstone", "minecraft:sandstone_wall", "minecraft:sandstone"),
 }
 
 
@@ -4180,6 +4205,7 @@ class LandStyle:
     - fence, gate: the fence around a field and the fence gate on its front side.
     - post: the block of the 4 corner posts of the fence of a field, under the lanterns: a fence, or a full block.
       The fence connects to the full faces of a full block: the fence has no gap.
+    - water: the waterlogged slab of the water of a field (see WATER_SLAB).
     - crops: the crops of the style in place of the crops of the layout (see FieldLayout), for example
       {"carrots": "beetroots"}.
     - path: the ground of the front row and of the paths of a field.
@@ -4187,11 +4213,17 @@ class LandStyle:
     - wall, logs, corner: the walls of the windmill and its corner logs (axis y). With logs, the wall block is a log
       along its wall: axis x on the front and the back walls, axis z on the side walls.
     - floor: the floor of the room of the windmill.
-    - roof, roof_slab: the stairs and the slab of the roof of the windmill. A pyramid roof (see windmill) has the slab
-      in its top ring.
-    - steep: the roof of the windmill is a steep roof of a long house (see steep_mill_roof), with gable walls of
-      roof_wall, a ridge of roof_ridge and carved horns of frame at the 2 ends of the ridge. The roof has no slab.
-    - frame, cloth: the arms of the sails (a fence block) and the cloth of the sails.
+    - band: the block of the top layer of the walls of the windmill (a band under the roof), or None for the wall.
+    - window: the block of the windows of the windmill.
+    - roof_shape: the roof of the windmill (see MILL_ROOFS):
+      - "pyramid": rings of the stairs roof (see roof_stairs) with the slab roof_slab in the top ring.
+      - "steep": the steep roof of a long house (see steep_mill_roof), with gable walls of roof_wall, a ridge of
+        roof_ridge and carved horns of frame at the 2 ends of the ridge. The roof has no slab.
+      - "flat": a flat roof of roof_wall with a parapet of the wall parapet and the slab roof_slab (see
+        flat_mill_roof).
+    - awning: the 2 wools of the stripes of an awning over the door of the windmill, or None for no awning.
+    - frame, cloth: the arms of the sails (a fence block) and the cloth of the sails. With stripe, the cloth of each
+      arm has a stripe of this block in its middle.
     """
     fence: str
     gate: str
@@ -4204,12 +4236,18 @@ class LandStyle:
     frame: str
     cloth: str
     post: str | None = None
+    water: tuple[str, dict[str, str]] = WATER_SLAB
     crops: dict[str, str] = dataclasses.field(default_factory=dict)
     logs: bool = False
     floor: str | None = None
-    steep: bool = False
+    band: str | None = None
+    window: str = "minecraft:glass_pane"
+    roof_shape: str = "pyramid"
     roof_wall: str = "minecraft:spruce_planks"
     roof_ridge: str = "minecraft:dark_oak_planks"
+    parapet: str = "minecraft:sandstone_wall"
+    awning: tuple[str, str] | None = None
+    stripe: str | None = None
 
     @property
     def corner_post(self):
@@ -4243,7 +4281,28 @@ NORSE_LAND = dataclasses.replace(
     logs=True,
     corner="minecraft:stripped_spruce_log",
     floor="minecraft:spruce_planks",
-    steep=True,
+    roof_shape="steep",
+)
+# Sunreach: fences of sandstone walls with corner pillars of cut sandstone, water in channels of smooth sandstone
+# slabs, and a windmill with walls of smooth sandstone on a base of sandstone, pillars of cut sandstone at the
+# corners, a band of terracotta under a flat roof with a parapet, windows with iron bars, a striped awning of wool over
+# the door and sails with a stripe of orange wool.
+SUN_LAND = dataclasses.replace(
+    LAND,
+    fence="minecraft:sandstone_wall",
+    post="minecraft:cut_sandstone",
+    water=("minecraft:smooth_sandstone_slab", {"type": "bottom", "waterlogged": "true"}),
+    base=lambda _rng: "minecraft:sandstone",
+    wall="minecraft:smooth_sandstone",
+    corner="minecraft:cut_sandstone",
+    floor="minecraft:smooth_sandstone",
+    band="minecraft:terracotta",
+    window="minecraft:iron_bars",
+    roof_shape="flat",
+    roof_wall="minecraft:smooth_sandstone",
+    roof_slab="minecraft:smooth_sandstone_slab",
+    awning=("minecraft:orange_wool", "minecraft:white_wool"),
+    stripe="minecraft:orange_wool",
 )
 
 
@@ -4308,7 +4367,7 @@ def field(style, size):
                 t.set(x, 0, z, *GRASS)
                 t.set(x, 1, z, style.fence)
             elif (x, z) in waters:
-                t.set(x, 0, z, *WATER_SLAB)
+                t.set(x, 0, z, *style.water)
             elif x in spec.paths or (z == FIELD_FIRST_ROW and x in first):
                 t.set(x, 0, z, style.path)
             else:
@@ -4336,6 +4395,8 @@ MILL_HEIGHT = MILL_WALL_TOP + 5
 # The height of a windmill with a steep roof: the ridge is 2 blocks higher for each block from the walls, and the
 # carved horns are 2 blocks above the roof.
 STEEP_MILL_HEIGHT = MILL_WALL_TOP + 2 + 2 * (MILL_BODY // 2) + 1
+# The layer of the awning over the door of a windmill: above the door, under the lowest arm of the sails.
+MILL_AWNING_Y = 3
 
 
 def steep_mill_top(x):
@@ -4369,12 +4430,46 @@ def steep_mill_roof(t, style):
         t.set(mid, steep_mill_top(mid), z, style.frame)
 
 
+def pyramid_mill_roof(t, style):
+    """The pyramid roof of the windmill: rings of stairs from the top of the walls, and a slab in the middle of the
+    top ring. The slab is not above the ring: a builder on a scaffolding in the room reaches it."""
+    x0 = z0 = 1
+    for ring in range(MILL_BODY // 2):
+        y = MILL_WALL_TOP + 1 + ring
+        low, high = ring, MILL_BODY - 1 - ring
+        for dx in range(low, high + 1):
+            for dz in range(low, high + 1):
+                if dx in (low, high) or dz in (low, high):
+                    t.set(x0 + dx, y, z0 + dz, style.roof, roof_stairs(dx, dz, low, high)[1])
+    t.set(MILL_WIDTH // 2, MILL_WALL_TOP + MILL_BODY // 2, z0 + MILL_BODY // 2, style.roof_slab,
+          {"type": "bottom", "waterlogged": "false"})
+
+
+def flat_mill_roof(t, style):
+    """The flat roof of a Sunreach house on the windmill (see flat_house_shell): a layer of roof_wall on the walls,
+    and a parapet of walls and slabs on its edges. A builder on a scaffolding in the room places the roof."""
+    y = MILL_WALL_TOP + 1
+    for x in range(1, MILL_WIDTH - 1):
+        for z in range(1, MILL_DEPTH):
+            t.set(x, y, z, style.roof_wall)
+            if x in (1, MILL_WIDTH - 2) or z in (1, MILL_DEPTH - 1):
+                if (x + z) % 2 == 0:
+                    t.set(x, y + 1, z, style.parapet)
+                else:
+                    t.set(x, y + 1, z, style.roof_slab, {"type": "bottom", "waterlogged": "false"})
+
+
+# The roof of a windmill for each roof shape of a land style, and the height of the template.
+MILL_ROOFS = {"pyramid": (pyramid_mill_roof, MILL_HEIGHT), "steep": (steep_mill_roof, STEEP_MILL_HEIGHT),
+              "flat": (flat_mill_roof, MILL_HEIGHT)}
+
+
 def windmill(style):
     """The windmill: the mill of the grain of the fields.
 
     - The tower: a base course of the style, walls of the style with a log at each corner, a door in the middle of
-      the front wall and windows on the sides. The roof is a pyramid roof (see roof_stairs) with a slab in its top
-      ring, or the steep roof of a long house (see steep_mill_roof).
+      the front wall and windows on the sides. The band of the style is the top layer of the walls. The roof has the
+      roof shape of the style (see MILL_ROOFS). An awning of the style is over the door.
     - The room: the grindstone of the miller on the floor, barrels of flour and hay bales, and a lantern on a barrel.
     - The sails: 4 arms of fences around the hub (a log on the front wall, axis z), in the front row. Each arm has a
       cloth of 3 blocks on one side, as the blades of a windmill. The lowest arm ends above the door.
@@ -4382,7 +4477,7 @@ def windmill(style):
     """
     rng = random.Random(97)
     mid = MILL_WIDTH // 2
-    height = STEEP_MILL_HEIGHT if style.steep else MILL_HEIGHT
+    roof, height = MILL_ROOFS[style.roof_shape]
     t = Template(MILL_WIDTH, height, MILL_DEPTH)
     t.fill(0, 1, 0, MILL_WIDTH - 1, height - 1, MILL_DEPTH - 1, "minecraft:air")
     x0, x1 = 1, MILL_WIDTH - 2
@@ -4401,34 +4496,26 @@ def windmill(style):
             along = {"axis": "x" if z in (z0, z1) else "z"} if style.logs else None
             for y in range(1, MILL_WALL_TOP + 1):
                 if corner:
-                    t.set(x, y, z, style.corner, LOG_Y)
+                    t.set(x, y, z, style.corner, LOG_Y if style.corner.endswith("_log") else None)
                 elif y == 1:
                     t.set(x, y, z, style.base(rng))
+                elif y == MILL_WALL_TOP and style.band:
+                    t.set(x, y, z, style.band)
                 else:
                     t.set(x, y, z, style.wall, along)
-    if style.steep:
-        steep_mill_roof(t, style)
-    # The pyramid roof: rings of stairs from the top of the walls, and a slab on the top.
-    for ring in range(0 if style.steep else MILL_BODY // 2):
-        y = MILL_WALL_TOP + 1 + ring
-        low, high = ring, MILL_BODY - 1 - ring
-        for dx in range(low, high + 1):
-            for dz in range(low, high + 1):
-                if dx in (low, high) or dz in (low, high):
-                    t.set(x0 + dx, y, z0 + dz, style.roof, roof_stairs(dx, dz, low, high)[1])
-    # The slab is in the middle of the top ring, not above it: a builder on a scaffolding in the room reaches it.
-    if not style.steep:
-        t.set(mid, MILL_WALL_TOP + MILL_BODY // 2, z0 + MILL_BODY // 2, style.roof_slab,
-              {"type": "bottom", "waterlogged": "false"})
+    roof(t, style)
     # The door, and the windows on the sides and at the back.
     for y, half in ((1, "lower"), (2, "upper")):
         t.set(mid, y, z0, "minecraft:spruce_door",
               {"facing": "north", "half": half, "hinge": "left", "open": "false", "powered": "false"})
     for y in (3, 6):
         for z in (z0 + 2, z1 - 2):
-            t.set(x0, y, z, "minecraft:glass_pane")
-            t.set(x1, y, z, "minecraft:glass_pane")
-        t.set(mid, y, z1, "minecraft:glass_pane")
+            t.set(x0, y, z, style.window)
+            t.set(x1, y, z, style.window)
+        t.set(mid, y, z1, style.window)
+    if style.awning:
+        for x in range(mid - 1, mid + 2):
+            t.set(x, MILL_AWNING_Y, 0, style.awning[(x - mid) % 2])
     # The room: the grindstone, the flour and the grain.
     # The middle of the room stays free for the scaffolding of the builders under the top of the roof.
     t.set(mid - 2, 1, z0 + 3, "minecraft:grindstone", {"face": "floor", "facing": "east"})
@@ -4446,10 +4533,11 @@ def windmill(style):
         t.set(mid + step, MILL_HUB_Y, 0, style.frame)
         t.set(mid - step, MILL_HUB_Y, 0, style.frame)
         if step > 1:
-            t.set(mid + 1, MILL_HUB_Y + step, 0, style.cloth)
-            t.set(mid - 1, MILL_HUB_Y - step, 0, style.cloth)
-            t.set(mid + step, MILL_HUB_Y - 1, 0, style.cloth)
-            t.set(mid - step, MILL_HUB_Y + 1, 0, style.cloth)
+            cloth = style.stripe if style.stripe and step == 3 else style.cloth
+            t.set(mid + 1, MILL_HUB_Y + step, 0, cloth)
+            t.set(mid - 1, MILL_HUB_Y - step, 0, cloth)
+            t.set(mid + step, MILL_HUB_Y - 1, 0, cloth)
+            t.set(mid - step, MILL_HUB_Y + 1, 0, cloth)
     building_sign(t, mid + 2, 1, 0, "mill")
     return t
 
@@ -4933,6 +5021,9 @@ STYLES = {
         "market": functools.partial(market, "wide", "sunreach"),
         **{f"job_{job}": build for job, build in SUNREACH_JOBS.items()},
         **CLIFF_PIECES["sunreach"],
+        **stone_pieces("sunreach"),
+        **{f"field_{size}": functools.partial(field, SUN_LAND, size) for size in FIELDS},
+        "mill": functools.partial(windmill, SUN_LAND),
     },
 }
 # The pieces of the maritime villages: the village of a site on the coast or on an island, in all the cultures. The
@@ -5717,7 +5808,7 @@ def street_stairs(v):
 def village_settings(v):
     """The settings of the village that change with the variant: the start pool, the wall and the homes. The stone
     column of the palisade has the stone of the culture (see STONE_COLUMNS)."""
-    column, point = STONE_COLUMNS.get(v.culture, STONE_COLUMNS[None])
+    column, point, base = STONE_COLUMNS.get(v.culture, STONE_COLUMNS[None])
     return {
         "start_pool": v.id("plaza"),
         "wall": {
@@ -5745,7 +5836,7 @@ def village_settings(v):
                 "gate": v.id("stone/gate"),
                 "palisade": {
                     "log": v.state(column),
-                    "base": v.state("minecraft:cobblestone"),
+                    "base": v.state(base),
                     "point": v.state(point),
                     "foundation": v.state("minecraft:cobblestone"),
                 },
