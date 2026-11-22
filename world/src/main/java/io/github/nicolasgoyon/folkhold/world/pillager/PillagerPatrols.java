@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.pillager;
 
+import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.pillager.PatrolClock;
 import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamp;
 import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerReputation;
@@ -7,10 +8,13 @@ import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -39,21 +43,25 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>A player who stays in a pillager territory for {@code pillagers.patrolDelaySeconds} gets a patrol from the
  *       camp. The next patrol for this player comes after {@code pillagers.patrolCooldownSeconds} (see
  *       {@link PatrolClock}).</li>
+ *   <li>The patrol is the abstract patrol of the camp that is the nearest to the player, if it travels and has no
+ *       entities (see {@link PillagerPatrolGroups}). It gets its entities near the player (see
+ *       {@link PatrolEntities}). When the camp has no such patrol, the patrol leaves at the next check. No other
+ *       pillagers spawn for the player.</li>
  *   <li>The patrol spawns {@code pillagers.spawnDistance} blocks from the player, in the direction of the camp, or at
  *       the camp when the player is nearer to it. The position is on the surface, in a loaded chunk, not in a fluid.
  *       When no position is good, the patrol leaves at the next check.</li>
  *   <li>The members are vanilla pillagers. The first member is a patrol leader with the ominous banner. The members
  *       walk to the player with the vanilla patrol goal. While the player is in the territory, the members get the
- *       new position of the player at each check. The vanilla AI attacks the player at a short distance. The members
- *       despawn as the vanilla patrols, far from the players.</li>
- *   <li>The size of a patrol comes from the tier of the player with the pillagers (see
+ *       new position of the player at each check. The vanilla AI attacks the player at a short distance. Far from the
+ *       players, the patrol is abstract again (see {@link PatrolEntities}).</li>
+ *   <li>The number of members that the player gets comes from the tier of the player with the pillagers (see
  *       {@link PillagerReputation#patrolSize}).</li>
  *   <li>A player who kills an illager in a pillager territory loses {@code pillagers.killReputation} reputation with
  *       the pillagers.</li>
  * </ul>
  *
- * <p>A patrol exists only near its player: it has no abstract state. The clocks and the patrols are in memory: a
- * server restart starts the clocks again.
+ * <p>The clocks and the link between a player and its patrol are in memory: a server restart starts the clocks
+ * again.
  */
 public final class PillagerPatrols {
     /** The tag of the members of a patrol. */
@@ -73,12 +81,21 @@ public final class PillagerPatrols {
         if (!CHECK.isDue(overworld.getGameTime())) {
             return;
         }
+        Set<UUID> followers = new HashSet<>();
         for (ServerPlayer player : List.copyOf(overworld.players())) {
-            check(overworld, player);
+            if (check(overworld, player)) {
+                followers.addAll(PATROLS.getOrDefault(player.getUUID(), List.of()));
+            }
         }
+        PatrolEntities.update(overworld, followers);
     }
 
-    private static void check(ServerLevel level, ServerPlayer player) {
+    /**
+     * Checks one player.
+     *
+     * @return true if the player is in a pillager territory: the members of its patrol walk to it
+     */
+    private static boolean check(ServerLevel level, ServerPlayer player) {
         MinecraftServer server = level.getServer();
         Optional<PillagerCamp> camp = player.isSpectator() || !player.isAlive()
                 ? Optional.empty()
@@ -92,21 +109,25 @@ public final class PillagerPatrols {
         long delay = WorldConfig.PILLAGER_PATROL_DELAY_SECONDS.get() * 20L;
         long cooldown = WorldConfig.PILLAGER_PATROL_COOLDOWN_SECONDS.get() * 20L;
         if (!clock.update(camp.isPresent() && baseSize > 0, level.getGameTime(), delay, cooldown)) {
-            return;
+            return camp.isPresent();
         }
+        Optional<MobileGroup> patrol = PillagerPatrolGroups.nearestFree(server, camp.get(), player.getX(),
+                player.getZ());
         Optional<BlockPos> spawn = spawnPosition(level, camp.get(), player.blockPosition());
-        if (spawn.isEmpty()) {
+        if (patrol.isEmpty() || spawn.isEmpty()) {
             clock.cancelPatrol();
-            return;
+            return true;
         }
         int size = PillagerReputation.patrolSize(PillagerFaction.tier(server, player.getUUID()), baseSize,
                 WorldConfig.PILLAGER_SWORN_ENEMY_EXTRA.get());
-        List<PatrollingMonster> members = send(level, spawn.get(), player.blockPosition(), size);
+        List<PatrollingMonster> members = PatrolEntities.materialize(level, patrol.get(), spawn.get(),
+                player.blockPosition(), size);
         if (members.isEmpty()) {
             clock.cancelPatrol();
-            return;
+            return true;
         }
         PATROLS.put(player.getUUID(), members.stream().map(Entity::getUUID).toList());
+        return true;
     }
 
     /** The members of the patrol of a player walk to the new position of the player. */
@@ -168,23 +189,38 @@ public final class PillagerPatrols {
     public static List<PatrollingMonster> send(ServerLevel level, BlockPos spawn, BlockPos target, int size) {
         List<PatrollingMonster> members = new ArrayList<>();
         for (int i = 0; i < size; i++) {
-            Pillager member = EntityType.PILLAGER.create(level);
-            if (member == null) {
-                continue;
-            }
-            BlockPos pos = surface(level, spawn.offset(i % 3 - 1, 0, i / 3)).orElse(spawn);
-            if (members.isEmpty()) {
-                member.setPatrolLeader(true);
-            }
-            member.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, level.random.nextFloat() * 360.0F, 0.0F);
-            EventHooks.finalizeMobSpawn(member, level, level.getCurrentDifficultyAt(pos), MobSpawnType.PATROL, null);
-            member.setPatrolTarget(target);
-            member.addTag(MEMBER_TAG);
-            if (level.addFreshEntity(member)) {
-                members.add(member);
-            }
+            spawnMember(level, spawn, members.size(), target, member -> { }).ifPresent(members::add);
         }
         return members;
+    }
+
+    /**
+     * Spawns one member of a patrol and sends it to a target. The member with the index 0 is a patrol leader with the
+     * ominous banner. The member gets the tag {@link #MEMBER_TAG}.
+     *
+     * @param level  the level
+     * @param spawn  the spawn position of the patrol, on the surface
+     * @param index  the index of the member in the patrol: it sets the position near the spawn position
+     * @param target the target of the patrol
+     * @param setup  changes the member before it joins the level, for example its UUID
+     * @return the member, or empty if it did not spawn
+     */
+    static Optional<PatrollingMonster> spawnMember(ServerLevel level, BlockPos spawn, int index, BlockPos target,
+            Consumer<Pillager> setup) {
+        Pillager member = EntityType.PILLAGER.create(level);
+        if (member == null) {
+            return Optional.empty();
+        }
+        BlockPos pos = surface(level, spawn.offset(index % 3 - 1, 0, index / 3)).orElse(spawn);
+        if (index == 0) {
+            member.setPatrolLeader(true);
+        }
+        member.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, level.random.nextFloat() * 360.0F, 0.0F);
+        EventHooks.finalizeMobSpawn(member, level, level.getCurrentDifficultyAt(pos), MobSpawnType.PATROL, null);
+        member.setPatrolTarget(target);
+        member.addTag(MEMBER_TAG);
+        setup.accept(member);
+        return level.addFreshEntity(member) ? Optional.of(member) : Optional.empty();
     }
 
     /** A player kills an illager in a pillager territory: the reputation with the pillagers goes down. */

@@ -394,6 +394,7 @@
   "folkhold_world.configuration.pillagerPatrolCooldownSeconds": "Time between two patrols (s)",
   "folkhold_world.configuration.pillagerPatrolSize": "Pillagers in a patrol",
   "folkhold_world.configuration.pillagerPatrolsPerCamp": "Patrols of each camp",
+  "folkhold_world.configuration.pillagerPatrolRespawnMinutes": "Minutes before a new patrol",
   "folkhold_world.configuration.pillagerSwornEnemyExtra": "More pillagers for a sworn enemy",
   "folkhold_world.configuration.pillagerSpawnDistance": "Distance from the player to the patrol spawn",
   "folkhold_world.configuration.pillagerKillReputation": "Reputation for a kill of an illager",
