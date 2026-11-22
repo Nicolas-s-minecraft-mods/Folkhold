@@ -1344,7 +1344,7 @@ A quest has a giver, a success condition that the mod checks on the state of the
 
 ### Delivery
 
-- A delivery asks for an item that the village needs (stock below half of its target), at most 32 items. The needs with the most value come first. A village does not offer two deliveries of the same item.
+- A delivery asks for an item that the village needs (stock below half of its target), at most 32 items. The needs with the most value come first. A village does not offer two deliveries of the same item. The value of a need is its missing quantity × its local price. Thus a cheap input (wheat, sand) comes after the inputs with more value of the same village (raw iron, coal), and the share of one type (see "Types of the board") can leave it out until the stock has the other inputs (GameTest `QuestGameTests.deliveriesAskForTheNeedsWithTheMostValueFirst`).
 - The reward is the local price of the items × 1.5 in emeralds, and +20 reputation.
 - The player gives all the items with the "Deliver" button of the quest screen of the village. The items go into the stock of the village.
 - **Offers**: at each cycle, a village makes new offers. The number of offers comes from its level. An offer expires after a delay.
