@@ -38,6 +38,7 @@ import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.Handymen;
+import io.github.nicolasgoyon.folkhold.world.village.StoneWall;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBraziers;
 import io.github.nicolasgoyon.folkhold.world.village.VillageClearing;
@@ -158,6 +159,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String LAND_TAG = "LandPieces";
     private static final String LAST_HOME_TAG = "LastHomeTick";
     private static final String GROWN_HOMES_TAG = "GrownHomes";
+    private static final String STONE_WALL_TAG = "StoneWall";
 
     /** Name of the village, or null before the village has a faction. */
     @Nullable
@@ -208,6 +210,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
      * home, at the origin and with the turn of its piece of the structure.
      */
     private final List<VillageReference.Piece> grownHomes = new ArrayList<>();
+    /** The parts of the first wall in stone (see {@link StoneWall}). */
+    private final StoneWall.State stoneWall = new StoneWall.State();
     /** The game time of the start of the last new home of the growth, or -1 with no such home. */
     private long lastHomeTick = -1;
     /** The fields and the mills that the builders of the village started outside the palisade (see {@link VillageLand}). */
@@ -1075,7 +1079,22 @@ public class VillageHeartBlockEntity extends BlockEntity {
             repairReferenceSearched = true;
             repairReference = VillageReference.find(serverLevel, worldPosition).orElse(null);
         }
-        return Optional.ofNullable(repairReference).map(reference -> reference.withReplaced(grownHomes));
+        return Optional.ofNullable(repairReference)
+                .map(reference -> stoneWall.apply(reference.withReplaced(grownHomes)));
+    }
+
+    /**
+     * The stone wall of the village: the parts of its first wall that its builders changed into stone (see
+     * {@link StoneWall}). The reference of the repairs has these parts (see {@link #repairReference}).
+     */
+    public StoneWall.State stoneWall() {
+        return stoneWall;
+    }
+
+    /** The parts of the stone wall changed: the zones of the wall come again from the reference. */
+    public void onStoneWallChanged() {
+        wallZones = null;
+        setChanged();
     }
 
     /**
@@ -1598,7 +1617,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
             long repairTicks = WorldConfig.CONSTRUCTION_REPAIR_CHECK_SECONDS.get() * 20L;
             if (heart.alertState == AlertState.CALM && !heart.rescues.isActive() && time % repairTicks < CHECK_INTERVAL
                     && VillageRepairs.check(serverLevel, heart).isEmpty()
-                    && VillageGrowth.check(serverLevel, heart).isEmpty()) {
+                    && VillageGrowth.check(serverLevel, heart).isEmpty()
+                    && StoneWall.check(serverLevel, heart).isEmpty()) {
                 VillageLand.check(serverLevel, heart);
             }
         }
@@ -1681,6 +1701,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (lastHomeTick >= 0) {
             tag.putLong(LAST_HOME_TAG, lastHomeTick);
         }
+        if (!stoneWall.isEmpty()) {
+            tag.put(STONE_WALL_TAG, stoneWall.save());
+        }
         if (!grownHomes.isEmpty()) {
             tag.put(GROWN_HOMES_TAG, VillageLand.save(grownHomes));
         }
@@ -1724,5 +1747,6 @@ public class VillageHeartBlockEntity extends BlockEntity {
         lastHomeTick = tag.contains(LAST_HOME_TAG, Tag.TAG_LONG) ? tag.getLong(LAST_HOME_TAG) : -1;
         grownHomes.clear();
         grownHomes.addAll(VillageLand.load(tag.getList(GROWN_HOMES_TAG, Tag.TAG_COMPOUND)));
+        stoneWall.load(registries.lookupOrThrow(Registries.BLOCK), tag.getCompound(STONE_WALL_TAG));
     }
 }
