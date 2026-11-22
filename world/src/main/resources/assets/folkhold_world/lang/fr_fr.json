@@ -28,6 +28,7 @@
   "folkhold_world.configuration.calmDelaySeconds": "Délai avant le retour au calme (secondes)",
   "folkhold_world.configuration.builders": "Bâtisseurs par village",
   "folkhold_world.configuration.handymen": "Hommes à tout faire par village",
+  "folkhold_world.configuration.heartShift": "Plus grand déplacement du cœur du village",
   "folkhold_world.configuration.garrison": "Garnison",
   "folkhold_world.configuration.garrisonRefillDelaySeconds": "Délai de remplacement (secondes)",
   "folkhold_world.configuration.garrisonActivationRadius": "Rayon d'activation",

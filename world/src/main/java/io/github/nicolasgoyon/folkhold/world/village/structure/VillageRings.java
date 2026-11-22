@@ -68,9 +68,10 @@ public final class VillageRings {
     /**
      * The search of the near villages goes this number of chunks from the start chunk, on each axis: 2 times the
      * largest outer box of a capital (the largest core radius of a plan, 3 rings of the largest band and the margin
-     * of the outer ring: about 240 blocks), and one chunk more.
+     * of the outer ring: about 240 blocks), one chunk more, and 2 times the largest shift of the heart from the start
+     * (see {@link HeartSearch#MAX_SHIFT}).
      */
-    public static final int NEIGHBOR_RANGE = 31;
+    public static final int NEIGHBOR_RANGE = 31 + Math.ceilDiv(2 * HeartSearch.MAX_SHIFT, 16);
     /**
      * A vanilla village stays in this number of blocks around the middle of its start chunk: its range of 80 blocks
      * around its start piece, the distance of the start piece from the middle of the chunk (18 blocks) and its terrain
@@ -210,7 +211,7 @@ public final class VillageRings {
      */
     public static Optional<Planned> planOfLevel(FortifiedVillageStructure village, Structure.GenerationContext context,
             int level, Predicate<FortifiedVillageStructure.Variant> variant) {
-        return village.generatedStart(context).filter(site -> variant.test(site.variant())).map(site -> {
+        return village.generatedStart(context, level).filter(site -> variant.test(site.variant())).map(site -> {
             FortifiedVillageStructure.Layout layout = village.layout(context, site, level);
             if (layout.rings().isEmpty()) {
                 return new Planned(layout, Map.of());
