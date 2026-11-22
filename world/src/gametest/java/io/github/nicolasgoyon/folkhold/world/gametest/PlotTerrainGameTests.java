@@ -80,7 +80,9 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * the maximum population). The measure reads the box of each building on a grid of {@link #FINE_STEP} blocks, finer
  * than the grid of the check of the plots. A building of a plot with no role over lava or deep water on this grid is
  * in the log: the grid of the check does not see it. The buildings of the bank and of the first jobs keep their plot
- * on bad terrain, and the log counts them.
+ * on bad terrain, and the log counts them. A cliff house stands against a rock face (see {@link PlanGround#cliff}): a
+ * steep slope under its box is the face, and it is not a problem. The rule of the cliff plots checks the lava and the
+ * deep water of its plot.
  */
 @GameTestHolder(FolkholdWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -905,6 +907,11 @@ public final class PlotTerrainGameTests {
                     if (result != PlotTerrain.Result.GOOD) {
                         roleBuildings.merge(result, 1, Integer::sum);
                     }
+                    continue;
+                }
+                // A cliff house stands against a rock face (see PlanGround#cliff): the steep slope is the face.
+                boolean cliff = plot.map(VillagePlan.Plot::onCliff).orElse(false);
+                if (cliff && result == PlotTerrain.Result.STEEP) {
                     continue;
                 }
                 if (result != PlotTerrain.Result.GOOD) {
