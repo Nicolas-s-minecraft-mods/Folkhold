@@ -3,6 +3,6 @@
   "need": "job_inputs",
   "reward": {
     "experience": 5,
-    "special": {"chance": 0.25, "goods_share": 0.5, "experience": 5}
+    "special": {"chance": 0.25, "goods_share": 0.5, "experience": 10}
   }
 }

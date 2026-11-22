@@ -62,7 +62,7 @@ public record RewardRule(int experience, List<RewardItem> items, double goodsSha
         if (value > 0.0) {
             Optional<Map.Entry<String, Integer>> best = goods.entrySet().stream()
                     .filter(entry -> entry.getValue() > 0 && price.applyAsDouble(entry.getKey()) > 0.0)
-                    .min(Comparator.comparing((Map.Entry<String, Integer> entry) -> -entry.getValue())
+                    .min(Comparator.comparingInt((Map.Entry<String, Integer> entry) -> -entry.getValue())
                             .thenComparing(Map.Entry::getKey));
             if (best.isPresent()) {
                 double unit = price.applyAsDouble(best.get().getKey());

@@ -11,6 +11,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.construction.StepType;
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Target;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
@@ -23,6 +24,7 @@ import io.github.nicolasgoyon.folkhold.world.construction.BuilderSites;
 import io.github.nicolasgoyon.folkhold.world.construction.ConstructionRun;
 import io.github.nicolasgoyon.folkhold.world.construction.ConstructionTargets;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
+import io.github.nicolasgoyon.folkhold.world.quest.QuestDefinitions;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.RepairEquivalents;
@@ -576,9 +578,16 @@ public final class VillageRepairGameTests {
                 .thenExecute(() -> {
                     helper.assertTrue(askedAt[0] < SharedConstants.TICKS_PER_MINUTE,
                             "The repair must not wait for the common materials: tick " + askedAt[0]);
+                    // A village quest for a repair gives emeralds and the experience of the definition of its need.
+                    int experience = QuestDefinitions.matching(QuestNeed.SITE_MATERIALS, settlement.level()).get(0)
+                            .rewards().base().experience();
+                    helper.assertTrue(experience > 0, "The definition of the site materials must give experience");
                     for (Quest offer : offers) {
                         helper.assertTrue(offer.kind() == QuestKind.DELIVERY && offer.count() > 0
                                 && offer.state() == QuestState.OFFERED, "A delivery of a missing material: " + offer);
+                        helper.assertTrue(offer.rewardEmeralds() >= 1 && offer.rewardExperience() == experience,
+                                "A repair quest must give emeralds and " + experience + " experience: "
+                                        + offer.rewardEmeralds() + ", " + offer.rewardExperience());
                         // The players deliver the materials: they go into the stock of the village.
                         settlement.economy().stock().set(offer.target(), STOCK);
                     }
