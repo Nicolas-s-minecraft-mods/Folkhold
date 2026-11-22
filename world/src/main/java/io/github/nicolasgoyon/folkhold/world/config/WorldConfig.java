@@ -24,6 +24,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue PATROL_RADIUS;
     public static final ModConfigSpec.IntValue CHASE_RADIUS;
     public static final ModConfigSpec.IntValue ALERT_RADIUS;
+    public static final ModConfigSpec.IntValue MONSTER_ALERT_DISTANCE;
     public static final ModConfigSpec.BooleanValue MONSTERS_ATTACK_GUARDS;
 
     public static final ModConfigSpec.IntValue VILLAGE_RADIUS;
@@ -241,6 +242,13 @@ public final class WorldConfig {
                 .comment("Radius in blocks in which an attack on one unit alerts the other units.")
                 .translation(KEY_PREFIX + "alertRadius")
                 .defineInRange("alertRadius", 24, 4, 128);
+        MONSTER_ALERT_DISTANCE = builder
+                .comment("Distance in blocks from a villager. A monster that a unit fights starts the alert of the",
+                        "village (bells, villagers that hide) only when a villager is at this distance or nearer. A",
+                        "raider (pillager, vindicator, witch...), a player and a unit always start the alert. With 0,",
+                        "each monster that a unit fights starts the alert.")
+                .translation(KEY_PREFIX + "monsterAlertDistance")
+                .defineInRange("monsterAlertDistance", 16, 0, 128);
         MONSTERS_ATTACK_GUARDS = builder
                 .comment("Hostile monsters attack guards first, as they attack iron golems.",
                         "The entity types in the tag folkhold_world:ignores_guards never do.",
