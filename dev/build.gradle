@@ -4,6 +4,7 @@
 //   ./gradlew :dev:runServer                     dedicated server (port 25565)
 //   ./gradlew :dev:runServer -PdebugPort=5005    same, with a Java debugger on port 5005
 //   ./gradlew :dev:runGameTestServer             runs all GameTests in a new world (folder run-gametest), then stops
+//   ./gradlew :dev:runGameTestServer -PgametestShard=2/4   runs the GameTests of the shard 2 of 4
 //   ./gradlew :dev:runClient                     client (needs a display, not available in the container)
 
 plugins {
@@ -27,6 +28,9 @@ dependencies {
 
 def gameTestNamespaces = modProjects.collect { project(it).property('mod_id') }.join(',')
 def debugPort = providers.gradleProperty('debugPort').getOrNull()
+// The shard of the GameTests, for example -PgametestShard=2/4 (see GameTestShards in the GameTests of core). With no
+// value, the GameTest server runs all the tests.
+def gametestShard = providers.gradleProperty('gametestShard').getOrNull()
 
 neoForge {
     version = neo_version
@@ -46,6 +50,11 @@ neoForge {
         }
         gameTestServer {
             type = 'gameTestServer'
+            // The names of all the tests and of the tests of the shard, for the check of the shards of the CI.
+            systemProperty 'folkhold.gametest.shardReport', project.file('run-gametest/shard-report').absolutePath
+            if (gametestShard != null) {
+                systemProperty 'folkhold.gametest.shard', gametestShard
+            }
         }
 
         configureEach {
@@ -90,5 +99,6 @@ tasks.named('runGameTestServer') {
     doFirst {
         gameTestWorld.deleteDir()
         gameTestConfig.deleteDir()
+        project.file('run-gametest/shard-report').deleteDir()
     }
 }
