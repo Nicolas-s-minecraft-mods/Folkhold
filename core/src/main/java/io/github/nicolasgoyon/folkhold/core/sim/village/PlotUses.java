@@ -18,7 +18,9 @@ import java.util.Objects;
  *       or a home plot that is not wide for a building that fits the home of the style. The plan gives the good
  *       plots nearest to the middle first, then the homes on their foundation (see {@link VillagePlan}).</li>
  *   <li>The job posts take the plot of the first food job, then the plots of the first trader jobs, then the free home
- *       plots that are not wide, in the order of the plan. The post 0 is the first food job.</li>
+ *       plots that are not wide and not on a cliff, in the order of the plan. The post 0 is the first food job.</li>
+ *   <li>A cliff plot holds no building of the level and no job post: it holds a cliff house (see
+ *       {@link VillagePlan.Plot#cliff()}).</li>
  *   <li>The other plots hold a home, except the spare plots and a wide plot of the market ({@link
  *       VillageBuildings#MARKET}) with no market: they stay free.</li>
  * </ul>
@@ -124,7 +126,8 @@ public final class PlotUses {
         for (Building building : buildings) {
             int plot = -1;
             for (int i = 0; i < plots.size() && plot < 0; i++) {
-                if (uses[i] == null && plots.get(i).role() == PlotRole.HOME && holds(plots.get(i), building)) {
+                if (uses[i] == null && plots.get(i).role() == PlotRole.HOME && !plots.get(i).onCliff()
+                        && holds(plots.get(i), building)) {
                     plot = i;
                 }
             }
@@ -137,7 +140,8 @@ public final class PlotUses {
         int placed = 0;
         for (PlotRole role : List.of(PlotRole.JOBS_FOOD, PlotRole.JOBS_START, PlotRole.HOME)) {
             for (int i = 0; i < plots.size() && placed < posts; i++) {
-                if (uses[i] == null && plots.get(i).role() == role && !plots.get(i).wide()) {
+                if (uses[i] == null && plots.get(i).role() == role && !plots.get(i).wide()
+                        && !plots.get(i).onCliff()) {
                     uses[i] = new Use(Type.POST, "", placed++);
                 }
             }

@@ -36,6 +36,8 @@ import java.util.Set;
  *       the plaza, or near a box before it (see {@link VillagePlan.Ground#lineFits}). Thus the line of the first wall
  *       stays off the high ground, also where the plan of the core is not a rectangle. The line can go down: the cliff
  *       side of the wall uses a drop as a wall (see {@link CliffSide}).</li>
+ *   <li>Cliff plot: a plot with its front at the level of its street and a rock face behind it (see
+ *       {@link #cliff}). A cliff house stands against the face.</li>
  *   <li>High ground of the first wall: a block of the world is high when its grid point is more than the rise above
  *       the plaza (see {@link #high}). The free outline of the first wall cuts out the high ground.</li>
  *   <li>Climb of a line: the grid points at {@link #LINE} blocks or less from a line, and the sum of the blocks of
@@ -67,6 +69,17 @@ public final class PlanGround implements VillagePlan.Ground {
     public static final int LINE = 2;
     /** The distance in blocks between the boxes of the plan and the line of the first wall, at most, with no margin. */
     public static final int OUTLINE_SLACK = WallOutline.CELL + LINE;
+    /**
+     * The lowest face of a cliff plot above its street, in blocks: the face of a plot that the level rule refuses
+     * ({@link #MAX_PLOT_RISE} + 1).
+     */
+    public static final int CLIFF_FACE = MAX_PLOT_RISE + 1;
+    /** The lowest face above the street of a cliff plot with a house of {@link #HIGH_CLIFF_STOREYS} storeys. */
+    public static final int HIGH_CLIFF_FACE = 10;
+    /** The storeys of the cliff house of a cliff plot with a face lower than {@link #HIGH_CLIFF_FACE}. */
+    public static final int CLIFF_STOREYS = 2;
+    /** The storeys of the cliff house of a cliff plot with a face of {@link #HIGH_CLIFF_FACE} blocks or more. */
+    public static final int HIGH_CLIFF_STOREYS = 3;
 
     private final PlotTerrain.Terrain terrain;
     private final int centerX;
@@ -205,6 +218,69 @@ public final class PlanGround implements VillagePlan.Ground {
                 covered.add(key(x, z));
             }
         }
+    }
+
+    /**
+     * The storeys of the cliff house of a cliff plot, or 0. The front of the plot is the side of its connector. The plot
+     * is a cliff plot when:
+     *
+     * <ul>
+     *   <li>each grid point of the plot in front of its last {@link #STEP} blocks (at least the first {@link #STEP}
+     *       blocks) is {@link #MAX_PLOT_RISE} blocks or less above or below the street at the connector, and is a point
+     *       of the region of the core (no region test in a band);</li>
+     *   <li>no grid point of the plot is more than {@link #MAX_PLOT_RISE} blocks below the street: no drop under the
+     *       house;</li>
+     *   <li>the face, the highest grid point of the last {@link #STEP} blocks of the plot or up to {@link #STEP}
+     *       blocks behind it, is {@link #CLIFF_FACE} blocks or more above the street;</li>
+     *   <li>no grid point of the plot and of the row behind it has lava or water deeper than
+     *       {@link VillageSite#MAX_SHALLOW_DEPTH} blocks.</li>
+     * </ul>
+     *
+     * <p>A face of {@link #HIGH_CLIFF_FACE} blocks or more gives {@link #HIGH_CLIFF_STOREYS} storeys, else
+     * {@link #CLIFF_STOREYS} storeys.
+     */
+    @Override
+    public int cliff(Box area, int x, int z, int rise) {
+        int[] connector = world(x, z);
+        Box world = world(area);
+        int dx = connector[0] < world.minX() ? 1 : connector[0] > world.maxX() ? -1 : 0;
+        int dz = dx != 0 ? 0 : connector[1] < world.minZ() ? 1 : connector[1] > world.maxZ() ? -1 : 0;
+        if (dx == 0 && dz == 0) {
+            return 0;
+        }
+        int street = column(connector[0], connector[1]).surface();
+        int plotDepth = dx != 0 ? world.maxX() - world.minX() + 1 : world.maxZ() - world.minZ() + 1;
+        int front = Math.max(STEP, plotDepth - STEP);
+        Box reach = Box.of(dx < 0 ? world.minX() - STEP : world.minX(), dz < 0 ? world.minZ() - STEP : world.minZ(),
+                dx > 0 ? world.maxX() + STEP : world.maxX(), dz > 0 ? world.maxZ() + STEP : world.maxZ());
+        Set<Long> flood = core ? region(rise) : Set.of();
+        int face = Integer.MIN_VALUE;
+        for (int px : points(reach.minX(), reach.maxX())) {
+            for (int pz : points(reach.minZ(), reach.maxZ())) {
+                PlotTerrain.Column column = column(px, pz);
+                if (column.lava() || column.depth() > VillageSite.MAX_SHALLOW_DEPTH) {
+                    return 0;
+                }
+                int height = column.surface() - street;
+                int depth = dx > 0 ? px - world.minX() : dx < 0 ? world.maxX() - px
+                        : dz > 0 ? pz - world.minZ() : world.maxZ() - pz;
+                boolean inPlot = px >= world.minX() && px <= world.maxX() && pz >= world.minZ() && pz <= world.maxZ();
+                if (inPlot && height < -MAX_PLOT_RISE) {
+                    return 0;
+                }
+                if (depth < front) {
+                    if (inPlot && (Math.abs(height) > MAX_PLOT_RISE || (core && !flood.contains(key(px, pz))))) {
+                        return 0;
+                    }
+                } else {
+                    face = Math.max(face, height);
+                }
+            }
+        }
+        if (face < CLIFF_FACE) {
+            return 0;
+        }
+        return face >= HIGH_CLIFF_FACE ? HIGH_CLIFF_STOREYS : CLIFF_STOREYS;
     }
 
     /** The distance from a box of the plan to the farthest grid point of the line of the first wall around it. */

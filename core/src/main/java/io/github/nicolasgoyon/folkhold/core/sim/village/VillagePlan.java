@@ -38,6 +38,9 @@ import java.util.function.Predicate;
  *       </li>
  *   <li>Each plot that is not wide gets a random setback from the street and a random shift along the street (see
  *       {@link Plot#setback()}), when its area stays free: the homes are not in a straight line.</li>
+ *   <li>A plot of a piece that obeys the rules of the ground, with a rock face behind it, is a cliff plot (see
+ *       {@link Ground#cliff}): a good plot with no setback and no shift, and the storeys of its cliff house. A cliff
+ *       plot takes the area of the home of the style, and it obeys the outline rule.</li>
  *   <li>The homes take the plots with a role, the wide plots and the good plots nearest to the middle (a plot of a
  *       side street counts at a part of its distance). When the good
  *       plots do not give the homes that the village needs, the missing homes take the bad plots that hold a home on
@@ -94,6 +97,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             public void cover(Box box, Set<Long> covered) {
                 // No point of the ground.
             }
+
+            @Override
+            public int cliff(Box area, int x, int z, int rise) {
+                return 0;
+            }
         };
 
         /**
@@ -143,6 +151,18 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
          * @param covered the covered points
          */
         void cover(Box box, Set<Long> covered);
+
+        /**
+         * The storeys of the cliff house of a cliff plot: a plot with its front at the level of its street and a rock
+         * face behind it (see {@link PlanGround#cliff}). 0 for a plot that is not a cliff plot.
+         *
+         * @param area the area of the home on the plot, with no setback and no shift
+         * @param x    the block X of the plot connector, on the edge of the street
+         * @param z    the block Z of the plot connector
+         * @param rise the largest difference of the ground with the plaza (see {@link Rules#rise()})
+         * @return the storeys of the cliff house, or 0
+         */
+        int cliff(Box area, int x, int z, int rise);
     }
 
     /**
@@ -352,12 +372,19 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      *                {@link #MAX_SETBACK}
      * @param shift   the blocks from the middle of the plot to the middle of the home along the street, in the
      *                direction of the piece, from -{@link #MAX_SHIFT} to {@link #MAX_SHIFT}
+     * @param cliff   the storeys of the cliff house of a cliff plot (see {@link Ground#cliff}), or 0. A cliff plot
+     *                holds a cliff house only: no wide home, no building of the level and no job post
      */
     public record Plot(int x, int z, Dir facing, Box area, List<Home> homes, PlotRole role, boolean good,
-            boolean spare, int piece, int setback, int shift) {
+            boolean spare, int piece, int setback, int shift, int cliff) {
         /** True when a wide home fits the plot. */
         public boolean wide() {
             return homes.size() > 1;
+        }
+
+        /** True for a cliff plot: a plot with a rock face behind it (see {@link Ground#cliff}). */
+        public boolean onCliff() {
+            return cliff > 0;
         }
     }
 
@@ -677,7 +704,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
 
     /** A plot before the choice of the homes. */
     private record Slot(int x, int z, Dir facing, int piece, int along, boolean east, Box area, PlotRole role,
-            boolean good, boolean foundation, int setback, int shift) {
+            boolean good, boolean foundation, int setback, int shift, int cliff) {
         /** True for a plot of a building of the first pieces: it is never wide and never spare. */
         boolean reserved() {
             return role != PlotRole.HOME;
@@ -1011,6 +1038,20 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     int setback = stagger ? random.nextInt(MAX_SETBACK + 1) : 0;
                     int shift = stagger ? (east ? 1 : -1) * random.nextInt(MAX_SHIFT + 1) : 0;
                     int[] connector = at(start, east ? StreetStyle.WIDTH - 1 : 0, along);
+                    Dir side = start.dir().counterclockwise();
+                    Dir facing = east ? side : side.opposite();
+                    PlotRole role = axis && tail.parent() == -1 ? role(start.dir(), row, east) : PlotRole.HOME;
+                    // A plot with a rock face behind it is a cliff plot: a cliff house stands against the face, with
+                    // no setback and no shift.
+                    Box flat = area(start, along, east, style.home());
+                    int cliff = rulesApply && grounded() && role == PlotRole.HOME
+                            ? ground.cliff(flat, connector[0], connector[1], rules.rise()) : 0;
+                    if (cliff > 0 && free(flat, false) && outlineOk(flat)) {
+                        grow(flat);
+                        slots.add(new Slot(connector[0], connector[1], facing, index, along, east, flat, role, true,
+                                false, 0, 0, cliff));
+                        continue;
+                    }
                     Box area = area(start, along, east, style.home(), setback, shift);
                     if (!plotFits(area, rulesApply)) {
                         setback = 0;
@@ -1019,16 +1060,12 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     }
                     if (plotFits(area, rulesApply)) {
                         grow(area);
-                        Dir side = start.dir().counterclockwise();
-                        Dir facing = east ? side : side.opposite();
-                        PlotRole role = axis && tail.parent() == -1 ? role(start.dir(), row, east)
-                                : PlotRole.HOME;
                         // A plot far above or below its street is a bad plot: it can be a spare plot, never a home.
                         boolean level = !rulesApply || !rules.level()
                                 || ground.level(area, connector[0], connector[1]);
                         boolean good = level && terrain.test(area);
                         slots.add(new Slot(connector[0], connector[1], facing, index, along, east, area, role, good,
-                                !good && level && foundation.test(area), setback, shift));
+                                !good && level && foundation.test(area), setback, shift, 0));
                     }
                 }
             }
@@ -1093,7 +1130,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     if (marked >= wide.count()) {
                         break;
                     }
-                    if (!order.contains(slot) || !slot.good() || slot.reserved() || wideOf.containsKey(slot)) {
+                    if (!order.contains(slot) || !slot.good() || slot.reserved() || slot.cliff() > 0
+                            || wideOf.containsKey(slot)) {
                         continue;
                     }
                     Box area = wideArea(slot, wide);
@@ -1151,7 +1189,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             boolean plain = wide == null;
             return new Plot(slot.x(), slot.z(), slot.facing(), areas.getOrDefault(slot, slot.area()), homes,
                     slot.role(), slot.good(), spare, slot.piece(), plain ? slot.setback() : 0,
-                    plain ? slot.shift() : 0);
+                    plain ? slot.shift() : 0, slot.cliff());
         }
 
         /**
