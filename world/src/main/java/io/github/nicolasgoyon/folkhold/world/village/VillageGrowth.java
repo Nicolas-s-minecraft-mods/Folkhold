@@ -105,6 +105,15 @@ public final class VillageGrowth {
     public static final String MILLS = "mills";
     /** The name of the piece of a house-workshop starts with this text. */
     private static final String JOB_PREFIX = "job_";
+    /** The name of the piece of a step of a home ends with this text and the step. */
+    public static final String STEP_SUFFIX = "_step";
+    /**
+     * The steps of the homes that grow in place, after the step 1 piece: the piece of a step has a new storey and
+     * {@code 2 * step} beds. The piece {@code job_<id>_step<step>} is in the pool {@code jobs_step<step>} of the
+     * variant.
+     */
+    public static final List<Integer> HOME_STEPS = List.of(2, 3);
+
     /** The number of jobs that one check of the growth tries for a house-workshop. */
     public static final int WORKSHOP_JOBS = 3;
 
@@ -131,17 +140,31 @@ public final class VillageGrowth {
     private static volatile SurplusSource surplus = SurplusSource.NONE;
 
     /**
-     * The pools of the pieces that the growth builds in a variant: the house-workshops, the buildings of the levels,
-     * the market, and the fields and the mills outside the palisade. The pools are in the folder of the pool of the
-     * homes of the variant.
+     * The pools of the pieces that the growth builds in a variant: the house-workshops, the pieces of the steps of the
+     * homes that grow in place, the buildings of the levels, the market, and the fields and the mills outside the
+     * palisade. The pools are in the folder of the pool of the homes of the variant.
      *
      * @param homes the id of the pool of the homes of the variant
      * @return the ids of the pools
      */
     public static List<ResourceLocation> pools(ResourceLocation homes) {
-        return List.of(VillagePlots.sibling(homes, VillagePlots.JOBS), VillagePlots.sibling(homes, HOUSES),
-                VillagePlots.sibling(homes, MARKET), VillagePlots.sibling(homes, FIELDS),
-                VillagePlots.sibling(homes, MILLS));
+        List<ResourceLocation> pools = new ArrayList<>(List.of(VillagePlots.sibling(homes, VillagePlots.JOBS)));
+        HOME_STEPS.forEach(step -> pools.add(stepPool(homes, step)));
+        pools.addAll(List.of(VillagePlots.sibling(homes, HOUSES), VillagePlots.sibling(homes, MARKET),
+                VillagePlots.sibling(homes, FIELDS), VillagePlots.sibling(homes, MILLS)));
+        return List.copyOf(pools);
+    }
+
+    /**
+     * The pool of the pieces of a step of the homes that grow in place, in the folder of the pool of the homes of a
+     * variant. A variant with no home that grows in place has an empty pool.
+     *
+     * @param homes the id of the pool of the homes of the variant
+     * @param step  the step, from {@link #HOME_STEPS}
+     * @return the id of the pool {@code jobs_step<step>}
+     */
+    public static ResourceLocation stepPool(ResourceLocation homes, int step) {
+        return VillagePlots.sibling(homes, VillagePlots.JOBS + STEP_SUFFIX + step);
     }
 
     /**

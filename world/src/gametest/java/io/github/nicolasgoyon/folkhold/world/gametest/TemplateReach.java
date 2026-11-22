@@ -156,7 +156,8 @@ final class TemplateReach {
                 .walk();
     }
 
-    private static boolean isWorkBlock(BlockState state) {
+    /** True for a work block of the reach check: see {@link #WORK_BLOCKS}. */
+    static boolean isWorkBlock(BlockState state) {
         return WORK_BLOCKS.contains(state.getBlock()) || state.getBlock() instanceof AbstractCauldronBlock
                 || state.getBlock() instanceof AnvilBlock;
     }
