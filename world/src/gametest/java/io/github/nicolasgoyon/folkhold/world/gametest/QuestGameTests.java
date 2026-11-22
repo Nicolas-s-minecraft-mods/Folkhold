@@ -104,6 +104,39 @@ public final class QuestGameTests {
         helper.succeed();
     }
 
+    /**
+     * The deliveries of a village ask for its needs with the most value first (quantity × local price). A village of
+     * the level 20 with a baker and a smelter and no stock has 3 deliveries (the share of one type of its 5 offers):
+     * raw iron, coal and raw copper. Wheat is the cheapest input with sand: it comes when the stock has the inputs with
+     * more value. Thus a village with a baker asks for wheat when wheat is its need with the most value.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_value_order")
+    public static void deliveriesAskForTheNeedsWithTheMostValueFirst(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        long now = helper.getLevel().getGameTime();
+        Settlement village = emptyVillage(server, 20_000, "folkhold_world:baker");
+        village.setProgress(20, 0);
+        village.economy().setJobs(List.of("folkhold_world:baker", "folkhold_world:smelter"));
+        List<String> first;
+        List<String> covered;
+        try {
+            first = QuestSystem.offerDeliveries(server, village, now).stream().map(Quest::target).toList();
+            clear(server, village);
+            village.setState(SettlementState.ACTIVE);
+            for (String item : List.of("minecraft:raw_iron", "minecraft:coal", "minecraft:raw_copper")) {
+                village.economy().stock().set(item, 500);
+            }
+            covered = QuestSystem.offerDeliveries(server, village, now).stream().map(Quest::target).toList();
+        } finally {
+            clear(server, village);
+        }
+        helper.assertTrue(first.equals(List.of("minecraft:raw_iron", "minecraft:coal", "minecraft:raw_copper")),
+                "The 3 deliveries must be the needs with the most value: " + first);
+        helper.assertTrue(covered.equals(List.of("minecraft:wheat", "minecraft:sand")),
+                "With the valuable inputs in stock, the village must ask for wheat first: " + covered);
+        helper.succeed();
+    }
+
     /** The saved data keeps the offers and the accepted quests. */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_save")
     public static void questDataKeepsTheQuests(GameTestHelper helper) {
