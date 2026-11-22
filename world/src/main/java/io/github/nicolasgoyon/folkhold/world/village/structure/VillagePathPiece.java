@@ -305,7 +305,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         }
         BlockState stair = stairs.hasProperty(StairBlock.FACING) ? stairs.setValue(StairBlock.FACING, facing)
                 : stairs;
-        level.set(pos.set(x, top, z).immutable(), stair);
+        level.set(pos.set(x, top + 1, z).immutable(), stair);
     }
 
     /**
