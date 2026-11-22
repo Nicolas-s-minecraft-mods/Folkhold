@@ -582,8 +582,8 @@ public final class QuestBoards {
         MutableComponent info = Component.translatable("quest.folkhold_world.active.info",
                 villageName(server, quest.settlementId()), quest.rewardEmeralds());
         if (quest.failureReputation() > 0) {
-            info = Component.translatable("quest.folkhold_world.reward.more", info,
-                    Component.translatable("quest.folkhold_world.failure", quest.failureReputation()));
+            info.append(UiStrings.separator())
+                    .append(Component.translatable("quest.folkhold_world.failure", quest.failureReputation()));
         }
         int action = QuestBoardPayload.ACTION_NONE;
         Optional<Component> blocked = Optional.empty();

@@ -32,6 +32,9 @@ the world, section `quests`). The files give the reward rules:
 | `folkhold_world:site_material_delivery` | 10 experience points | none |
 | `folkhold_world:caravan_escort` | 20 experience points | none |
 
+The delivery of the inputs of the jobs also has start items: an iron pickaxe for 50 % of the deliveries of ores,
+coal, redstone, cobblestone and flint.
+
 ## Format
 
 ```json
@@ -47,7 +50,9 @@ the world, section `quests`). The files give the reward rules:
     "goods_share": 0.0,
     "special": {"chance": 0.25, "factor": 1.5, "experience": 10, "items": [], "goods_share": 0.5}
   },
-  "offer": {"offer_minutes": 20, "duration_minutes": 40, "max_count": 32}
+  "offer": {"offer_minutes": 20, "duration_minutes": 40, "max_count": 32},
+  "start_items": {"chance": 0.5, "items": [{"item": "minecraft:iron_pickaxe"}], "targets": ["minecraft:raw_iron"]},
+  "penalty": {"reputation": 10, "start_items_factor": 2.0}
 }
 ```
 
@@ -67,6 +72,11 @@ the world, section `quests`). The files give the reward rules:
 | `reward.special.chance` | no | 0 | The chance (0 to 1) that a new quest gets the special reward in the place of the rule of the type. |
 | `reward.special.factor` | no | the factor of the definition | The factor of the emerald reward of a special reward. |
 | `reward.special.experience`, `.items`, `.goods_share` | no | 0, none, 0 | The parts of the special reward, as above. |
+| `start_items.items` | no | none | The items that the player gets when the quest starts. Same format as `reward.items`. |
+| `start_items.chance` | no | 1 with items, else 0 | The chance (0 to 1) that a new quest gets the start items. |
+| `start_items.targets` | no | all | The targets (item ids of a delivery) that get the start items. |
+| `penalty.reputation` | no | config | The reputation that the player loses with the faction of the giver when the accepted quest fails. |
+| `penalty.start_items_factor` | no | config | The extra loss for each emerald of the base value of the start items. |
 | `offer.offer_minutes` | no | config | Delivery: the time of the offer, in minutes. An escort offer lasts while the caravan waits. |
 | `offer.duration_minutes` | no | config | Delivery: the time from the acceptance to the deadline. Escort: the minimum time of the escort. In minutes. |
 | `offer.max_count` | no | config | Delivery: the maximum quantity of items. |
@@ -93,9 +103,18 @@ the world, section `quests`). The files give the reward rules:
 - The items of `reward.items` do not come from the stock: the reward makes them.
 - An item that does not go into the inventory of the player falls at the feet of the player.
 
+## Rules of the failures
+
+- An accepted quest that fails (abandoned, expired or failed) removes reputation with the faction and the village of
+  the giver: `penalty.reputation` (config `failureReputation`, 10), plus the base value of the start items in emeralds
+  × `penalty.start_items_factor` (config `startItemsPenalty`, 2), rounded. The board shows this loss on each offer and
+  on each active quest.
+- The player gets the start items when the quest starts, and keeps them after a success.
+- A quest with start items is only for the friend tier and above. A player has 1 active quest with start items at
+  most (config `maxStartItemQuests`).
+
 ## Limits of this version
 
 - A definition cannot add a new kind or a new need. The kind and the need choose the code that makes the offers.
-- A definition has no texts, no start items and no penalties. These fields are planned. Today they give a warning
-  in the log.
+- A definition has no texts. A field that this version does not know gives a warning in the log.
 - A definition cannot choose the items of a delivery: the need gives them.
