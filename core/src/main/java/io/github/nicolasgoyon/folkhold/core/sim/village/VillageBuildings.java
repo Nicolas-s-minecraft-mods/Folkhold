@@ -75,12 +75,12 @@ public final class VillageBuildings {
      * @param level        the level of the village
      * @param counts       the number of buildings of each kind in the village
      * @param scanned      true if the counts come from a scan of the village
-     * @param needsPlaces  true if the village needs places
+     * @param needsHome    true if the village needs a new home (see {@link HomeNeed})
      * @return the steps, in their order. Empty when the village needs nothing
      */
     public static List<Step> steps(List<Requirement> requirements, int level, Map<String, Integer> counts,
-            boolean scanned, boolean needsPlaces) {
-        return steps(requirements, level, counts, scanned, needsPlaces, false);
+            boolean scanned, boolean needsHome) {
+        return steps(requirements, level, counts, scanned, needsHome, false);
     }
 
     /**
@@ -88,13 +88,14 @@ public final class VillageBuildings {
      *
      * <ol>
      *   <li>A house-workshop, when the village has no food post or no post that trades. The village gets its food and
-     *       its trader before all the other buildings, also when it does not need places.</li>
+     *       its trader before all the other buildings, also when it needs no home.</li>
      *   <li>The market, when the level of the village needs one and the village has none. A market takes one plot, and
      *       the plots are few. The market comes first: else the new homes can take all the plots, and the village
      *       never gets its market. A home that waits for the market waits for one construction only.</li>
-     *   <li>A new home, when the village needs places. After a first post step, the village gets no second
-     *       house-workshop in the same check: the first post step tried the same jobs.</li>
-     *   <li>Else, the first missing building of the level, other than the market.</li>
+     *   <li>A new home, when the village needs a home (see {@link HomeNeed}). After a first post step, the village gets
+     *       no second house-workshop in the same check: the first post step tried the same jobs.</li>
+     *   <li>Else, the first missing building of the level, other than the market. A first post step takes the place
+     *       of the home: the building comes after it.</li>
      * </ol>
      *
      * <p>A village with no scan has no counts: its steps are only the home.
@@ -103,12 +104,12 @@ public final class VillageBuildings {
      * @param level         the level of the village
      * @param counts        the number of buildings of each kind in the village
      * @param scanned       true if the counts come from a scan of the village
-     * @param needsPlaces   true if the village needs places
+     * @param needsHome     true if the village needs a new home (see {@link HomeNeed})
      * @param needsFirstPost true if the scanned village has no food post or no post that trades
      * @return the steps, in their order. Empty when the village needs nothing
      */
     public static List<Step> steps(List<Requirement> requirements, int level, Map<String, Integer> counts,
-            boolean scanned, boolean needsPlaces, boolean needsFirstPost) {
+            boolean scanned, boolean needsHome, boolean needsFirstPost) {
         List<Step> steps = new ArrayList<>();
         boolean firstPost = scanned && needsFirstPost;
         if (firstPost) {
@@ -117,10 +118,8 @@ public final class VillageBuildings {
         if (scanned && needsMarket(requirements, level, counts)) {
             steps.add(new Step(StepType.MARKET, MARKET));
         }
-        if (needsPlaces) {
-            if (!firstPost) {
-                steps.add(new Step(StepType.HOME, ""));
-            }
+        if (needsHome && !firstPost) {
+            steps.add(new Step(StepType.HOME, ""));
         } else if (scanned) {
             List<Requirement> others = requirements.stream()
                     .filter(requirement -> !requirement.kind().equals(MARKET))
