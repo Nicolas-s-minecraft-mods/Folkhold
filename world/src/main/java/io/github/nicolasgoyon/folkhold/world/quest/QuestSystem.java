@@ -1,7 +1,9 @@
 package io.github.nicolasgoyon.folkhold.world.quest;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemCatalog;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Prices;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.Recipe;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestGenerator;
@@ -16,14 +18,18 @@ import io.github.nicolasgoyon.folkhold.core.sim.trade.TradeMatcher;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
+import io.github.nicolasgoyon.folkhold.world.economy.ItemIds;
 import io.github.nicolasgoyon.folkhold.world.group.VillageTrade;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import net.minecraft.SharedConstants;
@@ -102,8 +108,8 @@ public final class QuestSystem {
     }
 
     /**
-     * Makes the new offers of a village at a cycle: first a hunt (see {@link #offerHunt}), then the deliveries of the
-     * inputs of the jobs (see {@link #offerDeliveries}).
+     * Makes the new offers of a village at a cycle: first a hunt (see {@link #offerHunt}), then a job quest (see
+     * {@link #offerJobQuest}), then the deliveries of the inputs of the jobs (see {@link #offerDeliveries}).
      *
      * @param server     the server
      * @param settlement the village
@@ -112,6 +118,7 @@ public final class QuestSystem {
      */
     public static List<Quest> offerQuests(MinecraftServer server, Settlement settlement, long now) {
         List<Quest> created = new ArrayList<>(offerHunt(server, settlement, now));
+        created.addAll(offerJobQuest(server, settlement, now));
         created.addAll(offerDeliveries(server, settlement, now));
         return created;
     }
@@ -129,7 +136,7 @@ public final class QuestSystem {
             return definition.need();
         }
         return switch (quest.kind()) {
-            case DELIVERY -> QuestNeed.JOB_INPUTS;
+            case DELIVERY -> quest.giverJob().isEmpty() ? QuestNeed.JOB_INPUTS : QuestNeed.JOB_STORY;
             case ESCORT -> QuestNeed.CARAVAN;
             case HUNT -> QuestNeed.MONSTERS;
         };
@@ -168,6 +175,73 @@ public final class QuestSystem {
         Quest quest = QuestGenerator.hunt(settlement.id(), settlement.factionId(), settlement.level(), now,
                 QuestRewards.settings(definition.get(), rule), definition.get().id());
         QuestRewards.apply(quest, definition.get(), rule, settlement);
+        quests.add(quest);
+        QuestData.get(server).setDirty();
+        return List.of(quest);
+    }
+
+    /**
+     * Makes the job quest offer of a village: a worker of an active job asks for an input of its job, and the reward
+     * is a product of its job (see {@link QuestNeed#JOB_STORY}).
+     *
+     * <ul>
+     *   <li>The giver is an active job with an input and with an output in the stock of the village, at random. A
+     *       village offers one job quest at most.</li>
+     *   <li>The quest asks for an input of the job, at random: 2 times the count of the recipe (1 for a tool, an input
+     *       with a chance below 1), up to the maximum count. A village does not offer two deliveries of one item.</li>
+     *   <li>The emerald value is the local price of the items × the bonus. The reward rule pays it in the outputs of
+     *       the giver job (with {@code goods_share}, see {@link QuestRewards}).</li>
+     *   <li>The story is the text of the job in the definition ({@code texts}).</li>
+     * </ul>
+     *
+     * @param server     the server
+     * @param settlement the village
+     * @param now        the game time
+     * @return the new quest, or an empty list
+     */
+    public static List<Quest> offerJobQuest(MinecraftServer server, Settlement settlement, long now) {
+        if (!EconomyData.isActive() || !settlement.economy().isInitialized()) {
+            return List.of();
+        }
+        Quests quests = QuestData.get(server).quests();
+        List<Quest> offers = quests.offers(settlement.id());
+        Optional<QuestDefinition> definition = QuestDefinitions.matching(QuestNeed.JOB_STORY, settlement.level())
+                .stream().findFirst();
+        if (definition.isEmpty() || Math.min(1, wanted(offers, settlement.level(), QuestNeed.JOB_STORY)) <= 0
+                || offers.stream().anyMatch(quest -> !quest.giverJob().isEmpty())) {
+            return List.of();
+        }
+        Set<String> offered = offers.stream().filter(quest -> quest.kind() == QuestKind.DELIVERY)
+                .map(Quest::target).collect(Collectors.toSet());
+        Map<String, Job> givers = new LinkedHashMap<>();
+        for (Job job : Economies.activeJobs(settlement)) {
+            boolean inputs = job.recipe().inputs().stream().anyMatch(input -> ItemIds.item(input.item()).isPresent()
+                    && !offered.contains(input.item()));
+            if (inputs && QuestRewards.goods(settlement, List.of(job)).values().stream().anyMatch(count -> count > 0)) {
+                givers.putIfAbsent(job.id(), job);
+            }
+        }
+        if (givers.isEmpty()) {
+            return List.of();
+        }
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        Job giver = List.copyOf(givers.values()).get(random.nextInt(givers.size()));
+        List<Recipe.Input> inputs = giver.recipe().inputs().stream()
+                .filter(input -> ItemIds.item(input.item()).isPresent() && !offered.contains(input.item())).toList();
+        Recipe.Input input = inputs.get(random.nextInt(inputs.size()));
+        RewardRule rule = QuestRewards.choose(definition.get());
+        QuestGenerator.Settings settings = QuestRewards.settings(definition.get(), rule);
+        int count = input.chance() < 1.0 ? 1 : Math.min(settings.maxDeliveryCount(), input.count() * 2);
+        double price = Prices.price(EconomyData.catalog().info(input.item()),
+                settlement.economy().stock().count(input.item()), settlement.economy().population(),
+                Economies.settings());
+        long reward = Math.max(1, Math.round(count * price * settings.deliveryBonus()));
+        Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.DELIVERY, settlement.id(),
+                settlement.factionId(), input.item(), count, reward, settings.deliveryReputation(),
+                QuestGenerator.minTier(reward, settings), now + settings.offerLifetime(), settings.deliveryDuration(),
+                definition.get().id());
+        quest.setGiver(giver.id(), definition.get().texts().story(giver.id()));
+        QuestRewards.apply(quest, definition.get(), rule, settlement, QuestRewards.goods(settlement, List.of(giver)));
         quests.add(quest);
         QuestData.get(server).setDirty();
         return List.of(quest);

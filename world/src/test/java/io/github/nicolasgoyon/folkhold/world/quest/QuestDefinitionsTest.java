@@ -102,12 +102,12 @@ class QuestDefinitionsTest {
     void unknownFieldGivesAWarning() {
         List<String> warnings = new ArrayList<>();
         parse("""
-                {"kind": "delivery", "need": "site_materials", "texts": [],
+                {"kind": "delivery", "need": "site_materials", "title": [],
                  "reward": {"title": 5}, "conditions": {"tier": "town"}}
                 """, warnings);
 
         assertEquals(3, warnings.size(), "Warnings: " + warnings);
-        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'texts'")), "Warnings: " + warnings);
+        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'title'")), "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'reward.title'")),
                 "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'conditions.tier'")),
@@ -147,6 +147,48 @@ class QuestDefinitionsTest {
                 assertEquals(OptionalDouble.of(1.0), hunt.values().rewardFactor());
                 assertEquals(15, hunt.rewards().base().experience());
                 assertEquals(List.of(), warnings);
+            }
+        }
+    }
+
+    /**
+     * The job quests of the mod: each job with an input has a story of its own, and each story has a text in English
+     * and in French.
+     */
+    @Test
+    void modJobStoriesHaveTheirTexts() throws IOException {
+        QuestDefinition story;
+        try (Reader reader = new InputStreamReader(QuestDefinitionsTest.class.getResourceAsStream(
+                "/data/folkhold_world/folkhold/quest/job_story_delivery.json"), StandardCharsets.UTF_8)) {
+            story = QuestDefinitions.parse("folkhold_world:job_story_delivery",
+                    JsonParser.parseReader(reader).getAsJsonObject(), warning -> { });
+        }
+        assertEquals(QuestNeed.JOB_STORY, story.need());
+        java.nio.file.Path jobs;
+        try {
+            jobs = java.nio.file.Path.of(QuestDefinitionsTest.class.getResource(
+                    "/data/folkhold_world/folkhold/jobs/baker.json").toURI()).getParent();
+        } catch (java.net.URISyntaxException e) {
+            throw new IOException(e);
+        }
+        List<String> missing = new ArrayList<>();
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(jobs)) {
+            for (java.nio.file.Path file : files.sorted().toList()) {
+                JsonObject job = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
+                String id = "folkhold_world:" + file.getFileName().toString().replace(".json", "");
+                if (job.has("inputs") && !job.getAsJsonArray("inputs").isEmpty()
+                        && !story.texts().jobs().containsKey(id)) {
+                    missing.add(id);
+                }
+            }
+        }
+        assertEquals(List.of(), missing, "Jobs with an input and no story");
+        for (String lang : List.of("en_us", "fr_fr")) {
+            try (Reader reader = new InputStreamReader(QuestDefinitionsTest.class.getResourceAsStream(
+                    "/assets/folkhold_world/lang/" + lang + ".json"), StandardCharsets.UTF_8)) {
+                JsonObject texts = JsonParser.parseReader(reader).getAsJsonObject();
+                assertTrue(texts.has(story.texts().defaultKey()), lang + ": " + story.texts().defaultKey());
+                story.texts().jobs().values().forEach(key -> assertTrue(texts.has(key), lang + ": " + key));
             }
         }
     }

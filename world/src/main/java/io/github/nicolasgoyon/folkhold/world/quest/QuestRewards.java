@@ -79,7 +79,21 @@ public final class QuestRewards {
      * @param settlement the village that gives the quest
      */
     public static void apply(Quest quest, QuestDefinition definition, RewardRule rule, Settlement settlement) {
-        rule.applyTo(quest, goods(settlement), item -> Prices.price(EconomyData.catalog().info(item),
+        apply(quest, definition, rule, settlement, goods(settlement));
+    }
+
+    /**
+     * As {@link #apply(Quest, QuestDefinition, RewardRule, Settlement)}, with the goods of the reward.
+     *
+     * @param quest      the quest, with its emerald reward
+     * @param definition the definition of the quest
+     * @param rule       the reward rule
+     * @param settlement the village that gives the quest
+     * @param goods      the goods of the reward: the stock of each item, by item id
+     */
+    public static void apply(Quest quest, QuestDefinition definition, RewardRule rule, Settlement settlement,
+            Map<String, Integer> goods) {
+        rule.applyTo(quest, goods, item -> Prices.price(EconomyData.catalog().info(item),
                 settlement.economy().stock().count(item), settlement.economy().population(), Economies.settings()));
         definition.risk().applyTo(quest, ThreadLocalRandom.current(), item -> EconomyData.catalog().info(item).price(),
                 WorldConfig.QUEST_FAILURE_REPUTATION.get(), WorldConfig.QUEST_START_ITEMS_PENALTY.get());
@@ -118,8 +132,20 @@ public final class QuestRewards {
      * @return the stock of each item, by item id
      */
     public static Map<String, Integer> goods(Settlement settlement) {
+        return goods(settlement, Economies.activeJobs(settlement));
+    }
+
+    /**
+     * The goods of some jobs of a village: the stock of each output of the jobs. The currency and the items that the
+     * game does not know are not goods.
+     *
+     * @param settlement the village
+     * @param jobs       the jobs
+     * @return the stock of each item, by item id
+     */
+    public static Map<String, Integer> goods(Settlement settlement, List<Job> jobs) {
         Map<String, Integer> goods = new LinkedHashMap<>();
-        for (Job job : Economies.activeJobs(settlement)) {
+        for (Job job : jobs) {
             for (Recipe.Output output : job.recipe().outputs()) {
                 String item = output.item();
                 if (!item.equals(CURRENCY) && ItemIds.item(item).isPresent()) {

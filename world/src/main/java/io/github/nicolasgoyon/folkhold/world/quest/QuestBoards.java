@@ -26,6 +26,7 @@ import io.github.nicolasgoyon.folkhold.world.notice.Notices;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
+import io.github.nicolasgoyon.folkhold.world.village.VillageLife;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -559,7 +560,10 @@ public final class QuestBoards {
         String icon;
         if (quest.kind() == QuestKind.DELIVERY) {
             icon = quest.target();
-            info = Component.translatable("quest.folkhold_world.info.delivery", kind, minutes);
+            info = quest.text().isEmpty() ? Component.translatable("quest.folkhold_world.info.delivery", kind, minutes)
+                    : Component.translatable("quest.folkhold_world.info.story", Component.translatable(quest.text(),
+                            Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
+                                    itemName(quest.target()))), minutes);
             int have = Deliveries.count(player.getInventory(), ItemIds.item(quest.target()).orElse(Items.AIR));
             progress = Component.translatable("quest.folkhold_world.have", have, quest.count())
                     .withColor(have >= quest.count() ? INK_GOOD : have > 0 ? INK_BAD : INK_MUTED);
@@ -621,9 +625,9 @@ public final class QuestBoards {
                 blocked = Optional.of(Component.translatable("quest.folkhold_world.deliver_at",
                         villageName(server, quest.settlementId())));
             }
-            return new Active(quest.id(), quest.target(),
-                    Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
-                            itemName(quest.target())),
+            return new Active(quest.id(), quest.target(), quest.giverJob().isEmpty()
+                    ? Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
+                            itemName(quest.target())) : name(server, quest),
                     info, secondsLeft, action, blocked, ready);
         }
         if (quest.kind() == QuestKind.HUNT) {
@@ -658,6 +662,10 @@ public final class QuestBoards {
 
     /** The text of a quest: what to do. */
     public static Component name(MinecraftServer server, Quest quest) {
+        if (quest.kind() == QuestKind.DELIVERY && !quest.giverJob().isEmpty()) {
+            return Component.translatable("quest.folkhold_world.job_delivery", VillageLife.jobName(quest.giverJob()),
+                    quest.count(), itemName(quest.target()));
+        }
         if (quest.kind() == QuestKind.DELIVERY) {
             return Component.translatable("quest.folkhold_world.delivery", quest.count(), itemName(quest.target()));
         }
