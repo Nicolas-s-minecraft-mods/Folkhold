@@ -120,6 +120,7 @@ class EconomyTest {
         CycleReport report = Economy.runCycle(state, List.of(), 5, 100, SETTINGS, new SplittableRandom(1));
 
         assertEquals(1, state.population());
+        assertEquals(1, report.population());
     }
 
     /** The population grows with no food in the stock, up to the maximum. A population above it goes down. */

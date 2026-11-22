@@ -10,7 +10,6 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Box;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Dir;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Piece;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Plot;
-import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.village.TemplateSigns;

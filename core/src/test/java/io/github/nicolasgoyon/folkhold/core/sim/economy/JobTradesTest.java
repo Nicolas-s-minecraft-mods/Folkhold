@@ -65,7 +65,7 @@ class JobTradesTest {
         JobTrades.Plan seller = JobTrades.plan(List.of(baker), Map.of("bread", 20), CATALOG, 10, 6,
                 JobTradesTest::known);
         assertEquals(List.of(), seller.buys(), "A job with no input buys nothing");
-        assertEquals(6, seller.sellSlots(), "All the offers sell");
+        assertEquals(1, seller.sellSlots(), "The one item for sale gives one sell offer");
     }
 
     @Test
