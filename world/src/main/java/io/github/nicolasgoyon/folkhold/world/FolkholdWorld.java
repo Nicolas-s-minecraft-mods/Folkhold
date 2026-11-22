@@ -37,6 +37,7 @@ import io.github.nicolasgoyon.folkhold.world.journal.TerritoryReliefs;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.notice.Notices;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerDiscovery;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrolGroups;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrols;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
 import io.github.nicolasgoyon.folkhold.world.quest.EscortDifficulties;
@@ -230,6 +231,7 @@ public final class FolkholdWorld {
         SimulationTicker.addWorldSystem("mobile groups", MobileGroupSystem::tick);
         SimulationTicker.addWorldSystem("trade", VillageTrade::tick);
         SimulationTicker.addWorldSystem("traveling merchants", TravelingMerchants::tick);
+        SimulationTicker.addWorldSystem("pillager patrols", PillagerPatrolGroups::tick);
         SimulationTicker.addWorldSystem("quests", QuestSystem::tick);
         QuestSystem.addListener(QuestBoards::onQuestEnded);
         NeoForge.EVENT_BUS.addListener(QuestBoards::onEntityInteract);

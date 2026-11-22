@@ -1,9 +1,14 @@
 package io.github.nicolasgoyon.folkhold.world.pillager;
 
+import io.github.nicolasgoyon.folkhold.core.sim.group.GroupKind;
+import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
+import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroups;
 import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamp;
 import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerReputation;
+import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,6 +33,8 @@ import net.minecraft.world.level.saveddata.SavedData;
  *   <li>the reputation of each player with the pillagers (see {@link PillagerFaction}).</li>
  *   <li>the camps that each player entered: the maps show their territories.</li>
  *   <li>the placement regions that the discovery of the camps checked (see {@link PillagerDiscovery}).</li>
+ *   <li>the abstract patrols of the camps (see {@link PillagerPatrolGroups}). The origin and the destination of a
+ *       patrol are the id of its camp.</li>
  * </ul>
  */
 public final class PillagerData extends SavedData {
@@ -37,6 +44,7 @@ public final class PillagerData extends SavedData {
     private final Map<UUID, Integer> reputations = new HashMap<>();
     private final Map<UUID, Set<String>> discovered = new HashMap<>();
     private final Set<String> checkedRegions = new HashSet<>();
+    private final MobileGroups patrols = new MobileGroups();
 
     private PillagerData() {
     }
@@ -84,6 +92,22 @@ public final class PillagerData extends SavedData {
         return true;
     }
 
+    /** The abstract patrols of the camps. Call {@link #setDirty()} after a change. */
+    public MobileGroups patrols() {
+        return patrols;
+    }
+
+    /**
+     * The patrols of a camp.
+     *
+     * @param campId the id of the camp
+     * @return the patrols, in id order
+     */
+    public List<MobileGroup> patrolsOf(String campId) {
+        return patrols.all().stream().filter(patrol -> patrol.originId().equals(campId))
+                .sorted(Comparator.comparing(MobileGroup::id)).toList();
+    }
+
     /** True if the discovery checked a placement region (see {@link PillagerDiscovery#regionKey}). */
     public boolean isRegionChecked(String region) {
         return checkedRegions.contains(region);
@@ -97,13 +121,17 @@ public final class PillagerData extends SavedData {
     }
 
     /**
-     * Removes a camp, for example at the end of a test.
+     * Removes a camp and its patrols, for example at the end of a test.
      *
      * @param id the id of the camp
      */
     public void removeCamp(String id) {
         if (camps.remove(id) != null) {
             discovered.values().forEach(ids -> ids.remove(id));
+            setDirty();
+        }
+        for (MobileGroup patrol : patrolsOf(id)) {
+            patrols.remove(patrol.id());
             setDirty();
         }
     }
@@ -180,10 +208,21 @@ public final class PillagerData extends SavedData {
         ListTag regions = new ListTag();
         checkedRegions.stream().sorted().forEach(region -> regions.add(StringTag.valueOf(region)));
         tag.put("CheckedRegions", regions);
+        ListTag patrolList = new ListTag();
+        patrols.all().stream().sorted(Comparator.comparing(MobileGroup::id))
+                .forEach(patrol -> patrolList.add(MobileGroupData.saveGroup(patrol)));
+        tag.put("Patrols", patrolList);
         return tag;
     }
 
-    private static PillagerData load(CompoundTag tag, HolderLookup.Provider registries) {
+    /**
+     * Reads the data from a tag of {@link #save}. A patrol with an unknown camp or of another kind is dropped.
+     *
+     * @param tag        the tag
+     * @param registries the registries
+     * @return the data
+     */
+    public static PillagerData load(CompoundTag tag, HolderLookup.Provider registries) {
         PillagerData data = new PillagerData();
         ListTag campList = tag.getList("Camps", Tag.TAG_COMPOUND);
         for (int i = 0; i < campList.size(); i++) {
@@ -214,6 +253,14 @@ public final class PillagerData extends SavedData {
         ListTag regions = tag.getList("CheckedRegions", Tag.TAG_STRING);
         for (int i = 0; i < regions.size(); i++) {
             data.checkedRegions.add(regions.getString(i));
+        }
+        ListTag patrolList = tag.getList("Patrols", Tag.TAG_COMPOUND);
+        for (int i = 0; i < patrolList.size(); i++) {
+            MobileGroup patrol = MobileGroupData.loadGroup(patrolList.getCompound(i));
+            if (patrol != null && patrol.kind() == GroupKind.PILLAGER_PATROL && data.camps.containsKey(patrol.originId())
+                    && data.patrols.byId(patrol.id()).isEmpty()) {
+                data.patrols.add(patrol);
+            }
         }
         return data;
     }

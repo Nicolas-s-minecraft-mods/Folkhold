@@ -208,6 +208,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue PILLAGER_PATROL_DELAY_SECONDS;
     public static final ModConfigSpec.IntValue PILLAGER_PATROL_COOLDOWN_SECONDS;
     public static final ModConfigSpec.IntValue PILLAGER_PATROL_SIZE;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROLS_PER_CAMP;
     public static final ModConfigSpec.IntValue PILLAGER_SWORN_ENEMY_EXTRA;
     public static final ModConfigSpec.IntValue PILLAGER_SPAWN_DISTANCE;
     public static final ModConfigSpec.IntValue PILLAGER_KILL_REPUTATION;
@@ -1156,6 +1157,11 @@ public final class WorldConfig {
                 .comment("Pillagers in a patrol for a hostile player. 0 turns off the patrols.")
                 .translation(KEY_PREFIX + "pillagerPatrolSize")
                 .defineInRange("patrolSize", 3, 0, 16);
+        PILLAGER_PATROLS_PER_CAMP = builder
+                .comment("Abstract patrols of each pillager camp. A patrol walks a loop around its camp, in the",
+                        "territory, also with no player near. 0 removes the patrols of the camps.")
+                .translation(KEY_PREFIX + "pillagerPatrolsPerCamp")
+                .defineInRange("patrolsPerCamp", 2, 0, 4);
         PILLAGER_SWORN_ENEMY_EXTRA = builder
                 .comment("Pillagers that a patrol gets more for a sworn enemy of the pillagers.")
                 .translation(KEY_PREFIX + "pillagerSwornEnemyExtra")

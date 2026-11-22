@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import javax.annotation.Nullable;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -280,7 +281,14 @@ public final class MobileGroupData extends SavedData {
         return data;
     }
 
-    private static CompoundTag saveGroup(MobileGroup group) {
+    /**
+     * Writes one group. Other saved data can use it for their own groups (see
+     * {@link io.github.nicolasgoyon.folkhold.world.pillager.PillagerData}).
+     *
+     * @param group the group
+     * @return the tag of the group
+     */
+    public static CompoundTag saveGroup(MobileGroup group) {
         CompoundTag tag = new CompoundTag();
         tag.putString("Id", group.id());
         tag.putString("Kind", group.kind().serializedName());
@@ -352,8 +360,12 @@ public final class MobileGroupData extends SavedData {
     /**
      * Reads one group. A group with an invalid route or an unknown kind gives null. A group with an unknown state
      * travels. A member with an unknown role is not in the group.
+     *
+     * @param tag the tag of the group (see {@link #saveGroup})
+     * @return the group, or null
      */
-    private static MobileGroup loadGroup(CompoundTag tag) {
+    @Nullable
+    public static MobileGroup loadGroup(CompoundTag tag) {
         Optional<Route> route = loadRoute(tag.getIntArray("Route"), tag.getByteArray("RouteSurfaces"));
         if (route.isEmpty()) {
             return null;

@@ -8,7 +8,12 @@ public enum GroupKind implements SerializedName {
     /** Merchant, loaded mules and guards. It carries the goods of a trade between two villages. */
     CARAVAN("caravan"),
     /** Merchant of the neutral faction and a pack animal. It goes from village to village. */
-    TRAVELING_MERCHANT("traveling_merchant");
+    TRAVELING_MERCHANT("traveling_merchant"),
+    /**
+     * Pillagers of a pillager camp. The patrol walks a loop around its camp, in the territory of the camp. It never
+     * arrives.
+     */
+    PILLAGER_PATROL("pillager_patrol");
 
     private final String serializedName;
 
