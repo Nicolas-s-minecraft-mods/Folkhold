@@ -8,14 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 class PatrolFightTest {
-    /** A guard of 30 health and 4 damage. */
-    private static final double GUARD = PatrolFight.strength(30.0, 4.0);
-    /** A pillager of 24 health and 3 damage. */
-    private static final double PILLAGER = PatrolFight.strength(24.0, 3.0);
+    /** A guard of 30 health and 3 damage. */
+    private static final double GUARD = PatrolFight.strength(30.0, 3.0);
+    /** A pillager of 24 health and 2.5 damage. */
+    private static final double PILLAGER = PatrolFight.strength(24.0, 2.5);
 
     @Test
     void strongerGuardsBeatThePatrolAndLoseSomeGuards() {
-        // 4 guards (480) against 5 pillagers (360): 4 * (360 / 480)^2 = 2.25 guards die.
+        // 4 guards (360) against 5 pillagers (300): 4 * (300 / 360)^2 = 2.78 guards die.
         PatrolFight fight = PatrolFight.resolve(4 * GUARD, 4, 5 * PILLAGER, 5, 0.5);
         assertTrue(fight.caravanWins());
         assertEquals(2, fight.guardDeaths());
@@ -26,11 +26,11 @@ class PatrolFightTest {
 
     @Test
     void aStrongerPatrolKillsTheGuardsAndTakesAShareOfTheCargo() {
-        // 2 guards (240) against 5 pillagers (360): 5 * (240 / 360)^2 = 2.2 pillagers die.
+        // 2 guards (180) against 5 pillagers (300): 5 * (180 / 300)^2 = 1.8 pillagers die.
         PatrolFight fight = PatrolFight.resolve(2 * GUARD, 2, 5 * PILLAGER, 5, 0.5);
         assertFalse(fight.caravanWins());
         assertEquals(2, fight.guardDeaths());
-        assertEquals(2, fight.patrolDeaths());
+        assertEquals(1, fight.patrolDeaths());
         assertEquals(0.5, fight.cargoLoss());
         assertFalse(fight.caravanLost());
     }

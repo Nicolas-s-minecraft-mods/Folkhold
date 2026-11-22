@@ -48,7 +48,7 @@ public final class PatrolEncounterGameTests {
     private static final int TERRITORY_RADIUS = 3;
     private static final int PATROL_SIZE = 3;
     private static final int SWORN_EXTRA = 2;
-    private static final double PILLAGER_DAMAGE = 3.0;
+    private static final double PILLAGER_DAMAGE = 2.5;
     private static final double CARGO_LOSS = 0.5;
     private static final int BREAD = 20;
     private static final long PAYMENT = 20;

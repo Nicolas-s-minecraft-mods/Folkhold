@@ -1195,7 +1195,7 @@ public final class WorldConfig {
                 .comment("Attack damage of one pillager in an abstract fight with a caravan. The strength of a",
                         "fighter is its health multiplied by its damage. The guards use unit.guard.attackDamage.")
                 .translation(KEY_PREFIX + "pillagerEncounterDamage")
-                .defineInRange("encounterDamage", 3.0, 0.0, 100.0);
+                .defineInRange("encounterDamage", 2.5, 0.0, 100.0);
         PILLAGER_ENCOUNTER_CARGO_LOSS = builder
                 .comment("Share of the cargo and of the payment that a caravan loses when a patrol beats its guards",
                         "in an abstract fight.")
