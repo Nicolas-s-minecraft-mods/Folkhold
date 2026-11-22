@@ -9,6 +9,8 @@ import com.google.gson.JsonParser;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -58,18 +60,38 @@ class QuestDefinitionsTest {
                 Integer.MAX_VALUE, QuestDefinition.Values.CONFIG), definition);
     }
 
+    /** The reward rules: the rule of the type and a special rule with its chance and its factor. */
+    @Test
+    void rewardRulesGiveTheExperienceTheItemsAndTheGoods() {
+        List<String> warnings = new ArrayList<>();
+        QuestDefinition definition = parse("""
+                {"kind": "delivery", "need": "job_inputs",
+                 "reward": {"experience": 5, "items": [{"item": "minecraft:bread", "count": 2}, {"item": "a:b"}],
+                            "special": {"chance": 0.3, "factor": 2.0, "goods_share": 0.5, "experience": 9}}}
+                """, warnings);
+
+        assertEquals(new RewardRule.Choice(new RewardRule(5, List.of(new RewardItem("minecraft:bread", 2, false),
+                new RewardItem("a:b", 1, false)), 0.0, OptionalDouble.empty()), 0.3,
+                new RewardRule(9, List.of(), 0.5, OptionalDouble.of(2.0))), definition.rewards());
+        assertEquals(List.of(), warnings);
+        assertEquals(RewardRule.Choice.NONE, parse("{\"kind\": \"escort\", \"need\": \"caravan\"}",
+                warnings).rewards());
+        assertMessage("goods share", "{\"kind\": \"delivery\", \"need\": \"job_inputs\","
+                + " \"reward\": {\"goods_share\": 2}}");
+    }
+
     /** A field that this version does not use gives a warning with its path. The definition loads. */
     @Test
     void unknownFieldGivesAWarning() {
         List<String> warnings = new ArrayList<>();
         parse("""
                 {"kind": "delivery", "need": "site_materials", "start_items": [],
-                 "reward": {"experience": 5}, "conditions": {"tier": "town"}}
+                 "reward": {"title": 5}, "conditions": {"tier": "town"}}
                 """, warnings);
 
         assertEquals(3, warnings.size(), "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'start_items'")), "Warnings: " + warnings);
-        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'reward.experience'")),
+        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'reward.title'")),
                 "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'conditions.tier'")),
                 "Warnings: " + warnings);

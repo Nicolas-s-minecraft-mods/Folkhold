@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.core.sim.quest;
 
 import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -22,7 +23,9 @@ public final class Quest {
     private final String factionId;
     private final String target;
     private final int count;
-    private final long rewardEmeralds;
+    private long rewardEmeralds;
+    private int rewardExperience;
+    private List<RewardItem> rewardItems = List.of();
     private final int rewardReputation;
     private final ReputationTier minTier;
     private final long offerEnd;
@@ -127,6 +130,33 @@ public final class Quest {
 
     public long rewardEmeralds() {
         return rewardEmeralds;
+    }
+
+    /** The experience points of the reward. 0 for a quest of a save with no experience. */
+    public int rewardExperience() {
+        return rewardExperience;
+    }
+
+    /** The items of the reward. Empty for a quest of a save with no items. */
+    public List<RewardItem> rewardItems() {
+        return rewardItems;
+    }
+
+    /**
+     * Sets the emeralds, the experience and the items of the reward: at the generation (see {@link RewardRule}) and
+     * at the load of the saved data.
+     *
+     * @param emeralds   the emeralds, 0 or more
+     * @param experience the experience points, 0 or more
+     * @param items      the items
+     */
+    public void setReward(long emeralds, int experience, List<RewardItem> items) {
+        if (emeralds < 0 || experience < 0) {
+            throw new IllegalArgumentException("Invalid reward: " + emeralds + " emeralds, " + experience + " xp");
+        }
+        this.rewardEmeralds = emeralds;
+        this.rewardExperience = experience;
+        this.rewardItems = List.copyOf(items);
     }
 
     public int rewardReputation() {

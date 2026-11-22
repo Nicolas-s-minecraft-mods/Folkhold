@@ -1,4 +1,5 @@
 {
   "kind": "delivery",
-  "need": "site_materials"
+  "need": "site_materials",
+  "reward": {"experience": 10}
 }

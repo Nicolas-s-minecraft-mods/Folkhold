@@ -24,11 +24,29 @@ import java.util.OptionalInt;
  * @param minLevel the lowest level of a village with offers of the definition
  * @param maxLevel the highest level of a village with offers of the definition
  * @param values   the values of the offers
+ * @param rewards  the rules of the reward, other than the emeralds and the reputation
  */
 public record QuestDefinition(String id, QuestKind kind, QuestNeed need, boolean enabled, int minLevel,
-        int maxLevel, Values values) {
+        int maxLevel, Values values, RewardRule.Choice rewards) {
+
+    /**
+     * Makes a definition with the reward rule {@link RewardRule.Choice#NONE}: emeralds and reputation only.
+     *
+     * @param id       the id of the definition
+     * @param kind     the kind of the quests
+     * @param need     the need that makes the offers
+     * @param enabled  false for a definition that makes no offer
+     * @param minLevel the lowest level of a village with offers
+     * @param maxLevel the highest level of a village with offers
+     * @param values   the values of the offers
+     */
+    public QuestDefinition(String id, QuestKind kind, QuestNeed need, boolean enabled, int minLevel, int maxLevel,
+            Values values) {
+        this(id, kind, need, enabled, minLevel, maxLevel, values, RewardRule.Choice.NONE);
+    }
 
     public QuestDefinition {
+        Objects.requireNonNull(rewards);
         Objects.requireNonNull(id);
         Objects.requireNonNull(kind);
         Objects.requireNonNull(need);

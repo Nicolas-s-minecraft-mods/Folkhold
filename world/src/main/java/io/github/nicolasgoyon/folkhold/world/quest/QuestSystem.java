@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.tick.TickScheduler.TickInfo;
 import io.github.nicolasgoyon.folkhold.core.sim.trade.TradeMatcher;
@@ -133,10 +134,12 @@ public final class QuestSystem {
                 if (created.size() >= wanted) {
                     break;
                 }
+                RewardRule rule = QuestRewards.choose(definition);
                 for (Quest quest : QuestGenerator.deliveries(settlement.id(), settlement.factionId(), needs,
                         item -> Prices.price(catalog.info(item), settlement.economy().stock().count(item),
-                                population, Economies.settings()), offered, 1, now, settings(definition),
-                        definition.id())) {
+                                population, Economies.settings()), offered, 1, now,
+                        QuestRewards.settings(definition, rule), definition.id())) {
+                    QuestRewards.apply(quest, rule, settlement);
                     offered.add(quest.target());
                     created.add(quest);
                     made = true;

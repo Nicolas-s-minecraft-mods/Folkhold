@@ -23,8 +23,14 @@ pack of a world, of a server or of a mod jar can replace the definitions of Folk
 | `folkhold_world:site_material_delivery` | `delivery` | `site_materials` | The builders ask for the materials of their sites. |
 | `folkhold_world:caravan_escort` | `escort` | `caravan` | A new caravan waits for a player who protects it. |
 
-These files give only the kind and the need. All their values come from the server config
-(`serverconfig/folkhold_world-server.toml` of the world, section `quests`).
+The values of the offers of these files come from the server config (`serverconfig/folkhold_world-server.toml` of
+the world, section `quests`). The files give the reward rules:
+
+| Id | Rule of the type | Special reward |
+| --- | --- | --- |
+| `folkhold_world:job_input_delivery` | 5 experience points | 25 %: half of the emeralds in goods of the village, and 10 experience points |
+| `folkhold_world:site_material_delivery` | 10 experience points | none |
+| `folkhold_world:caravan_escort` | 20 experience points | none |
 
 ## Format
 
@@ -34,7 +40,13 @@ These files give only the kind and the need. All their values come from the serv
   "need": "job_inputs",
   "enabled": true,
   "conditions": {"min_level": 1, "max_level": 20},
-  "reward": {"factor": 1.5, "reputation": 20, "friend_reward": 64},
+  "reward": {
+    "factor": 1.5, "reputation": 20, "friend_reward": 64,
+    "experience": 5,
+    "items": [{"item": "minecraft:bread", "count": 2}],
+    "goods_share": 0.0,
+    "special": {"chance": 0.25, "factor": 1.5, "experience": 10, "items": [], "goods_share": 0.5}
+  },
   "offer": {"offer_minutes": 20, "duration_minutes": 40, "max_count": 32}
 }
 ```
@@ -49,6 +61,12 @@ These files give only the kind and the need. All their values come from the serv
 | `reward.factor` | no | config | Delivery: the factor of the local price of the items. Escort: the share of the payment of the caravan. |
 | `reward.reputation` | no | config | The reputation of the reward. |
 | `reward.friend_reward` | no | config | A quest with this reward in emeralds or more is only for the friend tier and the ally tier. |
+| `reward.experience` | no | 0 | The experience points that the player gets. |
+| `reward.items` | no | none | The items that the player gets: `item` (an item id) and `count` (1 by default). An unknown item id is an error. |
+| `reward.goods_share` | no | 0 | The share of the emerald reward (0 to 1) that the village pays in its goods: the outputs of its active jobs in its stock. |
+| `reward.special.chance` | no | 0 | The chance (0 to 1) that a new quest gets the special reward in the place of the rule of the type. |
+| `reward.special.factor` | no | the factor of the definition | The factor of the emerald reward of a special reward. |
+| `reward.special.experience`, `.items`, `.goods_share` | no | 0, none, 0 | The parts of the special reward, as above. |
 | `offer.offer_minutes` | no | config | Delivery: the time of the offer, in minutes. An escort offer lasts while the caravan waits. |
 | `offer.duration_minutes` | no | config | Delivery: the time from the acceptance to the deadline. Escort: the minimum time of the escort. In minutes. |
 | `offer.max_count` | no | config | Delivery: the maximum quantity of items. |
@@ -63,9 +81,21 @@ These files give only the kind and the need. All their values come from the serv
   of Folkhold turns these quests off.
 - Each quest keeps the id of its definition in the saved data.
 
+## Rules of the rewards
+
+- A reward has emeralds, reputation, experience points and items. The quest board shows each part before the player
+  accepts.
+- A new quest gets the special reward with its chance, else the rule of its type: the reward fields of the
+  definition.
+- The goods of a village are the item with the largest stock of the outputs of its active jobs. Their value at the
+  local price replaces a part of the emeralds, and the emeralds stay at 1 or more. The quest takes the goods from the
+  stock at the completion, up to the stock of this time.
+- The items of `reward.items` do not come from the stock: the reward makes them.
+- An item that does not go into the inventory of the player falls at the feet of the player.
+
 ## Limits of this version
 
 - A definition cannot add a new kind or a new need. The kind and the need choose the code that makes the offers.
-- A definition has no texts, no item rewards, no experience, no start items and no penalties. These fields are
-  planned. Today they give a warning in the log.
+- A definition has no texts, no start items and no penalties. These fields are planned. Today they give a warning
+  in the log.
 - A definition cannot choose the items of a delivery: the need gives them.

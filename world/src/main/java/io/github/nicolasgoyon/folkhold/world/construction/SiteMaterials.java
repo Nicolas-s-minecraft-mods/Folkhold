@@ -8,12 +8,14 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderMaterials.Kind;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderMaterials.Material;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestDefinitions;
+import io.github.nicolasgoyon.folkhold.world.quest.QuestRewards;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestSystem;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
@@ -341,11 +343,14 @@ final class SiteMaterials {
                 continue;
             }
             int count = Math.min(lacking, settings.maxDeliveryCount());
-            long reward = Math.max(1, Math.round(count * need.price() * settings.deliveryBonus()));
+            RewardRule rule = QuestRewards.choose(definition.get());
+            double bonus = rule.factor().orElse(settings.deliveryBonus());
+            long reward = Math.max(1, Math.round(count * need.price() * bonus));
             Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.DELIVERY, settlement.id(),
                     settlement.factionId(), item, count, reward, settings.deliveryReputation(),
                     QuestGenerator.minTier(reward, settings), questTime + settings.offerLifetime(),
                     settings.deliveryDuration(), definition.get().id());
+            QuestRewards.apply(quest, rule, settlement);
             all.add(quest);
             quests.put(item, quest.id());
             changed = true;
