@@ -2,9 +2,14 @@ package io.github.nicolasgoyon.folkhold.world.network;
 
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claimant;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerFaction;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -13,12 +18,14 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Server to client: the territories that the player discovered (see
  * {@link io.github.nicolasgoyon.folkhold.world.journal.TerritoryMaps}). The tab "Map" of the journal uses them for its
- * legend, for the button "Show all" and for its relief. The maps of Cartofold get the chunks of the territories in a
+ * legend (with the pillager faction when the player entered a pillager territory), for the button "Show all" and for
+ * its relief. The maps of Cartofold get the chunks of the territories in a
  * layer (see {@link io.github.nicolasgoyon.folkhold.world.journal.CartofoldMaps}).
  *
- * @param villages the discovered villages with a territory, in the order of the discovery
+ * @param villages  the discovered villages with a territory, in the order of the discovery
+ * @param pillagers true if the player entered a pillager territory: the legend shows the pillager faction
  */
-public record TerritoryMapPayload(List<Village> villages) implements CustomPacketPayload {
+public record TerritoryMapPayload(List<Village> villages, boolean pillagers) implements CustomPacketPayload {
 
     public static final Type<TerritoryMapPayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "territory_map"));
@@ -43,6 +50,7 @@ public record TerritoryMapPayload(List<Village> villages) implements CustomPacke
     public static final StreamCodec<RegistryFriendlyByteBuf, TerritoryMapPayload> STREAM_CODEC =
             StreamCodec.composite(
                     VILLAGE_CODEC.apply(ByteBufCodecs.list()), TerritoryMapPayload::villages,
+                    ByteBufCodecs.BOOL, TerritoryMapPayload::pillagers,
                     TerritoryMapPayload::new);
 
     /** No discovered territories. */
@@ -50,6 +58,43 @@ public record TerritoryMapPayload(List<Village> villages) implements CustomPacke
 
     public TerritoryMapPayload {
         villages = List.copyOf(villages);
+    }
+
+    /**
+     * The territories of some villages, with no pillager territory.
+     *
+     * @param villages the discovered villages with a territory
+     */
+    public TerritoryMapPayload(List<Village> villages) {
+        this(villages, false);
+    }
+
+    /**
+     * An entry of the legend of the map of the journal.
+     *
+     * @param name  the name of the faction
+     * @param color the color of the faction, as 0xRRGGBB
+     */
+    public record LegendEntry(Component name, int color) {
+    }
+
+    /**
+     * The legend of the map: each faction of the discovered villages one time, in the order of the discovery, then the
+     * pillager faction when the player entered a pillager territory.
+     *
+     * @return the entries of the legend
+     */
+    public List<LegendEntry> legend() {
+        Map<String, Integer> colors = new LinkedHashMap<>();
+        for (Village village : villages) {
+            colors.putIfAbsent(village.faction(), village.color() & 0xFFFFFF);
+        }
+        List<LegendEntry> entries = new ArrayList<>();
+        colors.forEach((name, color) -> entries.add(new LegendEntry(Component.literal(name), color)));
+        if (pillagers) {
+            entries.add(new LegendEntry(PillagerFaction.name(), PillagerFaction.COLOR));
+        }
+        return entries;
     }
 
     /**
