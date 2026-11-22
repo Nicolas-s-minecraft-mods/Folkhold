@@ -123,6 +123,8 @@
   "folkhold_world.configuration.raidHeartRadius": "Distance du centre du raid au cœur",
   "folkhold_world.configuration.raidSpawnMinDistance": "Distance minimale d'apparition d'une vague",
   "folkhold_world.configuration.raidSpawnMaxDistance": "Distance maximale d'apparition d'une vague",
+  "folkhold_world.configuration.raidCampSideDistance": "Côté du camp de pillards le plus proche : distance",
+  "folkhold_world.configuration.raidCampSideSpread": "Côté du camp de pillards : angle",
   "folkhold_world.configuration.raidExtraRavagersLevel4": "Ravageurs en plus par vague (niveau 4)",
   "folkhold_world.configuration.raidExtraRavagersLevel5": "Ravageurs en plus par vague (niveau 5)",
   "folkhold_world.configuration.raidGateForceSeconds": "Temps pour forcer une porte fermée (secondes)",

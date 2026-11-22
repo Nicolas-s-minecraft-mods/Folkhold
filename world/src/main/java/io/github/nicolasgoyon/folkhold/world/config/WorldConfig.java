@@ -70,6 +70,8 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue RAID_HEART_RADIUS;
     public static final ModConfigSpec.IntValue RAID_SPAWN_MIN_DISTANCE;
     public static final ModConfigSpec.IntValue RAID_SPAWN_MAX_DISTANCE;
+    public static final ModConfigSpec.IntValue RAID_CAMP_SIDE_DISTANCE;
+    public static final ModConfigSpec.IntValue RAID_CAMP_SIDE_SPREAD;
     public static final ModConfigSpec.IntValue RAID_EXTRA_RAVAGERS_LEVEL_4;
     public static final ModConfigSpec.IntValue RAID_EXTRA_RAVAGERS_LEVEL_5;
     public static final ModConfigSpec.IntValue RAID_GATE_FORCE_SECONDS;
@@ -524,6 +526,18 @@ public final class WorldConfig {
                         "loads more chunks and finds fewer paths to the village.")
                 .translation(KEY_PREFIX + "raidSpawnMaxDistance")
                 .defineInRange("spawnMaxDistance", 56, 16, 80);
+        RAID_CAMP_SIDE_DISTANCE = builder
+                .comment("A raid at a faction village comes from the side of the nearest pillager camp when the center",
+                        "of the camp is this distance or less from the heart, in blocks. 0 turns it off: the waves come",
+                        "from a random direction.")
+                .translation(KEY_PREFIX + "raidCampSideDistance")
+                .defineInRange("campSideDistance", 512, 0, 4096);
+        RAID_CAMP_SIDE_SPREAD = builder
+                .comment("Largest angle in degrees between the direction of the camp and the direction of the spawn",
+                        "position of a wave, seen from the heart. When no position on this side is good, the wave",
+                        "spawns in another direction.")
+                .translation(KEY_PREFIX + "raidCampSideSpread")
+                .defineInRange("campSideSpread", 45, 0, 180);
         RAID_EXTRA_RAVAGERS_LEVEL_4 = builder
                 .comment("Ravagers that each wave of a raid of level 4 gets more than the vanilla wave.")
                 .translation(KEY_PREFIX + "raidExtraRavagersLevel4")

@@ -2,22 +2,26 @@ package io.github.nicolasgoyon.folkhold.world.village;
 
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.monster.Pillager;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.PathNavigationRegion;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -29,7 +33,10 @@ import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 /**
  * The spawn position of a wave of raiders at a faction village (see {@link VillageRaids}).
  *
- * <p>The method tries random positions in a ring around the heart. The rules of a good position:
+ * <p>The method tries random positions in a ring around the heart. When a pillager camp is near the heart
+ * ({@code raid.campSideDistance}), the first half of the tries are on the side of the nearest camp
+ * ({@code raid.campSideSpread} degrees from its direction), and the other tries go in random directions. The rules of a
+ * good position:
  * <ul>
  *   <li>Ground: the position is on the ground of its column. Leaves do not count as ground.</li>
  *   <li>Land: the ground is a block of the tag {@link #GROUND}, natural ground. A roof, a wall or a palisade is not
@@ -97,7 +104,47 @@ public final class RaidSpawns {
     public static Optional<BlockPos> find(ServerLevel level, BlockPos heart, List<BlockPos> approaches,
             RandomSource random) {
         int min = WorldConfig.RAID_SPAWN_MIN_DISTANCE.get();
-        return find(level, heart, approaches, random, min, Math.max(min, WorldConfig.RAID_SPAWN_MAX_DISTANCE.get()));
+        OptionalDouble side = level.dimension() == Level.OVERWORLD
+                ? campDirection(level.getServer(), heart, WorldConfig.RAID_CAMP_SIDE_DISTANCE.get())
+                : OptionalDouble.empty();
+        return find(level, heart, approaches, random, min, Math.max(min, WorldConfig.RAID_SPAWN_MAX_DISTANCE.get()),
+                side, Math.toRadians(WorldConfig.RAID_CAMP_SIDE_SPREAD.get()));
+    }
+
+    /**
+     * The direction from a heart to the nearest pillager camp, as an angle in radians (0 is east, {@code PI / 2} is
+     * south), or empty when no camp is at the distance or nearer.
+     *
+     * @param server   the server
+     * @param heart    the position of the heart
+     * @param distance the largest distance in blocks to the center of the camp, 0 for no camp
+     * @return the angle, or empty
+     */
+    public static OptionalDouble campDirection(MinecraftServer server, BlockPos heart, int distance) {
+        if (distance <= 0) {
+            return OptionalDouble.empty();
+        }
+        return PillagerTerritories.nearestCamp(server, heart, distance)
+                .filter(camp -> camp.x() != heart.getX() || camp.z() != heart.getZ())
+                .map(camp -> OptionalDouble.of(Math.atan2(camp.z() - heart.getZ(), camp.x() - heart.getX())))
+                .orElse(OptionalDouble.empty());
+    }
+
+    /**
+     * The angle of a try of the search: in the side of the camp (the direction of the camp plus or minus the spread)
+     * for the first half of the tries, else a random direction.
+     *
+     * @param random the random source
+     * @param side   the direction of the camp, or empty
+     * @param spread the largest angle from the direction of the camp, in radians
+     * @param tryNumber the number of the try, from 0
+     * @return the angle, in radians
+     */
+    static double angle(RandomSource random, OptionalDouble side, double spread, int tryNumber) {
+        if (side.isPresent() && tryNumber < TRIES / 2) {
+            return side.getAsDouble() + (random.nextDouble() * 2.0 - 1.0) * spread;
+        }
+        return random.nextDouble() * Math.PI * 2.0;
     }
 
     /**
@@ -113,10 +160,29 @@ public final class RaidSpawns {
      */
     public static Optional<BlockPos> find(ServerLevel level, BlockPos heart, List<BlockPos> approaches,
             RandomSource random, int minDistance, int maxDistance) {
+        return find(level, heart, approaches, random, minDistance, maxDistance, OptionalDouble.empty(), 0.0);
+    }
+
+    /**
+     * A spawn position in a ring around a heart, first on a side. The first half of the tries are on the side, then
+     * the tries go in random directions: a wave always gets the best position that the search finds.
+     *
+     * @param level       the level
+     * @param heart       the position of the heart
+     * @param approaches  the positions outside the gates of the village
+     * @param random      the random source
+     * @param minDistance the inner radius of the ring, in blocks
+     * @param maxDistance the outer radius of the ring, in blocks
+     * @param side        the direction of the side as an angle in radians (see {@link #campDirection}), or empty
+     * @param spread      the largest angle from the direction of the side, in radians
+     * @return a good position (the position of the feet), or empty if the method finds none
+     */
+    public static Optional<BlockPos> find(ServerLevel level, BlockPos heart, List<BlockPos> approaches,
+            RandomSource random, int minDistance, int maxDistance, OptionalDouble side, double spread) {
         int paths = 0;
         Map<Check, Integer> rejected = new EnumMap<>(Check.class);
         for (int i = 0; i < TRIES && paths < MAX_PATHS; i++) {
-            double angle = random.nextDouble() * Math.PI * 2.0;
+            double angle = angle(random, side, spread, i);
             double distance = minDistance + random.nextDouble() * (maxDistance - minDistance);
             BlockPos pos = surface(level, heart.getX() + Mth.floor(Math.cos(angle) * distance),
                     heart.getZ() + Mth.floor(Math.sin(angle) * distance));

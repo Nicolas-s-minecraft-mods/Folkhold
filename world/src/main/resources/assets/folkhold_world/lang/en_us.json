@@ -123,6 +123,8 @@
   "folkhold_world.configuration.raidHeartRadius": "Distance from the raid center to the heart",
   "folkhold_world.configuration.raidSpawnMinDistance": "Minimum spawn distance of a wave",
   "folkhold_world.configuration.raidSpawnMaxDistance": "Maximum spawn distance of a wave",
+  "folkhold_world.configuration.raidCampSideDistance": "Raid side of the nearest pillager camp: distance",
+  "folkhold_world.configuration.raidCampSideSpread": "Raid side of the pillager camp: angle",
   "folkhold_world.configuration.raidExtraRavagersLevel4": "Extra ravagers for each wave (level 4)",
   "folkhold_world.configuration.raidExtraRavagersLevel5": "Extra ravagers for each wave (level 5)",
   "folkhold_world.configuration.raidGateForceSeconds": "Time to force a closed gate (seconds)",
