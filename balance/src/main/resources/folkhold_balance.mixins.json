@@ -2,7 +2,6 @@
   "required": true,
   "minVersion": "0.8",
   "package": "io.github.nicolasgoyon.folkhold.balance.mixin",
-  "plugin": "io.github.nicolasgoyon.folkhold.balance.BalanceMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AbstractMinecartMixin",

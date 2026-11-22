@@ -19,8 +19,8 @@ import org.spongepowered.asm.mixin.injection.At;
  * {@code Math.max} of the method gives this number. {@link SleepTicks} limits it, and measures the time of each extra
  * level tick for the limit of the next server tick.
  *
- * <p>The injectors have {@code require = 0}: a different version of Slumber does not stop the game. Then
- * {@link io.github.nicolasgoyon.folkhold.balance.BalanceMixinPlugin} writes a warning to the log, and Slumber runs with no limit.
+ * <p>The injectors have {@code require = 0}: a different version of Slumber does not stop the game. Then Slumber runs
+ * with no limit, and {@link SleepTicks#onServerTick} writes a warning to the log at the first fast night.
  */
 @Pseudo
 @Mixin(targets = "net.superscary.slumber.sim.Simulator", remap = false)
