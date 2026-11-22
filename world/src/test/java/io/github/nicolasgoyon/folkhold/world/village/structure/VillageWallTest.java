@@ -375,7 +375,7 @@ class VillageWallTest {
         Gate innerNorth = inner.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
         VillageWall.Wall wall = new VillageWall.Wall(inner, Map.of(innerNorth, BASE + 3), Set.of(), List.of());
 
-        VillageWall.Arm arm = VillageWall.bandArm(ring, north, WallLayout.MIN_BAND, wall).orElseThrow();
+        VillageWall.Arm arm = VillageWall.bandArm(ring, north, wall).orElseThrow();
 
         WallLayout.Cell gate = ring.cell(Side.NORTH, ring.along(north));
         assertEquals(gate.x(), arm.startX());
@@ -386,7 +386,7 @@ class VillageWallTest {
                 "The path stops before the flat terrain of the inner gate");
         assertEquals(BASE + 3, arm.end().getAsInt());
         VillageWall.Wall water = new VillageWall.Wall(inner, Map.of(innerNorth, BASE), Set.of(innerNorth), List.of());
-        assertTrue(VillageWall.bandArm(ring, north, WallLayout.MIN_BAND, water).isEmpty());
+        assertTrue(VillageWall.bandArm(ring, north, water).isEmpty());
     }
 
     /**

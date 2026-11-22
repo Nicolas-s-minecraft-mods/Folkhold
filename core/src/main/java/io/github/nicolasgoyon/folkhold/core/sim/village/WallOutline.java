@@ -30,6 +30,10 @@ import java.util.Optional;
  * </ul>
  *
  * <p>When no cell goes out, the outline is the rectangle.
+ *
+ * <p>The outline of a ring (see {@link #ring}) uses the same steps. Its rectangle is the box of the inner wall, larger
+ * by the band. A cell that no block of the inner wall is near stays out of it: the ring is an offset of the inner
+ * outline. A cell near the inner wall stays in it: the ring keeps a gap of free blocks around the inner wall.
  */
 public final class WallOutline {
     /** The smallest size of a cell of the outline, in blocks. */
@@ -51,6 +55,19 @@ public final class WallOutline {
          * @return true for high ground
          */
         boolean high(int x, int z);
+    }
+
+    /** The blocks of an area on the horizontal plane. */
+    @FunctionalInterface
+    public interface Blocks {
+        /**
+         * True for a block of the area.
+         *
+         * @param x the block X
+         * @param z the block Z
+         * @return true for a block of the area
+         */
+        boolean has(int x, int z);
     }
 
     private final Box rect;
@@ -77,21 +94,87 @@ public final class WallOutline {
      */
     public static Optional<List<Cell>> corners(Box rect, List<Box> keep, Cell middle, Ground ground) {
         WallOutline outline = new WallOutline(rect);
+        return outline.outline(outline.kept(keep), new boolean[outline.columns][outline.rows], middle, ground);
+    }
+
+    /**
+     * The corners of the free outline of a ring around an inner wall. A cell is far when no block of the inner wall
+     * is at {@code band} blocks or less from it, on each axis: a far cell is out of the ring, as a high cell. A cell
+     * with a block of the inner wall at {@code gap} blocks or less, on each axis, stays in the ring. The other cells
+     * go out when they are high ground (see {@link Ground}). The other steps are the steps of {@link #corners}.
+     *
+     * @param rect   the rectangle: the box of the inner wall, larger by the band
+     * @param inner  true for a block of the inner wall: on its line or inside it
+     * @param band   the band of the ring
+     * @param gap    the free blocks that the ring keeps around the inner wall, less than the band
+     * @param keep   other boxes that stay in the ring, for example the passages of the gates
+     * @param middle the middle of the village, in the inner wall
+     * @param ground the ground of the site
+     * @return the corners of the outline of the ring, clockwise from the north-west corner of its top row. Empty when
+     *         the outline is the rectangle, or when the outline loses a cell near the inner wall
+     */
+    public static Optional<List<Cell>> ring(Box rect, Blocks inner, int band, int gap, List<Box> keep, Cell middle,
+            Ground ground) {
+        WallOutline outline = new WallOutline(rect);
+        Area area = new Area(rect, inner);
         boolean[][] kept = outline.kept(keep);
-        boolean[][] high = outline.high(kept, ground);
-        if (!outline.cut(high)) {
+        boolean[][] far = new boolean[outline.columns][outline.rows];
+        for (int c = 0; c < outline.columns; c++) {
+            for (int r = 0; r < outline.rows; r++) {
+                Box cell = new Box(outline.minX(c), outline.minZ(r), outline.maxX(c), outline.maxZ(r));
+                kept[c][r] |= area.any(cell.grow(gap));
+                far[c][r] = !kept[c][r] && !area.any(cell.grow(band));
+            }
+        }
+        return outline.outline(kept, far, middle, ground);
+    }
+
+    /**
+     * The blocks of an area in a rectangle, with a table of sums: the test of a box reads 4 values of the table.
+     */
+    private static final class Area {
+        private final Box rect;
+        private final int[][] sums;
+
+        Area(Box rect, Blocks inside) {
+            this.rect = rect;
+            this.sums = new int[rect.width() + 1][rect.depth() + 1];
+            for (int i = 0; i < rect.width(); i++) {
+                for (int j = 0; j < rect.depth(); j++) {
+                    int block = inside.has(rect.minX() + i, rect.minZ() + j) ? 1 : 0;
+                    sums[i + 1][j + 1] = block + sums[i][j + 1] + sums[i + 1][j] - sums[i][j];
+                }
+            }
+        }
+
+        /** True when a block of the area is in a box. The part of the box out of the rectangle has no block. */
+        boolean any(Box box) {
+            int minI = Math.max(box.minX(), rect.minX()) - rect.minX();
+            int minJ = Math.max(box.minZ(), rect.minZ()) - rect.minZ();
+            int maxI = Math.min(box.maxX(), rect.maxX()) - rect.minX();
+            int maxJ = Math.min(box.maxZ(), rect.maxZ()) - rect.minZ();
+            if (maxI < minI || maxJ < minJ) {
+                return false;
+            }
+            return sums[maxI + 1][maxJ + 1] - sums[minI][maxJ + 1] - sums[maxI + 1][minJ] + sums[minI][minJ] > 0;
+        }
+    }
+
+    /** The steps of the outline, from the cells to keep and the far cells. */
+    private Optional<List<Cell>> outline(boolean[][] kept, boolean[][] far, Cell middle, Ground ground) {
+        if (!cut(kept, far, ground)) {
             return Optional.empty();
         }
-        outline.openCut();
-        outline.open(kept);
-        if (!outline.keepPart(outline.column(middle.x()), outline.row(middle.z()), kept)) {
+        openCut();
+        open(kept);
+        if (!keepPart(column(middle.x()), row(middle.z()), kept)) {
             return Optional.empty();
         }
-        outline.close();
-        if (outline.full()) {
+        close();
+        if (full()) {
             return Optional.empty();
         }
-        return Optional.of(outline.trace());
+        return Optional.of(trace());
     }
 
     /** The first block X of a column of cells. */
@@ -143,20 +226,6 @@ public final class WallOutline {
         return kept;
     }
 
-    /**
-     * The high cells: the cells with no box to keep and with a high point. The points are the blocks at each
-     * {@link #CELL} blocks from the first block of the cell, and its last blocks.
-     */
-    private boolean[][] high(boolean[][] kept, Ground ground) {
-        boolean[][] high = new boolean[columns][rows];
-        for (int c = 0; c < columns; c++) {
-            for (int r = 0; r < rows; r++) {
-                high[c][r] = !kept[c][r] && anyHigh(c, r, ground);
-            }
-        }
-        return high;
-    }
-
     private boolean anyHigh(int column, int row, Ground ground) {
         for (int x : points(minX(column), maxX(column))) {
             for (int z : points(minZ(row), maxZ(row))) {
@@ -180,23 +249,33 @@ public final class WallOutline {
 
     /**
      * Cuts the high cells that a chain of high cells joins to the edge of the rectangle. The other cells stay in the
-     * outline.
+     * outline. A high cell is a far cell, or a cell with no box to keep and with a high point: the points are the
+     * blocks at each {@link #CELL} blocks from the first block of the cell, and its last blocks. The cut reads the
+     * ground only at the cells next to the cut.
      *
      * @return true when a cell goes out
      */
-    private boolean cut(boolean[][] high) {
+    private boolean cut(boolean[][] kept, boolean[][] far, Ground ground) {
+        // 0: not read, 1: high, 2: not high.
+        byte[][] high = new byte[columns][rows];
+        CellTest test = (c, r) -> {
+            if (high[c][r] == 0) {
+                high[c][r] = (byte) (far[c][r] || (!kept[c][r] && anyHigh(c, r, ground)) ? 1 : 2);
+            }
+            return high[c][r] == 1;
+        };
         boolean[][] out = new boolean[columns][rows];
         Deque<int[]> open = new ArrayDeque<>();
         for (int c = 0; c < columns; c++) {
             for (int r = 0; r < rows; r++) {
-                if (high[c][r] && (c == 0 || r == 0 || c == columns - 1 || r == rows - 1)) {
+                if ((c == 0 || r == 0 || c == columns - 1 || r == rows - 1) && test.test(c, r)) {
                     out[c][r] = true;
                     open.add(new int[] {c, r});
                 }
             }
         }
         boolean any = !open.isEmpty();
-        flood(open, out, (c, r) -> high[c][r]);
+        flood(open, out, test);
         for (int c = 0; c < columns; c++) {
             for (int r = 0; r < rows; r++) {
                 in[c][r] = !out[c][r];

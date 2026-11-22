@@ -132,13 +132,17 @@ class WallOutlineTest {
         assertClosed(free);
     }
 
-    /** A ring around a free outline is the rectangle around it, larger by the band, with the gates on the same axes. */
+    /**
+     * A ring around a free outline is the offset of the outline: its box is the box of the outline, larger by the band.
+     * The cut corner of the outline is deeper than 2 bands, thus the ring keeps a part of it. The gates are on the same
+     * axes.
+     */
     @Test
-    void theRingIsARectangleAroundTheFreeOutline() {
+    void theRingIsAnOffsetOfTheFreeOutline() {
         WallLayout free = WallLayout.free(CROSS, MARGIN, SPACING, axes(), MIDDLE, WallOutlineTest::northEast);
         WallLayout ring = WallLayout.ring(free, WallLayout.MIN_BAND);
 
-        assertTrue(ring.isRectangle());
+        assertFalse(ring.isRectangle(), "The ring: " + ring.corners());
         assertEquals(free.outline().grow(WallLayout.MIN_BAND), ring.outline());
         assertEquals(free.gates().stream().map(Gate::center).toList(),
                 ring.gates().stream().map(Gate::center).toList());
@@ -155,6 +159,105 @@ class WallOutlineTest {
         assertTrue(hill.isRectangle(), "A hill in the middle does not change the outline");
         WallLayout thin = WallLayout.free(CROSS, MARGIN, SPACING, axes(), MIDDLE, (x, z) -> x > 30 && x < 34);
         assertTrue(thin.isRectangle(), "A thin strip of high ground does not change the outline: " + thin.corners());
+    }
+
+    /** The smallest distance on the 2 axes from a block to a block of a wall, on its line or inside it. */
+    private static int distance(WallLayout wall, int x, int z) {
+        for (int d = 0; ; d++) {
+            for (int i = -d; i <= d; i++) {
+                if (wall.contains(x + i, z - d) || wall.contains(x + i, z + d) || wall.contains(x - d, z + i)
+                        || wall.contains(x + d, z + i)) {
+                    return d;
+                }
+            }
+        }
+    }
+
+    /** On flat ground, the ring around a rectangle is the rectangle larger by the band. */
+    @Test
+    void ringOnFlatGroundIsTheRectangle() {
+        WallLayout inner = WallLayout.free(CROSS, MARGIN, SPACING, axes(), MIDDLE, WallOutline.Ground.FLAT);
+        for (int band : new int[] {WallLayout.MIN_BAND, 32, 40, WallLayout.MAX_BAND}) {
+            WallLayout ring = WallLayout.ring(inner, band, MIDDLE, WallOutline.Ground.FLAT);
+            assertTrue(ring.isRectangle(), "The ring: " + ring.corners());
+            assertEquals(inner.outline().grow(band), ring.outline());
+            assertEquals(WallLayout.ring(inner, band).corners(), ring.corners());
+            // A mountain far out of the band does not change the ring.
+            int far = inner.outline().maxX() + band + 1;
+            WallLayout same = WallLayout.ring(inner, band, MIDDLE, (x, z) -> x > far);
+            assertEquals(ring.corners(), same.corners());
+            assertEquals(ring.gates(), same.gates());
+        }
+    }
+
+    /**
+     * The ring of a free outline is an offset of the outline: each block of its line is one band from the inner wall,
+     * and at most 2 cells more at the inner corners. Its gates stay on the axes.
+     */
+    @Test
+    void ringFollowsTheFreeOutline() {
+        WallLayout inner = WallLayout.free(CROSS, MARGIN, SPACING, axes(), MIDDLE, WallOutlineTest::northEast);
+        int band = 32;
+        WallLayout ring = WallLayout.ring(inner, band, MIDDLE, WallOutline.Ground.FLAT);
+
+        assertFalse(ring.isRectangle(), "The ring: " + ring.corners());
+        for (int i = 0; i < ring.ringSize(); i++) {
+            Cell cell = ring.ringCell(i);
+            int distance = distance(inner, cell.x(), cell.z());
+            assertTrue(distance >= band && distance <= band + 2 * WallOutline.CELL,
+                    "The block " + cell + " of the ring is " + distance + " blocks from the inner wall");
+        }
+        assertEquals(4, ring.gates().size(), "The gates: " + ring.gates());
+        ring.gates().forEach(gate -> assertEquals(0, gate.center(), "The gate " + gate + " stays on its axis"));
+        assertRing(ring);
+        assertClosed(ring);
+    }
+
+    /**
+     * A mountain in the band: the ring goes around it, and no block of its line is on the high ground. Where the
+     * mountain starts at the inner wall, the ring keeps its gap and its gate on the axis.
+     */
+    @Test
+    void ringGoesAroundTheHighGroundOfTheBand() {
+        WallLayout inner = WallLayout.free(CROSS, MARGIN, SPACING, axes(), MIDDLE, WallOutline.Ground.FLAT);
+        int band = 40;
+        int east = inner.outline().maxX();
+        WallOutline.Ground slope = (x, z) -> x > east + 20;
+        WallLayout ring = WallLayout.ring(inner, band, MIDDLE, slope);
+
+        assertTrue(ring.outline().maxX() < inner.outline().maxX() + band, "The ring: " + ring.corners());
+        for (int i = 0; i < ring.ringSize(); i++) {
+            Cell cell = ring.ringCell(i);
+            assertFalse(slope.high(cell.x(), cell.z()), "The block " + cell + " of the ring is on the mountain");
+        }
+        assertTrue(ring.outline().maxX() > east + WallLayout.RING_GAP, "The ring keeps its gap: " + ring.outline());
+        assertEquals(inner.outline().grow(band).minX(), ring.outline().minX(), "The west side does not change");
+        assertEquals(4, ring.gates().size(), "The gates: " + ring.gates());
+        assertRing(ring);
+        assertClosed(ring);
+
+        WallOutline.Ground cliff = (x, z) -> x > east + 2;
+        WallLayout near = WallLayout.ring(inner, band, MIDDLE, cliff);
+        for (int i = 0; i < near.ringSize(); i++) {
+            Cell cell = near.ringCell(i);
+            assertTrue(distance(inner, cell.x(), cell.z()) >= WallLayout.RING_GAP,
+                    "The block " + cell + " of the ring is in the gap");
+        }
+        assertTrue(near.gates().stream().anyMatch(gate -> gate.side() == Side.EAST && gate.center() == 0),
+                "The east gate stays: " + near.gates());
+        assertRing(near);
+        assertClosed(near);
+
+        // The next ring goes around the ring inside it, on the same ground.
+        List<WallLayout> walls = WallLayout.rings(inner, 3, band, MIDDLE, slope);
+        for (int k = 1; k < walls.size(); k++) {
+            WallLayout outer = walls.get(k);
+            for (int i = 0; i < outer.ringSize(); i++) {
+                Cell cell = outer.ringCell(i);
+                assertFalse(walls.get(k - 1).contains(cell.x(), cell.z()), "The ring " + k + " touches its inner wall");
+            }
+            assertEquals(4, outer.gates().size(), "The gates of the ring " + k + ": " + outer.gates());
+        }
     }
 
     /** Each piece with the margin is inside the line: no block of it is on the line or out of the outline. */
