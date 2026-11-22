@@ -217,6 +217,28 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
                 gateFronts);
     }
 
+    /**
+     * This reference with other templates for some of its pieces: each piece with the origin and the turn of a new
+     * piece gets the template of the new piece. For example, a home that grows in place gets the piece of its step
+     * (see {@link VillageGrowth}).
+     *
+     * @param replaced the new pieces
+     * @return the reference
+     */
+    public VillageReference withReplaced(List<Piece> replaced) {
+        if (replaced.isEmpty()) {
+            return this;
+        }
+        List<Piece> all = new ArrayList<>(pieces.size());
+        for (Piece piece : pieces) {
+            all.add(replaced.stream()
+                    .filter(found -> found.origin().equals(piece.origin()) && found.rotation() == piece.rotation())
+                    .findFirst().orElse(piece));
+        }
+        return new VillageReference(all, palisades, area, plots, homes, piers, streetColumns, streets, paths,
+                gateFronts);
+    }
+
     /** This reference with the surface blocks of its streets. */
     public VillageReference withStreets(Map<BlockPos, BlockState> blocks) {
         return new VillageReference(pieces, palisades, area, plots, homes, piers, streetColumns, blocks, paths,

@@ -25,6 +25,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageGrowth;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
+import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import io.github.nicolasgoyon.folkhold.world.village.structure.WallSettings;
@@ -34,6 +35,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -98,6 +100,11 @@ public final class VillageGrowthGameTests {
     /** The origin of the house-workshop of the farmer: out of the space of the plot. */
     private static final BlockPos FARM_ORIGIN = new BlockPos(1, 1, 22);
     private static final String FARMER = FolkholdWorld.MOD_ID + ":farmer";
+    /** The house-workshop of the baker: a home that grows in place. */
+    private static final ResourceLocation BAKERY = ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
+            "village/job_baker");
+    private static final ResourceLocation BAKERY_STEP2 = ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
+            "village/job_baker_step2");
     /** The job of the job slots of a legacy village: not a food job, so the first post is not a legacy job. */
     private static final String LEGACY_JOB = FolkholdWorld.MOD_ID + ":miner";
     private static final ResourceLocation BARRACKS = ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
@@ -447,6 +454,69 @@ public final class VillageGrowthGameTests {
                     + settlement.level());
         } finally {
             end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A town with no free plot and a free post makes one house-workshop larger in place. The village of the level 9
+     * has the house-workshop of the baker as a piece of its structure. The growth starts the piece of step 2 of the
+     * baker on the piece of the home, with the same origin and the same turn. After the construction, the home has 4
+     * beds, the job post of the baker stays at the same position, and the reference of the repairs has the piece of
+     * step 2: the repairs see no damage in the home. A town permits the step 2 only: the next check makes no home
+     * larger.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_in_place")
+    public static void townMakesAHouseWorkshopLargerInPlace(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Village village = village(helper, HOMES, false, List.of(), 9, 3, false);
+        Settlement settlement = village.settlement();
+        VillageHeartBlockEntity heart = village.heart();
+        StructureTemplate template = level.getStructureManager().get(BAKERY).orElseThrow();
+        BlockPos origin = helper.absolutePos(FARM_ORIGIN);
+        StructurePlaceSettings settings = new StructurePlaceSettings()
+                .addProcessor(JigsawReplacementProcessor.INSTANCE).setKnownShape(true);
+        template.placeInWorld(level, origin, origin, settings, level.getRandom(), Block.UPDATE_CLIENTS);
+        BoundingBox grownBox = GhostPlacement.box(level.getStructureManager().get(BAKERY_STEP2).orElseThrow()
+                .getSize(), Rotation.NONE, Mirror.NONE, origin);
+        List<BoundingBox> boxes = new ArrayList<>(village.boxes());
+        boxes.add(grownBox);
+        Village grown = new Village(heart, settlement, boxes);
+        try {
+            heart.setRepairReference(new VillageReference(List.of(new VillageReference.Piece(BAKERY, origin,
+                    Rotation.NONE)), List.of(), Optional.empty(), List.of(), Optional.of(HOMES)));
+            heart.requestScan();
+            heart.ensureGarrison(level.getGameTime());
+            List<JobPosts.Post> before = settlement.jobPosts().orElseThrow();
+            HomeNeed.Cause need = VillageGrowth.homeNeed(level, heart, settlement);
+            Optional<BuilderSite> site = VillageGrowth.check(level, heart);
+
+            helper.assertTrue(need == HomeNeed.Cause.FREE_POST, "The town must need a home: " + need);
+            helper.assertTrue(site.isPresent() && site.get().template().equals(BAKERY_STEP2)
+                    && site.get().origin().equals(origin) && site.get().rotation() == Rotation.NONE,
+                    "The town must make the bakery larger in place: " + site.map(BuilderSite::template));
+            finish(level, heart, site.get());
+            List<JobPosts.Post> after = settlement.jobPosts().orElseThrow();
+            Optional<BuilderSite> next = VillageGrowth.check(level, heart);
+            VillageReference reference = heart.repairReference(level).orElseThrow();
+            Set<BlockPos> damaged = VillageRepairs.damaged(level, heart, reference);
+
+            helper.assertTrue(before.size() == 1 && after.size() == 1, "The town must keep 1 post: " + after);
+            JobPosts.Post post = after.get(0);
+            helper.assertTrue(post.jobId().equals(before.get(0).jobId()) && post.x() == before.get(0).x()
+                    && post.y() == before.get(0).y() && post.z() == before.get(0).z(),
+                    "The job post must stay: " + before + " -> " + after);
+            helper.assertTrue(post.homeBeds() == 4, "The home must have 4 beds: " + post.homeBeds());
+            helper.assertTrue(reference.pieces().equals(List.of(new VillageReference.Piece(BAKERY_STEP2, origin,
+                    Rotation.NONE))), "The reference must have the piece of step 2: " + reference.pieces());
+            helper.assertFalse(VillageRepairData.get(level).keeps(heart.getBlockPos(), origin.above(6)),
+                    "The repairs must cover the home");
+            helper.assertTrue(damaged.stream().noneMatch(grownBox::isInside),
+                    "The repairs must see no damage in the home: " + damaged.stream().filter(grownBox::isInside)
+                    .limit(10).toList());
+            helper.assertTrue(next.isEmpty(), "A town permits the step 2 only: " + next.map(BuilderSite::template));
+        } finally {
+            end(helper, grown);
         }
         helper.succeed();
     }
