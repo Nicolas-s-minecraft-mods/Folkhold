@@ -195,6 +195,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
      * a piece and a free plot. Not saved: the next check sets it.
      */
     private boolean homeNoSpace;
+    /**
+     * The kinds of the buildings for which the last check of the growth found no free plot (no piece of the kind, or
+     * no free plot that holds it). Not saved: the next check sets it.
+     */
+    private final Set<String> buildingNoSpace = new HashSet<>();
     /** The plot of the market of the village, or null before the growth starts the market. */
     @Nullable
     private VillageMarket.Plot marketPlot;
@@ -1165,6 +1170,27 @@ public class VillageHeartBlockEntity extends BlockEntity {
      */
     public Optional<VillageBeds.Homes> homes() {
         return Optional.ofNullable(homes);
+    }
+
+    /**
+     * True if the last check of the growth found no free plot for a building of a kind (see {@link VillageGrowth}).
+     * The heart screen shows it (see
+     * {@link io.github.nicolasgoyon.folkhold.world.village.VillageGrowthInfo}).
+     *
+     * @param kind the kind of the building, for example {@code storehouse}
+     * @return true with no free plot
+     */
+    public boolean isBuildingNoSpace(String kind) {
+        return buildingNoSpace.contains(kind);
+    }
+
+    /** Records the result of the last check of the growth for a building of a kind (see {@link VillageGrowth}). */
+    public void setBuildingNoSpace(String kind, boolean noSpace) {
+        if (noSpace) {
+            buildingNoSpace.add(kind);
+        } else {
+            buildingNoSpace.remove(kind);
+        }
     }
 
     /** Records the result of the last check of the growth for a new home (see {@link VillageGrowth}). */

@@ -261,6 +261,9 @@ public final class VillageGrowth {
             if (market && (attempt.site().isPresent() || attempt.complete())) {
                 // A plot in a chunk that is not ready can be free: the heart keeps the last known state.
                 heart.setMarketNoSpace(element.isPresent() && attempt.site().isEmpty());
+            } else if (attempt.site().isPresent() || attempt.complete()) {
+                // A building of the level or of the next tier: the heart screen shows a building with no plot.
+                heart.setBuildingNoSpace(step.kind(), attempt.site().isEmpty());
             }
             if (attempt.site().isPresent()) {
                 BuilderSite site = attempt.site().get();

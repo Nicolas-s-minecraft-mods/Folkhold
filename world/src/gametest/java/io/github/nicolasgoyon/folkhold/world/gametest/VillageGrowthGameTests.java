@@ -5,6 +5,7 @@ import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.GrowthCause;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HomeNeed;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
@@ -16,12 +17,15 @@ import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
+import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload;
+import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageGrowth;
+import io.github.nicolasgoyon.folkhold.world.village.VillageGrowthInfo;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
@@ -44,6 +48,8 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -519,6 +525,51 @@ public final class VillageGrowthGameTests {
             end(helper, grown);
         }
         helper.succeed();
+    }
+
+    /**
+     * The heart screen shows what stops the next level. A hamlet of the level 4 has a storehouse and no free plot for
+     * its market: the data of the screen gives the market of the next tier with the cause "no free plot", the
+     * storehouse as built, the free job posts and the cause of the new home. With no builder, the cause of the market
+     * is "no builder".
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_screen")
+    public static void heartScreenShowsWhatStopsTheNextLevel(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Village village = village(helper, HOMES, true, List.of(), 4, 3, false);
+        Settlement settlement = village.settlement();
+        VillageHeartBlockEntity heart = village.heart();
+        try {
+            helper.setBlock(HEART.east(2), ModBlocks.buildingSign(BuildingSignKind.STOREHOUSE));
+            heart.requestScan();
+            heart.ensureGarrison(level.getGameTime());
+            Optional<BuilderSite> site = VillageGrowth.check(level, heart);
+            List<VillageGrowthInfo.Need> needs = VillageGrowthInfo.nextTier(heart, settlement);
+            VillageInfoPayload.Section section = VillageGrowthInfo.growthSection(heart, settlement);
+            List<String> keys = section.rows().stream().flatMap(row -> java.util.stream.Stream.of(row.label(),
+                    row.value())).map(VillageGrowthGameTests::key).toList();
+            VillageFolk.of(level, heart.getBlockPos(), ModProfessions.BUILDER.get()).forEach(Entity::discard);
+            List<VillageGrowthInfo.Need> noBuilder = VillageGrowthInfo.nextTier(heart, settlement);
+
+            helper.assertTrue(site.isEmpty(), "With no free plot, the growth must start nothing");
+            helper.assertTrue(needs.equals(List.of(new VillageGrowthInfo.Need("market", GrowthCause.NO_SPACE),
+                    new VillageGrowthInfo.Need("storehouse", GrowthCause.BUILT))),
+                    "The market must have no free plot, and the storehouse must be built: " + needs);
+            String screen = "screen.folkhold_world.village_heart.";
+            helper.assertTrue(keys.containsAll(List.of(screen + "building.market", screen + "growth.no_space",
+                    screen + "building.storehouse", screen + "growth.built", screen + "free_posts",
+                    screen + "new_home")), "The rows must show the buildings and their causes: " + keys);
+            helper.assertTrue(noBuilder.get(0).cause() == GrowthCause.NO_BUILDER,
+                    "With no builder, the market must wait for a builder: " + noBuilder);
+        } finally {
+            end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /** The translation key of a text, or the text itself. */
+    private static String key(Component text) {
+        return text.getContents() instanceof TranslatableContents contents ? contents.getKey() : text.getString();
     }
 
     /**
