@@ -135,6 +135,9 @@ public final class QuestData extends SavedData {
                 entry.putUUID("Player", quest.playerId());
             }
             entry.putLong("Deadline", quest.deadline());
+            if (!quest.definitionId().isEmpty()) {
+                entry.putString("Definition", quest.definitionId());
+            }
             list.add(entry);
         }
         tag.put("Quests", list);
@@ -186,7 +189,8 @@ public final class QuestData extends SavedData {
                     .orElse(ReputationTier.NEUTRAL);
             Quest quest = new Quest(id, kind.get(), entry.getString("Settlement"), entry.getString("Faction"),
                     entry.getString("Target"), entry.getInt("Count"), entry.getLong("RewardEmeralds"),
-                    entry.getInt("RewardReputation"), minTier, entry.getLong("OfferEnd"), entry.getLong("Duration"));
+                    entry.getInt("RewardReputation"), minTier, entry.getLong("OfferEnd"), entry.getLong("Duration"),
+                    entry.getString("Definition"));
             quest.restore(state, entry.hasUUID("Player") ? entry.getUUID("Player") : null,
                     entry.getLong("Deadline"));
             if (data.quests.byId(quest.id()).isEmpty()) {

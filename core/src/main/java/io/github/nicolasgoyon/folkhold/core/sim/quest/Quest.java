@@ -12,7 +12,8 @@ import java.util.UUID;
  *   <li>Escort: the target is the id of a caravan. The count is not used.</li>
  * </ul>
  *
- * <p>The times are game times in ticks.
+ * <p>The times are game times in ticks. A quest keeps the id of the definition that made it (see
+ * {@link QuestDefinition}). A quest of a save with no definition id has an empty id.
  */
 public final class Quest {
     private final String id;
@@ -26,6 +27,7 @@ public final class Quest {
     private final ReputationTier minTier;
     private final long offerEnd;
     private final long duration;
+    private final String definitionId;
     private QuestState state = QuestState.OFFERED;
     private UUID playerId;
     private long deadline;
@@ -47,6 +49,30 @@ public final class Quest {
      */
     public Quest(String id, QuestKind kind, String settlementId, String factionId, String target, int count,
             long rewardEmeralds, int rewardReputation, ReputationTier minTier, long offerEnd, long duration) {
+        this(id, kind, settlementId, factionId, target, count, rewardEmeralds, rewardReputation, minTier, offerEnd,
+                duration, "");
+    }
+
+    /**
+     * Makes a quest of a definition in the state {@link QuestState#OFFERED}.
+     *
+     * @param id               the id of the quest (a UUID as text)
+     * @param kind             the kind
+     * @param settlementId     the id of the village that gives the quest
+     * @param factionId        the id of the faction of the village
+     * @param target           the item id (delivery) or the caravan id (escort)
+     * @param count            the quantity of items (delivery)
+     * @param rewardEmeralds   the emeralds of the reward
+     * @param rewardReputation the reputation of the reward
+     * @param minTier          the lowest reputation tier that can accept the quest
+     * @param offerEnd         the game time when the offer ends
+     * @param duration         the time from the acceptance to the deadline, in ticks
+     * @param definitionId     the id of the definition, or an empty text for no definition
+     */
+    public Quest(String id, QuestKind kind, String settlementId, String factionId, String target, int count,
+            long rewardEmeralds, int rewardReputation, ReputationTier minTier, long offerEnd, long duration,
+            String definitionId) {
+        this.definitionId = Objects.requireNonNull(definitionId);
         this.id = Objects.requireNonNull(id);
         this.kind = Objects.requireNonNull(kind);
         this.settlementId = Objects.requireNonNull(settlementId);
@@ -117,6 +143,11 @@ public final class Quest {
 
     public long duration() {
         return duration;
+    }
+
+    /** The id of the definition that made the quest, or an empty text for no definition. */
+    public String definitionId() {
+        return definitionId;
     }
 
     public QuestState state() {

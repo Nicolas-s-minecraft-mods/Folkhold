@@ -4,8 +4,10 @@ import io.github.nicolasgoyon.folkhold.core.sim.group.GroupState;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestGenerator;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
@@ -92,22 +94,29 @@ public final class Escorts {
      * @param caravan    the caravan, in the state waiting
      * @param origin     the village of the caravan
      * @param tickNumber the number of the abstract tick
-     * @return the quest, or an empty value if the escort offers are off
+     * @return the quest, or an empty value if the escort offers are off or no definition of the need
+     *         {@link QuestNeed#CARAVAN} makes offers in the village (see {@link QuestDefinitions})
      */
     public static Optional<Quest> offer(MinecraftServer server, MobileGroup caravan, Settlement origin,
             long tickNumber) {
-        if (!WorldConfig.QUEST_ESCORT_OFFERS.get()) {
+        Optional<QuestDefinition> definition = QuestDefinitions.matching(QuestNeed.CARAVAN, origin.level()).stream()
+                .findFirst();
+        if (!WorldConfig.QUEST_ESCORT_OFFERS.get() || definition.isEmpty()) {
             return Optional.empty();
         }
+        QuestDefinition.Values values = definition.get().values();
         int wait = WorldConfig.QUEST_ESCORT_WAIT_TICKS.get();
         caravan.setDepartureTick(tickNumber + wait);
         long now = server.overworld().getGameTime();
         long offerEnd = now + (long) wait * SimulationTicker.settings().intervalTicks();
-        long reward = Math.max(1, Math.round(caravan.payment() * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()));
+        long reward = Math.max(1, Math.round(caravan.payment()
+                * values.rewardFactor().orElse(WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())));
+        long minutes = escortMinutes(caravan.route().length(),
+                values.durationMinutes().orElse(WorldConfig.QUEST_ESCORT_MINUTES.get()));
         Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
-                caravan.id(), 0, reward, WorldConfig.QUEST_ESCORT_REPUTATION.get(),
-                QuestGenerator.minTier(reward, QuestSystem.settings()), offerEnd,
-                escortMinutes(caravan.route().length()) * SharedConstants.TICKS_PER_MINUTE);
+                caravan.id(), 0, reward, values.reputation().orElse(WorldConfig.QUEST_ESCORT_REPUTATION.get()),
+                QuestGenerator.minTier(reward, QuestSystem.settings(definition.get())), offerEnd,
+                minutes * SharedConstants.TICKS_PER_MINUTE, definition.get().id());
         QuestData data = QuestData.get(server);
         data.quests().add(quest);
         data.setDirty();
@@ -122,8 +131,20 @@ public final class Escorts {
      * @return the time, in minutes
      */
     public static long escortMinutes(double routeLength) {
+        return escortMinutes(routeLength, WorldConfig.QUEST_ESCORT_MINUTES.get());
+    }
+
+    /**
+     * The time of an escort with a minimum: the length of the route at
+     * {@link WorldConfig#QUEST_ESCORT_BLOCKS_PER_MINUTE}, plus {@link #EXTRA_MINUTES}, and at least the minimum.
+     *
+     * @param routeLength the length of the route, in blocks
+     * @param minimum     the minimum time, in minutes
+     * @return the time, in minutes
+     */
+    public static long escortMinutes(double routeLength, long minimum) {
         long travel = (long) Math.ceil(routeLength / WorldConfig.QUEST_ESCORT_BLOCKS_PER_MINUTE.get()) + EXTRA_MINUTES;
-        return Math.max(WorldConfig.QUEST_ESCORT_MINUTES.get(), travel);
+        return Math.max(minimum, travel);
     }
 
     /** The accepted escort quests. */

@@ -40,6 +40,7 @@ import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrols;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
 import io.github.nicolasgoyon.folkhold.world.quest.Escorts;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
+import io.github.nicolasgoyon.folkhold.world.quest.QuestDefinitions;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestSystem;
 import io.github.nicolasgoyon.folkhold.world.registry.ModBlockEntities;
 import io.github.nicolasgoyon.folkhold.world.registry.ModBlockFeatures;
@@ -213,6 +214,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(RepairEquivalents::onAddReloadListener);
         NeoForge.EVENT_BUS.addListener(GarrisonEquipment::onAddReloadListener);
         NeoForge.EVENT_BUS.addListener(EconomyData::onAddReloadListener);
+        NeoForge.EVENT_BUS.addListener(QuestDefinitions::onAddReloadListener);
         NeoForge.EVENT_BUS.addListener(StartMaterials::onAddReloadListener);
         SimulationTicker.addSystem("economy", Economies::tick);
         SimulationTicker.addSystem("level", SettlementLevels::tick);
