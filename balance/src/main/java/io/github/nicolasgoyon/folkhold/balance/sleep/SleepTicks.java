@@ -14,9 +14,7 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  * Slumber, nothing calls them.
  *
  * <ul>
- *   <li>The budget of the extra ticks of a server tick is {@code extraTickBudget}, plus the time that the server tick
- *       has left: 50 ms less the time from the start of the server tick to the extra ticks (see
- *       {@link SleepTickLimiter}).</li>
+ *   <li>The extra ticks of a server tick fit in the budget {@code extraTickBudget} (see {@link SleepTickLimiter}).</li>
  *   <li>When the extra ticks cannot end the night in {@code nightSeconds}, the day time jumps by the missing ticks
  *       (see {@link NightClock}). The jump needs the game rule {@code doDaylightCycle}.</li>
  * </ul>
@@ -24,14 +22,9 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 public final class SleepTicks {
     private static final long NANOS_PER_MILLI = 1_000_000L;
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
-    /** The time of a server tick at 20 ticks for each second, in nanoseconds. */
-    private static final long SERVER_TICK_NANOS = 50L * NANOS_PER_MILLI;
     private static final int DAY_TICKS = 24000;
     private static final SleepTickLimiter LIMITER = new SleepTickLimiter();
     private static final NightClock CLOCK = new NightClock();
-
-    /** The start of the current server tick ({@link System#nanoTime()}), or 0 before the first server tick. */
-    private static long tickStartNanos;
 
     private static int limitCalls;
     private static int checkedCalls;
@@ -49,9 +42,8 @@ public final class SleepTicks {
         limitCalls++;
         int serverTick = server == null ? 0 : server.getTickCount();
         long now = System.nanoTime();
-        long left = tickStartNanos == 0L ? 0L : Math.max(0L, SERVER_TICK_NANOS - (now - tickStartNanos));
         int allowed = LIMITER.allowed(requested, serverTick, BalanceConfig.SLEEP_MAX_EXTRA_TICKS.get(),
-                BalanceConfig.SLEEP_EXTRA_TICK_BUDGET.get() * NANOS_PER_MILLI + left);
+                BalanceConfig.SLEEP_EXTRA_TICK_BUDGET.get() * NANOS_PER_MILLI);
         if (server != null && allowed > 0) {
             jump(server.overworld(), serverTick, now, allowed);
         }
@@ -68,15 +60,6 @@ public final class SleepTicks {
         if (jump > 0) {
             level.setDayTime(level.getDayTime() + jump);
         }
-    }
-
-    /**
-     * Records the start of a server tick, for the time that the server tick has left (see {@link #limit}).
-     *
-     * @param event the start of a server tick
-     */
-    public static void onServerTickStart(ServerTickEvent.Pre event) {
-        tickStartNanos = System.nanoTime();
     }
 
     /**

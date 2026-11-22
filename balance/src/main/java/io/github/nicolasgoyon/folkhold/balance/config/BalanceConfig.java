@@ -286,9 +286,9 @@ public final class BalanceConfig {
                 .defineInRange("maxExtraTicks", 20, 1, 1000);
         SLEEP_EXTRA_TICK_BUDGET = builder
                 .comment("Time budget in milliseconds for the extra ticks of one server tick. The mod measures the time",
-                        "of the extra ticks and runs the number that fits in this time, 1 at least. The time that the",
-                        "server tick has left (50 ms less the time of the normal tick) adds to this budget. A higher",
-                        "value makes the night shorter and each server tick longer.")
+                        "of the extra ticks and runs the number that fits in this time, 1 at least. A server tick",
+                        "with no sleep has 50 ms. A higher value makes each server tick longer. In a slow world, it",
+                        "does not make the night shorter: see nightSeconds.")
                 .translation(KEY_PREFIX + "extraTickBudget")
                 .defineInRange("extraTickBudget", 50, 1, 1000);
         SLEEP_NIGHT_SECONDS = builder

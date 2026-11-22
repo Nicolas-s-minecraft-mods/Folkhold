@@ -37,8 +37,7 @@ class NightClockTest {
                 break;
             }
             int requested = (int) Math.ceil(toMorning / 40.0);
-            long left = Math.max(0L, 50 * MS - (now - start));
-            int extra = limiter.allowed(requested, serverTicks, 20, 50 * MS + left);
+            int extra = limiter.allowed(requested, serverTicks, 20, 50 * MS);
             int jump = clock.jump(serverTicks, now, toMorning, extra, targetNanos);
             assertTrue(jump <= toMorning - extra, "The jump stops before the morning");
             toMorning -= jump;
@@ -86,7 +85,7 @@ class NightClockTest {
     void slowWorldWithNoTargetTakesTheTimeOfTheExtraTicks() {
         Night night = night(29 * MS, 0L);
         assertEquals(0, night.jumped());
-        // 3 game ticks of 29 ms in each server tick: about 3,700 server ticks of 87 ms.
+        // 2 game ticks of 29 ms in each server tick: about 5,500 server ticks of 58 ms.
         assertTrue(night.realNanos() > 300 * SECOND, "The night takes more than 5 minutes: " + night);
     }
 
