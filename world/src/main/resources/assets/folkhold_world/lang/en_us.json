@@ -755,6 +755,7 @@
   "quest.folkhold_world.kind.hunt": "Hunt",
   "quest.folkhold_world.info.delivery": "%s · %s min",
   "quest.folkhold_world.info.escort": "%s · %s blocks · %s min",
+  "quest.folkhold_world.info.difficulty": "%s · difficulty %s",
   "quest.folkhold_world.info.hunt": "%s · %s blocks around · %s min",
   "quest.folkhold_world.info.tier": "%s · %s",
   "quest.folkhold_world.reward": "%s emeralds · +%s rep.",

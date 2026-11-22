@@ -162,6 +162,9 @@ public final class QuestData extends SavedData {
             if (!quest.text().isEmpty()) {
                 entry.putString("Text", quest.text());
             }
+            if (quest.difficulty() > 0) {
+                entry.putInt("Difficulty", quest.difficulty());
+            }
             if (!quest.definitionId().isEmpty()) {
                 entry.putString("Definition", quest.definitionId());
             }
@@ -232,6 +235,7 @@ public final class QuestData extends SavedData {
                     Math.max(0, entry.getInt("FailureReputation")));
             quest.setProgress(entry.getInt("Progress"));
             quest.setGiver(entry.getString("GiverJob"), entry.getString("Text"));
+            quest.setDifficulty(entry.getInt("Difficulty"));
             if (data.quests.byId(quest.id()).isEmpty()) {
                 data.quests.add(quest);
             }
