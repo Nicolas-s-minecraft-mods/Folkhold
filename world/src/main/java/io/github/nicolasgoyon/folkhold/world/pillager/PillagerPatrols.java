@@ -87,6 +87,7 @@ public final class PillagerPatrols {
                 followers.addAll(PATROLS.getOrDefault(player.getUUID(), List.of()));
             }
         }
+        PatrolEncounters.checkMaterialized(overworld);
         PatrolEntities.update(overworld, followers);
     }
 
@@ -162,7 +163,7 @@ public final class PillagerPatrols {
     }
 
     /** The surface of a column: the first free block above the ground, or empty in a fluid or an unloaded chunk. */
-    private static Optional<BlockPos> surface(ServerLevel level, BlockPos column) {
+    static Optional<BlockPos> surface(ServerLevel level, BlockPos column) {
         if (!level.isLoaded(column)) {
             return Optional.empty();
         }

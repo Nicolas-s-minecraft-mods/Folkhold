@@ -36,6 +36,7 @@ import io.github.nicolasgoyon.folkhold.world.journal.TerritoryMaps;
 import io.github.nicolasgoyon.folkhold.world.journal.TerritoryReliefs;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.notice.Notices;
+import io.github.nicolasgoyon.folkhold.world.pillager.PatrolEncounters;
 import io.github.nicolasgoyon.folkhold.world.pillager.PatrolEntities;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerDiscovery;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrolGroups;
@@ -186,6 +187,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(PatrolEntities::onDeath);
         NeoForge.EVENT_BUS.addListener(PatrolEntities::onServerStopping);
         NeoForge.EVENT_BUS.addListener(PatrolEntities::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(PatrolEncounters::onServerStopped);
         NeoForge.EVENT_BUS.addListener(RoadNetwork::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(RoadNetwork::onBlockPlaced);
         NeoForge.EVENT_BUS.addListener(RoadNetwork::onBlockBroken);
