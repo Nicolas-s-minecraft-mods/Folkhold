@@ -1,0 +1,117 @@
+package io.github.nicolasgoyon.folkhold.world.quest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import org.junit.jupiter.api.Test;
+
+/** The format of the quest definition files ({@link QuestDefinitions#parse}). */
+class QuestDefinitionsTest {
+
+    private static JsonObject json(String text) {
+        return JsonParser.parseString(text).getAsJsonObject();
+    }
+
+    private static QuestDefinition parse(String text, List<String> warnings) {
+        return QuestDefinitions.parse("test:quest", json(text), warnings::add);
+    }
+
+    /** A file with all the fields gives all the values. */
+    @Test
+    void fileWithAllTheFieldsGivesAllTheValues() {
+        List<String> warnings = new ArrayList<>();
+        QuestDefinition definition = parse("""
+                {"kind": "delivery", "need": "job_inputs", "enabled": false,
+                 "conditions": {"min_level": 5, "max_level": 9},
+                 "reward": {"factor": 2.5, "reputation": 12, "friend_reward": 80},
+                 "offer": {"offer_minutes": 15, "duration_minutes": 30, "max_count": 16}}
+                """, warnings);
+
+        assertEquals(new QuestDefinition("test:quest", QuestKind.DELIVERY, QuestNeed.JOB_INPUTS, false, 5, 9,
+                new QuestDefinition.Values(OptionalDouble.of(2.5), OptionalInt.of(12), OptionalInt.of(80),
+                        OptionalInt.of(15), OptionalInt.of(30), OptionalInt.of(16))), definition);
+        assertEquals(List.of(), warnings);
+    }
+
+    /** A file with only the kind and the need is on, has no level limit and takes all its values from the config. */
+    @Test
+    void fileWithOnlyTheKindAndTheNeedUsesTheDefaults() {
+        QuestDefinition definition = parse("{\"kind\": \"escort\", \"need\": \"caravan\"}", new ArrayList<>());
+
+        assertEquals(new QuestDefinition("test:quest", QuestKind.ESCORT, QuestNeed.CARAVAN, true, 1,
+                Integer.MAX_VALUE, QuestDefinition.Values.CONFIG), definition);
+    }
+
+    /** A field that this version does not use gives a warning with its path. The definition loads. */
+    @Test
+    void unknownFieldGivesAWarning() {
+        List<String> warnings = new ArrayList<>();
+        parse("""
+                {"kind": "delivery", "need": "site_materials", "start_items": [],
+                 "reward": {"experience": 5}, "conditions": {"tier": "town"}}
+                """, warnings);
+
+        assertEquals(3, warnings.size(), "Warnings: " + warnings);
+        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'start_items'")), "Warnings: " + warnings);
+        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'reward.experience'")),
+                "Warnings: " + warnings);
+        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'conditions.tier'")),
+                "Warnings: " + warnings);
+    }
+
+    /** A file that is not valid gives an error that tells the cause. */
+    @Test
+    void fileThatIsNotValidGivesTheCause() {
+        assertMessage("kind", "{\"need\": \"job_inputs\"}");
+        assertMessage("Unknown kind 'gather'", "{\"kind\": \"gather\", \"need\": \"job_inputs\"}");
+        assertMessage("Unknown need 'fish'", "{\"kind\": \"delivery\", \"need\": \"fish\"}");
+        assertMessage("has the kind delivery", "{\"kind\": \"escort\", \"need\": \"job_inputs\"}");
+        assertMessage("max_count", "{\"kind\": \"delivery\", \"need\": \"job_inputs\", \"offer\": {\"max_count\": 0}}");
+        assertMessage("Invalid levels", "{\"kind\": \"delivery\", \"need\": \"job_inputs\","
+                + " \"conditions\": {\"min_level\": 6, \"max_level\": 2}}");
+    }
+
+    private static void assertMessage(String expected, String text) {
+        RuntimeException error = assertThrows(RuntimeException.class, () -> parse(text, new ArrayList<>()));
+        assertTrue(error.getMessage().contains(expected), "Expected '" + expected + "' in: " + error.getMessage());
+    }
+
+    /** The 3 definitions of the mod are valid, with no warning and no value: all their values come from the config. */
+    @Test
+    void modDefinitionsAreValid() throws IOException {
+        Map<String, QuestNeed> files = Map.of("job_input_delivery", QuestNeed.JOB_INPUTS, "site_material_delivery",
+                QuestNeed.SITE_MATERIALS, "caravan_escort", QuestNeed.CARAVAN);
+        for (Map.Entry<String, QuestNeed> file : files.entrySet()) {
+            String path = "/data/folkhold_world/folkhold/quest/" + file.getKey() + ".json";
+            try (InputStream stream = QuestDefinitionsTest.class.getResourceAsStream(path)) {
+                assertTrue(stream != null, "Missing file " + path);
+                try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                    List<String> warnings = new ArrayList<>();
+                    QuestDefinition definition = QuestDefinitions.parse("folkhold_world:" + file.getKey(),
+                            JsonParser.parseReader(reader).getAsJsonObject(), warnings::add);
+                    assertEquals(file.getValue(), definition.need(), path);
+                    assertTrue(definition.enabled() && definition.minLevel() == 1
+                            && definition.maxLevel() == Integer.MAX_VALUE, path);
+                    assertEquals(QuestDefinition.Values.CONFIG, definition.values(), path);
+                    assertEquals(List.of(), warnings, path);
+                }
+            }
+        }
+    }
+}

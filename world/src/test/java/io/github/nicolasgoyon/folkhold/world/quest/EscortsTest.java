@@ -22,6 +22,15 @@ class EscortsTest {
         TestConfig.loadWorldConfig();
     }
 
+    /** The minimum of a definition replaces the minimum of the config. The travel time stays. */
+    @Test
+    void escortTimeUsesTheMinimumOfTheDefinition() {
+        long travel = (long) Math.ceil(20_000.0 / WorldConfig.QUEST_ESCORT_BLOCKS_PER_MINUTE.get()) + 10;
+        assertEquals(500, Escorts.escortMinutes(100, 500));
+        assertEquals(travel, Escorts.escortMinutes(20_000, 1));
+        assertEquals(Escorts.escortMinutes(100), Escorts.escortMinutes(100, WorldConfig.QUEST_ESCORT_MINUTES.get()));
+    }
+
     /** The time of an escort: the minimum for a short route, more for a long route. */
     @Test
     void escortTimeFollowsTheRouteLength() {
