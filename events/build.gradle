@@ -14,7 +14,7 @@ dependencies {
     api project(':core')
     // The tests of the client config load Confee with no game runtime. Confee logs with SLF4J (the version of
     // Minecraft 1.21.1).
-    testRuntimeOnly 'org.slf4j:slf4j-api:2.0.9'
+    testRuntimeOnly 'org.slf4j:slf4j-api:2.0.20'
 }
 
 neoForge {
