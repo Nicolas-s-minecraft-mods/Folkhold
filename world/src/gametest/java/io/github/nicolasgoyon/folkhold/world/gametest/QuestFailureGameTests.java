@@ -18,6 +18,7 @@ import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
+import io.github.nicolasgoyon.folkhold.world.network.QuestDetail;
 import io.github.nicolasgoyon.folkhold.world.quest.Deliveries;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
@@ -31,7 +32,6 @@ import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -101,15 +101,20 @@ public final class QuestFailureGameTests {
         return ReputationData.get(player.server).get(player.getUUID()).faction(faction);
     }
 
-    /** The last argument of the text of the board for the failure (see {@code quest.folkhold_world.failure}). */
-    private static Object shownLoss(Component risk) {
-        Component part = risk;
-        while (part.getContents() instanceof TranslatableContents contents
-                && contents.getKey().equals("quest.folkhold_world.reward.more")) {
-            part = (Component) contents.getArgs()[1];
+    /**
+     * The reputation loss of the line "Failure" of the detail panel of the board (see
+     * {@code quest.folkhold_world.detail.reputation_loss}), or null with no such line.
+     */
+    private static Object shownLoss(List<QuestDetail> details) {
+        for (QuestDetail detail : details) {
+            if (detail.label().getContents() instanceof TranslatableContents label
+                    && label.getKey().equals("quest.folkhold_world.detail.failure")
+                    && detail.value().getContents() instanceof TranslatableContents value
+                    && value.getKey().equals("quest.folkhold_world.detail.reputation_loss")) {
+                return value.getArgs()[0];
+            }
         }
-        return part.getContents() instanceof TranslatableContents contents
-                && contents.getKey().equals("quest.folkhold_world.failure") ? contents.getArgs()[0] : null;
+        return null;
     }
 
     /**
@@ -125,7 +130,7 @@ public final class QuestFailureGameTests {
         try {
             QuestBoardPayload.Offer shown = QuestBoards.board(player, village).offers().stream()
                     .filter(offer -> offer.questId().equals(quest.id())).findFirst().orElseThrow();
-            Object loss = shownLoss(shown.risk());
+            Object loss = shownLoss(shown.details());
             helper.assertTrue(QuestBoards.accept(player, quest.id()) == Quests.AcceptResult.ACCEPTED,
                     "The player must accept the quest");
             int before = factionReputation(player, village);
