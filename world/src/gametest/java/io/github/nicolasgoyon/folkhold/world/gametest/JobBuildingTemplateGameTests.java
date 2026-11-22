@@ -8,6 +8,7 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -348,6 +349,8 @@ public final class JobBuildingTemplateGameTests {
     @GameTest(template = "arena_large", timeoutTicks = 40, batch = "job_building_scan_forge", skyAccess = true)
     public static void forgeWithNoBedsIsNotAPost(GameTestHelper helper) {
         TestSupport.buildFloor(helper, ARENA);
+        // The scan finds only the buildings of this test.
+        TestSupport.clearEarlierBlocks(helper, VillageLayout.defaultArea(helper.absolutePos(HEART)));
         ServerLevel level = helper.getLevel();
         StructureTemplate template = level.getStructureManager().getOrCreate(piece("", "house_forge"));
         StructurePlaceSettings settings = new StructurePlaceSettings()
@@ -406,6 +409,8 @@ public final class JobBuildingTemplateGameTests {
                 .map(Map.Entry::getValue).findFirst().orElse(null);
         BlockPos heartPos = style != null ? STYLE_HEART : HEART;
         TestSupport.buildFloor(helper, style != null ? HUGE_ARENA : ARENA);
+        // The scan finds only the buildings of this test.
+        TestSupport.clearEarlierBlocks(helper, VillageLayout.defaultArea(helper.absolutePos(heartPos)));
         ServerLevel level = helper.getLevel();
         StructureTemplateManager templates = level.getStructureManager();
         List<BoundingBox> boxes = new ArrayList<>();

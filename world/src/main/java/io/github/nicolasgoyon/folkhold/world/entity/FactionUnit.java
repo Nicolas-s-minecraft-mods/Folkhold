@@ -22,6 +22,7 @@ import io.github.nicolasgoyon.folkhold.world.registry.ModSounds.UnitVoice;
 import io.github.nicolasgoyon.folkhold.world.settlement.Territories;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
+import io.github.nicolasgoyon.folkhold.world.village.MonsterThreats;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import java.util.Objects;
 import java.util.Optional;
@@ -732,7 +733,10 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (target != null) {
             LivingEntity threat = target;
             getVillageHeart().ifPresent(heart -> {
-                heart.reportThreat(null);
+                // A monster far from the villagers does not start the alert: the villagers stay in their beds.
+                if (MonsterThreats.startsAlert(threat)) {
+                    heart.reportThreat(null);
+                }
                 if (!(threat instanceof Player friend) || !isFriendlyTo(friend)) {
                     heart.shareTarget(threat);
                 }

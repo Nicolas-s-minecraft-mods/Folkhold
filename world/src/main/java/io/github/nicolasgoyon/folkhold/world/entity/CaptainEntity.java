@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
+import io.github.nicolasgoyon.folkhold.world.village.MonsterThreats;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -68,7 +69,7 @@ public class CaptainEntity extends GuardEntity {
     @Override
     protected void unitServerAiStep(@Nullable LivingEntity target) {
         super.unitServerAiStep(target);
-        if (target != null) {
+        if (target != null && MonsterThreats.startsAlert(target)) {
             getVillageHeart().ifPresent(heart -> {
                 heart.reportThreat(null);
                 heart.setAlertState(AlertState.ASSAULT);
