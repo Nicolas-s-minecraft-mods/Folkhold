@@ -28,6 +28,7 @@
   "folkhold_world.configuration.calmDelaySeconds": "Delay before the village is calm (seconds)",
   "folkhold_world.configuration.builders": "Builders for each village",
   "folkhold_world.configuration.handymen": "Handymen for each village",
+  "folkhold_world.configuration.heartShift": "Largest shift of the village heart",
   "folkhold_world.configuration.garrison": "Garrison",
   "folkhold_world.configuration.garrisonRefillDelaySeconds": "Refill delay (seconds)",
   "folkhold_world.configuration.garrisonActivationRadius": "Activation radius",

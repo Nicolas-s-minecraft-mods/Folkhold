@@ -14,6 +14,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.HeartSearch;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -161,7 +162,8 @@ public final class VillageCommands {
      *   <li>no possible vanilla village start is in {@link #VANILLA_EXCLUSION} chunks, as the exclusion zone of the
      *       structure set of the faction villages.</li>
      *   <li>no possible natural faction village start is near enough for its first wall to come near the new first
-     *       wall: the natural village has the largest radius of the structure.</li>
+     *       wall: the natural village has the largest radius of the structure, and its heart can be at the largest
+     *       shift from its start (see {@link HeartSearch}).</li>
      *   <li>in a world that generates structures, the rings also keep their space (see {@link #ringsAreFree}).</li>
      * </ul>
      */
@@ -179,7 +181,8 @@ public final class VillageCommands {
         }
         ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
         int wall = firstWall(structure, start);
-        int natural = structure.maxDistanceFromCenter() + structure.wall().margin() + WALL_LINE;
+        // A natural village can have its heart at the largest shift from its start (see HeartSearch).
+        int natural = structure.maxDistanceFromCenter() + structure.wall().margin() + WALL_LINE + HeartSearch.shift();
         int naturalRange = Math.ceilDiv(wall + natural + GAP, 16);
         return !inRange(level, state, BuiltinStructureSets.VILLAGES, chunk, VANILLA_EXCLUSION)
                 && !inRange(level, state, SettlementDiscovery.VILLAGE_SET, chunk, naturalRange)

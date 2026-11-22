@@ -7,6 +7,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTable;
 import io.github.nicolasgoyon.folkhold.core.sim.village.CaveSite;
+import io.github.nicolasgoyon.folkhold.core.sim.village.HeartSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlanGround;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotUses;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
@@ -70,6 +71,10 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>The terrain around the middle of the start piece must accept a village (see {@link VillageSite}): the plaza
  *       is not on water, the water does not cover half of the place, and the slope is not one of the steepest. The
  *       discovery of the settlements uses the same check: a settlement has a village.</li>
+ *   <li>On a steep start, the plaza moves to flatter ground near it, before the plan (see {@link HeartSearch}). The
+ *       site check at the start decides if a village starts, and the biome check reads the biome at the middle of the
+ *       plaza of the start. The plaza moves only to a position that the site check, the biome rule and the variant of
+ *       the start accept. The shift keeps the plan of the tier of the start level in the range of the structure.</li>
  *   <li>The start level of the village comes from the world seed and the start chunk (see
  *       {@link Settlements#startLevel(long, ChunkPos)}). Its tier gives the size of the village (see
  *       {@link VillageSizes}): the plot target and the maximum radius of the plan (see {@link VillagePlan}).</li>
@@ -219,21 +224,96 @@ public final class FortifiedVillageStructure extends Structure {
             return Optional.empty();
         }
         Start village = start.get();
+        // The structure check and the /locate command read only the position of the stub. The search of the heart
+        // runs with the generation of the pieces.
         return Optional.of(new GenerationStub(village.biomePosition(), builder -> VillageRings.layout(this, context,
-                village,
+                shifted(context, village),
                 Settlements.startLevel(context.seed(), context.chunkPos())).pieces().forEach(builder::addPiece)));
     }
 
     /**
      * The start of the village at the start chunk of a context, as the generation makes it: the start (see
-     * {@link #start}) and the check of the biome at the middle of the plaza, as {@code Structure.generate}. The
-     * ring districts use it to find their village (see {@link VillageRings}).
+     * {@link #start}), the check of the biome at the middle of the plaza, as {@code Structure.generate}, and the
+     * search of the heart (see {@link HeartSearch}). The ring districts and the discovery of the settlements use it to
+     * find their village (see {@link VillageRings}).
      *
      * @param context the context of the generation at the start chunk
      * @return the start, or empty if no village starts there
      */
-    Optional<Start> generatedStart(GenerationContext context) {
-        return start(context).filter(start -> context.validBiome().test(biomeAt(context, start.biomePosition())));
+    public Optional<Start> generatedStart(GenerationContext context) {
+        return start(context).filter(start -> context.validBiome().test(biomeAt(context, start.biomePosition())))
+                .map(start -> shifted(context, start));
+    }
+
+    /**
+     * The start of a village after the search of the heart (see {@link HeartSite}): the plaza moves to flatter ground
+     * near a steep start. A cave village, a maritime village and a village in a world with no search stay at their
+     * start. The largest offset on one axis keeps the plan of the tier of the start level in the range of the
+     * structure ({@code max_distance_from_center}).
+     */
+    private Start shifted(GenerationContext context, Start start) {
+        int shift = HeartSearch.shift();
+        if (shift == 0 || start.cave().isPresent() || start.maritime()) {
+            return start;
+        }
+        int radius = Math.min(firstRadius(sizeAt(context.seed(), context.chunkPos())), maxDistanceFromCenter);
+        int limit = maxDistanceFromCenter - radius;
+        HeartSearch.Key key = new HeartSearch.Key(context.chunkGenerator(), context.randomState(), context.seed(),
+                context.chunkPos().toLong(), shift);
+        HeartSite.Offset offset = HeartSearch.offset(key, () -> search(context, start, shift, limit, radius));
+        if (offset.equals(HeartSite.Offset.ZERO)) {
+            return start;
+        }
+        restartRandom(context);
+        return plaza(context, start.terrain(), start.variant(), false, Optional.empty(), offset).orElse(start);
+    }
+
+    /** The search of the heart of a village around its start, with the terrain cache of the start. */
+    private HeartSite.Offset search(GenerationContext context, Start start, int shift, int limit, int radius) {
+        TerrainCache terrain = start.terrain();
+        BlockPos middle = start.center();
+        int seaLevel = context.chunkGenerator().getSeaLevel();
+        CultureMap cultures = new CultureMap(context.seed(), context.biomeSource(), context.randomState().sampler());
+        PlotTerrains plots = new PlotTerrains(terrain);
+        Rotation turn = start.plaza().getRotation();
+        int margin = start.variant().wall().margin();
+        return HeartSite.search(shift, limit,
+                (dx, dz) -> terrain.point(middle.getX() + dx, middle.getZ() + dz).surface(),
+                offset -> {
+                    BlockPos at = at(terrain, middle, offset);
+                    Holder<Biome> biome = biomeAt(context, at);
+                    return checkSite(terrain, at, seaLevel) == VillageSite.Result.ACCEPTED
+                            && context.validBiome().test(biome)
+                            && variantAt(cultures.cultureAt(at.getX(), at.getZ()), biome, false) == start.variant();
+                },
+                offset -> regionSize(plots.core(at(terrain, middle, offset), turn, radius, margin),
+                        at(terrain, middle, offset), radius));
+    }
+
+    /** The position at an offset from a middle, on the surface of the terrain. */
+    private static BlockPos at(TerrainCache terrain, BlockPos middle, HeartSite.Offset offset) {
+        int x = middle.getX() + offset.dx();
+        int z = middle.getZ() + offset.dz();
+        return new BlockPos(x, terrain.point(x, z).surface(), z);
+    }
+
+    /**
+     * The size of the flood region of the core with the strict rules ({@link PlanGround#MAX_RISE}): the number of the
+     * grid points of the ground in the radius around the middle that are in the region.
+     *
+     * @param ground the ground of the core
+     * @param middle the middle of the plaza
+     * @param radius the radius of the plan
+     * @return the number of points
+     */
+    public static int regionSize(PlanGround ground, BlockPos middle, int radius) {
+        int count = 0;
+        for (int x = middle.getX() - radius; x <= middle.getX() + radius; x += PlanGround.STEP) {
+            for (int z = middle.getZ() - radius; z <= middle.getZ() + radius; z += PlanGround.STEP) {
+                count += ground.inRegion(x, z, PlanGround.MAX_RISE) ? 1 : 0;
+            }
+        }
+        return count;
     }
 
     /**
@@ -289,6 +369,15 @@ public final class FortifiedVillageStructure extends Structure {
      */
     private static Optional<Start> plaza(GenerationContext context, TerrainCache terrain, Variant variant,
             boolean maritime, Optional<Rotation> turn) {
+        return plaza(context, terrain, variant, maritime, turn, HeartSite.Offset.ZERO);
+    }
+
+    /**
+     * As {@link #plaza(GenerationContext, TerrainCache, Variant, boolean, Optional)}, with the origin of the plaza at
+     * an offset from the north-west corner of the start chunk: the middle of the plaza moves by this offset.
+     */
+    private static Optional<Start> plaza(GenerationContext context, TerrainCache terrain, Variant variant,
+            boolean maritime, Optional<Rotation> turn, HeartSite.Offset offset) {
         StructureTemplateManager templates = context.structureTemplateManager();
         ChunkPos chunk = context.chunkPos();
         Rotation rotation = turn.orElse(Rotation.getRandom(context.random()));
@@ -296,7 +385,7 @@ public final class FortifiedVillageStructure extends Structure {
         if (element == EmptyPoolElement.INSTANCE) {
             return Optional.empty();
         }
-        BlockPos origin = new BlockPos(chunk.getMinBlockX(), 0, chunk.getMinBlockZ());
+        BlockPos origin = new BlockPos(chunk.getMinBlockX() + offset.dx(), 0, chunk.getMinBlockZ() + offset.dz());
         PoolElementStructurePiece plaza = new PoolElementStructurePiece(templates, element, origin,
                 element.getGroundLevelDelta(), rotation, element.getBoundingBox(templates, origin, rotation),
                 LiquidSettings.APPLY_WATERLOGGING);
@@ -305,7 +394,8 @@ public final class FortifiedVillageStructure extends Structure {
         int z = (box.minZ() + box.maxZ()) / 2;
         int ground = terrain.point(x, z).surface();
         plaza.move(0, ground - (box.minY() + plaza.getGroundLevelDelta()), 0);
-        return Optional.of(new Start(plaza, new BlockPos(x, ground, z), variant, maritime, terrain));
+        return Optional.of(new Start(plaza, new BlockPos(x, ground, z), variant, maritime, terrain, Optional.empty(),
+                offset.axisDistance()));
     }
 
     /**
@@ -317,13 +407,21 @@ public final class FortifiedVillageStructure extends Structure {
      * @param maritime true for a maritime site
      * @param terrain  the terrain cache of the site check and of the layout
      * @param cave     the frame of a cave village (see {@link CaveVillage}), or empty for another village
+     * @param shift    the largest offset on one axis of the middle of the plaza from the start, in blocks (see
+     *                 {@link HeartSearch})
      */
-    record Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
-            TerrainCache terrain, Optional<CaveVillage.Frame> cave) {
-        /** The start of a village that is not a cave village. */
+    public record Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
+            TerrainCache terrain, Optional<CaveVillage.Frame> cave, int shift) {
+        /** The start of a village that is not a cave village, at its start. */
         Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
                 TerrainCache terrain) {
-            this(plaza, center, variant, maritime, terrain, Optional.empty());
+            this(plaza, center, variant, maritime, terrain, Optional.empty(), 0);
+        }
+
+        /** The start of a village at its start. */
+        Start(PoolElementStructurePiece plaza, BlockPos center, Variant variant, boolean maritime,
+                TerrainCache terrain, Optional<CaveVillage.Frame> cave) {
+            this(plaza, center, variant, maritime, terrain, cave, 0);
         }
 
         /**
@@ -427,7 +525,7 @@ public final class FortifiedVillageStructure extends Structure {
      * @return the layout, or empty if the site does not accept a village
      */
     public Optional<Layout> layout(GenerationContext context) {
-        return start(context).map(start -> layout(context, start,
+        return start(context).map(start -> layout(context, shifted(context, start),
                 Settlements.startLevel(context.seed(), context.chunkPos())));
     }
 
@@ -543,7 +641,8 @@ public final class FortifiedVillageStructure extends Structure {
         List<PlotUses.Building> buildings = pieces.buildings(
                 VillageBuildings.kinds(VillageBuildingTable.get(), level), styleOf(start.variant()));
         StreetStyle style = PlotUses.withWide(styleOf(start.variant()), buildings);
-        int radius = Math.min(firstRadius(size), maxDistanceFromCenter);
+        // A plaza that moved from the start keeps its plan in the range of the structure.
+        int radius = Math.min(firstRadius(size), maxDistanceFromCenter - start.shift());
         VillageSize limited = new VillageSize(size.tier(), size.plots(), size.bedsPerPlot(), size.spareShare(), radius,
                 size.rings(), size.wall(), size.minTerritoryRadius());
         int target = plotTarget(size);
