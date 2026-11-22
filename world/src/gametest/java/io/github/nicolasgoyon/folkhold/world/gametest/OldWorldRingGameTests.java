@@ -109,7 +109,7 @@ public final class OldWorldRingGameTests {
         VillageHearts.register(level, heartPos);
         heart.setRepairReference(VillageReference.of(level, first.pieces()).orElseThrow());
         heart.ringWall().clear();
-        heart.ringWall().setSite(new RingWall.Site(land, start, first.center()));
+        heart.ringWall().setSite(new RingWall.Site(land, start, first.center(), Optional.of(first.village().get(0))));
         Settlement settlement = Settlements.of(level.getServer(), heart).orElseThrow();
         Settlements.startEconomy(level.getServer(), settlement);
         settlement.setProgress(TOWN_LEVEL, 0);
