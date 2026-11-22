@@ -1,4 +1,5 @@
 {
   "kind": "escort",
-  "need": "caravan"
+  "need": "caravan",
+  "reward": {"experience": 20}
 }

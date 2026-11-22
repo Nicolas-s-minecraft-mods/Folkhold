@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
 import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
@@ -323,9 +324,9 @@ public final class QuestBoards {
     }
 
     /**
-     * Completes an accepted quest: the player gets the emeralds (from the treasury of the faction of the village) and
-     * the reputation. A player who is not in the game gets the reward at the next login: the treasury pays at that
-     * time.
+     * Completes an accepted quest: the player gets the emeralds (from the treasury of the faction of the village), the
+     * reputation, the experience and the items. A player who is not in the game gets the reward at the next login:
+     * the treasury and the stock of the village pay at that time.
      *
      * @param server the server
      * @param quest  the quest
@@ -339,7 +340,8 @@ public final class QuestBoards {
         }
         data.setDirty();
         QuestData.Reward reward = new QuestData.Reward(playerId, quest.factionId(), quest.settlementId(),
-                quest.rewardEmeralds(), quest.rewardReputation(), name(server, quest));
+                quest.rewardEmeralds(), quest.rewardReputation(), name(server, quest), quest.rewardExperience(),
+                quest.rewardItems());
         ServerPlayer player = server.getPlayerList().getPlayer(playerId);
         Optional<Component> message = Optional.empty();
         if (player != null) {
@@ -369,7 +371,9 @@ public final class QuestBoards {
     }
 
     /**
-     * Pays a reward to a player: the emeralds, up to the treasury of the faction, and the reputation.
+     * Pays a reward to a player: the emeralds, up to the treasury of the faction, the reputation, the experience
+     * points and the items. The goods of the village come from its stock, up to the stock. An item that does not go
+     * into the inventory falls at the feet of the player.
      *
      * @param player the player
      * @param reward the reward
@@ -382,8 +386,29 @@ public final class QuestBoards {
         settlements.addTreasury(reward.factionId(), -emeralds);
         giveEmeralds(player, emeralds);
         Reputations.apply(server, player, reward.factionId(), reward.settlementId(), reward.reputation());
-        return Notices.asText(Component.translatable("message.folkhold_world.quest_completed", reward.name()),
-                Component.translatable("message.folkhold_world.quest_reward", emeralds));
+        if (reward.experience() > 0) {
+            player.giveExperiencePoints(reward.experience());
+        }
+        List<RewardItem> given = new ArrayList<>();
+        Optional<Settlement> village = settlements.registry().byId(reward.settlementId());
+        for (RewardItem item : reward.items()) {
+            Optional<Item> found = ItemIds.item(item.item());
+            int count = item.count();
+            if (item.fromStock()) {
+                count = village.map(settlement -> settlement.economy().stock().remove(item.item(), item.count()))
+                        .orElse(0);
+                settlements.setDirty();
+            }
+            if (found.isPresent() && count > 0) {
+                giveItems(player, new ItemStack(found.get()), count);
+                given.add(new RewardItem(item.item(), count, item.fromStock()));
+            }
+        }
+        MutableComponent text = Component.translatable("message.folkhold_world.quest_reward", emeralds);
+        for (Component part : QuestRewards.extras(reward.experience(), given)) {
+            text = Component.translatable("quest.folkhold_world.reward.more", text, part);
+        }
+        return Notices.asText(Component.translatable("message.folkhold_world.quest_completed", reward.name()), text);
     }
 
     /**
@@ -525,8 +550,7 @@ public final class QuestBoards {
                     FactionVisuals.tierName(quest.minTier())));
         }
         return new Offer(quest.id(), quest.kind().serializedName(), icon, name(server, quest), info,
-                Component.translatable("quest.folkhold_world.reward", quest.rewardEmeralds(),
-                        quest.rewardReputation()),
+                QuestRewards.describe(quest),
                 progress, countdown, (int) Math.min(Integer.MAX_VALUE, quest.rewardEmeralds()), minutes, blocked);
     }
 
@@ -615,6 +639,19 @@ public final class QuestBoards {
         return SettlementData.get(server).registry().byId(settlementId)
                 .<Component>map(settlement -> Component.literal(settlement.name()))
                 .orElse(Component.literal("?"));
+    }
+
+    /** Gives items to a player in stacks of their maximum size. An item that does not go in falls. */
+    private static void giveItems(ServerPlayer player, ItemStack item, int count) {
+        int remaining = count;
+        while (remaining > 0) {
+            int size = Math.min(item.getMaxStackSize(), remaining);
+            ItemStack stack = item.copyWithCount(size);
+            if (!player.getInventory().add(stack)) {
+                player.drop(stack, false);
+            }
+            remaining -= size;
+        }
     }
 
     private static void giveEmeralds(ServerPlayer player, long emeralds) {

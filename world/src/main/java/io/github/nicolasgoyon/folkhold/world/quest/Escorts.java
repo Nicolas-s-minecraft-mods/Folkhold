@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestGenerator;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
@@ -105,18 +106,20 @@ public final class Escorts {
             return Optional.empty();
         }
         QuestDefinition.Values values = definition.get().values();
+        RewardRule rule = QuestRewards.choose(definition.get());
         int wait = WorldConfig.QUEST_ESCORT_WAIT_TICKS.get();
         caravan.setDepartureTick(tickNumber + wait);
         long now = server.overworld().getGameTime();
         long offerEnd = now + (long) wait * SimulationTicker.settings().intervalTicks();
         long reward = Math.max(1, Math.round(caravan.payment()
-                * values.rewardFactor().orElse(WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())));
+                * rule.factor().orElse(values.rewardFactor().orElse(WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()))));
         long minutes = escortMinutes(caravan.route().length(),
                 values.durationMinutes().orElse(WorldConfig.QUEST_ESCORT_MINUTES.get()));
         Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
                 caravan.id(), 0, reward, values.reputation().orElse(WorldConfig.QUEST_ESCORT_REPUTATION.get()),
                 QuestGenerator.minTier(reward, QuestSystem.settings(definition.get())), offerEnd,
                 minutes * SharedConstants.TICKS_PER_MINUTE, definition.get().id());
+        QuestRewards.apply(quest, rule, origin);
         QuestData data = QuestData.get(server);
         data.quests().add(quest);
         data.setDirty();
