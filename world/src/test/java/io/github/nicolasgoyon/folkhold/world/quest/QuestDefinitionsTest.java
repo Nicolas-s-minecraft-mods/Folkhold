@@ -102,12 +102,12 @@ class QuestDefinitionsTest {
     void unknownFieldGivesAWarning() {
         List<String> warnings = new ArrayList<>();
         parse("""
-                {"kind": "delivery", "need": "site_materials", "texts": [],
+                {"kind": "delivery", "need": "site_materials", "title": [],
                  "reward": {"title": 5}, "conditions": {"tier": "town"}}
                 """, warnings);
 
         assertEquals(3, warnings.size(), "Warnings: " + warnings);
-        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'texts'")), "Warnings: " + warnings);
+        assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'title'")), "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'reward.title'")),
                 "Warnings: " + warnings);
         assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'conditions.tier'")),
@@ -164,7 +164,13 @@ class QuestDefinitionsTest {
                     JsonParser.parseReader(reader).getAsJsonObject(), warning -> { });
         }
         assertEquals(QuestNeed.JOB_STORY, story.need());
-        java.nio.file.Path jobs = java.nio.file.Path.of("src/main/resources/data/folkhold_world/folkhold/jobs");
+        java.nio.file.Path jobs;
+        try {
+            jobs = java.nio.file.Path.of(QuestDefinitionsTest.class.getResource(
+                    "/data/folkhold_world/folkhold/jobs/baker.json").toURI()).getParent();
+        } catch (java.net.URISyntaxException e) {
+            throw new IOException(e);
+        }
         List<String> missing = new ArrayList<>();
         try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(jobs)) {
             for (java.nio.file.Path file : files.sorted().toList()) {

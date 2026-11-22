@@ -23,6 +23,7 @@ pack of a world, of a server or of a mod jar can replace the definitions of Folk
 | `folkhold_world:site_material_delivery` | `delivery` | `site_materials` | The builders ask for the materials of their sites. |
 | `folkhold_world:caravan_escort` | `escort` | `caravan` | A new caravan waits for a player who protects it. |
 | `folkhold_world:monster_hunt` | `hunt` | `monsters` | A village of the level 3 or more asks the player to kill monsters near it. |
+| `folkhold_world:job_story_delivery` | `delivery` | `job_story` | A worker of an active job asks for an input of its job and gives a product of its job, with the story of its job. |
 
 The values of the offers of these files come from the server config (`serverconfig/folkhold_world-server.toml` of
 the world, section `quests`). The files give the reward rules:
@@ -33,6 +34,7 @@ the world, section `quests`). The files give the reward rules:
 | `folkhold_world:site_material_delivery` | 10 experience points | none |
 | `folkhold_world:caravan_escort` | 20 experience points | none |
 | `folkhold_world:monster_hunt` | 15 experience points, 1 emerald for each monster (`reward.factor`) | none |
+| `folkhold_world:job_story_delivery` | 10 experience points, all the value in products of the job of the giver (`goods_share` 1) | none |
 
 The delivery of the inputs of the jobs also has start items: an iron pickaxe for 50 % of the deliveries of ores,
 coal, redstone, cobblestone and flint.
@@ -61,7 +63,7 @@ coal, redstone, cobblestone and flint.
 | Field | Necessary | Default | Meaning |
 | --- | --- | --- | --- |
 | `kind` | yes | | `delivery`, `escort` or `hunt`. It must be the kind of the need. |
-| `need` | yes | | What makes the offers: `job_inputs`, `site_materials` (kind `delivery`), `caravan` (kind `escort`) or `monsters` (kind `hunt`). |
+| `need` | yes | | What makes the offers: `job_inputs`, `job_story`, `site_materials` (kind `delivery`), `caravan` (kind `escort`) or `monsters` (kind `hunt`). |
 | `enabled` | no | `true` | `false`: the definition makes no offer. |
 | `conditions.min_level` | no | 1 | The lowest level of a village with offers of the definition. |
 | `conditions.max_level` | no | no maximum | The highest level of a village with offers of the definition. |
@@ -79,6 +81,8 @@ coal, redstone, cobblestone and flint.
 | `start_items.targets` | no | all | The targets (item ids of a delivery) that get the start items. |
 | `penalty.reputation` | no | config | The reputation that the player loses with the faction of the giver when the accepted quest fails. |
 | `penalty.start_items_factor` | no | config | The extra loss for each emerald of the base value of the start items. |
+| `texts.jobs` | no | none | Need `job_story`: the translation key of the story of each job id. The text gets the items of the quest as `%s`. |
+| `texts.default` | no | none | Need `job_story`: the key of the story of a job with no key in `texts.jobs`. |
 | `offer.offer_minutes` | no | config | Delivery and hunt: the time of the offer, in minutes. An escort offer lasts while the caravan waits. |
 | `offer.duration_minutes` | no | config | Delivery and hunt: the time from the acceptance to the deadline. Escort: the minimum time of the escort. In minutes. |
 | `offer.max_count` | no | config | Delivery: the maximum quantity of items. Hunt: the maximum number of monsters. |
@@ -88,7 +92,10 @@ coal, redstone, cobblestone and flint.
 - A village makes the offers of the need `job_inputs` with all the matching definitions: one offer for each
   definition in turn, in the order of their ids. The number of offers of the village (1, plus 1 for each 5 levels)
   stays the maximum for all the definitions together. A village does not offer two deliveries of the same item.
-- The needs `site_materials`, `caravan` and `monsters` use the first matching definition, in the order of the ids.
+- The needs `job_story`, `site_materials`, `caravan` and `monsters` use the first matching definition, in the order of
+  the ids.
+- A village offers one job quest at most. Its giver is an active job with an input and with an output in stock. Its
+  goods are the outputs of the giver job only.
 - A village offers one hunt at most. The number of monsters is 3, plus 1 for each 5 levels of the village.
 - A village has at most `max(1, round(offers × maxNeedShare))` offers of one need (server config, 0.6). The hunt
   comes before the deliveries of the inputs of the jobs.
@@ -121,5 +128,5 @@ coal, redstone, cobblestone and flint.
 ## Limits of this version
 
 - A definition cannot add a new kind or a new need. The kind and the need choose the code that makes the offers.
-- A definition has no texts. A field that this version does not know gives a warning in the log.
+- Only the need `job_story` uses `texts`. A field that this version does not know gives a warning in the log.
 - A definition cannot choose the items of a delivery: the need gives them.

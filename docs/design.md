@@ -1353,10 +1353,18 @@ A quest has a giver, a success condition that the mod checks on the state of the
 
 ### Types of the board
 
-- The board offers 4 types of quests (needs): the deliveries of the inputs of the jobs (`job_inputs`), the deliveries of the materials of the sites (`site_materials`), the escorts of the caravans (`caravan`) and the hunts of the monsters (`monsters`).
-- At each cycle, a village makes its new offers: first a hunt, then the deliveries of the inputs of the jobs (`QuestSystem.offerQuests`). The sites and the caravans make their offers at their own events.
+- The board offers 5 types of quests (needs): the deliveries of the inputs of the jobs (`job_inputs`), the job quests of the workers (`job_story`), the deliveries of the materials of the sites (`site_materials`), the escorts of the caravans (`caravan`) and the hunts of the monsters (`monsters`).
+- At each cycle, a village makes its new offers: first a hunt, then a job quest, then the deliveries of the inputs of the jobs (`QuestSystem.offerQuests`). The sites and the caravans make their offers at their own events.
 - **Share of one type** (`QuestGenerator.needCap`, config `maxNeedShare`, start value 0.6): a village has at most `max(1, round(offers × 0.6))` offers of one type. Thus a village with 2 offers or more has 2 types or more. The offers of a village are 1, 2, 3, 4 and 5 at the levels 1, 5, 10, 15 and 20.
 - Sample (GameTest `QuestTypeGameTests.noQuestTypeHasMoreThanItsShare`, villages of the levels 1, 4, 8, 12, 16 and 20 with a baker, a smelter and no stock): 9 deliveries and 5 hunts in each round, thus 64 % of deliveries and 36 % of hunts. The design maximum of one type in this sample is 70 %. With no hunt and no share, all the offers of the cycles are deliveries of the inputs of the jobs.
+
+### Job quests
+
+- A worker of an active job gives a quest of its job (need `job_story`, file `job_story_delivery.json`, `QuestSystem.offerJobQuest`). A village offers one job quest at most, after the hunt and before the deliveries of the inputs of the jobs.
+- The giver is an active job with an input and with an output in the stock of the village, at random. The quest asks for an input of the job, at random: 2 times the count of the recipe, 1 for a tool (a miner asks for a pickaxe). A village does not offer two deliveries of one item.
+- The reward: the emerald value of the items (local price × the bonus), paid in the outputs of the giver job from the stock of the village (`goods_share` 1, 1 item at least), 1 emerald and 10 experience points (start values).
+- Each job with an input has a story (`texts` of the file, keys `quest.folkhold_world.story.<job>`): for example the blacksmith "The forge waits. Bring me 12 iron ingots and I give you tools." The board shows the job of the giver, the items and the story. The player gives the items at the board, as for the other deliveries.
+- Each job group of the table of the jobs has job quests: food (baker, butcher, rancher, pastry cook, beekeeper), raw materials (shepherd, miner, digger, lumberjack), processing (smelter, mason, dyer, papermaker, sawyer) and crafted goods (blacksmith, fletcher, carpenter, tanner, weaver, tinker). A job with no input (farmer, gardener, fisher, forager) gives no job quest.
 
 ### Hunt
 
@@ -1387,7 +1395,7 @@ All distances, delays and rewards are configurable.
 - The mod has 4 definitions: `folkhold_world:job_input_delivery`, `folkhold_world:site_material_delivery`, `folkhold_world:caravan_escort` and `folkhold_world:monster_hunt`. They give no values of the offer, so the offers follow the config. They give the reward rules (see "Reward" above).
 - A data pack replaces a definition with a file of the same path, and adds a definition with a new path. `/reload` reads them again. A file with an error gives an error in the log and no definition. The other files load.
 - The need `job_inputs` uses all its matching definitions: one offer for each definition in turn, in the order of their ids, up to the number of offers of the village. The needs `site_materials` and `caravan` use the first matching definition. A need with no matching definition makes no offer.
-- Each new quest saves the id of its definition (`Definition` in `folkhold_quests.dat`) and the parts of its reward (`RewardExperience`, `RewardItems`), its start items (`StartItems`) and its failure loss (`FailureReputation`). A quest of a save with no failure loss has no loss. A quest of a save with no definition id loads with an empty id, and its rules do not change. A quest or a waiting reward of a save with no experience and no items loads with none.
+- Each new quest saves the id of its definition (`Definition` in `folkhold_quests.dat`) and the parts of its reward (`RewardExperience`, `RewardItems`), its start items (`StartItems`) and its failure loss (`FailureReputation`). A quest of a save with no failure loss has no loss. A job quest also saves its giver job (`GiverJob`) and its story (`Text`). A quest of a save with no definition id loads with an empty id, and its rules do not change. A quest or a waiting reward of a save with no experience and no items loads with none.
 - The API for other mods (#978) and the admin screen of the definitions (#979) are planned.
 
 ### Lore
