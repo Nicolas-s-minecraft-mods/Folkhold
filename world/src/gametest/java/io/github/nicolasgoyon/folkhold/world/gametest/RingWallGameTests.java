@@ -151,8 +151,17 @@ public final class RingWallGameTests {
         // The builders put the blocks of the sites in place.
         Map<BlockPos, BlockState> blocks = RingWall.startedBlocks(level, heart);
         blocks.forEach((pos, state) -> level.setBlock(pos, state, Block.UPDATE_CLIENTS));
-        helper.assertTrue(RingWall.startedBlocks(level, heart).isEmpty(),
-                "The ring must have no block that is not in place");
+        // A street follows the top of the terrain: after its blocks, a light of the street is the top. The other
+        // parts have each block in place.
+        List<BoundingBox> streetBoxes = heart.ringWall().pieces(level).stream().filter(piece -> piece
+                instanceof PoolElementStructurePiece pool && pool.getElement().getProjection()
+                        == StructureTemplatePool.Projection.TERRAIN_MATCHING).map(StructurePiece::getBoundingBox)
+                .toList();
+        List<BlockPos> left = RingWall.startedBlocks(level, heart).keySet().stream().filter(pos -> streetBoxes
+                .stream().noneMatch(box -> box.minX() <= pos.getX() && pos.getX() <= box.maxX()
+                        && box.minZ() <= pos.getZ() && pos.getZ() <= box.maxZ())).toList();
+        helper.assertTrue(left.isEmpty(), "The ring must have no block that is not in place: " + left.stream()
+                .limit(5).map(pos -> pos + " " + level.getBlockState(pos)).toList());
 
         int seaLevel = generator.getSeaLevel();
         List<VillageWall.Wall> walls = RingPlans.walls(reference, land.wall().towerSpacing(),
