@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonParser;
 import io.github.nicolasgoyon.folkhold.blocks.block.BuildingSignKind;
+import io.github.nicolasgoyon.folkhold.core.sim.level.TierGate;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings.Requirement;
 import java.io.IOException;
@@ -76,6 +77,35 @@ class VillageBuildingTableTest {
     @Test
     void fileWithNoLandGivesNoLand() {
         assertEquals(List.of(), VillageBuildingTable.parseLand(JsonParser.parseString("{\"buildings\": []}")
+                .getAsJsonObject()));
+    }
+
+    /**
+     * The data file of the mod gives the buildings of the next tier: a market and a storehouse to become a village, a
+     * barracks to become a town, and 2 storehouses to become a city. Each kind is a kind of building sign.
+     */
+    @Test
+    void dataFileHasTheBuildingsOfTheNextTier() throws IOException {
+        try (InputStream stream = VillageBuildingTableTest.class.getResourceAsStream(
+                "/data/folkhold_world/folkhold/village_buildings.json");
+                Reader reader = new InputStreamReader(Objects.requireNonNull(stream), StandardCharsets.UTF_8)) {
+            List<TierGate.Gate> gates = VillageBuildingTable.parseGates(
+                    JsonParser.parseReader(reader).getAsJsonObject());
+
+            assertEquals(List.of(new TierGate.Gate("hamlet", List.of(VillageBuildings.MARKET, "storehouse")),
+                    new TierGate.Gate("village", List.of("barracks")),
+                    new TierGate.Gate("town", List.of("storehouse", "storehouse"))), gates);
+            List<String> kinds = Arrays.stream(BuildingSignKind.values()).map(BuildingSignKind::serializedName)
+                    .toList();
+            gates.forEach(gate -> gate.kinds().forEach(kind -> assertTrue(kinds.contains(kind),
+                    "Not a kind of building sign: " + kind)));
+        }
+    }
+
+    /** A file with no next tier gives no gate. */
+    @Test
+    void fileWithNoNextTierGivesNoGate() {
+        assertEquals(List.of(), VillageBuildingTable.parseGates(JsonParser.parseString("{\"buildings\": []}")
                 .getAsJsonObject()));
     }
 }

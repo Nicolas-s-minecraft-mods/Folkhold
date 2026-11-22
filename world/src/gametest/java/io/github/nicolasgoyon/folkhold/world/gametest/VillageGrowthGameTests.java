@@ -17,6 +17,7 @@ import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
+import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -135,6 +137,7 @@ public final class VillageGrowthGameTests {
         Settlement settlement = village.settlement();
         VillageHeartBlockEntity heart = village.heart();
         try {
+            hamletBuildings(helper, heart);
             HomeNeed.Cause need = VillageGrowth.homeNeed(level, heart, settlement);
             String job = nextJob(level, settlement);
             int places = VillageBeds.places(settlement);
@@ -188,6 +191,7 @@ public final class VillageGrowthGameTests {
         Village village = village(helper, HOMES, true, List.of(plot(helper, false)), 1, 3, false);
         Settlement settlement = village.settlement();
         try {
+            hamletBuildings(helper, village.heart());
             fillPosts(settlement, LevelTables.get().traits(1).jobSlots());
             settlement.economy().setPopulation(LevelTables.get().traits(1).maxPopulation());
             HomeNeed.Cause need = VillageGrowth.homeNeed(level, village.heart(), settlement);
@@ -217,6 +221,7 @@ public final class VillageGrowthGameTests {
         Settlement settlement = village.settlement();
         VillageHeartBlockEntity heart = village.heart();
         try {
+            hamletBuildings(helper, heart);
             fillPosts(settlement, LevelTables.get().traits(1).jobSlots());
             VillageGrowth.setSurplusSource((found, ignored) -> 2);
             HomeNeed.Cause brief = VillageGrowth.homeNeed(level, heart, settlement);
@@ -354,43 +359,92 @@ public final class VillageGrowthGameTests {
     }
 
     /**
-     * A village with its food post, a post for each job slot and a missing building of its level: its builders start
-     * this building on the free plot. The village has a storehouse sign, so the barracks of the level 9 comes first. The
-     * village has a market. A village of the level 1 or of the level 5 needs no building: the forge is the building of
-     * the blacksmith, not a building of a level.
+     * A village with its food post, a post for each job slot and a missing building of its next tier: its builders
+     * start this building on the nearest free plot. The village has a storehouse and a market: a village of the level 1
+     * has the buildings of the next tier, and builds nothing. A village of the level 5 needs a barracks to become a
+     * town: the barracks comes. A town of the level 9 with the barracks needs a second storehouse to become a city: the
+     * storehouse comes on the second plot. The forge is the building of the blacksmith, not a building of a level.
      */
     @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_building")
-    public static void buildersStartAMissingBuildingOfTheLevel(GameTestHelper helper) {
+    public static void buildersStartAMissingBuildingOfTheNextTier(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
+        VillagePlots.Plot second = new VillagePlots.Plot(helper.absolutePos(CONNECTOR.north(12)), Direction.EAST,
+                HOUSE_FRONT, false);
         // The population fills the places of the staff.
-        Village village = village(helper, HOMES, true, List.of(plot(helper, false)), 1, 3, false);
+        Village village = village(helper, HOMES, true, List.of(plot(helper, false), second), 1, 3, false);
         Settlement settlement = village.settlement();
         VillageHeartBlockEntity heart = village.heart();
         try {
-            helper.setBlock(HEART.east(2), ModBlocks.buildingSign(BuildingSignKind.STOREHOUSE));
-            // A market sign with the market post behind it: the village has its market of the level 5.
-            helper.setBlock(HEART.west(2), ModBlocks.buildingSign(BuildingSignKind.MARKET).defaultBlockState()
-                    .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH));
-            helper.setBlock(HEART.west(2).south(), Blocks.OAK_LOG);
-            heart.requestScan();
-            heart.ensureGarrison(level.getGameTime());
+            hamletBuildings(helper, heart);
             // The posts fill the job slots of the level 9: the village needs no home.
             fillPosts(settlement, LevelTables.get().traits(9).jobSlots());
             boolean lowLevel = VillageGrowth.check(level, heart).isEmpty();
             settlement.setProgress(5, 0);
-            boolean noForge = VillageGrowth.check(level, heart).isEmpty();
+            Optional<BuilderSite> barracks = VillageGrowth.check(level, heart);
+            BuilderSites.stop(level);
+            helper.setBlock(HEART.north(2), ModBlocks.buildingSign(BuildingSignKind.BARRACKS));
+            heart.requestScan();
+            heart.ensureGarrison(level.getGameTime());
+            fillPosts(settlement, LevelTables.get().traits(9).jobSlots());
             settlement.setProgress(9, 0);
-            Optional<BuilderSite> site = VillageGrowth.check(level, heart);
+            Optional<BuilderSite> storehouse = VillageGrowth.check(level, heart);
 
             helper.assertTrue(heart.getLayout().markets().size() == 1, "The scan must find the market: "
                     + heart.getLayout().markets());
             helper.assertTrue(heart.getLayout().buildings().getOrDefault("storehouse", 0) == 1,
                     "The scan must count the storehouse sign: " + heart.getLayout().buildings());
-            helper.assertTrue(lowLevel, "A village of the level 1 must build nothing");
-            helper.assertTrue(noForge, "A village of the level 5 must build no forge");
-            helper.assertTrue(site.isPresent(), "A village with a missing building must start it on the free plot");
-            helper.assertTrue(site.get().template().equals(BARRACKS), "The building must be the barracks: "
-                    + site.get().template());
+            helper.assertTrue(lowLevel, "A village of the level 1 with its market and its storehouse must build "
+                    + "nothing");
+            helper.assertTrue(barracks.isPresent() && barracks.get().template().equals(BARRACKS),
+                    "A village of the level 5 must start the barracks of the next tier: "
+                    + barracks.map(BuilderSite::template));
+            helper.assertTrue(storehouse.isPresent() && storehouse.get().template().equals(STOREHOUSE),
+                    "A town of the level 9 must start its second storehouse: " + storehouse.map(BuilderSite::template));
+            helper.assertFalse(storehouse.get().origin().equals(barracks.get().origin()),
+                    "The storehouse must go on the second plot");
+        } finally {
+            end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The gate of the hamlet tier. A scanned hamlet of the level 4 with the experience of the level 5 and no market
+     * keeps the level 4 and its experience. With a market and a storehouse, the next gain gives the level 5. A
+     * settlement with no scan goes up with no gate. The operator command sets a level with no gate.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_tier_gate")
+    public static void hamletNeedsAMarketAndAStorehouseToBecomeAVillage(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Village village = village(helper, HOMES, true, List.of(), 4, 3, false);
+        Settlement settlement = village.settlement();
+        VillageHeartBlockEntity heart = village.heart();
+        int needed = LevelTables.get().traits(4).experience();
+        try {
+            settlement.setProgress(4, needed - 1);
+            SettlementLevels.addExperience(level.getServer(), settlement, 5);
+            int keptLevel = settlement.level();
+            int keptExperience = settlement.experience();
+            hamletBuildings(helper, heart);
+            SettlementLevels.addExperience(level.getServer(), settlement, 1);
+            int openLevel = settlement.level();
+
+            Settlement simulated = new Settlement("tier-gate-test", 0, 0, settlement.factionId(), "Test", 0, 0);
+            simulated.setProgress(4, needed - 1);
+            SettlementLevels.addExperience(level.getServer(), simulated, 5);
+            settlement.setBuildings(Optional.of(Map.of()));
+            SettlementLevels.setProgress(level.getServer(), settlement, 8, 0);
+            SettlementLevels.setProgress(level.getServer(), settlement, 9, 0);
+
+            helper.assertTrue(keptLevel == 4 && keptExperience == needed, "With no market, the hamlet must keep the "
+                    + "level 4 and the experience " + needed + ": level " + keptLevel + ", experience "
+                    + keptExperience);
+            helper.assertTrue(openLevel == 5, "With a market and a storehouse, the hamlet must become a village: "
+                    + openLevel);
+            helper.assertTrue(simulated.level() == 5, "A settlement with no scan must go up with no gate: "
+                    + simulated.level());
+            helper.assertTrue(settlement.level() == 9, "The command must set a level with no gate: "
+                    + settlement.level());
         } finally {
             end(helper, village);
         }
@@ -663,6 +717,19 @@ public final class VillageGrowthGameTests {
         settlement.setJobPosts(Optional.empty());
         heart.ensureGarrison(serverLevel.getGameTime());
         return new Village(heart, settlement, boxes);
+    }
+
+    /**
+     * Gives a village the buildings of the hamlet tier: a storehouse sign and a market sign with the market post behind
+     * it. The heart scans the village again.
+     */
+    private static void hamletBuildings(GameTestHelper helper, VillageHeartBlockEntity heart) {
+        helper.setBlock(HEART.east(2), ModBlocks.buildingSign(BuildingSignKind.STOREHOUSE));
+        helper.setBlock(HEART.west(2), ModBlocks.buildingSign(BuildingSignKind.MARKET).defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH));
+        helper.setBlock(HEART.west(2).south(), Blocks.OAK_LOG);
+        heart.requestScan();
+        heart.ensureGarrison(helper.getLevel().getGameTime());
     }
 
     /**

@@ -11,5 +11,10 @@
     {"kind": "mill", "min_level": 9},
     {"kind": "field", "min_level": 9},
     {"kind": "field", "min_level": 13}
+  ],
+  "next_tier": [
+    {"tier": "hamlet", "buildings": ["market", "storehouse"]},
+    {"tier": "village", "buildings": ["barracks"]},
+    {"tier": "town", "buildings": ["storehouse", "storehouse"]}
   ]
 }

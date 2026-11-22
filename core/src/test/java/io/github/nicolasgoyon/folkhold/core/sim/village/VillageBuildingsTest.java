@@ -117,4 +117,22 @@ class VillageBuildingsTest {
     void villageWithNoScanNeedsNoFirstPost() {
         assertEquals(List.of(HOME), VillageBuildings.steps(WITH_MARKET, 9, Map.of(), false, true, true));
     }
+
+    /**
+     * Inside a tier, the missing buildings of the next tier come before the homes. The market of the next tier comes
+     * also below the level of the market. A kind of the next tier does not come again as a building of the level.
+     */
+    @Test
+    void buildingsOfTheNextTierComeBeforeTheHomes() {
+        Step storehouse = new Step(StepType.BUILDING, "storehouse");
+        Step barracks = new Step(StepType.BUILDING, "barracks");
+        assertEquals(List.of(MARKET, storehouse, HOME), VillageBuildings.steps(WITH_MARKET, 4, Map.of(), true, true,
+                false, List.of(VillageBuildings.MARKET, "storehouse")));
+        assertEquals(List.of(barracks, HOME), VillageBuildings.steps(WITH_MARKET, 6, Map.of("market", 1,
+                "storehouse", 1), true, true, false, List.of("barracks")));
+        assertEquals(List.of(storehouse), VillageBuildings.steps(WITH_MARKET, 12, Map.of("market", 1,
+                "storehouse", 1, "barracks", 1), true, false, false, List.of("storehouse", "storehouse")));
+        assertEquals(List.of(HOME), VillageBuildings.steps(WITH_MARKET, 4, Map.of(), false, true, false,
+                List.of(VillageBuildings.MARKET)));
+    }
 }

@@ -641,6 +641,22 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
+     * Records the number of buildings of each kind in the settlement, from the building signs of the last scan of the
+     * village. The gates of the tiers read them (see
+     * {@link io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels}).
+     */
+    public void recordBuildings() {
+        if (!(level instanceof ServerLevel serverLevel) || !layout.isScanned()) {
+            return;
+        }
+        Settlements.of(serverLevel.getServer(), this).ifPresent(settlement -> {
+            if (settlement.setBuildings(Optional.of(layout.buildings()))) {
+                SettlementData.get(serverLevel.getServer()).setDirty();
+            }
+        });
+    }
+
+    /**
      * Records the job posts of the village in the settlement (see {@link JobPosts}), from the last scan of the village.
      * The posts with a food job that trades come first, then the posts with an other job that trades (see
      * {@link JobPosts#order}). A heart with no village structure has no homes to find: its
@@ -791,6 +807,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         recordGates();
         recordBeds();
+        recordBuildings();
         recordJobPosts();
         renewJobPosts();
         if (alertState == AlertState.CALM && ensureCats(serverLevel, now)) {
@@ -1171,6 +1188,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         layout.scan(serverLevel, scanArea(serverLevel));
         tradePlaceCache = null;
         recordMarketPlot(serverLevel);
+        recordBuildings();
         paintBanners();
         setChanged();
         return true;
