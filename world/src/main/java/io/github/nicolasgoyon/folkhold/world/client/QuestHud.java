@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.config.ClientConfig;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload.Entry;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload.Escort;
+import io.github.nicolasgoyon.folkhold.world.network.TerritoryStatusPayload;
 import java.util.Optional;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -17,12 +18,15 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * The quest panel at the top left of the screen (client option {@link ClientConfig#showQuestHud}).
+ * The quest panel at the top right of the screen (client option {@link ClientConfig#showQuestHud}), below the
+ * territory panel ({@link TerritoryHud}) and the vanilla icons of the status effects. The minimap of Cartofold and the
+ * coordinates are at the top left: the panel does not cover them. The panel has a scale of {@link #SCALE}.
  *
  * <ul>
  *   <li>A header with the number of active quests and the maximum.</li>
@@ -47,6 +51,16 @@ public final class QuestHud {
     /** Under this time, the time of a quest is on a red badge. */
     private static final int URGENT_SECONDS = 120;
     private static final int HEARTS = 4;
+    /** The scale of the text and of the icons of the panel. */
+    static final float SCALE = 0.75F;
+    /** The gap between the territory panel and the quest panel, in pixels of the screen. */
+    private static final int GAP = 2;
+    // The layout of the territory panel (see TerritoryHud): its margin, its padding, its banner and the height of a
+    // row of the vanilla icons of the status effects.
+    private static final int TERRITORY_MARGIN = 4;
+    private static final int TERRITORY_PAD = 4;
+    private static final int TERRITORY_BANNER = 14;
+    private static final int EFFECT_ROW = 26;
 
     private QuestHud() {
     }
@@ -79,14 +93,27 @@ public final class QuestHud {
                         + font.width("00:00") + 2 * PAD);
             }
         }
-        width = Math.min(width, Math.min(MAX_WIDTH, graphics.guiWidth() / 2 - MARGIN));
+        width = Math.min(width, Math.min(MAX_WIDTH, (int) ((graphics.guiWidth() / 2 - MARGIN) / SCALE)));
         int height = PAD + UiTheme.LINE + 3;
         for (Entry entry : log.quests()) {
             height += entry.escort().map(escort -> escortHeight(escort) + 2).orElse(ROW);
         }
         height += PAD - 2;
 
-        UiRect panel = new UiRect(MARGIN, MARGIN, width, height);
+        int screenWidth = Math.round(width * SCALE);
+        graphics.pose().pushPose();
+        graphics.pose().translate(graphics.guiWidth() - MARGIN - screenWidth, top(player), 0);
+        graphics.pose().scale(SCALE, SCALE, 1.0F);
+        try {
+            renderPanel(graphics, font, player, log, inventory, now, new UiRect(0, 0, width, height));
+        } finally {
+            graphics.pose().popPose();
+        }
+    }
+
+    /** Draws the panel in its own scaled coordinates. */
+    private static void renderPanel(GuiGraphics graphics, Font font, LocalPlayer player, QuestLogPayload log,
+            Inventory inventory, long now, UiRect panel) {
         UiDraw.fill(graphics, panel, UiTheme.HUD);
         UiRect inner = panel.inset(PAD);
         Component header = Component.translatable(KEY + "header", log.quests().size(), log.maxActive());
@@ -104,6 +131,57 @@ public final class QuestHud {
                 y += ROW;
             }
         }
+    }
+
+    /**
+     * The Y of the top of the quest panel, in pixels of the screen: below the vanilla icons of the status effects and
+     * below the territory panel when the territory panel shows.
+     */
+    private static int top(LocalPlayer player) {
+        TerritoryStatusPayload status = ClientTerritory.get();
+        int lines = status.faction().isEmpty() ? 0 : status.village().isPresent() ? 2 : 1;
+        boolean shown = ClientConfig.get().showTerritoryHud && lines > 0;
+        return top(effectsHeight(player), shown ? territoryHeight(lines, status.factionColor() >= 0) : 0);
+    }
+
+    /**
+     * The Y of the top of the quest panel.
+     *
+     * @param effects   the height of the vanilla icons of the status effects (0, 1 or 2 rows)
+     * @param territory the height of the territory panel, or 0 when it does not show
+     * @return the Y, in pixels of the screen
+     */
+    static int top(int effects, int territory) {
+        return TERRITORY_MARGIN + effects + (territory > 0 ? territory + GAP : 0);
+    }
+
+    /**
+     * The height of the territory panel (the layout of {@link TerritoryHud}).
+     *
+     * @param lines  the number of text lines (1 or 2)
+     * @param banner true when the panel has the banner of a faction
+     * @return the height, in pixels of the screen
+     */
+    static int territoryHeight(int lines, boolean banner) {
+        return TERRITORY_PAD + Math.max(lines * (UiTheme.LINE + 2) - 2, banner ? TERRITORY_BANNER : 0)
+                + TERRITORY_PAD;
+    }
+
+    /** The height of the vanilla icons of the status effects at the top right (the rule of {@link TerritoryHud}). */
+    private static int effectsHeight(LocalPlayer player) {
+        boolean beneficial = false;
+        boolean harmful = false;
+        for (MobEffectInstance effect : player.getActiveEffects()) {
+            if (!effect.showIcon()) {
+                continue;
+            }
+            if (effect.getEffect().value().isBeneficial()) {
+                beneficial = true;
+            } else {
+                harmful = true;
+            }
+        }
+        return harmful ? 2 * EFFECT_ROW : beneficial ? EFFECT_ROW : 0;
     }
 
     /**
