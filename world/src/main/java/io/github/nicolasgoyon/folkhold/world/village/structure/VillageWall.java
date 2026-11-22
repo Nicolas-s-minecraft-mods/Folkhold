@@ -15,6 +15,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Segment;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Side;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Tower;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallOutline;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WaterExit;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePlots.Plot;
@@ -30,6 +31,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntBinaryOperator;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 import net.minecraft.core.BlockPos;
@@ -77,8 +79,10 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>A {@link GroundFillPiece} on each tower and each gate fills the small gaps of air under the surface of the
  *       terrain near it.</li>
  *   <li>The water side: the top block of the terrain is water at the sea level or lower (see {@link #isWater}). On
- *       water, the palisade stands on its foundation, with no flat terrain along it. A gate that opens on water gets a
- *       {@link PierPiece} in front of it, and no flat terrain there.</li>
+ *       water, the palisade stands on its foundation, with no flat terrain along it. A gate that opens on water gets an
+ *       exit in front of it (see {@link WaterExit} and {@link #exit}), and no flat terrain there: a {@link PierPiece}
+ *       with steps, or a {@link PortPiece} at a gate of the outer wall on large water. A gate of a ring in front of a
+ *       water gate of the inner wall, on the same water, gets a bridge from the inner gate (see {@link #bridge}).</li>
  * </ul>
  */
 public final class VillageWall {
@@ -108,7 +112,12 @@ public final class VillageWall {
     /** The number of blocks on each side of the middle of a street: the plots are at this distance. */
     static final int STREET_HALF_WIDTH = 2;
     /** A pier starts at this distance outside the line: after the outer row of the gate. */
-    static final int PIER_START = 2;
+    static final int PIER_START = WaterExit.FIRST_ROW;
+    /**
+     * The exit of a water gate stays under this distance from the line: the longest pier, and the jetties of a port
+     * (see {@link #exit}).
+     */
+    static final int EXIT_REACH = Math.max(PIER_START + PierPiece.MAX_LENGTH, PortPiece.REACH + 1);
     /** The game places the pieces of a structure only in this range of chunks from the start chunk. */
     static final int CHUNK_RANGE = 8;
     /** The eyes of an archer on the platform of a tower are this number of blocks above the base of the tower. */
@@ -139,7 +148,7 @@ public final class VillageWall {
             List<StructurePiece> village, List<BoundingBox> reserved, BlockPos center, WallSettings settings,
             boolean maritime) {
         return build(context, heights, village, reserved, center, settings, maritime, OptionalInt.empty(),
-                WallOutline.Ground.FLAT).pieces();
+                WallOutline.Ground.FLAT, true).pieces();
     }
 
     /**
@@ -198,11 +207,13 @@ public final class VillageWall {
      *               the edges at the tower spacing of the settings
      * @param ground the ground of the site: the free outline of the wall cuts out its high ground (see
      *               {@link WallLayout#free}). {@link WallOutline.Ground#FLAT} gives the rectangle
+     * @param outer  true when no ring goes around the wall: a water gate on large water gets a port (see
+     *               {@link #exit})
      * @return the wall
      */
     public static Wall build(Structure.GenerationContext context, TerrainCache heights, List<StructurePiece> village,
             List<BoundingBox> reserved, BlockPos center, WallSettings settings, boolean maritime, OptionalInt towers,
-            WallOutline.Ground ground) {
+            WallOutline.Ground ground, boolean outer) {
         List<Box> boxes = village.stream().map(piece -> box(piece.getBoundingBox())).toList();
         List<Box> inside = new ArrayList<>(boxes);
         reserved.forEach(space -> inside.add(box(space)));
@@ -280,10 +291,10 @@ public final class VillageWall {
                 moveHouses(templates, village, arm, levels);
             }
             if (waterGates.contains(gate)) {
-                Optional<PierPiece> pier = pier(layout, gate, gateLevels.get(gate), terrain::height, seaLevel,
-                        settings.pier(), range(context.chunkPos()));
+                Optional<StructurePiece> exit = exit(layout, gate, gateLevels.get(gate), terrain::height, seaLevel,
+                        settings.pier(), range(context.chunkPos()), outer);
                 // A water gate with no pier in the range is a land gate: it gets the flat terrain in front of it.
-                pier.ifPresentOrElse(pieces::add, () -> waterGates.remove(gate));
+                exit.ifPresentOrElse(pieces::add, () -> waterGates.remove(gate));
             }
         }
         pieces.addAll(terrain(layout, smooth, gateLevels, water, waterGates));
@@ -343,11 +354,15 @@ public final class VillageWall {
                     .toList();
             Map<Gate, Integer> gateLevels = new HashMap<>();
             Map<Gate, Arm> arms = new HashMap<>();
+            List<PierPiece> bridges = new ArrayList<>();
             for (Gate gate : keptGates) {
                 Optional<Arm> arm = bandArm(layout, gate, band, inner);
                 arm.ifPresent(value -> arms.put(gate, value));
                 List<Integer> indices = layout.ringIndices(gate);
-                int level = reachable(flatten(bases, indices), arm);
+                // A bridge from the water gate of the inner wall gives its deck level to the gate.
+                Optional<PierPiece> bridge = bridge(layout, gate, inner, terrain::height, seaLevel, settings.pier());
+                bridge.ifPresent(bridges::add);
+                int level = bridge.isPresent() ? bridge.get().deckY() : reachable(flatten(bases, indices), arm);
                 indices.forEach(index -> bases[index] = level);
                 gateLevels.put(gate, level);
             }
@@ -373,6 +388,7 @@ public final class VillageWall {
                 }
             }
             Set<Gate> waterGates = new HashSet<>();
+            boolean outer = ring == count - 1;
             for (Gate gate : keptGates) {
                 Arm arm = arms.get(gate);
                 if (arm != null) {
@@ -381,9 +397,11 @@ public final class VillageWall {
                 }
                 if (isWaterGate(layout, gate, terrain::height, seaLevel)) {
                     waterGates.add(gate);
-                    pieces.add(pier(layout, gate, gateLevels.get(gate), terrain::height, seaLevel, settings.pier()));
+                    exit(layout, gate, gateLevels.get(gate), terrain::height, seaLevel, settings.pier(),
+                            BoundingBox.infinite(), outer).ifPresent(pieces::add);
                 }
             }
+            pieces.addAll(bridges);
             pieces.addAll(terrain(layout, smooth, gateLevels, water, waterGates));
             inner = new Wall(layout, gateLevels, waterGates, pieces, spare);
             rings.add(inner);
@@ -628,7 +646,8 @@ public final class VillageWall {
     /**
      * The pier of a water gate. It starts after the outer row of the gate and goes out over the water, to the first
      * position on land. It has {@link PierPiece#MIN_LENGTH} rows at least and {@link PierPiece#MAX_LENGTH} rows at most.
-     * The deck is at the level of the gate.
+     * The deck is at the level of the gate. Its steps go down to one block under the top block of the water (see
+     * {@link #lowestStep}).
      *
      * @param layout   the wall
      * @param gate     the gate
@@ -662,11 +681,12 @@ public final class VillageWall {
             int distance = PIER_START + length;
             int x = middle.x() + outX * distance;
             int z = middle.z() + outZ * distance;
-            // The row goes 1 block to each side of its middle, across the pier.
+            // The row goes 1 block to each side of its middle, across the pier, and the steps 1 block farther on the
+            // side of the higher X or Z.
             int acrossX = Math.abs(outZ);
             int acrossZ = Math.abs(outX);
-            if (x - acrossX < limit.minX() || x + acrossX > limit.maxX() || z - acrossZ < limit.minZ()
-                    || z + acrossZ > limit.maxZ()) {
+            if (x - acrossX < limit.minX() || x + 2 * acrossX > limit.maxX() || z - acrossZ < limit.minZ()
+                    || z + 2 * acrossZ > limit.maxZ()) {
                 break;
             }
             boolean onWater = isWater(top.applyAsInt(middle.x() + outX * distance, middle.z() + outZ * distance),
@@ -678,7 +698,112 @@ public final class VillageWall {
         }
         return length == 0 ? Optional.empty()
                 : Optional.of(new PierPiece(middle.x() + outX * PIER_START, middle.z() + outZ * PIER_START, outX,
-                        outZ, length, level, blocks));
+                        outZ, length, level, blocks, lowestStep(seaLevel), false));
+    }
+
+    /**
+     * The exit of a water gate (see {@link WaterExit}): a port on large water in front of a gate of the outer wall, else
+     * a pier (see {@link #pier(WallLayout, Gate, int, IntBinaryOperator, int, PierBlocks, BoundingBox)}). A port that
+     * does not fit in the limit gives its place to a pier. The bridges to the next ring come from the ring (see
+     * {@link #bridge}).
+     *
+     * @param layout   the wall
+     * @param gate     the water gate
+     * @param level    the level of the gate
+     * @param top      the Y of the top block of the terrain at a position (X, Z), water included
+     * @param seaLevel the sea level of the chunk generator
+     * @param blocks   the blocks of the piers
+     * @param limit    the box of the blocks that the exit can use, on the horizontal plane
+     * @param outer    true for the outer wall of the village
+     * @return the port or the pier, or empty if the first row of the pier is not in the limit
+     */
+    static Optional<StructurePiece> exit(WallLayout layout, Gate gate, int level, IntBinaryOperator top, int seaLevel,
+            PierBlocks blocks, BoundingBox limit, boolean outer) {
+        Side side = gate.side();
+        Cell middle = layout.cell(gate.edge(), layout.along(gate));
+        int outX = -side.insideX();
+        int outZ = -side.insideZ();
+        IntPredicate water = distance -> isWater(top.applyAsInt(middle.x() + outX * distance,
+                middle.z() + outZ * distance), seaLevel);
+        int width = waterWidth(middle, outX, outZ, top, seaLevel);
+        if (WaterExit.choose(water, width, OptionalInt.empty(), outer) == WaterExit.Kind.PORT) {
+            BoundingBox port = PortPiece.boundingBox(middle.x(), middle.z(), outX, outZ, level);
+            if (port.minX() >= limit.minX() && port.maxX() <= limit.maxX() && port.minZ() >= limit.minZ()
+                    && port.maxZ() <= limit.maxZ()) {
+                return Optional.of(new PortPiece(middle.x(), middle.z(), outX, outZ, level, lowestStep(seaLevel),
+                        blocks));
+            }
+        }
+        return pier(layout, gate, level, top, seaLevel, blocks, limit).map(StructurePiece.class::cast);
+    }
+
+    /**
+     * The width of the water across the axis of a gate, at {@link WaterExit#PORT_DEPTH} blocks from the line: the
+     * blocks of water side by side on the row, from the axis, {@link WaterExit#PORT_WIDTH} blocks at most. 0 when the
+     * axis is not on water there.
+     */
+    private static int waterWidth(Cell middle, int outX, int outZ, IntBinaryOperator top, int seaLevel) {
+        int x = middle.x() + outX * WaterExit.PORT_DEPTH;
+        int z = middle.z() + outZ * WaterExit.PORT_DEPTH;
+        if (!isWater(top.applyAsInt(x, z), seaLevel)) {
+            return 0;
+        }
+        int acrossX = outZ != 0 ? 1 : 0;
+        int acrossZ = outX != 0 ? 1 : 0;
+        int width = 1;
+        for (int sign : new int[] {-1, 1}) {
+            for (int step = 1; step <= WaterExit.PORT_WIDTH / 2; step++) {
+                if (!isWater(top.applyAsInt(x + sign * acrossX * step, z + sign * acrossZ * step), seaLevel)) {
+                    break;
+                }
+                width++;
+            }
+        }
+        return width;
+    }
+
+    /**
+     * The bridge to a gate of a ring from the water gate of the wall inside it, on the same axis, when the water goes
+     * from one gate to the other (see {@link WaterExit}). The deck goes from the first row after the outer row of the
+     * inner gate to the row before the inner row of the ring gate, at the level of the inner gate. The ring gate takes
+     * this level. The bridge has steps in its middle, and no rails on its 2 end rows.
+     *
+     * @param ring     the ring
+     * @param gate     a gate of the ring
+     * @param inner    the wall inside the ring
+     * @param top      the Y of the top block of the terrain at a position (X, Z), water included
+     * @param seaLevel the sea level of the chunk generator
+     * @param blocks   the blocks of the piers
+     * @return the bridge, or empty when the inner wall has no water gate on the axis or the water does not go to the
+     *         ring gate
+     */
+    public static Optional<PierPiece> bridge(WallLayout ring, Gate gate, Wall inner, IntBinaryOperator top,
+            int seaLevel, PierBlocks blocks) {
+        Optional<Gate> innerGate = inner.waterGates().stream()
+                .filter(candidate -> candidate.side() == gate.side() && candidate.center() == gate.center())
+                .findFirst();
+        if (innerGate.isEmpty() || !inner.gateLevels().containsKey(innerGate.get())) {
+            return Optional.empty();
+        }
+        Side side = gate.side();
+        int outX = -side.insideX();
+        int outZ = -side.insideZ();
+        Cell from = inner.layout().cell(innerGate.get().edge(), inner.layout().along(innerGate.get()));
+        Cell to = ring.cell(gate.edge(), ring.along(gate));
+        int distance = (to.x() - from.x()) * outX + (to.z() - from.z()) * outZ;
+        int length = distance - 2 * PIER_START + 1;
+        IntPredicate water = step -> isWater(top.applyAsInt(from.x() + outX * step, from.z() + outZ * step),
+                seaLevel);
+        if (length < 1 || WaterExit.choose(water, 0, OptionalInt.of(distance), false) != WaterExit.Kind.BRIDGE) {
+            return Optional.empty();
+        }
+        return Optional.of(new PierPiece(from.x() + outX * PIER_START, from.z() + outZ * PIER_START, outX, outZ,
+                length, inner.gateLevels().get(innerGate.get()), blocks, lowestStep(seaLevel), true));
+    }
+
+    /** The Y of the lowest step of a deck: one block under the top block of the water. */
+    static int lowestStep(int seaLevel) {
+        return seaLevel - 2;
     }
 
     /**

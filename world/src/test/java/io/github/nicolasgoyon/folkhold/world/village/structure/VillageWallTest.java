@@ -11,6 +11,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Box;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Gate;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Segment;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Side;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WaterExit;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -107,7 +108,76 @@ class VillageWallTest {
         BoundingBox box = open.getBoundingBox();
         assertEquals(line - VillageWall.PIER_START, box.maxZ(), "The pier starts after the outer row of the gate");
         assertEquals(-1, box.minX());
-        assertEquals(1, box.maxX());
+        // The steps go along the side of the higher X: the box takes their column.
+        assertEquals(2, box.maxX());
+        assertTrue(open.hasSteps() && !open.openEnd(), "A pier has steps and rails on its last row");
+        assertEquals(SEA - 2, BASE - open.steps() + 1, "The lowest step is one block under the top of the water");
+        assertEquals(PierPiece.MAX_LENGTH - open.steps(), open.topStep(), "The steps end at the last row");
+    }
+
+    /**
+     * The exit of a water gate of the outer wall on large water is a port. An inner wall, a small lake, a narrow lake
+     * and a port out of the range of the start chunk give a pier.
+     */
+    @Test
+    void largeWaterOfTheOuterWallGivesAPort() {
+        WallLayout layout = layout();
+        Gate north = layout.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        int line = layout.outline().minZ();
+        BoundingBox all = BoundingBox.infinite();
+
+        StructurePiece port = VillageWall.exit(layout, north, BASE, (x, z) -> SEA - 1, SEA, PIER, all, true)
+                .orElseThrow();
+        StructurePiece inner = VillageWall.exit(layout, north, BASE, (x, z) -> SEA - 1, SEA, PIER, all, false)
+                .orElseThrow();
+        StructurePiece lake = VillageWall.exit(layout, north, BASE, (x, z) -> z < line - 30 ? SEA + 2 : SEA - 1, SEA,
+                PIER, all, true).orElseThrow();
+        StructurePiece narrow = VillageWall.exit(layout, north, BASE, (x, z) -> Math.abs(x) > 10 ? SEA + 2 : SEA - 1,
+                SEA, PIER, all, true).orElseThrow();
+        StructurePiece cut = VillageWall.exit(layout, north, BASE, (x, z) -> SEA - 1, SEA, PIER,
+                new BoundingBox(-5, -1000, -1000, 1000, 1000, 1000), true).orElseThrow();
+
+        assertTrue(port instanceof PortPiece, "Open sea in front of the outer wall: a port");
+        assertEquals(new BoundingBox(-PortPiece.QUAY_HALF, BASE - PierPiece.MAX_DEPTH, line - PortPiece.REACH,
+                PortPiece.QUAY_HALF, BASE + 2, line - PortPiece.QUAY_FROM), port.getBoundingBox());
+        assertTrue(inner instanceof PierPiece, "An inner wall: a pier");
+        assertTrue(lake instanceof PierPiece, "A small lake: a pier");
+        assertTrue(narrow instanceof PierPiece, "A narrow lake: a pier");
+        assertTrue(cut instanceof PierPiece, "A port out of the range: a pier");
+    }
+
+    /**
+     * The water gate of a wall and the gate of its ring on the same water: the bridge goes from the row after the outer
+     * row of the inner gate to the row before the inner row of the ring gate, at the level of the inner gate. With
+     * land in the band, or with no water gate on the axis, the ring gate gets no bridge.
+     */
+    @Test
+    void bridgeJoinsTheGatesOfTwoWallsOnTheSameWater() {
+        WallLayout layout = layout();
+        WallLayout ring = WallLayout.ring(layout, WallLayout.MIN_BAND);
+        Gate north = layout.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        Gate ringNorth = ring.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        Gate ringEast = ring.gates().stream().filter(gate -> gate.side() == Side.EAST).findFirst().orElseThrow();
+        VillageWall.Wall inner = new VillageWall.Wall(layout, Map.of(north, BASE), Set.of(north), List.of());
+        VillageWall.Wall dry = new VillageWall.Wall(layout, Map.of(north, BASE), Set.of(), List.of());
+        int line = layout.outline().minZ();
+        int ringLine = ring.outline().minZ();
+
+        PierPiece bridge = VillageWall.bridge(ring, ringNorth, inner, (x, z) -> SEA - 1, SEA, PIER).orElseThrow();
+        Optional<PierPiece> shore = VillageWall.bridge(ring, ringNorth, inner,
+                (x, z) -> z < ringLine + WaterExit.BRIDGE_SHORE + 2 ? SEA + 2 : SEA - 1, SEA, PIER);
+
+        assertEquals(line - VillageWall.PIER_START, bridge.getBoundingBox().maxZ(), "The bridge starts at the gate");
+        assertEquals(ringLine + VillageWall.PIER_START, bridge.getBoundingBox().minZ(),
+                "The bridge ends at the ring gate");
+        assertEquals(WallLayout.MIN_BAND - 3, bridge.length());
+        assertEquals(BASE, bridge.deckY());
+        assertTrue(bridge.openEnd() && bridge.hasSteps(), "A bridge has steps and no rails at its 2 ends");
+        assertTrue(shore.isEmpty(), "Land in the band: no bridge");
+        assertTrue(VillageWall.bridge(ring, ringNorth, dry, (x, z) -> SEA - 1, SEA, PIER).isEmpty(),
+                "No water gate on the axis: no bridge");
+        assertTrue(VillageWall.bridge(ring, ringEast, inner, (x, z) -> SEA - 1, SEA, PIER).isEmpty(),
+                "The water gate of the inner wall is on another axis: no bridge");
     }
 
     /**

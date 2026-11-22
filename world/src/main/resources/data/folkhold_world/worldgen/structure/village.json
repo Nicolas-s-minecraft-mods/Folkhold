@@ -41,6 +41,15 @@
       },
       "rail": {
         "Name": "minecraft:spruce_fence"
+      },
+      "stairs": {
+        "Name": "minecraft:spruce_stairs",
+        "Properties": {
+          "facing": "north",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
       }
     },
     "street_stairs": {
@@ -93,6 +102,15 @@
           },
           "rail": {
             "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -141,6 +159,15 @@
           },
           "rail": {
             "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -189,6 +216,15 @@
           },
           "rail": {
             "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -231,6 +267,15 @@
           },
           "rail": {
             "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -280,6 +325,15 @@
           },
           "rail": {
             "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -326,6 +380,15 @@
           },
           "rail": {
             "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -379,6 +442,15 @@
           },
           "rail": {
             "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -428,6 +500,15 @@
           },
           "rail": {
             "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -477,6 +558,15 @@
           },
           "rail": {
             "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -520,6 +610,15 @@
           },
           "rail": {
             "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -570,6 +669,15 @@
           },
           "rail": {
             "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -617,6 +725,15 @@
           },
           "rail": {
             "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -670,6 +787,15 @@
           },
           "rail": {
             "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -719,6 +845,15 @@
           },
           "rail": {
             "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -768,6 +903,15 @@
           },
           "rail": {
             "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -811,6 +955,15 @@
           },
           "rail": {
             "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -861,6 +1014,15 @@
           },
           "rail": {
             "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -908,6 +1070,15 @@
           },
           "rail": {
             "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -961,6 +1132,15 @@
           },
           "rail": {
             "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -1010,6 +1190,15 @@
           },
           "rail": {
             "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -1059,6 +1248,15 @@
           },
           "rail": {
             "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -1102,6 +1300,15 @@
           },
           "rail": {
             "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -1152,6 +1359,15 @@
           },
           "rail": {
             "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
@@ -1199,6 +1415,15 @@
           },
           "rail": {
             "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
           }
         },
         "street_stairs": {
