@@ -2,7 +2,7 @@
 
 ## Summary
 
-Trains of minecarts linked with chains, locomotives, storage minecarts, an anvil with no level cap, and no Mending in trades.
+Trains of linked minecarts, locomotives, storage minecarts, an anvil with no level cap, no Mending in trades, and a limit for the fast nights.
 
 ## Description
 
@@ -19,11 +19,22 @@ Trains of minecarts linked with chains, locomotives, storage minecarts, an anvil
 - **No Mending in trades and in fishing.** The server configuration gives the list of the blocked enchantments.
 - **An anvil with no level cap.** The anvil never shows "Too Expensive!". Two books of the maximum level give a book of the next level, at a cost that grows fast. A repair has no penalty for the work before it.
 
+### Fast nights (with Slumber)
+
+- With the Slumber mod, the night goes fast when all the players sleep. The game runs the ticks of the night: the furnaces smelt and the crops grow.
+- Folkhold Balance limits the extra ticks in each server tick, so that each server tick stays short.
+- A clock keeps the night at about 40 seconds of real time (option `nightSeconds`). In a slow world, the time jumps ahead in small steps.
+
+### Train chunk loading
+
+- A server option, off by default: a moving locomotive keeps the chunks of its train loaded. It also loads the chunks in front of it.
+
 Each rule has its options in the configuration of the mod.
 
 ### Requirements
 
 - Minecraft 1.21.1, NeoForge 21.1.259 or later, Java 21.
+- Optional mod: Slumber (fast nights).
 - Client and server.
 
 ### License and links

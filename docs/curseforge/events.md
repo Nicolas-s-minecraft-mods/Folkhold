@@ -24,14 +24,16 @@ Natural events: earthquakes that shake and crack the buildings, and storms with 
 
 ### Control
 
-- A natural earthquake or storm comes 15 to 30 game days after the start, near a player.
+- A natural earthquake or storm comes near a player, in loaded chunks only. Each type of event has its own time between 2 events.
+- After a natural event, its region has no other natural event for 7 to 15 game days. A storm and an earthquake do not occur in the same place in the same night.
 - The operators start and stop the events with `/folkhold earthquake` and `/folkhold storm`.
-- The server configuration sets the frequency, the strength and the damage of each event.
+- The server configuration sets the frequency, the strength and the damage of each event, and the size of the regions.
+- The Config button opens the client options (camera shake) and the server options.
 
 ### Requirements
 
 - Minecraft 1.21.1, NeoForge 21.1.259 or later, Java 21.
-- Required mod: Folkhold Core.
+- Required mod: Folkhold Core. The client also needs Confee: it shows the options screen.
 - Client and server.
 
 ### License and links
