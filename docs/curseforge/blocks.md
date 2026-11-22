@@ -2,7 +2,7 @@
 
 ## Summary
 
-Library of the blocks of the Folkhold mods: building signs, job signs, a village heart, a bank chest, a quest board and a brazier.
+Library of the Folkhold blocks: building signs, job signs, a village heart, a bank chest, a quest board, a watch post and a brazier.
 
 ## Description
 
@@ -10,9 +10,10 @@ Library of the blocks of the Folkhold mods: building signs, job signs, a village
 
 ### Blocks
 
-- **Building signs.** A sign with a 3D icon names a building of a village. The buildings are a house, a storehouse, a barracks, a market, a mill, and the house-workshop of each job.
+- **Building signs.** A sign with a 3D icon names a building of a village. The buildings are a house, a village hall, a storehouse, a barracks, a forge, a bank, a market, a farm and a mill.
 - **Job signs.** A sign with the icon of a job names the job of a house-workshop.
-- **Village blocks.** The village heart, the bank chest, the quest board and the brazier of Folkhold World.
+- **Village blocks.** The village heart, the bank chest and its bank wall, the quest board, the watch post and the brazier of Folkhold World.
+- **Brazier.** A brazier works as a campfire. A flint and steel, a fire charge or a burning arrow lights it. A shovel or water puts it out. It does not burn the entities.
 
 A builder of maps can use these blocks as decoration with no other Folkhold mod.
 
