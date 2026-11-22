@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestRisk;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
@@ -49,7 +50,9 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  *   "reward": {"factor": 1.5, "reputation": 10, "friend_reward": 64, "experience": 5,
  *              "items": [{"item": "minecraft:bread", "count": 2}], "goods_share": 0.0,
  *              "special": {"chance": 0.25, "goods_share": 0.5, "experience": 5}},
- *   "offer": {"offer_minutes": 20, "duration_minutes": 40, "max_count": 64}
+ *   "offer": {"offer_minutes": 20, "duration_minutes": 40, "max_count": 64},
+ *   "start_items": {"chance": 0.5, "items": [{"item": "minecraft:iron_pickaxe"}], "targets": ["minecraft:raw_iron"]},
+ *   "penalty": {"reputation": 10, "start_items_factor": 2.0}
  * }
  * </pre>
  * {@code kind} and {@code need} are necessary. {@code enabled} is true by default. With no {@code min_level} the
@@ -60,7 +63,10 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  */
 public final class QuestDefinitions extends SimpleJsonResourceReloadListener {
     public static final String DIRECTORY = "folkhold/quest";
-    private static final Set<String> FIELDS = Set.of("kind", "need", "enabled", "conditions", "reward", "offer");
+    private static final Set<String> FIELDS = Set.of("kind", "need", "enabled", "conditions", "reward", "offer",
+            "start_items", "penalty");
+    private static final Set<String> START_FIELDS = Set.of("chance", "items", "targets");
+    private static final Set<String> PENALTY_FIELDS = Set.of("reputation", "start_items_factor");
     private static final Set<String> CONDITION_FIELDS = Set.of("min_level", "max_level");
     private static final Set<String> REWARD_FIELDS = Set.of("factor", "reputation", "friend_reward", "experience",
             "items", "goods_share", "special");
@@ -169,13 +175,33 @@ public final class QuestDefinitions extends SimpleJsonResourceReloadListener {
         RewardRule.Choice rewards = new RewardRule.Choice(base, GsonHelper.getAsDouble(special, "chance", 0.0),
                 rule(special, special.has("factor") ? OptionalDouble.of(GsonHelper.getAsDouble(special, "factor"))
                         : OptionalDouble.empty(), "reward.special.", warnings));
+        JsonObject start = GsonHelper.getAsJsonObject(json, "start_items", new JsonObject());
+        unknown(start, START_FIELDS, "start_items.", warnings);
+        JsonObject penalty = GsonHelper.getAsJsonObject(json, "penalty", new JsonObject());
+        unknown(penalty, PENALTY_FIELDS, "penalty.", warnings);
+        List<String> targets = new ArrayList<>();
+        for (JsonElement target : GsonHelper.getAsJsonArray(start, "targets", new JsonArray())) {
+            targets.add(GsonHelper.convertToString(target, "start_items.targets"));
+        }
+        List<RewardItem> startItems = items(start, "start_items.", warnings);
+        QuestRisk risk = new QuestRisk(GsonHelper.getAsDouble(start, "chance", startItems.isEmpty() ? 0.0 : 1.0),
+                startItems, targets, optionalInt(penalty, "reputation"),
+                penalty.has("start_items_factor")
+                        ? OptionalDouble.of(GsonHelper.getAsDouble(penalty, "start_items_factor"))
+                        : OptionalDouble.empty());
         return new QuestDefinition(id, kind, need, GsonHelper.getAsBoolean(json, "enabled", true),
                 GsonHelper.getAsInt(conditions, "min_level", 1),
-                GsonHelper.getAsInt(conditions, "max_level", Integer.MAX_VALUE), values, rewards);
+                GsonHelper.getAsInt(conditions, "max_level", Integer.MAX_VALUE), values, rewards, risk);
     }
 
     /** Reads the experience, the items and the goods share of a reward rule. */
     private static RewardRule rule(JsonObject json, OptionalDouble factor, String prefix, Consumer<String> warnings) {
+        return new RewardRule(GsonHelper.getAsInt(json, "experience", 0), items(json, prefix, warnings),
+                GsonHelper.getAsDouble(json, "goods_share", 0.0), factor);
+    }
+
+    /** Reads the list {@code items} of an object: each item has an id and a count (1 by default). */
+    private static List<RewardItem> items(JsonObject json, String prefix, Consumer<String> warnings) {
         List<RewardItem> items = new ArrayList<>();
         JsonArray array = GsonHelper.getAsJsonArray(json, "items", new JsonArray());
         for (int i = 0; i < array.size(); i++) {
@@ -184,17 +210,18 @@ public final class QuestDefinitions extends SimpleJsonResourceReloadListener {
             items.add(new RewardItem(GsonHelper.getAsString(item, "item"), GsonHelper.getAsInt(item, "count", 1),
                     false));
         }
-        return new RewardRule(GsonHelper.getAsInt(json, "experience", 0), items,
-                GsonHelper.getAsDouble(json, "goods_share", 0.0), factor);
+        return items;
     }
 
     /** Fails for an item of a reward that the game does not know. */
     private static void checkItems(QuestDefinition definition) {
-        for (RewardRule rule : List.of(definition.rewards().base(), definition.rewards().special())) {
-            for (RewardItem item : rule.items()) {
-                if (ItemIds.item(item.item()).isEmpty()) {
-                    throw new IllegalArgumentException("Unknown item '" + item.item() + "' in the reward");
-                }
+        List<RewardItem> all = new ArrayList<>(definition.risk().startItems());
+        all.addAll(definition.rewards().base().items());
+        all.addAll(definition.rewards().special().items());
+        for (RewardItem item : all) {
+            if (ItemIds.item(item.item()).isEmpty()) {
+                throw new IllegalArgumentException("Unknown item '" + item.item()
+                        + "' in the reward or the start items");
             }
         }
     }

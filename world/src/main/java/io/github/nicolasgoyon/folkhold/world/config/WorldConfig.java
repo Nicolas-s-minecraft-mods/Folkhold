@@ -146,6 +146,9 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue QUEST_DELIVERY_MAX_COUNT;
     public static final ModConfigSpec.IntValue QUEST_FRIEND_REWARD;
     public static final ModConfigSpec.IntValue QUEST_MAX_ACTIVE;
+    public static final ModConfigSpec.IntValue QUEST_FAILURE_REPUTATION;
+    public static final ModConfigSpec.DoubleValue QUEST_START_ITEMS_PENALTY;
+    public static final ModConfigSpec.IntValue QUEST_MAX_START_ITEM_QUESTS;
     public static final ModConfigSpec.BooleanValue QUEST_ESCORT_OFFERS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_WAIT_TICKS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_DISTANCE;
@@ -841,6 +844,20 @@ public final class WorldConfig {
                 .comment("Maximum number of active quests of a player.")
                 .translation(KEY_PREFIX + "questMaxActive")
                 .defineInRange("maxActive", 3, 1, 20);
+        QUEST_FAILURE_REPUTATION = builder
+                .comment("Reputation that a player loses with the faction of the village when an accepted quest fails:",
+                        "abandoned, expired, or failed. A quest definition can give an other value.")
+                .translation(KEY_PREFIX + "questFailureReputation")
+                .defineInRange("failureReputation", 10, 0, 1000);
+        QUEST_START_ITEMS_PENALTY = builder
+                .comment("Extra reputation that a player loses at the failure of a quest with start items, for each",
+                        "emerald of the base value of the start items. A quest definition can give an other value.")
+                .translation(KEY_PREFIX + "questStartItemsPenalty")
+                .defineInRange("startItemsPenalty", 2.0, 0.0, 100.0);
+        QUEST_MAX_START_ITEM_QUESTS = builder
+                .comment("Maximum number of active quests with start items of a player.")
+                .translation(KEY_PREFIX + "questMaxStartItemQuests")
+                .defineInRange("maxStartItemQuests", 1, 0, 20);
         QUEST_ESCORT_OFFERS = builder
                 .comment("Each new trade caravan offers an escort quest and waits at its village.")
                 .translation(KEY_PREFIX + "questEscortOffers")

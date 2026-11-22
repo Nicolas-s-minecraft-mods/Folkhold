@@ -34,7 +34,9 @@ public final class Quests {
         /** The reputation tier of the player is too low. */
         TIER_TOO_LOW,
         /** The player has the maximum number of active quests. */
-        TOO_MANY
+        TOO_MANY,
+        /** The quest has start items, and the player has the maximum number of active quests with start items. */
+        TOO_MANY_START_ITEMS
     }
 
     /**
@@ -108,6 +110,22 @@ public final class Quests {
      * @return the result
      */
     public AcceptResult accept(String questId, UUID playerId, ReputationTier tier, long now, int maxActive) {
+        return accept(questId, playerId, tier, now, maxActive, Integer.MAX_VALUE);
+    }
+
+    /**
+     * A player accepts an offer, with a limit of the active quests with start items (see {@link QuestRisk}).
+     *
+     * @param questId       the id of the quest
+     * @param playerId      the player
+     * @param tier          the reputation tier of the player with the village
+     * @param now           the game time
+     * @param maxActive     the maximum number of active quests of a player
+     * @param maxStartItems the maximum number of active quests with start items of a player
+     * @return the result
+     */
+    public AcceptResult accept(String questId, UUID playerId, ReputationTier tier, long now, int maxActive,
+            int maxStartItems) {
         Quest quest = quests.get(questId);
         if (quest == null) {
             return AcceptResult.UNKNOWN;
@@ -120,6 +138,10 @@ public final class Quests {
         }
         if (active(playerId).size() >= maxActive) {
             return AcceptResult.TOO_MANY;
+        }
+        if (!quest.startItems().isEmpty() && active(playerId).stream()
+                .filter(other -> !other.startItems().isEmpty()).count() >= maxStartItems) {
+            return AcceptResult.TOO_MANY_START_ITEMS;
         }
         quest.accept(playerId, now);
         return AcceptResult.ACCEPTED;
