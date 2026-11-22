@@ -662,8 +662,10 @@ public final class PlotTerrainGameTests {
                 climbing += climb > 0 ? 1 : 0;
                 climbingRectangles += rectangleClimb > 0 ? 1 : 0;
                 FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {}: rules {}, free outline {} ({} edges),"
-                        + " climb {}, climb of the rectangle {}", context.chunkPos(), layout.style().name(), level,
-                        layout.plan().rules(), !wall.isRectangle(), wall.edges(), climb, rectangleClimb);
+                        + " climb {}, climb of the rectangle {}, {} plots of {}, {} missing plots, {} missing homes",
+                        context.chunkPos(), layout.style().name(), level, layout.plan().rules(), !wall.isRectangle(),
+                        wall.edges(), climb, rectangleClimb, layout.plan().plots().size(), layout.plan().target(),
+                        layout.plan().missingPlots(), layout.plan().missingHomes());
                 int rise = FortifiedVillageStructure.outlineRise(layout.plan().rules());
                 WallLayout inside = wall;
                 for (int r = 0; r < layout.rings().size() && r + 1 < layout.plans().size(); r++) {
