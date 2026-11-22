@@ -17,6 +17,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.RingDistrictHolds;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -51,8 +52,6 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class OldWorldRingGameTests {
     /** The start chunk of the town is this number of chunks east of the test: far from the other tests. */
     private static final int DISTANCE = 300;
-    /** The level of the layout of the first wall: a hamlet has no ring and no band. */
-    private static final int HAMLET_LEVEL = 4;
     private static final int TOWN_LEVEL = 9;
     /** The test loads the chunks of the area of the village and of this number of blocks around it. */
     private static final int LOAD_REACH = 96;
@@ -65,12 +64,24 @@ public final class OldWorldRingGameTests {
     }
 
     /**
-     * A town of a world with no flag of the rings: the village structure has the first wall only, with no ring
-     * district, and the settlement has the town tier from the start. The first check of the heart plans the ring
-     * around the first wall and starts the construction sites of its parts, with no change of the tier.
+     * A town of a world with no flag of the rings (see {@link VillageRings#enabled()}): the village structure of the
+     * level 9 has the first wall only, with all its plots inside, and no ring district starts. The settlement has the
+     * town tier from the start. The first check of the heart plans the ring around the first wall and starts the
+     * construction sites of its parts, with no change of the tier. The test runs in one tick, with the flag off, and
+     * sets the flag back at its end.
      */
     @GameTest(template = "empty", timeoutTicks = 200, batch = "old_world_rings")
     public static void townOfAnOldWorldBuildsItsRing(GameTestHelper helper) {
+        boolean rings = VillageRings.enabled();
+        VillageRings.setEnabled(false);
+        try {
+            townWithNoFlag(helper);
+        } finally {
+            VillageRings.setEnabled(rings);
+        }
+    }
+
+    private static void townWithNoFlag(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
                 .registryOrThrow(Registries.STRUCTURE).getOrThrow(Settlements.VILLAGE_STRUCTURE);
@@ -82,7 +93,11 @@ public final class OldWorldRingGameTests {
                 level.getSeed(), start, level, biome -> true);
         FortifiedVillageStructure.Variant land = new FortifiedVillageStructure.Variant(HolderSet.direct(),
                 structure.startPool(), structure.wall(), structure.homes(), Optional.empty());
-        FortifiedVillageStructure.Layout first = structure.layout(context, land, false, HAMLET_LEVEL).orElseThrow();
+        FortifiedVillageStructure.Layout first = structure.layout(context, land, false, TOWN_LEVEL).orElseThrow();
+        helper.assertTrue(first.rings().isEmpty() && first.bands().isEmpty(),
+                "A town of a world with no flag must have its first wall only");
+        helper.assertTrue(VillageRings.generatedPieces(level, start).isEmpty(),
+                "No ring district must start in a world with no flag");
         place(level, structure, start, first.pieces());
         BoundingBox plaza = first.village().get(0).getBoundingBox();
         BlockPos heartPos = new BlockPos((plaza.minX() + plaza.maxX()) / 2, plaza.minY() + 1,

@@ -107,6 +107,16 @@ public final class VillageRings {
         return enabled;
     }
 
+    /**
+     * Sets the flag of the rings of the current world, for the tests of a world of an earlier version. The caller sets
+     * the flag back in the same tick: the generation of the other tests reads it.
+     *
+     * @param rings true for a world with the rings
+     */
+    public static void setEnabled(boolean rings) {
+        enabled = rings;
+    }
+
     /** Reads the flag of the rings when the overworld loads. A new world gets the flag. */
     public static void onLevelLoad(LevelEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
