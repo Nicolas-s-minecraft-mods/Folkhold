@@ -63,6 +63,8 @@ Other IDEs: IntelliJ IDEA can also open a dev container. The support depends on 
 
    The server starts, runs all GameTests, then stops. The result is in the console. The GameTest server uses the folder `dev/run-gametest`, with a new world for each run. It does not change the world of the dev server, `dev/run/world`.
 
+   To run one shard of the GameTests, as a job of the CI does, give the shard: `./gradlew :dev:runGameTestServer -PgametestShard=2/4`. See "GameTest shards" in "Continuous integration and releases".
+
 Without VS Code, use the scripts from a terminal on the host:
 
 ```powershell
@@ -380,9 +382,15 @@ To add a language, add `site/lang/<language>.json` with all the keys of `en_us.j
   | --- | --- | --- |
   | **Version** | | Calculates the version of the build. |
   | **Build** | Version | Compiles the mods, runs the JUnit tests, the format check and the translation check. Uploads the jars (artifact `folkhold-mods`) and the coverage report of `core` (artifact `folkhold-core-coverage`). When the job fails, it uploads the Gradle log (artifact `folkhold-build-logs`). |
-  | **GameTests** | Version | Compiles the mods and runs the GameTest server. When the job fails, it uploads the logs (artifact `folkhold-gametest-logs`). |
+  | **GameTest shard 1/4** to **4/4** | Version | Each job compiles the mods and runs the GameTest server with one shard of the GameTests (`-PgametestShard=<i>/4`). It writes the number of tests and the time as a notice. It uploads the names of its tests (artifact `folkhold-gametest-shard-<i>`), and the logs when it fails (artifact `folkhold-gametest-logs-<i>`). |
+  | **GameTests** | GameTest shard 1/4 to 4/4 | The required check of the GameTests. It passes when each shard passes, and when each test ran in one shard and only one (`scripts/check_gametest_shards.py`). |
   | **Modpack** | Build | Checks the required dependencies of the mods of the modpack (`scripts/modpack_deps.py`). Then makes the `.mrpack` file from the jars of the job **Build** (artifact `folkhold-modpack`). |
   | **Dev pack** | GameTests, Modpack | For a push on `develop` only: makes the dev pack and the dev instance (artifact `folkhold-dev-pack`). |
+
+- **GameTest shards** (`GameTestShards` in the GameTests of core): the system property `folkhold.gametest.shard` (Gradle property `gametestShard`) gives the shard of a run. With no shard, the server runs all the tests.
+  - A shard gets whole batches (the tests of one batch run together). The batches go to the shards by their measured time (`core/src/gametest/resources/folkhold_gametest_times.properties`), the longest first, each to the shard with the smallest total time. A batch that the file does not have counts 1 s. Thus a new test runs in one shard, and the shards stay near the same time. To measure again, take the times between the lines `Running test batch` of a full run.
+  - Each run writes `dev/run-gametest/shard-report/all-tests.txt` (all the tests) and `shard-tests.txt` (the tests of the run). The job GameTests compares them.
+  - Measured times of the workflow Build for a pull request (#998): before the shards, 10 to 12 minutes (the job GameTests: about 2 minutes of compile and server start, then 8.7 minutes of tests).
 
 - "Run workflow" on the workflow **Build** has the input `release`. With this input, the run uses the version of the release and also makes the Maven files of the mods (artifact `folkhold-maven`). The run publishes nothing: use it to test a release build.
 - The shared steps of the workflows are composite actions in `.github/actions/`:
