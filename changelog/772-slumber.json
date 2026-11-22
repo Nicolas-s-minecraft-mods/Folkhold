@@ -1,5 +1,5 @@
 {
   "category": "new",
-  "en_us": "When all the players sleep, the night goes fast in place of a jump to the morning: the furnaces smelt, the crops grow and the villages live during the night. The server stays responsive during the fast night: the server options of the section \"sleep\" of Folkhold Balance limit the speed.",
-  "fr_fr": "Quand tous les joueurs dorment, la nuit passe vite au lieu de sauter au matin : les fours cuisent, les cultures poussent et les villages vivent pendant la nuit. Le serveur reste réactif pendant la nuit rapide : les options serveur de la section « sleep » de Folkhold Balance limitent la vitesse."
+  "en_us": "When all the players sleep, the night goes fast in place of a jump to the morning: the furnaces smelt, the crops grow and the villages live during the night. The night takes about 40 seconds. In a slow world, the clock also jumps ahead in small steps to keep this time. The server stays responsive during the fast night. The server options of the section \"sleep\" of Folkhold Balance set the speed and the time of the night.",
+  "fr_fr": "Quand tous les joueurs dorment, la nuit passe vite au lieu de sauter au matin : les fours cuisent, les cultures poussent et les villages vivent pendant la nuit. La nuit dure environ 40 secondes. Dans un monde lent, l'horloge avance aussi par petits sauts pour garder cette durée. Le serveur reste réactif pendant la nuit rapide. Les options serveur de la section « sleep » de Folkhold Balance règlent la vitesse et la durée de la nuit."
 }
