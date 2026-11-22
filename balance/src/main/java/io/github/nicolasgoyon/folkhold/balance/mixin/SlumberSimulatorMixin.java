@@ -11,8 +11,9 @@ import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
- * The simulator of the optional mod Slumber 1.0.0. Slumber is not a dependency: with no Slumber, Mixin does not
- * apply this mixin ({@link Pseudo}).
+ * The simulator of the optional mod Slumber 1.0.0. Slumber is not a dependency. With no Slumber,
+ * {@link io.github.nicolasgoyon.folkhold.balance.BalanceMixinPlugin} skips this mixin. The mixin is also
+ * {@link Pseudo}: Mixin does not need its target class.
  *
  * <p>At the end of each server tick while all the players sleep, {@code Simulator.simulateWorld} runs
  * {@code max(slumberTickMultiplier - 1, ceil(ticks to the morning / 40))} extra ticks of all the levels. The second
