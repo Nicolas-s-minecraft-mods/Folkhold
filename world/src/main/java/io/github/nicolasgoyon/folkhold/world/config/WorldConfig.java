@@ -29,6 +29,7 @@ public final class WorldConfig {
 
     public static final ModConfigSpec.IntValue VILLAGE_RADIUS;
     public static final ModConfigSpec.IntValue VILLAGE_MESSAGE_RADIUS;
+    public static final ModConfigSpec.IntValue VILLAGE_MESSAGE_MARGIN;
     public static final ModConfigSpec.IntValue SPAWN_PROTECTION_RADIUS;
     public static final ModConfigSpec.IntValue CALM_DELAY_SECONDS;
     public static final ModConfigSpec.IntValue BUILDERS;
@@ -270,10 +271,16 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "villageRadius")
                 .defineInRange("radius", 48, 8, 256);
         VILLAGE_MESSAGE_RADIUS = builder
-                .comment("Distance in blocks from a village heart where a player gets the village message",
-                        "(village name, faction, reputation). The village wall is at approximately 30 blocks.")
+                .comment("Smallest distance in blocks from a village heart where a player gets the village message",
+                        "(village name, faction, reputation). A large village also gives the message at",
+                        "messageMargin blocks from its structure area (the box of its wall).")
                 .translation(KEY_PREFIX + "villageMessageRadius")
                 .defineInRange("messageRadius", 50, 8, 256);
+        VILLAGE_MESSAGE_MARGIN = builder
+                .comment("Distance in blocks out of the structure area of a village (the box of its wall) where a",
+                        "player gets the village message. Thus the message of a large village shows at its limit.")
+                .translation(KEY_PREFIX + "villageMessageMargin")
+                .defineInRange("messageMargin", 16, 0, 128);
         SPAWN_PROTECTION_RADIUS = builder
                 .comment("Radius in blocks around a village heart where hostile monsters do not spawn naturally.",
                         "The protection also covers the area of the village structure of the heart.",

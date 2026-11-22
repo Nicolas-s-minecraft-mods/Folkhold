@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claima
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -67,7 +68,8 @@ public final class TerritoryMaps {
     }
 
     /**
-     * The map of a player: the discovered villages with a territory.
+     * The map of a player: the discovered villages with a territory, and true if the player entered a pillager
+     * territory.
      *
      * @param player the player
      * @return the payload
@@ -89,7 +91,8 @@ public final class TerritoryMaps {
             }
             villages.add(village(claimant, settlement.get(), factions));
         }
-        return new TerritoryMapPayload(villages);
+        return new TerritoryMapPayload(villages,
+                !PillagerData.get(server).discovered(player.getUUID()).isEmpty());
     }
 
     /**

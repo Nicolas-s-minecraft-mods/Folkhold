@@ -29,7 +29,6 @@ import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -941,19 +940,18 @@ public class JournalScreen extends UiScreen {
                 header.x(), y, right - header.x(), village.active() ? UiTheme.TEXT : UiTheme.TEXT_FAINT);
     }
 
-    /** Draws the legend of the map: the color and the name of each faction with a discovered territory. */
+    /**
+     * Draws the legend of the map: the color and the name of each faction with a discovered territory, and the pillager
+     * faction when the player entered a pillager territory.
+     */
     private void renderMapLegend(GuiGraphics graphics, UiRect legend) {
         int x = legend.x();
-        Map<String, Integer> colors = new LinkedHashMap<>();
-        for (TerritoryMapPayload.Village village : ClientJournalMap.territories()) {
-            colors.putIfAbsent(village.faction(), village.color() & 0xFFFFFF);
-        }
-        for (Map.Entry<String, Integer> faction : colors.entrySet()) {
+        for (TerritoryMapPayload.LegendEntry faction : ClientJournalMap.legend()) {
             if (x >= legend.right() - 10) {
                 break;
             }
-            UiDraw.mark(graphics, x, legend.y() + 2, 7, 0xFF000000 | faction.getValue());
-            int w = UiText.draw(graphics, font, Component.literal(faction.getKey()), x + 10, legend.y() + 1,
+            UiDraw.mark(graphics, x, legend.y() + 2, 7, 0xFF000000 | faction.color());
+            int w = UiText.draw(graphics, font, faction.name(), x + 10, legend.y() + 1,
                     legend.right() - x - 10, UiTheme.TEXT);
             x += 10 + w + 2 * UiTheme.PADDING;
         }

@@ -46,8 +46,10 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
  *       early warning before the villages. When a player enters unclaimed land, a title shows "Unclaimed
  *       territory". When a player enters a pillager territory (see {@link PillagerTerritories}), the banner shows
  *       "Lands of the Pillagers" and the tier of the player with the pillagers.</li>
- *   <li><b>village message</b>: when a player comes near a village (see {@link WorldConfig#VILLAGE_MESSAGE_RADIUS}),
- *       the action bar shows the village name, the faction, the level and tier of the village, the reputation tier
+ *   <li><b>village message</b>: when a player comes near a village (see {@link VillageHearts#isNear}): at
+ *       {@link WorldConfig#VILLAGE_MESSAGE_RADIUS} blocks from the heart, or at
+ *       {@link WorldConfig#VILLAGE_MESSAGE_MARGIN} blocks from the structure area of a large village, the action bar
+ *       shows the village name, the faction, the level and tier of the village, the reputation tier
  *       in this village, and what the guards do.</li>
  *   <li><b>journal</b>: the territory discovers its village, and the village message is a visit (see
  *       {@link Journals}).</li>
@@ -95,7 +97,8 @@ public final class TerritoryMessages {
         String territoryId = !overworld ? OUTSIDE
                 : territory.map(FactionSpec::id).orElse(pillagers ? PillagerFaction.ID : UNCLAIMED);
         Optional<VillageHeartBlockEntity> village = VillageHearts
-                .findNearest(level, player.blockPosition(), WorldConfig.VILLAGE_MESSAGE_RADIUS.get())
+                .findNearForMessage(level, player.blockPosition(), WorldConfig.VILLAGE_MESSAGE_RADIUS.get(),
+                        WorldConfig.VILLAGE_MESSAGE_MARGIN.get())
                 .map(level::getBlockEntity)
                 .filter(VillageHeartBlockEntity.class::isInstance)
                 .map(VillageHeartBlockEntity.class::cast);
