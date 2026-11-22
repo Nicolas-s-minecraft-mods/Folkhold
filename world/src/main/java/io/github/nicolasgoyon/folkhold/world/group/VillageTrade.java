@@ -1,7 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.group;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemCatalog;
-import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemInfo;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Prices;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Recipe;
@@ -38,7 +37,7 @@ import net.minecraft.server.MinecraftServer;
  *
  * <ol>
  *   <li>Each active settlement with an economy lists its surpluses and its needs (see {@link TradeMatcher}). A
- *       settlement uses the inputs of its jobs and the food.</li>
+ *       settlement uses the inputs of its active jobs.</li>
  *   <li>The system requests a small number of new routes between possible partners, the nearest pairs first. A
  *       worker thread calculates them (see {@link CaravanRoutes#request}). The trade uses a route at the next
  *       abstract tick after its calculation.</li>
@@ -99,7 +98,7 @@ public final class VillageTrade {
             participants.add(new Participant(settlement.id(), settlement.factionId(), settlement.x(), settlement.z(),
                     TradeMatcher.surpluses(settlement.economy().stock(), population, catalog),
                     TradeMatcher.needs(settlement.economy().stock(), population, catalog,
-                            usedItems(settlement, catalog))));
+                            usedItems(settlement))));
         }
         Relations relations = FactionData.get(server).relations();
         calculateRoutes(server, participants, settlements, relations);
@@ -178,19 +177,14 @@ public final class VillageTrade {
     }
 
     /**
-     * The items that a settlement uses: the inputs of its active jobs (see {@link Economies#activeJobs}) and the
-     * food. The caravans and the delivery quests bring no input of an inactive job.
+     * The items that a settlement uses: the inputs of its active jobs (see {@link Economies#activeJobs}). The caravans
+     * and the delivery quests bring no input of an inactive job.
      */
-    public static Set<String> usedItems(Settlement settlement, ItemCatalog catalog) {
+    public static Set<String> usedItems(Settlement settlement) {
         Set<String> items = new LinkedHashSet<>();
         for (Job job : Economies.activeJobs(settlement)) {
             for (Recipe.Input input : job.recipe().inputs()) {
                 items.add(input.item());
-            }
-        }
-        for (ItemInfo info : catalog.all()) {
-            if (info.isFood()) {
-                items.add(info.id());
             }
         }
         return items;

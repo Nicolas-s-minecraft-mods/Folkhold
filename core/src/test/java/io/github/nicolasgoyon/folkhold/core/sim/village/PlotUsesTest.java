@@ -77,7 +77,7 @@ class PlotUsesTest {
                             assertEquals(PlotUses.Type.FREE, use.type(), name);
                             free++;
                         }
-                        if (plot.role() == PlotRole.JOBS_FOOD) {
+                        if (plot.role() == PlotRole.JOBS_FIRST) {
                             assertEquals(new Use(PlotUses.Type.POST, "", 0), use, name);
                         }
                         if (plot.role() == PlotRole.BANK) {

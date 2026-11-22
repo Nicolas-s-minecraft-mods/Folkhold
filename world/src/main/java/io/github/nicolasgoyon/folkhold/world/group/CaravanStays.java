@@ -43,8 +43,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       {@link io.github.nicolasgoyon.folkhold.world.entity.CaravanMerchant}).</li>
  *   <li>During the stay, the merchant trades at all the hours. It sells the surplus of the stock of the destination
  *       that no worker sells (see {@link JobTrades#surplus}): no output of an active job with a trader, and only the
- *       quantity above the target of the inputs of the active jobs and of the food. Thus it sells the goods that the
- *       caravans deliver and that no job of the village makes. The prices are the prices of the destination, the items leave its stock and the emeralds go into the
+ *       quantity above the target of the inputs of the active jobs. Thus it sells the goods that the caravans deliver and that no job of the village makes. The prices are the prices of the destination, the items leave its stock and the emeralds go into the
  *       treasury of its faction (see {@link Merchants#applyTrade}).</li>
  *   <li>The stop is not saved: the mod finds it again from the heart. A caravan of a saved world goes to the stop that
  *       the heart gives now.</li>

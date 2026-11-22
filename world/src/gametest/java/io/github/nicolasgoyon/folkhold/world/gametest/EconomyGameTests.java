@@ -48,7 +48,7 @@ public final class EconomyGameTests {
     @GameTest(template = "empty", timeoutTicks = 20, batch = "economy_data")
     public static void modDataHasJobsAndItems(GameTestHelper helper) {
         helper.assertTrue(EconomyData.jobs().containsKey("folkhold_world:farmer"), "The farmer job must exist");
-        helper.assertTrue(EconomyData.catalog().info("minecraft:carrot").isFood(), "A carrot must be food");
+        helper.assertTrue(EconomyData.catalog().contains("minecraft:carrot"), "A carrot must have item values");
         helper.succeed();
     }
 
@@ -72,9 +72,12 @@ public final class EconomyGameTests {
         helper.succeed();
     }
 
-    /** A cycle of a village of farmers produces wheat, feeds the population and gives a prosperity. */
+    /**
+     * A cycle of a village of farmers produces wheat and gives a prosperity. The population eats nothing: the farmers
+     * have no input, so the cycle consumes nothing.
+     */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "economy_cycle")
-    public static void cycleProducesAndFeeds(GameTestHelper helper) {
+    public static void cycleProducesAndGivesAProsperity(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         Settlement settlement = settlement(server, 620, 3);
         Economies.initialize(server, settlement);
@@ -87,8 +90,9 @@ public final class EconomyGameTests {
 
         helper.assertTrue(report.workingJobs() > 0, "At least one job must work");
         helper.assertTrue(report.produced().getOrDefault("minecraft:wheat", 0) > 0, "The farmers must produce wheat");
-        helper.assertTrue(report.foodCovered() >= 0.9, "The population must eat, not " + report.foodCovered());
-        helper.assertTrue(prosperity > 0.5, "A fed settlement must have a good prosperity, not " + prosperity);
+        helper.assertTrue(report.consumed().isEmpty(), "The cycle must consume nothing, not " + report.consumed());
+        helper.assertTrue(prosperity > 0.5, "A settlement with working jobs must have a good prosperity, not "
+                + prosperity);
         helper.succeed();
     }
 

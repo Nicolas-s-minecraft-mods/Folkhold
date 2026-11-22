@@ -7,7 +7,6 @@ import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
-import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
@@ -306,26 +305,21 @@ public final class RaidEffectGameTests {
     }
 
     /**
-     * A raid ends in a loss, and the food of the stocks is at the food floor: the food stays, the other items lose
-     * their part.
+     * A raid ends in a loss with a small population and some bread in the stocks: the food loses its part, as the
+     * other items. The stock loss keeps no food for the population.
      */
-    @GameTest(template = "arena_large", timeoutTicks = 100, batch = "raid_effect_food_floor")
-    public static void fallKeepsTheFoodFloor(GameTestHelper helper) {
+    @GameTest(template = "arena_large", timeoutTicks = 100, batch = "raid_effect_food")
+    public static void fallRemovesThePartOfTheFood(GameTestHelper helper) {
         TestSupport.setConfigForTest(helper, WorldConfig.RAID_HEART_RADIUS, 96);
-        TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_FOOD_PER_INHABITANT, 4);
-        TestSupport.setConfigForTest(helper, WorldConfig.RAID_FALL_FOOD_FLOOR_DAYS, 3);
         Scene scene = scene(helper, RaidRewardGameTests.CENTER);
         ServerLevel level = helper.getLevel();
         BlockPos center = helper.absolutePos(RaidRewardGameTests.CENTER).above(RaidRewardGameTests.SKY);
-        // 5 inhabitants eat 4 food points each day: the floor of 3 days is 60 points, 12 bread (5 points each).
-        int breadAtFloor = 12;
+        int bread = 12;
         scene.settlement().economy().setPopulation(5);
-        scene.settlement().economy().stock().set("minecraft:bread", breadAtFloor);
+        scene.settlement().economy().stock().set("minecraft:bread", bread);
         Raid[] raid = new Raid[1];
         waitForHeart(helper, scene)
                 .thenExecute(() -> {
-                    helper.assertTrue(EconomyData.catalog().info("minecraft:bread").food() == 5,
-                            "The bread must give 5 food points");
                     raid[0] = RaidRewardGameTests.raidAt(level, center);
                     killAndEnd(helper, scene, raid[0]);
                     helper.assertTrue(raid[0].isLoss(), "The raid must end in a loss");
@@ -335,7 +329,7 @@ public final class RaidEffectGameTests {
                 .thenExecute(() -> {
                     try {
                         int percent = WorldConfig.RAID_FALL_STOCK_PERCENT.get();
-                        assertStock(helper, scene, DIAMONDS - DIAMONDS * percent / 100, breadAtFloor);
+                        assertStock(helper, scene, DIAMONDS - DIAMONDS * percent / 100, bread - bread * percent / 100);
                     } finally {
                         end(level, raid[0], scene);
                     }

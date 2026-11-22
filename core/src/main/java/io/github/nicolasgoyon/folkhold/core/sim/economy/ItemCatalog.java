@@ -6,8 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Economic values of the items. An item that is not in the catalog has the default values: price 1, no food,
- * target 32.
+ * Economic values of the items. An item that is not in the catalog has the default values: price 1, target 32.
  */
 public final class ItemCatalog {
     public static final ItemCatalog EMPTY = new ItemCatalog(Map.of());
@@ -21,7 +20,7 @@ public final class ItemCatalog {
     /** The values of an item, or the default values. */
     public ItemInfo info(String id) {
         ItemInfo info = items.get(id);
-        return info != null ? info : new ItemInfo(id, 1.0, 0, 32);
+        return info != null ? info : new ItemInfo(id, 1.0, 32);
     }
 
     public boolean contains(String id) {

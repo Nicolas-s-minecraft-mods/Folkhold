@@ -52,7 +52,7 @@ final class VillagePlanMap {
             if (plot.area().overlaps(cell)) {
                 return switch (plot.role()) {
                     case BANK -> 'B';
-                    case JOBS_FOOD, JOBS_START -> 'J';
+                    case JOBS_FIRST, JOBS_START -> 'J';
                     case HOME -> plot.spare() ? plot.good() ? 'o' : 'x' : plot.wide() ? 'W' : 'h';
                 };
             }

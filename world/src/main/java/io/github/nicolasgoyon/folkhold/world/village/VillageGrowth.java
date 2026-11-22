@@ -15,7 +15,6 @@ import io.github.nicolasgoyon.folkhold.world.construction.BuilderSite;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSites;
 import io.github.nicolasgoyon.folkhold.world.construction.GhostPlacement;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
-import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
@@ -45,9 +44,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * streets (see {@link VillagePlots}). Each new home is a house-workshop: a home with the job post of a job.
  *
  * <ul>
- *   <li>A scanned village with no valid food post or no valid post that trades gets a house-workshop first, before the
- *       market, also when it does not need places. The inhabitants of the homes fill the first valid post first (see
- *       {@link JobPosts}): a valid food post that trades is active with 1 inhabitant of the homes.</li>
+ *   <li>A scanned village with no valid post that trades gets a house-workshop first, before the market, also when it
+ *       does not need places. The inhabitants of the homes fill the first valid post first (see {@link JobPosts}): a
+ *       valid post that trades is active with 1 inhabitant of the homes.</li>
  *   <li>The job of a house-workshop comes from {@link JobAssignment#next} with the job ids of the valid posts. The
  *       growth starts no site while the village has a site, and the heart checks the growth only after a scan: thus
  *       the post of the last house-workshop counts before the next choice. The piece is
@@ -177,8 +176,8 @@ public final class VillageGrowth {
      * starts.
      *
      * <p>With the setting {@code construction.growth} false, the village takes no new plot for a new home, for a
-     * building of the level or for a first market. The maintenance steps stay: the first posts (a village with no
-     * food post or no post that trades), the check of the market signs and the market again on its plot.
+     * building of the level or for a first market. The maintenance steps stay: the first post (a village with no post
+     * that trades), the check of the market signs and the market again on its plot.
      *
      * @param level the level
      * @param heart the village heart
@@ -398,13 +397,13 @@ public final class VillageGrowth {
     }
 
     /**
-     * True if a village needs a first post: it has no food post or no post that trades.
+     * True if a village needs a first post: it has no post that trades.
      *
      * @param posts the job ids of the valid posts (see {@link #postJobs})
      * @return true if the village needs a house-workshop before the other buildings
      */
     public static boolean needsFirstPost(List<String> posts) {
-        return posts.stream().noneMatch(Economies::producesFood) || posts.stream().noneMatch(Merchants::trades);
+        return posts.stream().noneMatch(Merchants::trades);
     }
 
     /**
@@ -420,8 +419,7 @@ public final class VillageGrowth {
         ResourceLocation homes = reference.homes().orElseThrow();
         boolean complete = true;
         for (int i = 0; i < WORKSHOP_JOBS; i++) {
-            Optional<String> job = JobAssignment.next(posts, eligible, EconomyData.catalog(), Merchants::trades,
-                    seed);
+            Optional<String> job = JobAssignment.next(posts, eligible, Merchants::trades, seed);
             if (job.isEmpty()) {
                 break;
             }

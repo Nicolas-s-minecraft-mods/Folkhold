@@ -17,7 +17,7 @@ import java.util.Optional;
  *   <li>The kind of a building is the kind of its building sign, for example {@code storehouse}.</li>
  *   <li>The first requirement of the list with a missing building comes first.</li>
  *   <li>The market ({@link #MARKET}) comes before a new home and before the other buildings (see {@link #steps}).</li>
- *   <li>A village with no food post or no post that trades gets a house-workshop first: before the market.</li>
+ *   <li>A village with no post that trades gets a house-workshop first: before the market.</li>
  * </ul>
  */
 public final class VillageBuildings {
@@ -41,7 +41,7 @@ public final class VillageBuildings {
 
     /** The kinds of steps of the growth of a village. */
     public enum StepType {
-        /** A house-workshop for a village with no food post or no post that trades. */
+        /** A house-workshop for a village with no post that trades. */
         FIRST_POST,
         /** The missing market. */
         MARKET,
@@ -87,8 +87,8 @@ public final class VillageBuildings {
      * The steps of the growth of a village, in their order. The builders do the first step with a free plot.
      *
      * <ol>
-     *   <li>A house-workshop, when the village has no food post or no post that trades. The village gets its food and
-     *       its trader before all the other buildings, also when it needs no home.</li>
+     *   <li>A house-workshop, when the village has no post that trades. The village gets its trader before all the
+     *       other buildings, also when it needs no home.</li>
      *   <li>The market, when the level of the village needs one and the village has none. A market takes one plot, and
      *       the plots are few. The market comes first: else the new homes can take all the plots, and the village
      *       never gets its market. A home that waits for the market waits for one construction only.</li>
@@ -105,7 +105,7 @@ public final class VillageBuildings {
      * @param counts        the number of buildings of each kind in the village
      * @param scanned       true if the counts come from a scan of the village
      * @param needsHome     true if the village needs a new home (see {@link HomeNeed})
-     * @param needsFirstPost true if the scanned village has no food post or no post that trades
+     * @param needsFirstPost true if the scanned village has no post that trades
      * @return the steps, in their order. Empty when the village needs nothing
      */
     public static List<Step> steps(List<Requirement> requirements, int level, Map<String, Integer> counts,
@@ -118,7 +118,7 @@ public final class VillageBuildings {
      * {@code TierGate}). The builders do the first step with a free plot.
      *
      * <ol>
-     *   <li>A house-workshop, when the village has no food post or no post that trades.</li>
+     *   <li>A house-workshop, when the village has no post that trades.</li>
      *   <li>The market, when the level of the village or the next tier needs one and the village has none.</li>
      *   <li>The other missing buildings of the next tier, in their order. Inside a tier, they come before the homes:
      *       else the homes can take all the plots, and the village stays at its tier.</li>
@@ -134,7 +134,7 @@ public final class VillageBuildings {
      * @param counts        the number of buildings of each kind in the village
      * @param scanned       true if the counts come from a scan of the village
      * @param needsHome     true if the village needs a new home (see {@link HomeNeed})
-     * @param needsFirstPost true if the scanned village has no food post or no post that trades
+     * @param needsFirstPost true if the scanned village has no post that trades
      * @param nextTier      the kinds of the missing buildings of the next tier, in their order
      * @return the steps, in their order. Empty when the village needs nothing
      */

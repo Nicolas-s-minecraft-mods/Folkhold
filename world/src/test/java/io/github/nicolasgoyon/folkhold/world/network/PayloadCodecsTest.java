@@ -43,7 +43,7 @@ class PayloadCodecsTest {
     private static Section section() {
         return new Section(Component.literal("Economy"), List.of(
                 new Row(Component.literal("Population"), Component.literal("12")),
-                Row.bar(Component.literal("Food"), Component.literal("8 / 10"), 8, 10),
+                Row.bar(Component.literal("Housing"), Component.literal("8 / 10"), 8, 10),
                 Row.segments(Component.literal("Garrison"), Component.literal("3"), 3, 5, 1)));
     }
 

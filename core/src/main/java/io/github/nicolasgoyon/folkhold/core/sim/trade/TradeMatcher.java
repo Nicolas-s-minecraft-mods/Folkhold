@@ -20,7 +20,7 @@ import java.util.TreeMap;
  * <ul>
  *   <li>A <b>surplus</b> is an item with a stock above {@code 1.5 × S_target}. The settlement sells the quantity
  *       above its target.</li>
- *   <li>A <b>need</b> is an item that the settlement uses (an input of its jobs, or food) with a stock below
+ *   <li>A <b>need</b> is an item that the settlement uses (an input of its active jobs) with a stock below
  *       {@code 0.5 × S_target}. The settlement buys the quantity below its target.</li>
  *   <li>Each candidate is a seller, a buyer and an item. Its score is the value of the quantity, divided by a
  *       factor of the distance. The match takes the candidates with the highest score first.</li>

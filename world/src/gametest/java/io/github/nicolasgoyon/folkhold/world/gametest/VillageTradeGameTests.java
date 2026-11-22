@@ -32,7 +32,9 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class VillageTradeGameTests {
     private static final int FAR_X = 22_000_000;
-    private static final String BREAD = "minecraft:bread";
+    private static final String WHEAT = "minecraft:wheat";
+    /** The job of the test settlements: the wheat is its input. */
+    private static final String BAKER = "folkhold_world:baker";
 
     private VillageTradeGameTests() {
     }
@@ -43,12 +45,14 @@ public final class VillageTradeGameTests {
         return List.of(factions.get(0), factions.get(1));
     }
 
-    /** An active settlement with an economy: 10 inhabitants, no jobs, some bread. */
-    private static Settlement settlement(MinecraftServer server, String factionId, int x, int z, int bread) {
+    /** An active settlement with an economy: 10 inhabitants, a baker, some wheat. */
+    private static Settlement settlement(MinecraftServer server, String factionId, int x, int z, int wheat) {
         Settlement settlement = new Settlement(UUID.randomUUID().toString(), x >> 4, z >> 4, factionId,
                 "Test market", x, z);
+        settlement.setBiome("minecraft:plains");
         settlement.economy().setPopulation(10);
-        settlement.economy().stock().set(BREAD, bread);
+        settlement.economy().setJobs(List.of(BAKER));
+        settlement.economy().stock().set(WHEAT, wheat);
         settlement.economy().setInitialized(true);
         SettlementData data = SettlementData.get(server);
         data.registry().add(settlement);
@@ -64,8 +68,8 @@ public final class VillageTradeGameTests {
     }
 
     /**
-     * A village with a surplus of bread sends a caravan to a village with a need. At the arrival, the buyer gets the
-     * bread, the seller gets the payment, and the relation between the two factions goes up.
+     * A village with a surplus of wheat sends a caravan to a village that needs the wheat for its baker. At the
+     * arrival, the buyer gets the wheat, the seller gets the payment, and the relation between the two factions goes up.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "trade_caravan")
     public static void tradeSendsACaravanAndPaysAtTheArrival(GameTestHelper helper) {
@@ -87,15 +91,15 @@ public final class VillageTradeGameTests {
         List<MobileGroup> created = VillageTrade.trade(server, settlements.tickNumber(), List.of(seller, buyer));
 
         MobileGroup caravan = created.isEmpty() ? null : created.get(0);
-        int cargo = caravan == null ? 0 : caravan.cargo().count(BREAD);
-        int sellerStock = seller.economy().stock().count(BREAD);
+        int cargo = caravan == null ? 0 : caravan.cargo().count(WHEAT);
+        int sellerStock = seller.economy().stock().count(WHEAT);
         if (caravan != null) {
             // Only this caravan arrives: the other groups of the test world do not change the treasuries.
             MobileGroupSystem.deliver(server, caravan);
             VillageTrade.onArrival(server, caravan);
             MobileGroupData.get(server).groups().remove(caravan.id());
         }
-        int buyerStock = buyer.economy().stock().count(BREAD);
+        int buyerStock = buyer.economy().stock().count(WHEAT);
         long sellerGain = settlements.treasury(sellerFaction) - sellerTreasury;
         long buyerLoss = buyerTreasury - settlements.treasury(buyerFaction);
         int relationAfter = relations.get(sellerFaction, buyerFaction);
@@ -111,11 +115,11 @@ public final class VillageTradeGameTests {
                 && caravan.destinationId().equals(buyer.id()) && caravan.factionId().equals(sellerFaction),
                 "The caravan must go from the seller to the buyer, with the faction of the seller");
         helper.assertTrue(cargo > 0 && sellerStock == 500 - cargo,
-                "The bread must leave the stock of the seller: " + cargo + ", " + sellerStock);
+                "The wheat must leave the stock of the seller: " + cargo + ", " + sellerStock);
         helper.assertTrue(caravan.merchant().isPresent()
                 && caravan.members().stream().filter(m -> m.role() == MemberRole.GUARD).count() >= 2,
                 "The caravan must have a merchant and 2 or more guards");
-        helper.assertTrue(buyerStock == cargo, "The buyer must get the bread: " + buyerStock);
+        helper.assertTrue(buyerStock == cargo, "The buyer must get the wheat: " + buyerStock);
         helper.assertTrue(caravan.payment() > 0 && sellerGain == caravan.payment()
                 && buyerLoss == caravan.payment(),
                 "The buyer must pay the seller: " + caravan.payment() + ", " + sellerGain + ", " + buyerLoss);
@@ -144,7 +148,7 @@ public final class VillageTradeGameTests {
         retire(server, seller, buyer);
         relations.set(sellerFaction, buyerFaction, relationBefore);
         helper.assertTrue(created.isEmpty(), "Factions at war must not trade");
-        helper.assertTrue(seller.economy().stock().count(BREAD) == 500, "The seller must keep its bread");
+        helper.assertTrue(seller.economy().stock().count(WHEAT) == 500, "The seller must keep its wheat");
         helper.succeed();
     }
 }

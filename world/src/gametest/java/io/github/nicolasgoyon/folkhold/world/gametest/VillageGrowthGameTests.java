@@ -14,7 +14,6 @@ import io.github.nicolasgoyon.folkhold.world.construction.BuilderSite;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSites;
 import io.github.nicolasgoyon.folkhold.world.construction.GhostPlacement;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
-import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload;
@@ -80,7 +79,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
  * In-game tests for the growth of a village: its builders build a house-workshop or a building of the level on a free
- * plot (see {@link VillageGrowth}). Most villages of the tests have the house-workshop of the farmer (a food post that
+ * plot (see {@link VillageGrowth}). Most villages of the tests have the house-workshop of the farmer (a post that
  * trades) as a piece of their village structure, south-west of the heart. The tests of the Sunreach style grow the
  * pieces of a village structure with the rules of the growth, with no heart and no block in the level.
  * See {@link TestSupport} for the templates and the helpers.
@@ -111,7 +110,7 @@ public final class VillageGrowthGameTests {
             "village/job_baker");
     private static final ResourceLocation BAKERY_STEP2 = ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
             "village/job_baker_step2");
-    /** The job of the job slots of a legacy village: not a food job, so the first post is not a legacy job. */
+    /** The job of the job slots of a legacy village. */
     private static final String LEGACY_JOB = FolkholdWorld.MOD_ID + ":miner";
     private static final ResourceLocation BARRACKS = ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
             "village/house_barracks");
@@ -257,11 +256,11 @@ public final class VillageGrowthGameTests {
     }
 
     /**
-     * A village with no food post and no need of places: its builders start a food house-workshop that trades before
+     * A village with no post and no need of places: its builders start a house-workshop of a job that trades before
      * the other buildings. The village of the level 3 needs a storehouse: the house-workshop comes first.
      */
-    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_food")
-    public static void villageWithNoFoodPostBuildsAFoodHouseWorkshop(GameTestHelper helper) {
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_first_post")
+    public static void villageWithNoPostBuildsAHouseWorkshopThatTrades(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Village village = village(helper, HOMES, false, List.of(plot(helper, false)), 3, 3, false);
         try {
@@ -271,8 +270,7 @@ public final class VillageGrowthGameTests {
             String job = site.map(found -> jobOf(found.template())).orElse("");
             helper.assertTrue(site.isPresent() && site.get().template().equals(workshop(job)),
                     "The village must start a house-workshop: " + site.map(BuilderSite::template));
-            helper.assertTrue(Economies.producesFood(job) && Merchants.trades(job),
-                    "The house-workshop must be of a food job that trades: " + job);
+            helper.assertTrue(Merchants.trades(job), "The house-workshop must be of a job that trades: " + job);
         } finally {
             end(helper, village);
         }
@@ -280,7 +278,7 @@ public final class VillageGrowthGameTests {
     }
 
     /**
-     * A village with no food post in a variant with no piece for its jobs: the growth tries {@link
+     * A village with no post in a variant with no piece for its jobs: the growth tries {@link
      * VillageGrowth#WORKSHOP_JOBS} jobs and goes on with the storehouse of the level 3. With no free plot, the growth
      * starts no site.
      */
@@ -307,7 +305,7 @@ public final class VillageGrowthGameTests {
     }
 
     /**
-     * A legacy village (its save has no list of posts) with too few places gets a food house-workshop on the free plot.
+     * A legacy village (its save has no list of posts) with too few places gets a house-workshop on the free plot.
      * After the scan, the new post takes one legacy job slot: the village keeps the job slots of its level.
      */
     @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_legacy")
@@ -328,8 +326,9 @@ public final class VillageGrowthGameTests {
             helper.assertTrue(before.size() == slots, "Before the site, the legacy slots give the jobs: " + before);
             helper.assertTrue(after.size() == slots && after.get(0).equals(job),
                     "The post must take one legacy slot: " + after);
-            long legacyJobs = after.stream().filter(found -> found.equals(LEGACY_JOB)).count();
-            helper.assertTrue(legacyJobs == slots - 1, "The legacy slots must go down by 1: " + after);
+            // The job of the post can also be the legacy job: the slots after the post are the legacy slots.
+            helper.assertTrue(after.subList(1, after.size()).stream().allMatch(LEGACY_JOB::equals),
+                    "The legacy slots must go down by 1: " + after);
             helper.assertTrue(settlement.jobPosts().orElseThrow().size() == 1, "The village must have 1 post: "
                     + settlement.jobPosts());
             helper.assertTrue(settlement.legacyJobs(), "The village stays a legacy village");
@@ -341,8 +340,8 @@ public final class VillageGrowthGameTests {
 
     /**
      * A site of a house-workshop that stops before its end leaves no post: the village keeps no job of this site.
-     * The space of the stopped site stays taken, so the next check starts the food house-workshop again on the second
-     * plot.
+     * The space of the stopped site stays taken, so the next check starts the first house-workshop again on the
+     * second plot.
      */
     @GameTest(template = "arena_large", timeoutTicks = 20, batch = "village_growth_stopped")
     public static void stoppedHouseWorkshopLeavesNoPost(GameTestHelper helper) {
@@ -359,12 +358,12 @@ public final class VillageGrowthGameTests {
             List<String> posts = VillageGrowth.postJobs(level.getServer(), village.settlement());
             Optional<BuilderSite> again = VillageGrowth.check(level, village.heart());
 
-            helper.assertTrue(Economies.producesFood(job), "The first site must be a food house-workshop: " + job);
+            helper.assertTrue(Merchants.trades(job), "The first site must be a house-workshop that trades: " + job);
             helper.assertTrue(posts.isEmpty(), "A stopped site must give no post: " + posts);
-            helper.assertTrue(VillageGrowth.needsFirstPost(posts), "The village must need its food post again");
+            helper.assertTrue(VillageGrowth.needsFirstPost(posts), "The village must need its first post again");
             helper.assertTrue(again.isPresent() && again.get().template().equals(first.template())
                     && !again.get().origin().equals(first.origin()),
-                    "The food house-workshop must start again on the second plot: " + again.map(BuilderSite::origin));
+                    "The first house-workshop must start again on the second plot: " + again.map(BuilderSite::origin));
         } finally {
             end(helper, village);
         }
@@ -372,7 +371,7 @@ public final class VillageGrowthGameTests {
     }
 
     /**
-     * A village with its food post, a post for each job slot and a missing building of its next tier: its builders
+     * A village with its post that trades, a post for each job slot and a missing building of its next tier: its builders
      * start this building on the nearest free plot. The village has a storehouse and a market: a village of the level 1
      * has the buildings of the next tier, and builds nothing. A village of the level 5 needs a barracks to become a
      * town: the barracks comes. A town of the level 9 with the barracks needs a second storehouse to become a city: the
@@ -880,8 +879,8 @@ public final class VillageGrowthGameTests {
     /** The job that {@link JobAssignment#next} gives for the next house-workshop of a village. */
     private static String nextJob(ServerLevel level, Settlement settlement) {
         List<String> posts = VillageGrowth.postJobs(level.getServer(), settlement);
-        return JobAssignment.next(posts, Economies.eligibleJobs(level.getServer(), settlement), EconomyData.catalog(),
-                Merchants::trades, JobAssignment.postSeed(Settlements.seed(settlement.id()), posts.size()))
+        return JobAssignment.next(posts, Economies.eligibleJobs(level.getServer(), settlement), Merchants::trades,
+                JobAssignment.postSeed(Settlements.seed(settlement.id()), posts.size()))
                 .orElseThrow();
     }
 

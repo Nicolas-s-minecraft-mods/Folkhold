@@ -1,14 +1,10 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
-import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemCatalog;
-import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemInfo;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Stock;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
-import io.github.nicolasgoyon.folkhold.world.economy.Economies;
-import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.faction.Reputations;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
@@ -33,8 +29,7 @@ import net.minecraft.world.entity.raid.Raid;
  *   <li>Village that falls: each helper gets {@code raidEffects.fallReputation}. The settlement loses
  *       {@code raidEffects.fallExperiencePercent} % of the experience of its current level and
  *       {@code raidEffects.fallStockPercent} % of each item of its stocks, only when {@link #paysFallPenalty} is
- *       true and the settlement is not in the cooldown of an earlier penalty ({@link #inFallCooldown}). The food loss
- *       stops at the food floor ({@link #foodFloor}).</li>
+ *       true and the settlement is not in the cooldown of an earlier penalty ({@link #inFallCooldown}).</li>
  * </ul>
  * The players who do not help get no change. A settlement that is not active (ruins) gets no change.
  */
@@ -87,51 +82,19 @@ public final class RaidEffects {
     }
 
     /**
-     * The food points that a fall does not remove from the stocks: the food need of the population for some days.
-     *
-     * @param population        the population of the settlement
-     * @param foodPerInhabitant the food points that one inhabitant eats in one cycle (one game day)
-     * @param days              the number of days (0: no floor)
-     * @return the food floor, in food points, 0 or more
-     */
-    public static int foodFloor(int population, int foodPerInhabitant, int days) {
-        long floor = (long) Math.max(0, population) * Math.max(0, foodPerInhabitant) * Math.max(0, days);
-        return (int) Math.min(Integer.MAX_VALUE, floor);
-    }
-
-    /**
      * Removes a part of each item of a stock. The loss of each item is rounded down: an item with a small count can
-     * stay complete. The food items ({@link ItemInfo#isFood}) keep the food floor: when the loss of the food items
-     * takes the food points of the stock below the floor, the loss of each food item becomes smaller, in the same
-     * proportion for each food item (rounded down). Thus the loss can be smaller than the food points above the floor,
-     * never larger.
+     * stay complete.
      *
-     * @param stock     the stock
-     * @param percent   the loss, in percent of each item (0 to 100)
-     * @param catalog   the item values (to find the food items)
-     * @param foodFloor the food points that stay in the stock (see {@link #foodFloor})
+     * @param stock   the stock
+     * @param percent the loss, in percent of each item (0 to 100)
      * @return the total count of items that the stock loses
      */
-    public static int removeStocks(Stock stock, int percent, ItemCatalog catalog, int foodFloor) {
+    public static int removeStocks(Stock stock, int percent) {
         int clamped = Math.max(0, Math.min(100, percent));
-        Map<String, Integer> losses = new TreeMap<>();
-        long foodPoints = 0;
-        long foodLoss = 0;
-        for (Map.Entry<String, Integer> entry : stock.asMap().entrySet()) {
-            int loss = (int) ((long) entry.getValue() * clamped / 100);
-            losses.put(entry.getKey(), loss);
-            int food = catalog.info(entry.getKey()).food();
-            foodPoints += (long) entry.getValue() * food;
-            foodLoss += (long) loss * food;
-        }
-        long allowed = Math.max(0, foodPoints - Math.max(0, foodFloor));
         int removed = 0;
-        for (Map.Entry<String, Integer> entry : losses.entrySet()) {
-            long loss = entry.getValue();
-            if (foodLoss > allowed && catalog.info(entry.getKey()).isFood()) {
-                loss = loss * allowed / foodLoss;
-            }
-            removed += stock.remove(entry.getKey(), (int) loss);
+        for (Map.Entry<String, Integer> entry : new TreeMap<>(stock.asMap()).entrySet()) {
+            int loss = (int) ((long) entry.getValue() * clamped / 100);
+            removed += stock.remove(entry.getKey(), loss);
         }
         return removed;
     }
@@ -184,10 +147,7 @@ public final class RaidEffects {
                 experience = experienceLoss(LevelTables.get().traits(settlement.level()).experience(),
                         WorldConfig.RAID_FALL_EXPERIENCE_PERCENT.get());
                 SettlementLevels.addExperience(server, settlement, -experience);
-                int floor = foodFloor(settlement.economy().population(), Economies.settings().foodPerInhabitant(),
-                        WorldConfig.RAID_FALL_FOOD_FLOOR_DAYS.get());
-                stocks = removeStocks(settlement.economy().stock(), WorldConfig.RAID_FALL_STOCK_PERCENT.get(),
-                        EconomyData.catalog(), floor);
+                stocks = removeStocks(settlement.economy().stock(), WorldConfig.RAID_FALL_STOCK_PERCENT.get());
                 settlement.setLastFallPenalty(now);
                 data.setDirty();
             }

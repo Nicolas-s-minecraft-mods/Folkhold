@@ -146,7 +146,7 @@ class VillagePlanTest {
                     Map<PlotRole, Long> roles = plan.plots().stream()
                             .collect(Collectors.groupingBy(Plot::role, Collectors.counting()));
                     assertEquals(1, roles.get(PlotRole.BANK), name);
-                    assertEquals(1, roles.get(PlotRole.JOBS_FOOD), name);
+                    assertEquals(1, roles.get(PlotRole.JOBS_FIRST), name);
                     assertEquals(style == StreetStyle.VALEHOLM ? 2 : 1, roles.get(PlotRole.JOBS_START), name);
                     for (Plot plot : plan.plots().stream().filter(p -> p.role() != PlotRole.HOME).toList()) {
                         Piece piece = plan.pieces().get(plot.piece());

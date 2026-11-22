@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 
 class TradeMatcherTest {
     private static final ItemCatalog CATALOG = new ItemCatalog(Map.of(
-            "bread", new ItemInfo("bread", 1.0, 5, 40),
-            "iron", new ItemInfo("iron", 4.0, 0, 20)));
+            "bread", new ItemInfo("bread", 1.0, 40),
+            "iron", new ItemInfo("iron", 4.0, 20)));
     private static final TradeMatcher.Settings SETTINGS = new TradeMatcher.Settings(10, 256, 500.0);
     private static final TradeMatcher.Pricing UNIT_PRICE = (seller, item) -> CATALOG.info(item).price();
 

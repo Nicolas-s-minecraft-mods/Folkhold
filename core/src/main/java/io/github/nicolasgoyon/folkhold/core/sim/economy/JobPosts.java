@@ -12,9 +12,9 @@ import java.util.function.Predicate;
  *   <li>A post is a job sign in a home. A home is a building with 1 home bed or more. A home has 1 post at most. A job
  *       sign in a building with no home bed is not a post.</li>
  *   <li>A home with no job sign (a cottage) has no post.</li>
- *   <li>The posts have an order, in 3 groups: first the posts with a food job that trades, then the posts with an
- *       other job that trades, then the other posts. In a group, the known posts keep their order, and the new posts
- *       come after them in the scan order. Each scan applies this order (see {@link #order}).</li>
+ *   <li>The posts have an order, in 2 groups: first the posts with a job that trades, then the other posts. In a
+ *       group, the known posts keep their order, and the new posts come after them in the scan order. Each scan
+ *       applies this order (see {@link #order}).</li>
  *   <li>The inhabitants of the homes fill the homes of the valid posts in the order of the posts. A post is valid when
  *       its job is valid (job file, minimum level, biome). A post with a job that is not valid takes no inhabitant.
  *       A post is active when it is valid and its home has 1 inhabitant or more. The economy runs one job slot for
@@ -69,13 +69,11 @@ public final class JobPosts {
      *
      * @param known   the posts that the village has, or empty before the first scan
      * @param scanned the posts of the scan, in the scan order
-     * @param food    true for a job id that produces food
      * @param trades  true for a job id with workers that trade
-     * @return the posts of the scan (with the job and the beds of the scan), in 3 groups: food jobs that trade, other
-     *         jobs that trade, other jobs. In a group, the known posts in their order, then the new posts.
+     * @return the posts of the scan (with the job and the beds of the scan), in 2 groups: jobs that trade, other jobs.
+     *         In a group, the known posts in their order, then the new posts.
      */
-    public static List<Post> order(Optional<List<Post>> known, List<Post> scanned, Predicate<String> food,
-            Predicate<String> trades) {
+    public static List<Post> order(Optional<List<Post>> known, List<Post> scanned, Predicate<String> trades) {
         List<Post> byAge = new ArrayList<>(scanned.size());
         for (Post old : known.orElse(List.of())) {
             scanned.stream().filter(old::samePlace).findFirst().ifPresent(byAge::add);
@@ -86,8 +84,7 @@ public final class JobPosts {
             }
         }
         List<Post> result = new ArrayList<>(byAge.size());
-        byAge.stream().filter(post -> trades.test(post.jobId()) && food.test(post.jobId())).forEach(result::add);
-        byAge.stream().filter(post -> trades.test(post.jobId()) && !food.test(post.jobId())).forEach(result::add);
+        byAge.stream().filter(post -> trades.test(post.jobId())).forEach(result::add);
         byAge.stream().filter(post -> !trades.test(post.jobId())).forEach(result::add);
         return result;
     }

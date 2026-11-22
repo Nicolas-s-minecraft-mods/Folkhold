@@ -17,8 +17,9 @@ import java.util.Objects;
  *   <li>Each building of the level takes the first free plot of the plan that holds it: a wide plot of its wide home,
  *       or a home plot that is not wide for a building that fits the home of the style. The plan gives the good
  *       plots nearest to the middle first, then the homes on their foundation (see {@link VillagePlan}).</li>
- *   <li>The job posts take the plot of the first food job, then the plots of the first trader jobs, then the free home
- *       plots that are not wide and not on a cliff, in the order of the plan. The post 0 is the first food job.</li>
+ *   <li>The job posts take the plot of the first job post, then the plots of the next job posts of the start, then
+ *       the free home plots that are not wide and not on a cliff, in the order of the plan. The post 0 is on the plot
+ *       of the first job post.</li>
  *   <li>A cliff plot holds no building of the level and no job post: it holds a cliff house (see
  *       {@link VillagePlan.Plot#cliff()}).</li>
  *   <li>The other plots hold a home, except the spare plots and a wide plot of the market ({@link
@@ -138,7 +139,7 @@ public final class PlotUses {
             }
         }
         int placed = 0;
-        for (PlotRole role : List.of(PlotRole.JOBS_FOOD, PlotRole.JOBS_START, PlotRole.HOME)) {
+        for (PlotRole role : List.of(PlotRole.JOBS_FIRST, PlotRole.JOBS_START, PlotRole.HOME)) {
             for (int i = 0; i < plots.size() && placed < posts; i++) {
                 if (uses[i] == null && plots.get(i).role() == role && !plots.get(i).wide()
                         && !plots.get(i).onCliff()) {

@@ -480,7 +480,7 @@ public final class MarketGrowthGameTests {
         // The growth of the villages is off by default: the tests of the growth turn it on.
         TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_GROWTH, true);
         TestSupport.buildFloor(helper, size);
-        // The house-workshop of the farmer: the village has its food post that trades, so a new home comes after
+        // The house-workshop of the farmer: the village has its post that trades, so a new home comes after
         // the market (see VillageGrowth).
         StructureTemplate farm = level.getStructureManager().get(FARM).orElseThrow();
         BlockPos farmOrigin = helper.absolutePos(FARM_ORIGIN);

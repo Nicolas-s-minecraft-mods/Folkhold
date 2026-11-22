@@ -1,6 +1,5 @@
 package io.github.nicolasgoyon.folkhold.core.sim.economy;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -17,8 +16,6 @@ import java.util.function.Predicate;
  *   <li>The worker sells the outputs of its jobs that the stock has. The most valuable stock comes first.</li>
  *   <li>The worker buys the inputs of its jobs that the village needs: a stock below half of its target. The largest
  *       need comes first.</li>
- *   <li>After the inputs, the worker also buys the food that the village needs most: the food item with the largest
- *       need below its target, if the worker does not sell this item.</li>
  *   <li>The offer count of the level divides between the traders of the village (see {@link #share}). A worker has
  *       {@link #MIN_OFFERS} offers or more, and not more than the offer count of the level.</li>
  *   <li>On a market day, each trader has extra offers, up to {@link #MAX_OFFERS} offers (see {@link #offers}).</li>
@@ -117,20 +114,13 @@ public final class JobTrades {
         Comparator<String> byNeed = Comparator.comparingInt((String item) ->
                 stock.getOrDefault(item, 0) - Prices.target(catalog.info(item), population))
                 .thenComparing(item -> item);
-        List<String> buys = new ArrayList<>(inputs.stream()
+        List<String> buys = inputs.stream()
                 .filter(item -> tradable.test(item)
                         && stock.getOrDefault(item, 0) < Prices.target(catalog.info(item), population) / 2)
                 .sorted(byNeed)
-                .toList());
-        catalog.all().stream()
-                .filter(info -> info.isFood() && tradable.test(info.id()) && !outputs.contains(info.id())
-                        && !buys.contains(info.id())
-                        && stock.getOrDefault(info.id(), 0) < Prices.target(info, population))
-                .map(ItemInfo::id)
-                .min(byNeed)
-                .ifPresent(buys::add);
+                .toList();
         if (offers <= 0) {
-            return new Plan(sells, 0, List.copyOf(buys), 0);
+            return new Plan(sells, 0, buys, 0);
         }
         int sellSlots = Math.max(1, (offers * 2 + 2) / 3);
         int buySlots = offers - sellSlots;
@@ -145,7 +135,7 @@ public final class JobTrades {
             sellSlots += buySlots - buys.size();
             buySlots = buys.size();
         }
-        return new Plan(sells, sellSlots, List.copyOf(buys), buySlots);
+        return new Plan(sells, sellSlots, buys, buySlots);
     }
 
     /**
@@ -154,8 +144,8 @@ public final class JobTrades {
      *
      * <ul>
      *   <li>An output of a job of a worker is not in the surplus: the worker sells it.</li>
-     *   <li>The village keeps its target of the inputs of its active jobs and of the food: only the quantity above the
-     *       target is for sale.</li>
+     *   <li>The village keeps its target of the inputs of its active jobs: only the quantity above the target is for
+     *       sale.</li>
      *   <li>The other items are for sale with all their stock.</li>
      *   <li>The most valuable surplus comes first.</li>
      * </ul>
@@ -183,8 +173,7 @@ public final class JobTrades {
                 .filter(entry -> !outputs.contains(entry.getKey()) && tradable.test(entry.getKey()))
                 .map(entry -> {
                     ItemInfo info = catalog.info(entry.getKey());
-                    int reserve = inputs.contains(entry.getKey()) || info.isFood() ? Prices.target(info, population)
-                            : 0;
+                    int reserve = inputs.contains(entry.getKey()) ? Prices.target(info, population) : 0;
                     return Map.entry(entry.getKey(), entry.getValue() - reserve);
                 })
                 .filter(entry -> entry.getValue() > 0)

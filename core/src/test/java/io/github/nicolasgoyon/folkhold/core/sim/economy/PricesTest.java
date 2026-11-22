@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 class PricesTest {
-    private static final ItemInfo BREAD = new ItemInfo("bread", 2.0, 5, 40);
+    private static final ItemInfo BREAD = new ItemInfo("bread", 2.0, 40);
     private static final EconomySettings SETTINGS = EconomySettings.DEFAULT;
 
     @Test

@@ -54,8 +54,8 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  *   <li>The workers of the settlement show its active jobs: the profession of a worker is the profession of its job
  *       (see {@link EconomyData#profession(String)}). In a scanned village, the household of the home of a valid post
  *       does the job of the post and sleeps in this home (see {@link #seats} and {@link VillageHomes}). The posts
- *       with a food job that trade come first in the order of the posts, then the posts with an other job that trades,
- *       and the first valid post always has an inhabitant: thus a village with a valid post that trades has a trader.
+ *       with a job that trades come first in the order of the posts, and the first valid post always has an
+ *       inhabitant: thus a village with a valid post that trades has a trader.
  *       The inhabitants of the other homes have the inhabitant profession: they give life to the village.</li>
  *   <li>Only the workers of the active jobs trade, with the goods of their jobs (see {@link Merchants}). A player
  *       cannot trade with the other inhabitants. The vanilla trades of a profession do not apply: they would bypass

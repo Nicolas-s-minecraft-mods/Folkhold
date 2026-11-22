@@ -347,11 +347,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         HOME,
         /** The bank: the plot at x = 0 of the first plot row of the street to the north (pool {@code bank}). */
         BANK,
-        /** The first food job: the plot at x = 0 of the first plot row of the street to the south. */
-        JOBS_FOOD,
+        /** The first job post: the plot at x = 0 of the first plot row of the street to the south. */
+        JOBS_FIRST,
         /**
-         * The first trader job: the plot at x = 4 of the first plot row of the street to the south, and in the
-         * Valeholm style also the plot at x = 0 of its second plot row.
+         * The next job posts of the start: the plot at x = 4 of the first plot row of the street to the south, and in
+         * the Valeholm style also the plot at x = 0 of its second plot row.
          */
         JOBS_START
     }
@@ -1089,7 +1089,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 return PlotRole.BANK;
             }
             if (street == Dir.SOUTH && row == 0) {
-                return east ? PlotRole.JOBS_START : PlotRole.JOBS_FOOD;
+                return east ? PlotRole.JOBS_START : PlotRole.JOBS_FIRST;
             }
             return street == Dir.SOUTH && row == 1 && !east ? PlotRole.JOBS_START : PlotRole.HOME;
         }

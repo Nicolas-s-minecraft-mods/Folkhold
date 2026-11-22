@@ -92,7 +92,7 @@ class VillageBuildingsTest {
 
     private static final Step FIRST_POST = new Step(StepType.FIRST_POST, "");
 
-    /** A village with no food post or no post that trades gets a house-workshop first, before the market. */
+    /** A village with no post that trades gets a house-workshop first, before the market. */
     @Test
     void firstPostComesBeforeTheMarket() {
         assertEquals(List.of(FIRST_POST, MARKET, new Step(StepType.BUILDING, "storehouse")),

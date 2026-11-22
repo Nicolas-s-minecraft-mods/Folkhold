@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
  *
  * <ul>
  *   <li>The settlement keeps its current jobs that are still valid, up to the number of slots.</li>
- *   <li>A share of the slots ({@link #FOOD_SHARE}) goes to jobs that produce food.</li>
  *   <li>The other slots get random jobs. The weight of a job is its chance. Two slots can get the same job.</li>
  *   <li>The same seed and the same input give the same jobs.</li>
  * </ul>
@@ -24,9 +23,6 @@ import java.util.stream.Collectors;
  * {@link #renew}.
  */
 public final class JobAssignment {
-    /** Minimum share of the slots for the jobs that produce food. */
-    public static final double FOOD_SHARE = 0.4;
-
     private JobAssignment() {
     }
 
@@ -36,12 +32,10 @@ public final class JobAssignment {
      * @param current  the current job ids of the settlement
      * @param eligible the jobs that the settlement can have (level and biome)
      * @param slots    the number of job slots
-     * @param catalog  the item values (to find the food jobs)
      * @param seed     the seed, for example from the settlement id
      * @return the job ids
      */
-    public static List<String> assign(List<String> current, List<Job> eligible, int slots, ItemCatalog catalog,
-            long seed) {
+    public static List<String> assign(List<String> current, List<Job> eligible, int slots, long seed) {
         Map<String, Job> byId = eligible.stream()
                 .collect(Collectors.toMap(Job::id, Function.identity(), (a, b) -> a));
         List<String> result = new ArrayList<>();
@@ -54,13 +48,6 @@ public final class JobAssignment {
             return result;
         }
         SplittableRandom random = new SplittableRandom(seed ^ ((long) slots * 0x9E3779B97F4A7C15L));
-        List<Job> foodJobs = eligible.stream().filter(job -> job.producesFood(catalog)).toList();
-        int foodNeeded = (int) Math.ceil(slots * FOOD_SHARE);
-        int food = (int) result.stream().filter(id -> byId.get(id).producesFood(catalog)).count();
-        while (result.size() < slots && food < foodNeeded && !foodJobs.isEmpty()) {
-            result.add(pick(foodJobs, random).id());
-            food++;
-        }
         while (result.size() < slots) {
             result.add(pick(eligible, random).id());
         }
@@ -71,9 +58,7 @@ public final class JobAssignment {
      * Chooses the job of a new job post (see {@link JobPosts}). The first step with a candidate job gives the job:
      *
      * <ol>
-     *   <li>No post with a food job: a food job that trades.</li>
      *   <li>No post with a job that trades: a job that trades.</li>
-     *   <li>Fewer food posts than {@link #FOOD_SHARE} of the posts: a food job.</li>
      *   <li>Else: a job of {@code eligible}.</li>
      * </ol>
      *
@@ -82,30 +67,21 @@ public final class JobAssignment {
      *
      * @param posts    the job ids of the valid posts of the village
      * @param eligible the jobs that the village can have (level and biome)
-     * @param catalog  the item values (to find the food jobs)
      * @param trades   true for a job id with workers that trade
      * @param seed     the seed of the post (see {@link #postSeed})
      * @return the job id, or empty when {@code eligible} is empty
      */
-    public static Optional<String> next(List<String> posts, List<Job> eligible, ItemCatalog catalog,
-            Predicate<String> trades, long seed) {
+    public static Optional<String> next(List<String> posts, List<Job> eligible, Predicate<String> trades,
+            long seed) {
         if (eligible.isEmpty()) {
             return Optional.empty();
         }
         Map<String, Job> byId = eligible.stream()
                 .collect(Collectors.toMap(Job::id, Function.identity(), (a, b) -> a));
-        Predicate<String> food = id -> byId.containsKey(id) && byId.get(id).producesFood(catalog);
-        long foodPosts = posts.stream().filter(food).count();
         List<Job> sorted = byId.values().stream().sorted(Comparator.comparing(Job::id)).toList();
         List<Predicate<Job>> steps = new ArrayList<>();
-        if (foodPosts == 0) {
-            steps.add(job -> food.test(job.id()) && trades.test(job.id()));
-        }
         if (posts.stream().noneMatch(trades)) {
             steps.add(job -> trades.test(job.id()));
-        }
-        if (foodPosts == 0 || foodPosts < posts.size() * FOOD_SHARE) {
-            steps.add(job -> food.test(job.id()));
         }
         steps.add(job -> true);
         Map<String, Long> counts = posts.stream().collect(Collectors.groupingBy(Function.identity(),
@@ -128,7 +104,6 @@ public final class JobAssignment {
      * @param posts    the posts of the village, in their order
      * @param needsJob true for a job id that must change (for example a sign with no job)
      * @param eligible the jobs that the village can have (level and biome)
-     * @param catalog  the item values (to find the food jobs)
      * @param trades   true for a job id with workers that trade
      * @param seed     the seed of the settlement
      * @param write    writes the new job of a post (for example on its job sign), and returns false when it cannot
@@ -136,7 +111,7 @@ public final class JobAssignment {
      *         returns false.
      */
     public static List<JobPosts.Post> renew(List<JobPosts.Post> posts, Predicate<String> needsJob,
-            List<Job> eligible, ItemCatalog catalog, Predicate<String> trades, long seed,
+            List<Job> eligible, Predicate<String> trades, long seed,
             Predicate<JobPosts.Post> write) {
         List<String> jobs = new ArrayList<>(posts.stream().map(JobPosts.Post::jobId).filter(needsJob.negate())
                 .toList());
@@ -146,7 +121,7 @@ public final class JobAssignment {
             if (!needsJob.test(post.jobId())) {
                 continue;
             }
-            Optional<String> job = next(jobs, eligible, catalog, trades, postSeed(seed, i));
+            Optional<String> job = next(jobs, eligible, trades, postSeed(seed, i));
             if (job.isEmpty()) {
                 continue;
             }

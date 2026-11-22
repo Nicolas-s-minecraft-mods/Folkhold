@@ -677,9 +677,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
 
     /**
      * Records the job posts of the village in the settlement (see {@link JobPosts}), from the last scan of the village.
-     * The posts with a food job that trades come first, then the posts with an other job that trades (see
-     * {@link JobPosts#order}). A heart with no village structure has no homes to find: its
-     * posts stay unknown, and the village keeps the job slots of its level.
+     * The posts with a job that trades come first (see {@link JobPosts#order}). A heart with no village structure has
+     * no homes to find: its posts stay unknown, and the village keeps the job slots of its level.
      */
     public void recordJobPosts() {
         if (!(level instanceof ServerLevel serverLevel) || !layout.isScanned()) {
@@ -692,8 +691,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         homes = VillageBeds.homes(serverLevel, worldPosition, layout.jobSigns(), layout.beds(), reference.get());
         List<JobPosts.Post> scanned = homes.posts();
         Settlements.of(serverLevel.getServer(), this).ifPresent(settlement -> {
-            List<JobPosts.Post> posts = JobPosts.order(settlement.jobPosts(), scanned, Economies::producesFood,
-                    Merchants::trades);
+            List<JobPosts.Post> posts = JobPosts.order(settlement.jobPosts(), scanned, Merchants::trades);
             if (settlement.setJobPosts(Optional.of(posts))) {
                 SettlementData.get(serverLevel.getServer()).setDirty();
             }
@@ -723,11 +721,10 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 return;
             }
             List<JobPosts.Post> renewed = JobAssignment.renew(posts, needsJob,
-                    Economies.eligibleJobs(server, settlement), EconomyData.catalog(), Merchants::trades,
+                    Economies.eligibleJobs(server, settlement), Merchants::trades,
                     Settlements.seed(settlement.id()), post -> writeJobSign(serverLevel, post));
             if (!renewed.equals(posts)) {
-                settlement.setJobPosts(Optional.of(JobPosts.order(Optional.of(renewed), renewed,
-                        Economies::producesFood, Merchants::trades)));
+                settlement.setJobPosts(Optional.of(JobPosts.order(Optional.of(renewed), renewed, Merchants::trades)));
                 SettlementData.get(server).setDirty();
                 setChanged();
             }

@@ -13,25 +13,25 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class JobAssignmentTest {
-    private static final ItemCatalog CATALOG = new ItemCatalog(Map.of(
-            "bread", new ItemInfo("bread", 1.0, 5, 32), "ore", new ItemInfo("ore", 1.0, 0, 32)));
     private static final Job BAKER = new Job("baker", new Recipe(List.of(), List.of(new Recipe.Output("bread", 1, 1.0))),
             1, 1, List.of());
     private static final Job MINER = new Job("miner", new Recipe(List.of(), List.of(new Recipe.Output("ore", 1, 1.0))),
             1, 10, List.of());
 
+    /** The slots get random jobs with the weights of the jobs. A food job gets no share of its own. */
     @Test
-    void assignmentFillsTheSlotsWithAShareOfFoodJobs() {
-        List<String> jobs = JobAssignment.assign(List.of(), List.of(BAKER, MINER), 5, CATALOG, 42);
+    void assignmentFillsTheSlotsWithTheWeights() {
+        assertEquals(5, JobAssignment.assign(List.of(), List.of(BAKER, MINER), 5, 42).size());
 
-        assertEquals(5, jobs.size());
-        assertTrue(jobs.stream().filter("baker"::equals).count() >= 2, "Expected 2 food jobs or more: " + jobs);
+        long bakers = JobAssignment.assign(List.of(), List.of(BAKER, MINER), 1000, 42).stream()
+                .filter("baker"::equals).count();
+        // Weights 1 and 10: about 9 % of bakers.
+        assertTrue(bakers > 50 && bakers < 140, "About 9 % of bakers: " + bakers);
     }
 
     @Test
     void currentValidJobsStay() {
-        List<String> jobs = JobAssignment.assign(List.of("miner", "unknown", "miner"), List.of(BAKER, MINER), 4,
-                CATALOG, 1);
+        List<String> jobs = JobAssignment.assign(List.of("miner", "unknown", "miner"), List.of(BAKER, MINER), 4, 1);
 
         assertEquals(List.of("miner", "miner"), jobs.subList(0, 2));
         assertEquals(4, jobs.size());
@@ -39,13 +39,13 @@ class JobAssignmentTest {
 
     @Test
     void sameSeedGivesTheSameJobs() {
-        assertEquals(JobAssignment.assign(List.of(), List.of(BAKER, MINER), 8, CATALOG, 9),
-                JobAssignment.assign(List.of(), List.of(BAKER, MINER), 8, CATALOG, 9));
+        assertEquals(JobAssignment.assign(List.of(), List.of(BAKER, MINER), 8, 9),
+                JobAssignment.assign(List.of(), List.of(BAKER, MINER), 8, 9));
     }
 
     @Test
     void noEligibleJobGivesOnlyTheCurrentValidJobs() {
-        assertEquals(List.of(), JobAssignment.assign(List.of("miner"), List.of(), 3, CATALOG, 1));
+        assertEquals(List.of(), JobAssignment.assign(List.of("miner"), List.of(), 3, 1));
     }
 
     /**
@@ -61,16 +61,16 @@ class JobAssignmentTest {
         assertEquals(10, fisher.forCulture("ashmark").weight());
         assertEquals(10, fisher.forCulture(null).weight());
 
-        long plain = JobAssignment.assign(List.of(), List.of(MINER, fisher), 1000, CATALOG, 5).stream()
+        long plain = JobAssignment.assign(List.of(), List.of(MINER, fisher), 1000, 5).stream()
                 .filter("fisher"::equals).count();
-        long north = JobAssignment.assign(List.of(), List.of(MINER, fisher.forCulture("valeholm")), 1000, CATALOG, 5)
+        long north = JobAssignment.assign(List.of(), List.of(MINER, fisher.forCulture("valeholm")), 1000, 5)
                 .stream().filter("fisher"::equals).count();
         // Weights 10 and 10: about 50 % of fishers. Weights 10 and 30: about 75 %.
         assertTrue(plain > 450 && plain < 550, "About 50 % of fishers with no culture: " + plain);
         assertTrue(north > 700 && north < 800, "About 75 % of fishers in Valeholm: " + north);
     }
 
-    /** A food job with no trade. */
+    /** A job with no trade that makes bread. */
     private static final Job FORAGER = new Job("forager",
             new Recipe(List.of(), List.of(new Recipe.Output("bread", 1, 1.0))), 1, 10, List.of());
     /** An other job with no trade. */
@@ -81,16 +81,17 @@ class JobAssignmentTest {
     private static final List<Job> ALL = List.of(BAKER, MINER, FORAGER, DIGGER);
 
     private static String next(List<String> posts, List<Job> eligible, long seed) {
-        return JobAssignment.next(posts, eligible, CATALOG, TRADES, seed).orElseThrow();
+        return JobAssignment.next(posts, eligible, TRADES, seed).orElseThrow();
     }
 
-    /** Step 1: a village with no food post gets a food job that trades, for all the seeds. */
+    /** Step 1: the first post of a village gets a job that trades, for all the seeds. */
     @Test
-    void villageWithNoFoodPostGetsAFoodJobThatTrades() {
-        IntStream.range(0, 50).forEach(seed -> assertEquals("baker", next(List.of("miner", "digger"), ALL, seed)));
+    void firstPostGetsAJobThatTrades() {
+        IntStream.range(0, 50).forEach(seed -> assertTrue(TRADES.test(next(List.of(), ALL, seed)),
+                "Expected a job that trades"));
     }
 
-    /** Step 2: a village with only food posts that do not trade gets a job that trades. */
+    /** Step 1: a village with only posts that do not trade gets a job that trades. */
     @Test
     void villageWithNoTraderGetsAJobThatTrades() {
         IntStream.range(0, 50).forEach(seed -> assertEquals("miner",
@@ -99,17 +100,9 @@ class JobAssignmentTest {
                 "Expected a job that trades"));
     }
 
-    /** Step 3: a village with fewer food posts than 40 % of its posts gets a food job. */
+    /** Step 2: a village with a trader gets a random job, with fewer repeats of its jobs. */
     @Test
-    void villageWithFewFoodPostsGetsAFoodJob() {
-        List<String> posts = List.of("baker", "miner", "digger");
-        IntStream.range(0, 50).forEach(seed -> assertTrue(Set.of("baker", "forager").contains(next(posts, ALL, seed)),
-                "Expected a food job"));
-    }
-
-    /** Step 4: a village with enough food and a trader gets a random job, with fewer repeats of its jobs. */
-    @Test
-    void villageWithFoodAndATraderGetsDifferentJobs() {
+    void villageWithATraderGetsDifferentJobs() {
         List<String> posts = List.of("baker", "miner");
         List<String> jobs = IntStream.range(0, 1000).mapToObj(seed -> next(posts, ALL, seed)).toList();
         // Weights 1/2, 10/2, 10, 10: the forager and the digger come about 2 times more often than the miner.
@@ -131,14 +124,7 @@ class JobAssignmentTest {
     void onlyEligibleJobsAreCandidates() {
         IntStream.range(0, 50).forEach(seed -> assertEquals("digger",
                 next(List.of("baker", "miner"), List.of(DIGGER), seed)));
-        assertEquals(Optional.empty(), JobAssignment.next(List.of(), List.of(), CATALOG, TRADES, 1));
-    }
-
-    /** Step 3 with no post: when no food job trades and no job trades, the first post gets a food job. */
-    @Test
-    void firstPostGetsAFoodJobWhenNoJobTrades() {
-        IntStream.range(0, 50).forEach(seed -> assertEquals("forager",
-                next(List.of(), List.of(FORAGER, DIGGER), seed)));
+        assertEquals(Optional.empty(), JobAssignment.next(List.of(), List.of(), TRADES, 1));
     }
 
     /**
@@ -153,31 +139,31 @@ class JobAssignmentTest {
                 new JobPosts.Post("", 9, 0, 0, 3));
         List<Job> eligible = List.of(MINER, DIGGER, FORAGER);
 
-        List<JobPosts.Post> renewed = JobAssignment.renew(posts, needsJob::contains, eligible, CATALOG, TRADES, 3,
+        List<JobPosts.Post> renewed = JobAssignment.renew(posts, needsJob::contains, eligible, TRADES, 3,
                 post -> true);
 
         assertEquals(posts.subList(0, 2), renewed.subList(0, 2));
-        // No food post and no food job that trades: the food share gives the forager.
-        assertEquals(new JobPosts.Post("forager", 7, 0, 0, 2), renewed.get(2));
+        assertEquals(7, renewed.get(2).x());
+        assertTrue(Set.of("miner", "digger", "forager").contains(renewed.get(2).jobId()), "Expected a job: " + renewed);
         assertTrue(Set.of("miner", "digger", "forager").contains(renewed.get(3).jobId()), "Expected a job: " + renewed);
-        assertEquals(renewed, JobAssignment.renew(posts, needsJob::contains, eligible, CATALOG, TRADES, 3,
+        assertEquals(renewed, JobAssignment.renew(posts, needsJob::contains, eligible, TRADES, 3,
                 post -> true));
-        assertEquals(posts, JobAssignment.renew(posts, needsJob::contains, List.of(), CATALOG, TRADES, 3,
+        assertEquals(posts, JobAssignment.renew(posts, needsJob::contains, List.of(), TRADES, 3,
                 post -> true));
     }
 
     /** A job that the write does not accept does not change the post and does not count for the next posts. */
     @Test
     void jobThatIsNotWrittenDoesNotCount() {
-        List<JobPosts.Post> posts = List.of(new JobPosts.Post("miner", 0, 0, 0, 2),
+        List<JobPosts.Post> posts = List.of(new JobPosts.Post("digger", 0, 0, 0, 2),
                 new JobPosts.Post("", 1, 0, 0, 2), new JobPosts.Post("", 2, 0, 0, 2));
-        // The post 1 is not written. Thus the post 2 has no food post before it: step 3 gives the forager for all
-        // the seeds. With the job of the post 1 in the count, the post 2 gets step 4 (a random job).
+        // The post 1 is not written. Thus the post 2 has no post that trades before it: step 1 gives the miner for
+        // all the seeds. With the miner of the post 1 in the count, the post 2 gets step 2 (a random job).
         IntStream.range(0, 20).forEach(seed -> {
             List<JobPosts.Post> renewed = JobAssignment.renew(posts, String::isEmpty, List.of(MINER, FORAGER, DIGGER),
-                    CATALOG, TRADES, seed, post -> post.x() == 2);
+                    TRADES, seed, post -> post.x() == 2);
             assertEquals(posts.get(1), renewed.get(1));
-            assertEquals("forager", renewed.get(2).jobId());
+            assertEquals("miner", renewed.get(2).jobId());
         });
     }
 }

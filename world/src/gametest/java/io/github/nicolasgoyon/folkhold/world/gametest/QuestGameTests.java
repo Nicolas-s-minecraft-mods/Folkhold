@@ -35,12 +35,14 @@ public final class QuestGameTests {
     private QuestGameTests() {
     }
 
-    /** An active village with an economy and no food: it needs food. */
-    private static Settlement hungryVillage(MinecraftServer server, int z) {
+    /** An active village with an economy, one job and no stock: it needs the inputs of the job. */
+    private static Settlement emptyVillage(MinecraftServer server, int z, String job) {
         String faction = FactionData.get(server).factions().get(0).id();
         Settlement settlement = new Settlement(UUID.randomUUID().toString(), FAR_X >> 4, z >> 4, faction,
                 "Test quests", FAR_X, z);
+        settlement.setBiome("minecraft:plains");
         settlement.economy().setPopulation(10);
+        settlement.economy().setJobs(List.of(job));
         settlement.economy().setInitialized(true);
         SettlementData data = SettlementData.get(server);
         data.registry().add(settlement);
@@ -65,7 +67,7 @@ public final class QuestGameTests {
     @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_offers")
     public static void villageOffersDeliveriesForItsNeeds(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
-        Settlement village = hungryVillage(server, 0);
+        Settlement village = emptyVillage(server, 0, "folkhold_world:baker");
         long now = helper.getLevel().getGameTime();
 
         List<Quest> first = QuestSystem.offerDeliveries(server, village, now);
@@ -77,10 +79,28 @@ public final class QuestGameTests {
         helper.assertTrue(first.size() == 1 && second.isEmpty() && offers.size() == 1,
                 "A village of level 1 must offer 1 quest: " + first.size() + ", " + second.size());
         Quest quest = first.get(0);
-        helper.assertTrue(quest.kind() == QuestKind.DELIVERY && EconomyData.catalog().info(quest.target()).isFood(),
-                "The quest must ask for food: " + quest.target());
+        helper.assertTrue(quest.kind() == QuestKind.DELIVERY && quest.target().equals("minecraft:wheat"),
+                "The quest must ask for the wheat of the baker: " + quest.target());
         helper.assertTrue(quest.count() > 0 && quest.rewardEmeralds() >= 1 && quest.offerEnd() > now,
                 "The quest must have a quantity, a reward and an end of offer");
+        helper.succeed();
+    }
+
+    /**
+     * A village with no stock and only a job with no input offers no delivery: the village has no food need, so it
+     * does not ask for food.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_no_food")
+    public static void villageAsksForNoFood(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement village = emptyVillage(server, 10_000, "folkhold_world:farmer");
+
+        List<Quest> offers = QuestSystem.offerDeliveries(server, village, helper.getLevel().getGameTime());
+
+        clear(server, village);
+        helper.assertTrue(EconomyData.isActive(), "The economy data must be loaded");
+        helper.assertTrue(offers.isEmpty(), "The village must offer no delivery: " + offers.stream()
+                .map(Quest::target).toList());
         helper.succeed();
     }
 
@@ -116,7 +136,7 @@ public final class QuestGameTests {
     @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_ruins")
     public static void offersOfARuinedVillageEnd(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
-        Settlement village = hungryVillage(server, 5000);
+        Settlement village = emptyVillage(server, 5000, "folkhold_world:baker");
         QuestSystem.offerDeliveries(server, village, helper.getLevel().getGameTime());
         int before = QuestData.get(server).quests().offers(village.id()).size();
 

@@ -11,11 +11,11 @@ class JobTradesTest {
             List.of(new Recipe.Input("iron", 2), new Recipe.Input("coal", 1)),
             List.of(new Recipe.Output("sword", 1, 1.0), new Recipe.Output("helmet", 1, 1.0))), 1, 10, List.of());
     private static final ItemCatalog CATALOG = new ItemCatalog(Map.of(
-            "sword", new ItemInfo("sword", 8.0, 0, 4),
-            "helmet", new ItemInfo("helmet", 5.0, 0, 4),
-            "iron", new ItemInfo("iron", 2.0, 0, 32),
-            "coal", new ItemInfo("coal", 0.5, 0, 32),
-            "bread", new ItemInfo("bread", 1.0, 5, 32)));
+            "sword", new ItemInfo("sword", 8.0, 4),
+            "helmet", new ItemInfo("helmet", 5.0, 4),
+            "iron", new ItemInfo("iron", 2.0, 32),
+            "coal", new ItemInfo("coal", 0.5, 32),
+            "bread", new ItemInfo("bread", 1.0, 32)));
 
     private static boolean known(String item) {
         return !item.equals("emerald");
@@ -53,17 +53,19 @@ class JobTradesTest {
         assertEquals(List.of("coal", "iron"), plan.buys());
     }
 
+    /** A worker buys only the inputs of its jobs: a food item below its target is not a buy offer. */
     @Test
-    void workerBuysTheFoodThatTheVillageNeedsAfterItsInputs() {
-        JobTrades.Plan plan = JobTrades.plan(List.of(SMITH), Map.of("iron", 4, "bread", 20), CATALOG, 10, 6,
+    void workerBuysOnlyTheInputsOfItsJobs() {
+        JobTrades.Plan plan = JobTrades.plan(List.of(SMITH), Map.of("iron", 4, "bread", 0), CATALOG, 10, 6,
                 JobTradesTest::known);
-        assertEquals(List.of("coal", "iron", "bread"), plan.buys(), "The bread is below its target");
+        assertEquals(List.of("coal", "iron"), plan.buys());
 
         Job baker = new Job("baker", new Recipe(List.of(), List.of(new Recipe.Output("bread", 1, 1.0))), 1, 10,
                 List.of());
         JobTrades.Plan seller = JobTrades.plan(List.of(baker), Map.of("bread", 20), CATALOG, 10, 6,
                 JobTradesTest::known);
-        assertEquals(List.of(), seller.buys(), "A worker does not buy the food that it sells");
+        assertEquals(List.of(), seller.buys(), "A job with no input buys nothing");
+        assertEquals(1, seller.sellSlots(), "The one item for sale gives one sell offer");
     }
 
     @Test
@@ -136,14 +138,15 @@ class JobTradesTest {
         Map<String, Integer> stock = Map.of("sword", 2, "helmet", 9, "iron", 40, "coal", 40, "bread", 50,
                 "emerald", 9);
 
-        // Population 10: the target of iron and coal is 32, the target of bread is 32.
-        assertEquals(Map.of("helmet", 9, "sword", 2, "iron", 8, "coal", 8, "bread", 18), JobTrades.surplus(List.of(),
+        // Population 10: the target of iron and coal is 32. The bread is not an input: it has no reserve.
+        assertEquals(Map.of("helmet", 9, "sword", 2, "iron", 8, "coal", 8, "bread", 50), JobTrades.surplus(List.of(),
                 List.of(SMITH), stock, CATALOG, 10, JobTradesTest::known));
-        assertEquals(List.of("helmet", "bread", "iron", "sword", "coal"), List.copyOf(JobTrades.surplus(List.of(),
+        assertEquals(List.of("bread", "helmet", "iron", "sword", "coal"), List.copyOf(JobTrades.surplus(List.of(),
                 List.of(SMITH), stock, CATALOG, 10, JobTradesTest::known).keySet()), "The most valuable first");
-        assertEquals(Map.of("iron", 8, "coal", 8, "bread", 18), JobTrades.surplus(List.of(SMITH), List.of(SMITH),
+        assertEquals(Map.of("iron", 8, "coal", 8, "bread", 50), JobTrades.surplus(List.of(SMITH), List.of(SMITH),
                 stock, CATALOG, 10, JobTradesTest::known), "No output of a worker");
-        assertEquals(Map.of("coal", 40, "iron", 40), JobTrades.surplus(List.of(), List.of(), Map.of("iron", 40,
-                "coal", 40, "bread", 20), CATALOG, 10, JobTradesTest::known), "No input, and the bread reserve");
+        assertEquals(Map.of("coal", 40, "iron", 40, "bread", 20), JobTrades.surplus(List.of(), List.of(),
+                Map.of("iron", 40, "coal", 40, "bread", 20), CATALOG, 10, JobTradesTest::known),
+                "No input: no reserve");
     }
 }
