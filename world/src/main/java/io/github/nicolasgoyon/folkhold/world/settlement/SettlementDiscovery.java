@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import javax.annotation.Nullable;
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -24,6 +27,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructureCheck;
 import net.minecraft.world.level.levelgen.structure.StructureCheckResult;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
@@ -42,8 +46,14 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * {@code /locate} command does. It does not generate chunks.
  *
  * <p>The discovery checks each region once and saves the result. Around each player and around the world spawn,
- * it puts the regions that it did not check in a queue. Each server tick checks a small number of regions. The
- * simulation runs on the discovered settlements, so the world around the players changes with no visit.
+ * it puts the regions that it did not check in a queue. Each server tick starts the check of a small number of
+ * regions. The simulation runs on the discovered settlements, so the world around the players changes with no visit.
+ *
+ * <p>The check of the structure in a candidate chunk can take some hundred milliseconds (the search of a cave site,
+ * see {@link io.github.nicolasgoyon.folkhold.world.village.structure.CaveVillage}). The checks of the queue calculate
+ * the start on a worker thread ({@link StartCheck}). The server thread then puts the result in the structure check of
+ * the level and adds the settlement. A region stays in the checks in progress until its result comes: the number of
+ * checks in progress is {@code discoveryChecksPerTick} at most.
  *
  * <p>An operator can check all the regions around a position now, with a larger distance
  * ({@link #discoverAround}).
@@ -67,6 +77,30 @@ public final class SettlementDiscovery {
 
     private static final Deque<RegionPos> QUEUE = new ArrayDeque<>();
     private static final Set<RegionPos> QUEUED = new HashSet<>();
+    /** The regions with a check in progress on a worker thread. The server thread uses it. */
+    private static final Set<RegionPos> PENDING = new HashSet<>();
+    /** The results of the worker threads, for the server thread. */
+    private static final ConcurrentLinkedQueue<Result> RESULTS = new ConcurrentLinkedQueue<>();
+    /** The number of the server run: a result of an earlier run does not apply. */
+    private static int run;
+
+    /**
+     * The result of the calculation of a start on a worker thread.
+     *
+     * @param run        the number of the server run at the start of the check
+     * @param level      the Overworld
+     * @param structures the structure sets and the seed of the placement
+     * @param region     the placement region
+     * @param check      the structure check of the level
+     * @param structure  the village structure
+     * @param candidate  the candidate chunk of the region
+     * @param canStart   true if the village can start in the candidate chunk
+     * @param error      the error of the calculation, or null
+     */
+    private record Result(int run, ServerLevel level, ChunkGeneratorStructureState structures, RegionPos region,
+            StructureCheck check, Structure structure, ChunkPos candidate, boolean canStart,
+            @Nullable Throwable error) {
+    }
 
     private SettlementDiscovery() {
     }
@@ -81,6 +115,9 @@ public final class SettlementDiscovery {
         SCAN.reset();
         QUEUE.clear();
         QUEUED.clear();
+        PENDING.clear();
+        RESULTS.clear();
+        run++;
     }
 
     public static void onServerTick(ServerTickEvent.Post event) {
@@ -91,11 +128,77 @@ public final class SettlementDiscovery {
                 enqueueAround(overworld, player.blockPosition());
             }
         }
+        applyResults();
         int checks = WorldConfig.DISCOVERY_CHECKS_PER_TICK.get();
-        for (int i = 0; i < checks && !QUEUE.isEmpty(); i++) {
+        for (int i = 0; i < checks && PENDING.size() < checks && !QUEUE.isEmpty(); i++) {
             RegionPos region = QUEUE.poll();
             QUEUED.remove(region);
-            checkRegion(overworld, structures(overworld), region);
+            checkRegionLater(overworld, structures(overworld), region);
+        }
+    }
+
+    /**
+     * Starts the check of one placement region, as {@link #checkRegion} does, with the calculation of the start on a
+     * worker thread. A server tick later applies the result: the region is checked and the settlement is added. A
+     * candidate chunk that the placement rules reject, or with a known result in the structure check, gets the check
+     * now. Use it on the server thread.
+     *
+     * @param level      the Overworld
+     * @param structures the structure sets and the seed of the placement
+     * @param region     the placement region
+     */
+    public static void checkRegionLater(ServerLevel level, ChunkGeneratorStructureState structures,
+            RegionPos region) {
+        Optional<RandomSpreadStructurePlacement> placement =
+                villagePlacement(structures, RandomSpreadStructurePlacement.class);
+        Optional<Structure> structure = villageStructure(level);
+        if (placement.isEmpty() || structure.isEmpty() || PENDING.contains(region)) {
+            return;
+        }
+        ChunkPos candidate = candidate(structures, placement.get(), region);
+        StructureCheck check = StartCheck.of(level);
+        if (!placement.get().isStructureChunk(structures, candidate.x, candidate.z)
+                || StartCheck.isKnown(check, structure.get(), candidate)) {
+            checkRegion(level, structures, region);
+            return;
+        }
+        PENDING.add(region);
+        int started = run;
+        Structure village = structure.get();
+        Util.backgroundExecutor().execute(() -> {
+            boolean canStart = false;
+            Throwable error = null;
+            try {
+                canStart = StartCheck.canStart(check, village, candidate);
+            } catch (RuntimeException e) {
+                error = e;
+            }
+            RESULTS.add(new Result(started, level, structures, region, check, village, candidate, canStart, error));
+        });
+    }
+
+    /** True if the discovery has checks in progress on a worker thread. */
+    public static boolean hasChecksInProgress() {
+        return !PENDING.isEmpty() || !RESULTS.isEmpty();
+    }
+
+    /**
+     * Applies the results of the worker threads: puts each result in the structure check, then checks the region. With
+     * an error, the check of the region calculates the start on the server thread.
+     */
+    private static void applyResults() {
+        for (Result result = RESULTS.poll(); result != null; result = RESULTS.poll()) {
+            if (result.run() != run) {
+                continue;
+            }
+            PENDING.remove(result.region());
+            if (result.error() != null) {
+                FolkholdWorld.LOGGER.warn("The check of the start of {} on a worker thread failed. The server thread"
+                        + " checks it", result.candidate(), result.error());
+            } else {
+                StartCheck.store(result.check(), result.structure(), result.candidate(), result.canStart());
+            }
+            checkRegion(result.level(), result.structures(), result.region());
         }
     }
 
@@ -103,7 +206,7 @@ public final class SettlementDiscovery {
     private static void enqueueAround(ServerLevel level, BlockPos center) {
         SettlementData data = SettlementData.get(level.getServer());
         for (RegionPos region : regionsAround(structures(level), center, WorldConfig.DISCOVERY_RADIUS.get())) {
-            if (!data.isRegionChecked(region.x(), region.z()) && QUEUED.add(region)) {
+            if (!data.isRegionChecked(region.x(), region.z()) && !PENDING.contains(region) && QUEUED.add(region)) {
                 QUEUE.add(region);
             }
         }
@@ -205,11 +308,17 @@ public final class SettlementDiscovery {
         if (placement.isEmpty() || structure.isEmpty()) {
             return Optional.empty();
         }
-        int spacing = placement.get().spacing();
-        ChunkPos candidate = placement.get().getPotentialStructureChunk(structures.getLevelSeed(),
-                region.minChunkX(spacing), region.minChunkZ(spacing));
+        ChunkPos candidate = candidate(structures, placement.get(), region);
         SettlementData.get(level.getServer()).markRegionChecked(region.x(), region.z());
         return checkCandidate(level, structures, candidate, placement.get(), structure.get());
+    }
+
+    /** The candidate chunk of a placement region. */
+    private static ChunkPos candidate(ChunkGeneratorStructureState structures,
+            RandomSpreadStructurePlacement placement, RegionPos region) {
+        int spacing = placement.spacing();
+        return placement.getPotentialStructureChunk(structures.getLevelSeed(), region.minChunkX(spacing),
+                region.minChunkZ(spacing));
     }
 
     /**
