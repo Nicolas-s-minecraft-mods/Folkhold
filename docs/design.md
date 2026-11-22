@@ -161,7 +161,7 @@ A village belongs to the faction with the nearest territory center, so the numbe
 | Route | List of points between two villages. A mobile group follows it. |
 | Materialization | Creation of the entities of an abstract state near a player. The opposite operation removes the entities and writes their state back. |
 | Quest board | Block in each faction village. It shows the quests of the village. |
-| Ambush | Group of vanilla monsters that attacks an escorted caravan at a point of its route. |
+| Ambush | Group of pillagers that attacks an escorted caravan at a point of its route. |
 | Pillager camp | Pillager site of the world (a vanilla pillager outpost by default) with a disc of territory around it. |
 | Pillager patrol | Group of vanilla pillagers that leaves a pillager camp and walks to a player in its territory. |
 
@@ -1378,13 +1378,23 @@ A quest has a giver, a success condition that the mod checks on the state of the
 - When a caravan is ready to leave, its village offers an escort quest. The caravan waits until a player accepts or until a delay ends. Then it leaves.
 - The escorted caravan stays materialized while the player is in the escort distance.
 - When the player is farther than the escort distance, the caravan stops. When the player stays away longer than a delay, the quest fails and the caravan continues as an abstract group.
-- **Ambushes**: each escort contains 1 to 3 ambushes of vanilla monsters at random points of the route. The length of the route and the level of the origin village set the size of an ambush.
+- **Ambushes** (`Escorts.spawnAmbush`): pillagers attack the caravan at random points of the route, between 20 % and 90 % of its length. An ambush appears 16 blocks in front of the merchant and attacks the merchant. Its raiders do not join a raid and do not lead a patrol.
+- **Difficulty** (`EscortDifficulty`, data file `folkhold/escort_difficulties.json`): the difficulty of an escort is 1, plus 1 for each 5 levels of the origin village, plus 1 for each 1000 blocks of route, plus 1 when a pillager camp (#720) is 256 blocks or less from the origin or the destination, up to the number of levels of the file. The board shows it with stars. Each level of the file gives (start values):
+
+  | Difficulty | Extra guards | Ambushes | Pillagers | Vindicators | Ravager | Helmet | Reward factor |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 1 | 0 | 1 | 2 to 3 | 0 | no | none | 1 |
+  | 2 | 1 | 1 to 2 | 2 to 4 | 1 | no | none | 1.5 |
+  | 3 | 1 | 2 to 3 | 3 to 4 | 1 | no | iron | 2 |
+  | 4 | 2 | 2 to 3 | 3 to 5 | 2 | no | iron | 2.5 |
+  | 5 | 3 | 3 | 4 to 6 | 2 | yes | diamond | 3.5 |
+
+  The extra guards join the caravan when its village offers the escort. The reward factor multiplies the emerald reward. An escort of an old save has no difficulty and uses the level 1.
 - **Success**: the caravan arrives and its merchant is alive. The reward comes from the value of the cargo.
 - **Failure**: the merchant dies, the player stays away too long, or the deadline ends.
 - **Guidance**: a gold marker above the merchant shows the caravan to protect, also through the blocks.
 
 - Defaults: the caravan waits 6 minutes for an escort, the escort distance is 48 blocks, the player can stay away 2 minutes, the deadline is the length of the route at 60 blocks per minute plus 10 minutes (at least 40 minutes), the reward is 50 % of the value of the cargo and +30 reputation.
-- An ambush has 2 monsters, plus 1 for each 500 blocks of route and for each 5 levels of the origin village, up to 8. The monsters (zombies, skeletons and spiders, with a helmet against the sun) appear 16 blocks in front of the merchant and attack it.
 
 All distances, delays and rewards are configurable.
 

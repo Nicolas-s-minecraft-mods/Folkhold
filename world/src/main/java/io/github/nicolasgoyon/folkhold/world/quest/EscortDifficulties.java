@@ -61,7 +61,13 @@ public final class EscortDifficulties extends SimplePreparableReloadListener<Esc
             return EscortDifficulty.DEFAULT;
         }
         try (Reader reader = resource.get().openAsReader()) {
-            return parse(JsonParser.parseReader(reader).getAsJsonObject());
+            EscortDifficulty difficulties = parse(JsonParser.parseReader(reader).getAsJsonObject());
+            for (EscortDifficulty.Level level : difficulties.levels()) {
+                if (!level.helmet().isEmpty() && ItemIds.item(level.helmet()).isEmpty()) {
+                    throw new IllegalArgumentException("Unknown helmet '" + level.helmet() + "'");
+                }
+            }
+            return difficulties;
         } catch (IOException | RuntimeException e) {
             FolkholdWorld.LOGGER.error("The escort difficulties {} are not valid: {}. The escorts use the default "
                     + "difficulty", FILE, e.getMessage());
@@ -88,9 +94,6 @@ public final class EscortDifficulties extends SimplePreparableReloadListener<Esc
             int[] ambushes = range(level, "ambushes", 1, 1);
             int[] pillagers = range(level, "pillagers", 2, 3);
             String helmet = GsonHelper.getAsString(level, "helmet", "");
-            if (!helmet.isEmpty() && ItemIds.item(helmet).isEmpty()) {
-                throw new IllegalArgumentException("Unknown helmet '" + helmet + "'");
-            }
             levels.add(new EscortDifficulty.Level(GsonHelper.getAsInt(level, "guards", 0), ambushes[0], ambushes[1],
                     pillagers[0], pillagers[1], GsonHelper.getAsInt(level, "vindicators", 0),
                     GsonHelper.getAsBoolean(level, "ravager", false), helmet,
