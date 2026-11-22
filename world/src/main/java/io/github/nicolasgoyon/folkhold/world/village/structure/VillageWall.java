@@ -53,8 +53,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *
  * <ul>
  *   <li>The first wall has a free outline: the rectangle around the pieces, with the high ground of the site cut out
- *       (see {@link WallLayout#free}). On flat ground, it is the rectangle. A ring is the rectangle around the wall
- *       inside it, larger by the band (see {@link WallLayout#ring}).</li>
+ *       (see {@link WallLayout#free}). On flat ground, it is the rectangle. A ring is the outline of the wall inside it,
+ *       larger by the band, with the high ground of the band cut out (see {@link WallLayout#ring}).</li>
  *   <li>A gate goes on each of the 4 axes of the start piece, on the first edge of its side that the axis meets: the
  *       streets go out of the start piece on these axes.</li>
  *   <li>The cliff side (see {@link CliffSide}): where the terrain outside the line goes down steeply, the palisade is
@@ -319,17 +319,22 @@ public final class VillageWall {
      * @param settings the settings of the wall
      * @param maritime true for a maritime village: the palisade stands on the land side only
      * @param start    the start chunk of the village
+     * @param center   the middle of the start piece: the axes of the gates start there
+     * @param ground   the ground of the site: each ring cuts out the high ground of its band (see
+     *                 {@link WallLayout#ring(WallLayout, int, Cell, WallOutline.Ground)})
      * @return the rings, from the inside to the outside
      */
     public static List<Wall> rings(Structure.GenerationContext context, TerrainCache heights, Wall first, int count,
-            int band, WallSettings settings, boolean maritime, ChunkPos start) {
+            int band, WallSettings settings, boolean maritime, ChunkPos start, BlockPos center,
+            WallOutline.Ground ground) {
+        Cell middle = new Cell(center.getX(), center.getZ());
         Terrain terrain = new Terrain(heights);
         int seaLevel = context.chunkGenerator().getSeaLevel();
         StructureTemplateManager templates = context.structureTemplateManager();
         List<Wall> rings = new ArrayList<>();
         Wall inner = first;
         for (int ring = 0; ring < count; ring++) {
-            WallLayout planned = WallLayout.ring(inner.layout(), band);
+            WallLayout planned = WallLayout.ring(inner.layout(), band, middle, ground);
             boolean[] water = new boolean[planned.ringSize()];
             for (int i = 0; i < water.length; i++) {
                 Cell cell = planned.ringCell(i);
@@ -339,7 +344,7 @@ public final class VillageWall {
             int[] bases = bases(planned, terrain);
             Wall wall = inner;
             WallLayout gated = withGates(planned, CliffSide.ringGates(planned,
-                    gateDrop(planned, bases, terrain, gate -> bandArm(planned, gate, band, wall)), keep));
+                    gateDrop(planned, bases, terrain, gate -> bandArm(planned, gate, wall)), keep));
             ToIntFunction<Tower> view = corner -> cornerView(gated, corner.edge(), bases, terrain);
             Predicate<Tower> allowed = tower -> kept(keep, gated.ringIndices(gated.towerBox(tower)));
             int gateTowers = gated.withTowers(0, view, allowed).towers().size();
@@ -356,7 +361,7 @@ public final class VillageWall {
             Map<Gate, Arm> arms = new HashMap<>();
             List<PierPiece> bridges = new ArrayList<>();
             for (Gate gate : keptGates) {
-                Optional<Arm> arm = bandArm(layout, gate, band, inner);
+                Optional<Arm> arm = bandArm(layout, gate, inner);
                 arm.ifPresent(value -> arms.put(gate, value));
                 List<Integer> indices = layout.ringIndices(gate);
                 // A bridge from the water gate of the inner wall gives its deck level to the gate.
@@ -460,17 +465,17 @@ public final class VillageWall {
     /**
      * The path of a gate of a ring across the band: the rows from the ring gate to the flat terrain in front of the
      * gate of the wall inside it ({@link #APPROACH} blocks). The inner gate is on the same axis (see
-     * {@link WallLayout#ring}). The line of the inner gate is the band or more from the line of the ring: the free
-     * outline of the first wall can have its gate deeper in the box of the wall. The path ends at the level of the inner
-     * gate. Empty if the inner wall has no gate there or if the inner gate opens on water.
+     * {@link WallLayout#ring}). The distance between the 2 lines is not always the band: the free outline of the first
+     * wall can have its gate deeper in the box of the wall, and a ring cuts out the high ground of its band. The path
+     * ends at the level of the inner gate. Empty if the inner wall has no gate there or if the inner gate opens on
+     * water.
      *
      * @param ring  the ring
      * @param gate  the gate of the ring
-     * @param band  the band of the ring
      * @param inner the wall inside the ring
      * @return the arm of the path
      */
-    static Optional<Arm> bandArm(WallLayout ring, Gate gate, int band, Wall inner) {
+    static Optional<Arm> bandArm(WallLayout ring, Gate gate, Wall inner) {
         Optional<Gate> innerGate = inner.gateLevels().keySet().stream()
                 .filter(candidate -> candidate.side() == gate.side() && !inner.waterGates().contains(candidate))
                 .findFirst();
@@ -480,7 +485,8 @@ public final class VillageWall {
         Side side = gate.side();
         Cell middle = ring.cell(gate.edge(), ring.along(gate));
         Cell inside = inner.layout().cell(innerGate.get().edge(), inner.layout().along(innerGate.get()));
-        int distance = Math.max(band, Math.abs(inside.x() - middle.x()) + Math.abs(inside.z() - middle.z()));
+        // The distance across the band, from the line of the ring to the line of the inner gate.
+        int distance = side.insideX() == 0 ? Math.abs(inside.z() - middle.z()) : Math.abs(inside.x() - middle.x());
         int length = distance - 2 - APPROACH;
         if (length < 1) {
             return Optional.empty();

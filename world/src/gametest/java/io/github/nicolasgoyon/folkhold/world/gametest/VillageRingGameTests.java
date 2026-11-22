@@ -169,7 +169,7 @@ public final class VillageRingGameTests {
             WallLayout ring = wall.layout();
             helper.assertTrue(ring.gates().size() == 4, "The ring must have 4 gates: " + ring.gates());
             for (WallLayout.Gate gate : ring.gates()) {
-                WallLayout.Cell middle = ring.cell(gate.side(), ring.along(gate));
+                WallLayout.Cell middle = ring.cell(gate.edge(), ring.along(gate));
                 int x = middle.x() - GATE_APPROACH * gate.side().insideX();
                 int z = middle.z() - GATE_APPROACH * gate.side().insideZ();
                 helper.assertTrue(reached.contains(ChunkPos.asLong(x, z)),
@@ -314,7 +314,7 @@ public final class VillageRingGameTests {
             int slope = 0;
             for (VillageWall.Wall wall : layout.rings()) {
                 for (Map.Entry<WallLayout.Gate, Integer> gate : wall.gateLevels().entrySet()) {
-                    WallLayout.Cell middle = wall.layout().cell(gate.getKey().side(),
+                    WallLayout.Cell middle = wall.layout().cell(gate.getKey().edge(),
                             wall.layout().along(gate.getKey()));
                     int x = middle.x() - FRONT * gate.getKey().side().insideX();
                     int z = middle.z() - FRONT * gate.getKey().side().insideZ();

@@ -15,6 +15,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallOutline;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.faction.CultureMap;
@@ -567,9 +568,10 @@ public final class FortifiedVillageStructure extends Structure {
         village.addAll(core.pieces());
         List<BoundingBox> reserved = new ArrayList<>(core.reserved());
         int rise = outlineRise(plan.rules());
+        WallOutline.Ground high = (x, z) -> ground.high(x, z, rise);
         VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, core.reserved(),
-                start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)),
-                (x, z) -> ground.high(x, z, rise), !(VillageRings.enabled() && size.rings() > 0));
+                start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)), high,
+                !(VillageRings.enabled() && size.rings() > 0));
         // The stairs of the streets on the slopes, after the paths of the gates: a path has its own stairs.
         List<StructurePiece> wallPieces = new ArrayList<>(wall.pieces());
         wallPieces.addAll(StreetStepsPiece.of(plan, start.center(), turn, start.terrain(), paths(wall.pieces()),
@@ -583,7 +585,7 @@ public final class FortifiedVillageStructure extends Structure {
         if (VillageRings.enabled() && size.rings() > 0) {
             int band = bandOf(size, start.variant());
             List<VillageWall.Wall> walls = VillageWall.rings(context, start.terrain(), wall, size.rings(), band,
-                    start.variant().wall(), start.maritime(), context.chunkPos());
+                    start.variant().wall(), start.maritime(), context.chunkPos(), start.center(), high);
             if (!bands) {
                 rings.addAll(walls);
             }
@@ -591,7 +593,8 @@ public final class FortifiedVillageStructure extends Structure {
             for (int ring = 0; bands && ring < walls.size(); ring++) {
                 VillageWall.Wall inner = ring == 0 ? wall : walls.get(ring - 1);
                 VillagePlan bandPlan = VillagePlan.band(size, bandPlots.get(ring), plain,
-                        planBox(inner.layout().outline(), start.center(), turn), band,
+                        planOutline(inner.layout(), start.center(), turn),
+                        planOutline(walls.get(ring).layout(), start.center(), turn),
                         plots.plan(start.center(), turn), plots.foundation(start.center(), turn),
                         plots.band(start.center(), turn), seed + ring + 1);
                 PlotUses.Result bandUses = PlotUses.assign(bandPlan, missing, posts.count() - placedPosts);
@@ -688,17 +691,19 @@ public final class FortifiedVillageStructure extends Structure {
         return missing;
     }
 
-    /** The box of a box of the world in the frame of the plan: (0, 0) is the middle of the plaza. */
-    private static VillagePlan.Box planBox(WallLayout.Box box, BlockPos center, Rotation rotation) {
+    /** The outline of a wall in the frame of the plan: (0, 0) is the middle of the plaza. */
+    private static WallLayout planOutline(WallLayout wall, BlockPos center, Rotation rotation) {
         Rotation back = switch (rotation) {
             case CLOCKWISE_90 -> Rotation.COUNTERCLOCKWISE_90;
             case COUNTERCLOCKWISE_90 -> Rotation.CLOCKWISE_90;
             default -> rotation;
         };
-        BlockPos first = new BlockPos(box.minX() - center.getX(), 0, box.minZ() - center.getZ()).rotate(back);
-        BlockPos second = new BlockPos(box.maxX() - center.getX(), 0, box.maxZ() - center.getZ()).rotate(back);
-        return new VillagePlan.Box(Math.min(first.getX(), second.getX()), Math.min(first.getZ(), second.getZ()),
-                Math.max(first.getX(), second.getX()), Math.max(first.getZ(), second.getZ()));
+        List<WallLayout.Cell> corners = new ArrayList<>();
+        for (WallLayout.Cell corner : wall.corners()) {
+            BlockPos turned = new BlockPos(corner.x() - center.getX(), 0, corner.z() - center.getZ()).rotate(back);
+            corners.add(new WallLayout.Cell(turned.getX(), turned.getZ()));
+        }
+        return WallLayout.outline(corners);
     }
 
     /**

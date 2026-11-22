@@ -518,22 +518,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
     }
 
     /**
-     * Makes the plan of the band of a ring: the ring street and its plots. The band is the space between the line of
-     * the inner wall and the line of the ring, {@link #bandWidth} blocks outside it.
-     *
-     * <ul>
-     *   <li>The ring street goes along each side of the inner wall, in the band. Its middle is
-     *       {@link #BAND_INNER} blocks, a home depth and 2 blocks outside the inner line. It starts at the 2 sides of
-     *       the path across the band on the axis of the side (x = 0 or z = 0), and goes to the 2 corners of the band.
-     *       The paths across the bands keep the 5 blocks of the axis.</li>
-     *   <li>The plan adds segments ({@code street_next}) one by one at the open end that is nearest to the middle, as
-     *       the plan of the core. Each open end gets a street end.</li>
-     *   <li>Each piece, each street end and each home stays in the band: {@link #BAND_INNER} blocks or more outside
-     *       the inner line, and {@link #BAND_OUTER} blocks or more inside the ring line.</li>
-     *   <li>The plots have no role and no wide home. The homes are the good plots nearest to the middle, then the bad
-     *       plots that hold a home on its foundation. The spare plots are the bad plots first, then the farthest
-     *       plots.</li>
-     * </ul>
+     * Makes the plan of the band of a ring around a rectangle: the ring is the rectangle larger by the band (see
+     * {@link #band(VillageSize, int, StreetStyle, WallLayout, WallLayout, Predicate, Predicate, Ground, long)}).
      *
      * @param size       the size of the tier: the spare share
      * @param target     the plots of the band, with the spare plots
@@ -551,34 +537,97 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
     }
 
     /**
-     * As {@link #band(VillageSize, int, StreetStyle, Box, int, Predicate, Predicate, long)}, with a ground. The plan
-     * tries the region and the level of the plots of the ground first, then the region only, then no rule of the
-     * ground (see {@link Rules}). A band has no outline rule: the line of its ring is fixed.
+     * As {@link #band(VillageSize, int, StreetStyle, Box, int, Predicate, Predicate, long)}, with a ground (see
+     * {@link #band(VillageSize, int, StreetStyle, WallLayout, WallLayout, Predicate, Predicate, Ground, long)}).
      *
      * @param ground the rules of the terrain (see {@link Ground}), or {@link Ground#ANY}
      */
     public static VillagePlan band(VillageSize size, int target, StreetStyle style, Box inner, int band,
             Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed) {
+        return band(size, target, style, rectangle(inner), rectangle(inner.grow(band)), terrain, foundation, ground,
+                seed);
+    }
+
+    /** The outline of a rectangle of the plan. */
+    private static WallLayout rectangle(Box box) {
+        return WallLayout.outline(List.of(new WallLayout.Cell(box.minX(), box.minZ()),
+                new WallLayout.Cell(box.maxX(), box.minZ()), new WallLayout.Cell(box.maxX(), box.maxZ()),
+                new WallLayout.Cell(box.minX(), box.maxZ())));
+    }
+
+    /**
+     * Makes the plan of the band of a ring: the ring street and its plots. The band is the space between the line of
+     * the inner wall and the line of the ring (see {@link WallLayout#ring}).
+     *
+     * <ul>
+     *   <li>The ring street goes along each edge of the inner wall, in the band. Its middle is {@link #BAND_INNER}
+     *       blocks, a home depth and 2 blocks outside the line of the edge. On an edge that the axis of its side
+     *       crosses (x = 0 or z = 0), it starts at the 2 sides of the path across the band and goes to the 2 ends of
+     *       the edge. The paths across the bands keep the 5 blocks of the axis. On another edge, it starts at the 2
+     *       sides of the middle of the edge, when a segment fits there.</li>
+     *   <li>The plan adds segments ({@code street_next}) one by one at the open end that is nearest to the middle, as
+     *       the plan of the core. Each open end gets a street end.</li>
+     *   <li>Each piece, each street end and each home stays in the band: {@link #BAND_INNER} blocks or more outside
+     *       the inner line, and {@link #BAND_OUTER} blocks or more inside the ring line.</li>
+     *   <li>The plots have no role and no wide home. The homes are the good plots nearest to the middle, then the bad
+     *       plots that hold a home on its foundation. The spare plots are the bad plots first, then the farthest
+     *       plots.</li>
+     * </ul>
+     *
+     * <p>The plan tries the region and the level of the plots of the ground first, then the region only, then no rule
+     * of the ground (see {@link Rules}). A band has no outline rule: the line of its ring is fixed.
+     *
+     * @param size       the size of the tier: the spare share
+     * @param target     the plots of the band, with the spare plots
+     * @param style      the street pieces and the homes of the style
+     * @param inner      the outline of the inner wall in the frame of the plan (see {@link WallLayout#outline})
+     * @param ring       the outline of the ring in the frame of the plan
+     * @param terrain    true when the terrain of a box is good for a home
+     * @param foundation true when a box with bad terrain can hold a home on its foundation
+     * @param ground     the rules of the terrain (see {@link Ground}), or {@link Ground#ANY}
+     * @param seed       the seed of the choices
+     * @return the plan of the band, with its shortfall when the band is too small
+     */
+    public static VillagePlan band(VillageSize size, int target, StreetStyle style, WallLayout inner, WallLayout ring,
+            Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed) {
         StreetStyle plain = new StreetStyle(style.name(), style.segment(), style.segmentPlots(), style.crossArm(),
                 style.crossPlots(), style.side(), style.home(), List.of(), style.endOverflow());
-        Box near = inner.grow(BAND_INNER - 1);
-        Box far = inner.grow(band - BAND_OUTER);
-        Predicate<Box> region = box -> far.contains(box.minX(), box.minZ()) && far.contains(box.maxX(), box.maxZ())
-                && !box.overlaps(near);
+        Predicate<Box> region = box -> ring.holds(layoutBox(box.grow(BAND_OUTER - 1)))
+                && !inner.touches(layoutBox(box.grow(BAND_INNER - 1)));
         int wide = Integer.MAX_VALUE / 4;
         List<Box> axes = List.of(new Box(-AXIS_HALF_WIDTH, -wide, AXIS_HALF_WIDTH, wide),
                 new Box(-wide, -AXIS_HALF_WIDTH, wide, AXIS_HALF_WIDTH));
         int middle = BAND_INNER + style.home().depth() + StreetStyle.WIDTH / 2;
         int first = AXIS_HALF_WIDTH + 1;
-        List<Start> starts = List.of(
-                new Start(first, inner.minZ() - middle, Dir.EAST), new Start(-first, inner.minZ() - middle, Dir.WEST),
-                new Start(inner.maxX() + middle, first, Dir.SOUTH), new Start(inner.maxX() + middle, -first, Dir.NORTH),
-                new Start(first, inner.maxZ() + middle, Dir.EAST), new Start(-first, inner.maxZ() + middle, Dir.WEST),
-                new Start(inner.minX() - middle, first, Dir.SOUTH), new Start(inner.minX() - middle, -first, Dir.NORTH));
+        List<Start> starts = new ArrayList<>();
+        Set<Start> optional = new HashSet<>();
+        for (int edge = 0; edge < inner.edges(); edge++) {
+            WallLayout.Side side = inner.side(edge);
+            WallLayout.Cell from = inner.cell(edge, 0);
+            WallLayout.Cell to = inner.cell(edge, inner.length(edge) - 1);
+            boolean alongX = side.insideX() == 0;
+            int low = alongX ? Math.min(from.x(), to.x()) : Math.min(from.z(), to.z());
+            int high = alongX ? Math.max(from.x(), to.x()) : Math.max(from.z(), to.z());
+            boolean axis = low < 0 && high > 0;
+            int center = axis ? 0 : Math.floorDiv(low + high, 2);
+            int line = alongX ? from.z() - side.insideZ() * middle : from.x() - side.insideX() * middle;
+            List<Start> pair = alongX
+                    ? List.of(new Start(center + first, line, Dir.EAST), new Start(center - first, line, Dir.WEST))
+                    : List.of(new Start(line, center + first, Dir.SOUTH), new Start(line, center - first, Dir.NORTH));
+            starts.addAll(pair);
+            if (!axis) {
+                optional.addAll(pair);
+            }
+        }
         List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.ALL, Rules.REGION, Rules.NONE);
         // A band has no outline rule and no rise: ALL and REGION differ by the level of the plots only.
         return firstComplete(rules, rule -> best(seed, random -> new Planner(target, target - size.sparePlots(target),
-                plain, region, axes, false, true, terrain, foundation, ground, rule, random).plan(starts)));
+                plain, region, axes, false, true, terrain, foundation, ground, rule, random).plan(starts, optional)));
+    }
+
+    /** A box of the plan as a box of a wall. */
+    private static WallLayout.Box layoutBox(Box box) {
+        return new WallLayout.Box(box.minX(), box.minZ(), box.maxX(), box.maxZ());
     }
 
     /** An axis street gets a crossroad with the chance 1 in this number, when a crossroad fits. */
@@ -711,6 +760,17 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         }
 
         VillagePlan plan(List<Start> starts) {
+            return plan(starts, Set.of());
+        }
+
+        /**
+         * The plan from the starts of its streets.
+         *
+         * @param starts   the starts of the streets
+         * @param optional the starts that get no street end when their first segment does not fit. A start of a
+         *                 band also gets no street end out of the region of the band
+         */
+        VillagePlan plan(List<Start> starts, Set<Start> optional) {
             // The first pieces of the streets to the north and to the south come first: their plots have roles.
             List<Start> ordered = new ArrayList<>(starts);
             if (axis) {
@@ -720,7 +780,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 Tail tail = new Tail(start, false, -1, -1, box(start, StreetStyle.END), 0);
                 if (fits(tail, Kind.SEGMENT)) {
                     add(tail, Kind.SEGMENT);
-                } else {
+                } else if (!optional.contains(start) && (axis || free(tail.end(), false))) {
+                    // A start of a band out of the band gets no street end.
                     closed.add(tail);
                 }
             }

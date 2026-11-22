@@ -115,6 +115,54 @@ class VillageBandPlanTest {
                 "a plot on the outer side of the street");
     }
 
+    /**
+     * The band between 2 free outlines: the inner wall with its north-east corner cut out, and a ring with its east
+     * side cut back by a mountain. Each piece and each plot stays between the 2 outlines, with the free blocks near the
+     * 2 walls, and the ring street goes along the edges of the cut corner.
+     */
+    @Test
+    void bandFollowsTheOutlinesOfTheWalls() {
+        VillageSize town = size("town");
+        int band = VillagePlan.bandWidth(StreetStyle.BASE);
+        WallLayout.Box core = new WallLayout.Box(CORE_WALL.minX(), CORE_WALL.minZ(), CORE_WALL.maxX(),
+                CORE_WALL.maxZ());
+        List<WallLayout.Gate> gates = List.of(new WallLayout.Gate(WallLayout.Side.NORTH, 0),
+                new WallLayout.Gate(WallLayout.Side.EAST, 0), new WallLayout.Gate(WallLayout.Side.SOUTH, 0),
+                new WallLayout.Gate(WallLayout.Side.WEST, 0));
+        WallLayout.Cell middle = new WallLayout.Cell(0, 0);
+        // The pieces of a cross: the outline cuts out the 4 corners with no piece where the ground is high.
+        List<WallLayout.Box> pieces = List.of(new WallLayout.Box(core.minX() + 5, -10, core.maxX() - 5, 10),
+                new WallLayout.Box(-10, core.minZ() + 5, 10, core.maxZ() - 5), new WallLayout.Box(-40, -10, 10, 50));
+        WallOutline.Ground cornerHigh = (x, z) -> x > 30 && z < -30;
+        WallLayout inner = WallLayout.free(pieces, 4, 40, gates, middle, cornerHigh);
+        int east = inner.outline().maxX();
+        WallLayout ring = WallLayout.ring(inner, band, middle, (x, z) -> x > east + 24);
+        assertFalse(inner.isRectangle(), inner.corners().toString());
+        assertFalse(ring.isRectangle(), ring.corners().toString());
+
+        VillagePlan plan = VillagePlan.band(town, town.bandPlots().get(0), StreetStyle.BASE, inner, ring,
+                box -> true, box -> false, VillagePlan.Ground.ANY, 5);
+        List<Box> boxes = new ArrayList<>();
+        plan.pieces().forEach(piece -> boxes.add(piece.box()));
+        plan.plots().forEach(plot -> boxes.add(plot.area()));
+        assertFalse(plan.plots().isEmpty());
+        for (int i = 0; i < boxes.size(); i++) {
+            Box box = boxes.get(i);
+            WallLayout.Box near = new WallLayout.Box(box.minX(), box.minZ(), box.maxX(), box.maxZ())
+                    .grow(VillagePlan.BAND_INNER - 1);
+            WallLayout.Box far = new WallLayout.Box(box.minX(), box.minZ(), box.maxX(), box.maxZ())
+                    .grow(VillagePlan.BAND_OUTER - 1);
+            assertFalse(inner.touches(near), box + " near the inner wall");
+            assertTrue(ring.holds(far), box + " near the ring");
+            for (int j = i + 1; j < boxes.size(); j++) {
+                assertFalse(box.overlaps(boxes.get(j)), box + " " + boxes.get(j));
+            }
+        }
+        // A plot in the cut corner of the inner wall: the ring street goes along the edges of the cut.
+        assertTrue(plan.plots().stream().anyMatch(plot -> plot.area().minX() > 30 && plot.area().maxZ() < -30
+                && plot.area().maxZ() > inner.outline().minZ()), "a plot in the cut corner");
+    }
+
     /** The same seed gives the same band. */
     @Test
     void sameSeedGivesTheSameBand() {

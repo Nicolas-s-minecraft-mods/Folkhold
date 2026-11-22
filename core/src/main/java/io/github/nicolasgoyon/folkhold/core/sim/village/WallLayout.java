@@ -40,10 +40,11 @@ import java.util.function.ToIntFunction;
  * {@link #ringSize()}).
  *
  * <p>An outer ring of the wall is a new wall around an inner wall (see {@link #ring} and {@link #rings}). Its outline is
- * the box around the inner outline, larger by the band on each side. Its gates are on the same X (north and south
- * sides) or Z (east and west sides) as the gates of the inner wall: the streets of the arms go straight from an inner
- * gate to the gate of the ring. Its towers obey the tower spacing of the inner wall. A tower and its stair go inside the
- * ring, in the band.
+ * the inner outline, larger by the band on each side, with the high ground of the band cut out. On flat ground around a
+ * rectangle, it is the rectangle larger by the band. Its gates are on the same X (north and south sides) or Z (east and
+ * west sides) as the gates of the inner wall: the paths across the band go straight from an inner gate to the gate of
+ * the ring. Its towers obey the tower spacing of the inner wall. A tower and its stair go inside the ring, in the
+ * band.
  */
 public final class WallLayout {
     /** The size of a tower, in blocks. */
@@ -76,6 +77,11 @@ public final class WallLayout {
     public static final int MIN_BAND = 24;
     /** The largest band of an outer ring: the band of the Valeholm style (see {@link VillagePlan#bandWidth}). */
     public static final int MAX_BAND = 48;
+    /**
+     * The free blocks that a ring keeps around the wall inside it, at least: the flat terrain in front of the inner
+     * gates ({@code VillageWall.APPROACH}), and the towers and the flat terrain of the ring.
+     */
+    public static final int RING_GAP = 16;
     /** The fewest towers of the first wall of a village: one next to each of its 4 gates. */
     public static final int MIN_TOWERS = 4;
     /** The towers of a village for each archer of its garrison: an archer changes its post between the towers. */
@@ -402,6 +408,27 @@ public final class WallLayout {
         return build(rectangle(rect), towerSpacing, rectangleGates(gates));
     }
 
+    /**
+     * The outline of a closed orthogonal polygon, with no tower and no gate: for the tests of the boxes in it (see
+     * {@link #touches} and {@link #holds}). The corners go clockwise, from any corner.
+     *
+     * @param corners the corners of the polygon, clockwise
+     * @return the outline
+     */
+    public static WallLayout outline(List<Cell> corners) {
+        int first = 0;
+        for (int i = 1; i < corners.size(); i++) {
+            Cell cell = corners.get(i);
+            Cell best = corners.get(first);
+            if (cell.z() < best.z() || (cell.z() == best.z() && cell.x() < best.x())) {
+                first = i;
+            }
+        }
+        List<Cell> ordered = new ArrayList<>(corners.subList(first, corners.size()));
+        ordered.addAll(corners.subList(0, first));
+        return new WallLayout(ordered, MIN_TOWER_SPACING, List.of(), List.of(), List.of());
+    }
+
     /** The rectangle around the boxes of the pieces, with the margin and the line, and with sides of a valid size. */
     private static Box rectangle(List<Box> pieces, int margin, int towerSpacing) {
         if (pieces.isEmpty()) {
@@ -491,22 +518,118 @@ public final class WallLayout {
     }
 
     /**
-     * Calculates an outer ring around a wall. The outline of the ring is the box around the inner outline, larger by
-     * the band on each side. Each gate of the inner wall gives a gate on the same side of the ring, at the same
-     * position. The towers of the ring obey the tower spacing of the inner wall, with a corner tower at the start of
-     * each side. The calculation is deterministic.
+     * Calculates an outer ring around a wall on flat ground: {@link #ring(WallLayout, int, Cell, WallOutline.Ground)}
+     * with the middle of the box of the inner wall and {@link WallOutline.Ground#FLAT}. Around a rectangle, the ring is
+     * the rectangle larger by the band.
      *
      * @param inner the inner wall: the first wall of the village, or the last ring
-     * @param band  the distance from the box of the inner wall to the line of the ring, from {@link #MIN_BAND} to
+     * @param band  the distance from the inner wall to the line of the ring, from {@link #MIN_BAND} to
      *              {@link #MAX_BAND}
      * @return the ring
      */
     public static WallLayout ring(WallLayout inner, int band) {
+        Box box = inner.outline;
+        return ring(inner, band, new Cell((box.minX() + box.maxX()) / 2, (box.minZ() + box.maxZ()) / 2),
+                WallOutline.Ground.FLAT);
+    }
+
+    /**
+     * Calculates an outer ring around a wall on the ground of the site. The outline of the ring is the outline of the
+     * inner wall, larger by the band on each side, with the high ground of the band cut out (see
+     * {@link WallOutline#ring}):
+     *
+     * <ul>
+     *   <li>The rectangle of the ring is the box of the inner outline, larger by the band. A cell of
+     *       {@link WallOutline} with no block of the inner wall at the band or less, on each axis, is out of the ring.
+     *       Thus the ring is an offset of the inner outline, and around a rectangle it is the rectangle.</li>
+     *   <li>The ring keeps {@link #RING_GAP} blocks or more around the inner wall, and a passage of
+     *       {@link #GATE_PASSAGE} blocks on each side of the axis of each inner gate in this gap. Out of this gap, the
+     *       high cells that a chain of high cells joins to the edge of the rectangle go out of the ring.</li>
+     *   <li>Each gate of the inner wall gives a gate on the same side of the ring, on the same axis: on the first edge of
+     *       this side that the axis meets from the middle of the village.</li>
+     * </ul>
+     *
+     * <p>The ring takes the outline with the fewest blocks of its line on high ground (see {@link #highBlocks}), from
+     * this list: the cut outline, the offset of the inner outline with no cut, and the rectangle around the inner
+     * outline, larger by the band. With the same number of blocks, the first outline of the list comes first. An
+     * outline with no edge with the space for a gate is not in the list. Thus on a hill near the inner wall, the ring
+     * can go around the hill on its outer side. The towers of the ring obey the tower spacing of the inner wall, with a corner tower at the start of
+     * each edge after an outer corner. The calculation is deterministic.
+     *
+     * @param inner  the inner wall: the first wall of the village, or the last ring
+     * @param band   the distance from the inner wall to the line of the ring, from {@link #MIN_BAND} to
+     *               {@link #MAX_BAND}
+     * @param middle the middle of the village: the axes of the gates start there
+     * @param ground the ground of the site
+     * @return the ring
+     */
+    public static WallLayout ring(WallLayout inner, int band, Cell middle, WallOutline.Ground ground) {
         if (band < MIN_BAND || band > MAX_BAND) {
             throw new IllegalArgumentException("The band of a ring must be " + MIN_BAND + " to " + MAX_BAND
                     + " blocks: " + band);
         }
-        return build(rectangle(inner.outline.grow(band)), inner.towerSpacing, rectangleGates(inner.gates));
+        Box rect = inner.outline.grow(band);
+        List<Gate> requests = rectangleGates(inner.gates);
+        WallLayout best = build(rectangle(rect), inner.towerSpacing, requests);
+        if (inner.isRectangle() && ground == WallOutline.Ground.FLAT) {
+            return best;
+        }
+        List<Box> passages = inner.gates.stream().map(gate -> inner.passage(gate, RING_GAP)).toList();
+        List<WallLayout> candidates = new ArrayList<>();
+        for (WallOutline.Ground cut : ground == WallOutline.Ground.FLAT ? List.of(ground)
+                : List.of(ground, WallOutline.Ground.FLAT)) {
+            Optional<List<Cell>> corners = WallOutline.ring(rect, inner::contains, band, RING_GAP, passages, middle,
+                    cut);
+            if (corners.isPresent()) {
+                WallLayout shape = new WallLayout(corners.get(), inner.towerSpacing, List.of(), List.of(), List.of());
+                shape.gatesOnAxes(requests, middle)
+                        .ifPresent(placed -> candidates.add(build(corners.get(), inner.towerSpacing, placed)));
+            }
+        }
+        candidates.add(best);
+        // The outline with the fewest blocks of its line on high ground, the first outline of the list first.
+        int fewest = Integer.MAX_VALUE;
+        for (WallLayout candidate : candidates) {
+            int high = candidate.highBlocks(ground);
+            if (high < fewest) {
+                fewest = high;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The number of blocks of the line of the palisade on high ground.
+     *
+     * @param ground the ground of the site
+     * @return the number of blocks, 0 or more
+     */
+    public int highBlocks(WallOutline.Ground ground) {
+        if (ground == WallOutline.Ground.FLAT) {
+            return 0;
+        }
+        int high = 0;
+        for (int i = 0; i < ringSize; i++) {
+            Cell cell = ringCell(i);
+            high += ground.high(cell.x(), cell.z()) ? 1 : 0;
+        }
+        return high;
+    }
+
+    /**
+     * The passage of a gate of this wall to a ring: the box of {@link #GATE_PASSAGE} blocks on each side of the axis of
+     * the gate, from the line of the gate to a distance outside it.
+     */
+    private Box passage(Gate gate, int distance) {
+        Cell middle = cell(gate.edge(), along(gate));
+        Side side = gate.side();
+        int endX = middle.x() - side.insideX() * distance;
+        int endZ = middle.z() - side.insideZ() * distance;
+        int halfX = side.insideX() == 0 ? GATE_PASSAGE : 0;
+        int halfZ = side.insideZ() == 0 ? GATE_PASSAGE : 0;
+        return new Box(Math.min(middle.x(), endX) - halfX, Math.min(middle.z(), endZ) - halfZ,
+                Math.max(middle.x(), endX) + halfX, Math.max(middle.z(), endZ) + halfZ);
     }
 
     /**
@@ -518,13 +641,27 @@ public final class WallLayout {
      * @return the inner wall first, then the rings from the inside to the outside: {@code count + 1} walls
      */
     public static List<WallLayout> rings(WallLayout inner, int count, int band) {
+        Box box = inner.outline;
+        return rings(inner, count, band, new Cell((box.minX() + box.maxX()) / 2, (box.minZ() + box.maxZ()) / 2),
+                WallOutline.Ground.FLAT);
+    }
+
+    /**
+     * As {@link #rings(WallLayout, int, int)}, on the ground of the site (see
+     * {@link #ring(WallLayout, int, Cell, WallOutline.Ground)}).
+     *
+     * @param middle the middle of the village: the axes of the gates start there
+     * @param ground the ground of the site
+     */
+    public static List<WallLayout> rings(WallLayout inner, int count, int band, Cell middle,
+            WallOutline.Ground ground) {
         if (count < 0) {
             throw new IllegalArgumentException("The number of rings must be 0 or more: " + count);
         }
         List<WallLayout> walls = new ArrayList<>();
         walls.add(inner);
         for (int i = 0; i < count; i++) {
-            walls.add(ring(walls.get(i), band));
+            walls.add(ring(walls.get(i), band, middle, ground));
         }
         return List.copyOf(walls);
     }
@@ -1228,6 +1365,29 @@ public final class WallLayout {
             }
         }
         return inside;
+    }
+
+    /** True if a block of the line of the palisade is in a box. */
+    public boolean lineIn(Box box) {
+        for (int edge = 0; edge < sides.length; edge++) {
+            Cell start = corners.get(edge);
+            Cell end = corners.get(next(edge));
+            if (Math.max(start.x(), end.x()) >= box.minX() && Math.min(start.x(), end.x()) <= box.maxX()
+                    && Math.max(start.z(), end.z()) >= box.minZ() && Math.min(start.z(), end.z()) <= box.maxZ()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if a block of a box is on the line of the palisade or inside it. */
+    public boolean touches(Box box) {
+        return lineIn(box) || contains(box.minX(), box.minZ());
+    }
+
+    /** True if each block of a box is inside the line of the palisade, with no block on the line. */
+    public boolean holds(Box box) {
+        return !lineIn(box) && contains(box.minX(), box.minZ());
     }
 
     /**
