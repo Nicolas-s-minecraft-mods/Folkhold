@@ -19,6 +19,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
@@ -82,14 +83,56 @@ public final class RaidGameTests {
      * game, after a time that changes with the other work of this executor. The GameTest server ticks faster than real
      * time: a limit in ticks can end before the update, and the bottom of the pit then has no sky light. Thus the
      * checks wait for the light with the real-time limit {@link TestSupport#WORKER_SECONDS} (see
-     * {@link TestSupport#thenWaitForWorker}). The test runs {@link #SPAWN_RUNS} times, one run after the other, and
-     * each run must pass.
+     * {@link TestSupport#thenWaitForWorker}).
+     *
+     * <p>The test has {@link #SPAWN_RUNS} runs, one after the other. Each run builds the scene again from a flat
+     * ground (see {@link #buildSpawnScene}): the light of the pit and of the roof changes again in each run, and the
+     * checks of each run must pass. The log gives the checks and the time of each run until its checks pass.
      */
     @GameTest(template = "arena_large", timeoutTicks = TestSupport.WORKER_TICKS, batch = "raid_spawn",
-            skyAccess = true, attempts = SPAWN_RUNS, requiredSuccesses = SPAWN_RUNS)
+            skyAccess = true)
     public static void spawnPositionsAvoidRiversPitsRoofsAndFloors(GameTestHelper helper) {
         TestSupport.sweep(helper);
+        BlockPos heart = helper.absolutePos(new BlockPos(16, 1, 16));
+        BlockPos pit = helper.absolutePos(new BlockPos(16, -2, 4));
+        GameTestSequence sequence = helper.startSequence();
+        for (int run = 1; run <= SPAWN_RUNS; run++) {
+            int number = run;
+            String[] last = {"no check"};
+            long[] checks = {0L};
+            long[] start = {0L};
+            boolean[] skyAtStart = {false};
+            sequence.thenExecute(() -> {
+                buildSpawnScene(helper);
+                start[0] = System.nanoTime();
+                skyAtStart[0] = helper.getLevel().canSeeSky(pit);
+            });
+            TestSupport.thenWaitForWorker(helper, sequence, () -> {
+                checks[0]++;
+                try {
+                    checkSpawns(helper, heart);
+                    return true;
+                } catch (GameTestAssertException e) {
+                    last[0] = e.getMessage();
+                    return false;
+                }
+            }, () -> "Run " + number + ", the checks of the spawn positions: " + last[0]).thenExecute(() ->
+                    FolkholdWorld.LOGGER.info("Raid spawn checks, run {} of {}: pass after {} checks (1 for each"
+                            + " tick) and {} ms, sky light at the bottom of the pit at the start: {}, last failed"
+                            + " check: {}", number, SPAWN_RUNS, checks[0], (System.nanoTime() - start[0]) / 1_000_000L,
+                            skyAtStart[0], last[0]));
+        }
+        sequence.thenSucceed();
+    }
+
+    /**
+     * Builds the scene of {@link #spawnPositionsAvoidRiversPitsRoofsAndFloors} from a flat ground of grass on stone:
+     * a river, a pit, a roof and a floor of planks.
+     */
+    private static void buildSpawnScene(GameTestHelper helper) {
+        fill(helper, new BlockPos(0, -2, 0), new BlockPos(SIZE - 1, -1, SIZE - 1), Blocks.STONE.defaultBlockState());
         buildGrass(helper);
+        fill(helper, new BlockPos(0, 3, 0), new BlockPos(SIZE - 1, 3, SIZE - 1), Blocks.AIR.defaultBlockState());
         // A river: x 26 to 28, 2 blocks deep. The floor at z 0 and z 31 keeps the water in the arena.
         fill(helper, new BlockPos(26, -1, 1), new BlockPos(28, 0, SIZE - 2), Blocks.WATER.defaultBlockState());
         // A pit 3 blocks deep: x 15 to 17, z 3 to 5.
@@ -98,28 +141,6 @@ public final class RaidGameTests {
         fill(helper, new BlockPos(3, 3, 14), new BlockPos(6, 3, 18), Blocks.OAK_PLANKS.defaultBlockState());
         // A floor of planks: x 14 to 18, z 26 to 29.
         fill(helper, new BlockPos(14, 0, 26), new BlockPos(18, 0, 29), Blocks.OAK_PLANKS.defaultBlockState());
-        BlockPos heart = helper.absolutePos(new BlockPos(16, 1, 16));
-
-        // The light engine updates the light of the new blocks in its own thread, after a time that changes: the
-        // checks run at each tick until they pass, with a real-time limit.
-        // The log gives the checks and the time until the checks pass: the light of the pit is not ready at the start.
-        String[] last = {"no check"};
-        long[] checks = {0L};
-        long start = System.nanoTime();
-        boolean skyAtStart = helper.getLevel().canSeeSky(helper.absolutePos(new BlockPos(16, -2, 4)));
-        TestSupport.thenWaitForWorker(helper, helper.startSequence(), () -> {
-            checks[0]++;
-            try {
-                checkSpawns(helper, heart);
-                return true;
-            } catch (GameTestAssertException e) {
-                last[0] = e.getMessage();
-                return false;
-            }
-        }, () -> "The checks of the spawn positions: " + last[0]).thenExecute(() -> FolkholdWorld.LOGGER.info(
-                "Raid spawn checks: pass after {} checks (1 for each tick) and {} ms, sky light at the bottom of the pit at the start: {},"
-                        + " last failed check: {}", checks[0], (System.nanoTime() - start) / 1_000_000L, skyAtStart,
-                last[0])).thenSucceed();
     }
 
     /** The checks of {@link #spawnPositionsAvoidRiversPitsRoofsAndFloors}, on the scene of the test. */
