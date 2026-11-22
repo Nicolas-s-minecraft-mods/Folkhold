@@ -115,7 +115,7 @@ public final class TerrainPiece extends StructurePiece implements PieceBeardifie
      * True for a block of the terrain: dirt, grass, stone, sand, gravel, clay, terracotta or snow. The blocks of the
      * pieces are not blocks of the terrain.
      */
-    static boolean isTerrain(BlockState state) {
+    public static boolean isTerrain(BlockState state) {
         return state.is(BlockTags.DIRT) || state.is(BlockTags.BASE_STONE_OVERWORLD) || state.is(BlockTags.SAND)
                 || state.is(Blocks.GRAVEL) || state.is(Blocks.CLAY) || state.is(BlockTags.TERRACOTTA)
                 || state.is(BlockTags.SNOW);
@@ -125,7 +125,7 @@ public final class TerrainPiece extends StructurePiece implements PieceBeardifie
      * True for a plant with no fluid: a flower, a sapling, or another block that a block replaces (grass, a snow
      * layer).
      */
-    static boolean isPlant(BlockState state) {
+    public static boolean isPlant(BlockState state) {
         boolean plant = state.is(BlockTags.FLOWERS) || state.is(BlockTags.SAPLINGS)
                 || (!state.isAir() && state.canBeReplaced());
         return plant && state.getFluidState().isEmpty();

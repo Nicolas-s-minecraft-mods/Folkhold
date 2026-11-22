@@ -38,6 +38,7 @@ import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.Handymen;
+import io.github.nicolasgoyon.folkhold.world.village.RingWall;
 import io.github.nicolasgoyon.folkhold.world.village.StoneWall;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBraziers;
@@ -160,6 +161,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String LAST_HOME_TAG = "LastHomeTick";
     private static final String GROWN_HOMES_TAG = "GrownHomes";
     private static final String STONE_WALL_TAG = "StoneWall";
+    private static final String RING_WALL_TAG = "RingWall";
 
     /** Name of the village, or null before the village has a faction. */
     @Nullable
@@ -212,6 +214,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private final List<VillageReference.Piece> grownHomes = new ArrayList<>();
     /** The parts of the first wall in stone (see {@link StoneWall}). */
     private final StoneWall.State stoneWall = new StoneWall.State();
+    /** The new rings of the village at runtime (see {@link RingWall}). */
+    private final RingWall.State ringWall = new RingWall.State();
     /** The game time of the start of the last new home of the growth, or -1 with no such home. */
     private long lastHomeTick = -1;
     /** The fields and the mills that the builders of the village started outside the palisade (see {@link VillageLand}). */
@@ -1079,8 +1083,31 @@ public class VillageHeartBlockEntity extends BlockEntity {
             repairReferenceSearched = true;
             repairReference = VillageReference.find(serverLevel, worldPosition).orElse(null);
         }
+        Optional<VillageReference> rings = ringWall.reference(serverLevel);
         return Optional.ofNullable(repairReference)
-                .map(reference -> stoneWall.apply(reference.withReplaced(grownHomes)));
+                .map(reference -> stoneWall.apply(reference.withReplaced(grownHomes)))
+                .map(reference -> rings.map(reference::with).orElse(reference));
+    }
+
+    /**
+     * The new rings of the village at runtime: the pieces of the planned rings and the parts with a site (see
+     * {@link RingWall}). The reference of the repairs has the parts with a site (see {@link #repairReference}).
+     */
+    public RingWall.State ringWall() {
+        return ringWall;
+    }
+
+    /**
+     * The parts of the new rings changed: the zones of the wall come again from the reference, and the area of the
+     * village follows the reference.
+     *
+     * @param serverLevel the level of the heart
+     */
+    public void onRingWallChanged(ServerLevel serverLevel) {
+        wallZones = null;
+        tradePlaceCache = null;
+        VillageHearts.register(serverLevel, worldPosition, repairReference(serverLevel).flatMap(VillageReference::area));
+        setChanged();
     }
 
     /**
@@ -1618,7 +1645,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
             if (heart.alertState == AlertState.CALM && !heart.rescues.isActive() && time % repairTicks < CHECK_INTERVAL
                     && VillageRepairs.check(serverLevel, heart).isEmpty()
                     && VillageGrowth.check(serverLevel, heart).isEmpty()
-                    && StoneWall.check(serverLevel, heart).isEmpty()) {
+                    && StoneWall.check(serverLevel, heart).isEmpty()
+                    && RingWall.check(serverLevel, heart).isEmpty()) {
                 VillageLand.check(serverLevel, heart);
             }
         }
@@ -1704,6 +1732,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (!stoneWall.isEmpty()) {
             tag.put(STONE_WALL_TAG, stoneWall.save());
         }
+        if (!ringWall.isEmpty()) {
+            tag.put(RING_WALL_TAG, ringWall.save(level instanceof ServerLevel serverLevel ? serverLevel : null));
+        }
         if (!grownHomes.isEmpty()) {
             tag.put(GROWN_HOMES_TAG, VillageLand.save(grownHomes));
         }
@@ -1748,5 +1779,6 @@ public class VillageHeartBlockEntity extends BlockEntity {
         grownHomes.clear();
         grownHomes.addAll(VillageLand.load(tag.getList(GROWN_HOMES_TAG, Tag.TAG_COMPOUND)));
         stoneWall.load(registries.lookupOrThrow(Registries.BLOCK), tag.getCompound(STONE_WALL_TAG));
+        ringWall.load(tag.getCompound(RING_WALL_TAG));
     }
 }
