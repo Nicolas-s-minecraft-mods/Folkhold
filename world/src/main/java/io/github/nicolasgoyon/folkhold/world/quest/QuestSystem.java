@@ -105,7 +105,7 @@ public final class QuestSystem {
         ItemCatalog catalog = EconomyData.catalog();
         int population = settlement.economy().population();
         Map<String, Integer> needs = TradeMatcher.needs(settlement.economy().stock(), population, catalog,
-                VillageTrade.usedItems(settlement, catalog));
+                VillageTrade.usedItems(settlement));
         Set<String> offered = offers.stream().filter(quest -> quest.kind() == QuestKind.DELIVERY)
                 .map(Quest::target).collect(Collectors.toSet());
         List<Quest> created = QuestGenerator.deliveries(settlement.id(), settlement.factionId(), needs,

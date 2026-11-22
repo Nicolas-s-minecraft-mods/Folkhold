@@ -325,7 +325,6 @@ public final class SettlementData extends SavedData {
         CompoundTag stock = new CompoundTag();
         economy.stock().asMap().forEach(stock::putInt);
         tag.put("Stock", stock);
-        tag.putDouble("FoodCovered", economy.foodCovered());
         tag.putDouble("JobsWorking", economy.jobsWorking());
         tag.putInt("Cycles", economy.cycles());
         return tag;
@@ -345,6 +344,10 @@ public final class SettlementData extends SavedData {
         return posts;
     }
 
+    /**
+     * Reads the economy of a settlement. The load ignores the keys that it does not know, for example the key
+     * {@code FoodCovered} of the saves of an older version: the economy has no food need.
+     */
     private static void loadEconomy(EconomyState economy, CompoundTag tag) {
         economy.setInitialized(tag.getBoolean("Initialized"));
         economy.setPopulation(tag.getInt("Population"));
@@ -358,9 +361,7 @@ public final class SettlementData extends SavedData {
         for (String item : stock.getAllKeys()) {
             economy.stock().set(item, stock.getInt(item));
         }
-        double food = tag.contains("FoodCovered") ? tag.getDouble("FoodCovered") : 1.0;
-        double jobsWorking = tag.contains("JobsWorking") ? tag.getDouble("JobsWorking") : 1.0;
-        economy.setLastCycle(food, jobsWorking);
+        economy.setLastCycle(tag.contains("JobsWorking") ? tag.getDouble("JobsWorking") : 1.0);
         economy.setCycles(tag.getInt("Cycles"));
     }
 }

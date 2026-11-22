@@ -104,7 +104,6 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue RAID_HOLD_REPUTATION;
     public static final ModConfigSpec.IntValue RAID_FALL_REPUTATION;
     public static final ModConfigSpec.IntValue RAID_FALL_COOLDOWN_TICKS;
-    public static final ModConfigSpec.IntValue RAID_FALL_FOOD_FLOOR_DAYS;
 
     public static final ModConfigSpec.IntValue DISCOVERY_RADIUS;
     public static final ModConfigSpec.IntValue ADMIN_DISCOVERY_RADIUS;
@@ -116,12 +115,10 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue LEVEL_MAX_GAIN_PER_CYCLE;
     public static final ModConfigSpec.IntValue LEVEL_CAPTAIN_DEATH_LOSS;
     public static final ModConfigSpec.IntValue ECONOMY_WORKERS_PER_JOB;
-    public static final ModConfigSpec.IntValue ECONOMY_FOOD_PER_INHABITANT;
     public static final ModConfigSpec.DoubleValue ECONOMY_DECAY_RATE;
     public static final ModConfigSpec.DoubleValue ECONOMY_ELASTICITY;
     public static final ModConfigSpec.IntValue ECONOMY_START_TREASURY;
     public static final ModConfigSpec.IntValue ECONOMY_TREASURY_MINIMUM;
-    public static final ModConfigSpec.IntValue ECONOMY_FOOD_SHORTAGE_LOSS;
 
     public static final ModConfigSpec.IntValue GROUP_BLOCKS_PER_TICK;
     public static final ModConfigSpec.IntValue GROUP_MAX_GROUPS;
@@ -655,12 +652,6 @@ public final class WorldConfig {
                         "A sleep or /time set does not end it. The helpers still get the reputation.")
                 .translation(KEY_PREFIX + "raidFallCooldownTicks")
                 .defineInRange("fallCooldownTicks", 24000, 0, 2400000);
-        RAID_FALL_FOOD_FLOOR_DAYS = builder
-                .comment("Food that the stock loss of a fall does not remove, in economy cycles of the food need of the",
-                        "population (one cycle is one game day with the default simulation interval; 0: no floor).",
-                        "The other items lose the full part.")
-                .translation(KEY_PREFIX + "raidFallFoodFloorDays")
-                .defineInRange("fallFoodFloorDays", 3, 0, 100);
         builder.pop();
 
         builder.comment("Abstract simulation of the settlements.")
@@ -685,7 +676,7 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "simulationIntervalTicks")
                 .defineInRange("intervalTicks", 2400, 20, 72000);
         SIMULATION_CYCLE_LENGTH = builder
-                .comment("Abstract ticks in one cycle. Production and consumption run once each cycle.",
+                .comment("Abstract ticks in one cycle. The production of the jobs runs once each cycle.",
                         "With the default interval, 10 abstract ticks are one game day.")
                 .translation(KEY_PREFIX + "simulationCycleLength")
                 .defineInRange("cycleLength", 10, 1, 1000);
@@ -717,10 +708,6 @@ public final class WorldConfig {
                 .comment("Inhabitants for one active job in the economy: each cycle runs at most population / workersPerJob job slots. In a village with job posts, the household of a post shows the job, and this value does not change the households.")
                 .translation(KEY_PREFIX + "economyWorkersPerJob")
                 .defineInRange("workersPerJob", 2, 1, 20);
-        ECONOMY_FOOD_PER_INHABITANT = builder
-                .comment("Food points that one inhabitant eats in one cycle (bread: 5 points).")
-                .translation(KEY_PREFIX + "economyFoodPerInhabitant")
-                .defineInRange("foodPerInhabitant", 4, 0, 100);
         ECONOMY_DECAY_RATE = builder
                 .comment("Share of each stock that rots or wears in one cycle.")
                 .translation(KEY_PREFIX + "economyDecayRate")
@@ -737,10 +724,6 @@ public final class WorldConfig {
                 .comment("A faction with fewer emeralds in its treasury gives less prosperity to its settlements.")
                 .translation(KEY_PREFIX + "economyTreasuryMinimum")
                 .defineInRange("treasuryMinimum", 100, 0, 1_000_000);
-        ECONOMY_FOOD_SHORTAGE_LOSS = builder
-                .comment("Experience that a settlement loses in a cycle with a food shortage (less than half of its need).")
-                .translation(KEY_PREFIX + "economyFoodShortageLoss")
-                .defineInRange("foodShortageLoss", 10, 0, 10000);
         builder.pop();
 
         builder.comment("Mobile groups: caravans and traveling merchants.")
@@ -1050,8 +1033,8 @@ public final class WorldConfig {
                         "They also build the buildings of the level and the first market on the free plots.",
                         "The village looks for a free plot after the check of the repairs.",
                         "False (default): the villages take no new plot for a new home, a building of the level or a",
-                        "first market. The first posts of a village with no food post or no post that trades, and a",
-                        "broken market on its plot, still come back.")
+                        "first market. The first post of a village with no post that trades, and a broken market on",
+                        "its plot, still come back.")
                 .translation(KEY_PREFIX + "constructionGrowth")
                 .define("growth", false);
         CONSTRUCTION_GROWTH_SURPLUS_DAYS = builder

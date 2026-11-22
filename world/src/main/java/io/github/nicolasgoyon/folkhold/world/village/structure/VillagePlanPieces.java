@@ -73,7 +73,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       (see {@link Builder#cliff}). The house stands at the back of the plot, against the rock face, and its door at
  *       the level of the street. It has no terrain adaptation ({@link CavePiece}): the rock behind it and beside it
  *       stays. With no cliff house that fits the plot, the plot gets a home of the pool {@code houses}.</li>
- *   <li>The job posts come first, in the order of the posts: the plot of the first food job gets the first job. Then
+ *   <li>The job posts come first, in the order of the posts: the plot of the first job post gets the first job. Then
  *       come the bank and the buildings of the level, then the homes. The homes give the home beds of the maximum
  *       population of the level: a home with no bed comes only on top of these beds.</li>
  *   <li>The job of each post comes from {@link JobAssignment#next} with the jobs of the earlier posts, as the growth
@@ -382,8 +382,8 @@ final class VillagePlanPieces {
         }
 
         /**
-         * The order of the placement of the plots: the job posts in the order of the posts (the plot of the first food
-         * job first), then the other plots with a building, then the homes, in the order of the plan.
+         * The order of the placement of the plots: the job posts in the order of the posts (the plot of the first job
+         * post first), then the other plots with a building, then the homes, in the order of the plan.
          */
         private static List<Integer> order(PlotUses.Result uses) {
             List<Integer> order = new ArrayList<>();
@@ -480,14 +480,12 @@ final class VillagePlanPieces {
         private boolean post(Site site, long seed, RandomSource random) {
             for (int i = 0; i < VillageGrowth.WORKSHOP_JOBS; i++) {
                 long postSeed = JobAssignment.postSeed(seed, postJobs.size());
-                Optional<String> chosen = JobAssignment.next(postJobs, eligible, EconomyData.catalog(),
-                        Merchants::trades, postSeed);
+                Optional<String> chosen = JobAssignment.next(postJobs, eligible, Merchants::trades, postSeed);
                 if (chosen.isPresent() && sameJobOnly(List.of(chosen.get()))) {
                     String same = chosen.get();
                     List<Job> others = eligible.stream().filter(other -> !other.id().equals(same)).toList();
                     if (!others.isEmpty()) {
-                        chosen = JobAssignment.next(postJobs, others, EconomyData.catalog(), Merchants::trades,
-                                postSeed);
+                        chosen = JobAssignment.next(postJobs, others, Merchants::trades, postSeed);
                     }
                 }
                 Optional<String> job = chosen;

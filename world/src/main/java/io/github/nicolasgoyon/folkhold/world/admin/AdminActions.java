@@ -339,8 +339,6 @@ public final class AdminActions {
             Map<String, Integer> jobs = new TreeMap<>();
             economy.jobs().forEach(job -> jobs.merge(job, 1, Integer::sum));
             List<Row> economyRows = new ArrayList<>();
-            int food = (int) Math.round(economy.foodCovered() * 100);
-            economyRows.add(Row.bar(label("food"), Component.translatable(KEY + "percent", food), food, 100));
             economyRows.add(new Row(label("jobs_working"), Component.translatable(KEY + "jobs_value",
                     Math.round(economy.jobsWorking() * 100), jobs.size())));
             economyRows.add(new Row(label("treasury"),

@@ -190,8 +190,7 @@ public final class SettlementCommands {
         source.sendSuccess(() -> Component.translatable(KEY + "settlement.info.position", settlement.x(),
                 settlement.z(), settlement.biome(), data.claims().chunkCount(settlement.id())), false);
         source.sendSuccess(() -> Component.translatable(KEY + "settlement.info.economy", economy.population(),
-                Math.round(economy.foodCovered() * 100), Math.round(economy.jobsWorking() * 100),
-                data.treasury(settlement.factionId())), false);
+                Math.round(economy.jobsWorking() * 100), data.treasury(settlement.factionId())), false);
         Map<String, Integer> jobs = new TreeMap<>();
         economy.jobs().forEach(job -> jobs.merge(job, 1, Integer::sum));
         source.sendSuccess(() -> Component.translatable(KEY + "settlement.info.jobs",

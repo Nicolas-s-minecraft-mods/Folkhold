@@ -16,7 +16,6 @@ import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
-import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import java.util.ArrayList;
@@ -47,15 +46,14 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  *   <li>At each cycle: the job slots follow the level (more slots, new jobs), then the settlement runs one
  *       economic cycle (see {@link Economy}). Only the active jobs work: the jobs of the active job posts of a scanned
  *       village, and the job slots of a village with no scan (see {@link #activeJobIds}).</li>
- *   <li>A food shortage removes experience.</li>
- *   <li>The prosperity of a settlement comes from its food, its jobs and the treasury of its faction.</li>
+ *   <li>The prosperity of a settlement comes from its jobs and the treasury of its faction.</li>
  * </ul>
  */
 public final class Economies {
     /** Share of the maximum population at the start. */
     private static final double START_POPULATION = 0.6;
-    /** A settlement with less food than this share has a food shortage. */
-    private static final double SHORTAGE = 0.5;
+    /** Share of the working jobs in the prosperity. The treasury of the faction gives the rest. */
+    static final double JOBS_SHARE = 0.6;
 
     private Economies() {
     }
@@ -63,8 +61,7 @@ public final class Economies {
     /** The economy settings from the server configuration. */
     public static EconomySettings settings() {
         EconomySettings defaults = EconomySettings.DEFAULT;
-        return new EconomySettings(WorldConfig.ECONOMY_WORKERS_PER_JOB.get(),
-                WorldConfig.ECONOMY_FOOD_PER_INHABITANT.get(), WorldConfig.ECONOMY_DECAY_RATE.get(),
+        return new EconomySettings(WorldConfig.ECONOMY_WORKERS_PER_JOB.get(), WorldConfig.ECONOMY_DECAY_RATE.get(),
                 defaults.growthRate(), WorldConfig.ECONOMY_ELASTICITY.get(), defaults.minPriceFactor(),
                 defaults.maxPriceFactor(), defaults.sellMarkup(), defaults.buyMarkdown());
     }
@@ -84,8 +81,8 @@ public final class Economies {
     }
 
     /**
-     * Sets the population, the jobs and the start stock of a settlement: the outputs of its jobs, food, and the
-     * building materials of {@link StartMaterials}.
+     * Sets the population, the jobs and the start stock of a settlement: the outputs and the inputs of its jobs, and
+     * the building materials of {@link StartMaterials}.
      *
      * @param server     the server
      * @param settlement the settlement
@@ -99,8 +96,7 @@ public final class Economies {
         EconomyState state = settlement.economy();
         state.setPopulation(Math.max(2, (int) Math.round(traits.maxPopulation() * START_POPULATION)));
         updateJobs(server, settlement);
-        Economy.seedStock(state, jobs(settlement), 2 + settlement.level(), traits.stockCapacity(),
-                EconomyData.catalog(), settings());
+        Economy.seedStock(state, jobs(settlement), 2 + settlement.level(), traits.stockCapacity());
         StartMaterials.addTo(server, settlement, traits.stockCapacity());
         state.setInitialized(true);
         SettlementData.get(server).setDirty();
@@ -118,17 +114,14 @@ public final class Economies {
         updateJobs(server, settlement);
         LevelTraits traits = LevelTables.get().traits(settlement.level());
         CycleReport report = Economy.runCycle(settlement.economy(), activeJobs(settlement), traits.maxPopulation(),
-                traits.stockCapacity(), EconomyData.catalog(), settings(), random);
+                traits.stockCapacity(), settings(), random);
         SettlementData.get(server).setDirty();
-        if (report.foodCovered() < SHORTAGE) {
-            SettlementLevels.addExperience(server, settlement, -WorldConfig.ECONOMY_FOOD_SHORTAGE_LOSS.get());
-        }
         return report;
     }
 
     /**
-     * The prosperity of a settlement (0 to 1): 50 % food, 30 % working jobs, 20 % faction treasury. A settlement with
-     * job slots and no active job (for example no active job post) gets no share for the jobs.
+     * The prosperity of a settlement (0 to 1): 60 % working jobs, 40 % faction treasury. A settlement with job slots
+     * and no active job (for example no active job post) gets no share for the jobs.
      */
     public static double prosperity(MinecraftServer server, Settlement settlement) {
         EconomyState state = settlement.economy();
@@ -138,7 +131,7 @@ public final class Economies {
         long treasury = SettlementData.get(server).treasury(settlement.factionId());
         double treasuryScore = treasury >= WorldConfig.ECONOMY_TREASURY_MINIMUM.get() ? 1.0 : 0.0;
         double jobsScore = !state.jobs().isEmpty() && activeJobIds(settlement).isEmpty() ? 0.0 : state.jobsWorking();
-        return 0.5 * state.foodCovered() + 0.3 * jobsScore + 0.2 * treasuryScore;
+        return JOBS_SHARE * jobsScore + (1.0 - JOBS_SHARE) * treasuryScore;
     }
 
     /**
@@ -150,8 +143,7 @@ public final class Economies {
         int slots = LevelTables.get().traits(settlement.level()).jobSlots();
         List<Job> eligible = eligibleJobs(server, settlement);
         List<String> current = settlement.economy().jobs();
-        List<String> updated = JobAssignment.assign(current, eligible, slots, EconomyData.catalog(),
-                Settlements.seed(settlement.id()));
+        List<String> updated = JobAssignment.assign(current, eligible, slots, Settlements.seed(settlement.id()));
         if (!updated.equals(current)) {
             settlement.economy().setJobs(updated);
         }
@@ -265,17 +257,6 @@ public final class Economies {
         }
         Job job = EconomyData.jobs().get(jobId);
         return job != null && !matchesBiome(job, settlement.biome(), biomeHolder(server, settlement.biome()));
-    }
-
-    /**
-     * True if a job produces food (see {@link Job#producesFood}).
-     *
-     * @param jobId the job id
-     * @return false for a job id with no definition
-     */
-    public static boolean producesFood(String jobId) {
-        Job job = EconomyData.jobs().get(jobId);
-        return job != null && job.producesFood(EconomyData.catalog());
     }
 
     /**

@@ -31,8 +31,7 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  *
  * <ul>
  *   <li>{@code data/<namespace>/folkhold/jobs/<id>.json}: one job. The job id is {@code <namespace>:<id>}.</li>
- *   <li>{@code data/folkhold_world/folkhold/items.json}: the price, the food points and the stock target of each
- *       item.</li>
+ *   <li>{@code data/folkhold_world/folkhold/items.json}: the price and the stock target of each item.</li>
  * </ul>
  *
  * <p>Job format:
@@ -52,7 +51,8 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
  * {@link io.github.nicolasgoyon.folkhold.world.village.VillageFolk}). With no profession, the inhabitant has the
  * inhabitant profession. A job works in a scanned village only at an active job post (see
  * {@link Economies#activeJobIds}). An input with a chance below 1 is a tool: the job needs it and
- * uses it up sometimes. Items format: {@code {"minecraft:bread": {"price": 1.0, "food": 5, "target": 32}, ...}}.
+ * uses it up sometimes. Items format: {@code {"minecraft:bread": {"price": 1.0, "target": 32}, ...}}. The load
+ * ignores the other fields of an item.
  *
  * <p>A file that is not valid is ignored, with an error in the log.
  */
@@ -180,7 +180,7 @@ public final class EconomyData extends SimpleJsonResourceReloadListener {
         for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
             JsonObject item = entry.getValue().getAsJsonObject();
             items.put(entry.getKey(), new ItemInfo(entry.getKey(), GsonHelper.getAsDouble(item, "price"),
-                    GsonHelper.getAsInt(item, "food", 0), GsonHelper.getAsInt(item, "target", 32)));
+                    GsonHelper.getAsInt(item, "target", 32)));
         }
         return new ItemCatalog(items);
     }

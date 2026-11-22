@@ -63,7 +63,7 @@ import net.minecraft.world.item.Item;
  *       the state of the new home (see {@link VillageGrowthInfo}).</li>
  *   <li><b>garrison</b>: for each role, the units alive and dead, and the configured count (segments).</li>
  *   <li><b>economy</b>: the market (state, hours, market day, see {@link VillageLife}), population (bar), housing
- *       (bar), food, treasury of the faction, and the main stocks with their price.</li>
+ *       (bar), treasury of the faction, and the main stocks with their price.</li>
  *   <li><b>jobs</b>: the active jobs and the job posts (see {@link VillageLife}).</li>
  *   <li><b>territory</b>: number of claimed territory chunks.</li>
  * </ul>
@@ -196,7 +196,7 @@ public final class VillageInfo {
         if (EconomyData.isActive()) {
             EconomyState economy = settlement.economy();
             Map<String, Integer> found = TradeMatcher.needs(economy.stock(), economy.population(),
-                    EconomyData.catalog(), VillageTrade.usedItems(settlement, EconomyData.catalog()));
+                    EconomyData.catalog(), VillageTrade.usedItems(settlement));
             needs = found.entrySet().stream()
                     .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                     .limit(NEED_ITEMS)
@@ -308,7 +308,6 @@ public final class VillageInfo {
         if (heart.rescues().waitsForLadders()) {
             rows.add(row("rescue", Component.translatable(KEY + "rescue.no_ladders").withColor(TEXT_BAD)));
         }
-        rows.add(row("food", Component.translatable(KEY + "percent", Math.round(economy.foodCovered() * 100))));
         rows.add(row("treasury", Component.translatable(KEY + "emeralds",
                 SettlementData.get(server).treasury(settlement.factionId()))));
         economy.stock().asMap().entrySet().stream()
