@@ -52,9 +52,9 @@ class PayloadCodecsTest {
     void adminList() {
         AdminListPayload payload = new AdminListPayload(List.of(
                 new AdminListPayload.Summary("id-1", "Northam", Component.literal("Ash"), 7,
-                        Component.literal("Town"), true, 100, -200, 15, 320, true),
+                        Component.literal("Town"), true, 100, -200, 15, 320, true, "faction_1", 0x3C5A9A, "valeholm"),
                 new AdminListPayload.Summary("id-2", "Ruinton", Component.literal("Oak"), 1,
-                        Component.literal("Hamlet"), false, -5, 5, 0, 0, false)));
+                        Component.literal("Hamlet"), false, -5, 5, 0, 0, false, "faction_2", 0x9A3C3C, "")));
         assertEquals(payload, roundTrip(AdminListPayload.STREAM_CODEC, payload));
     }
 
