@@ -39,6 +39,7 @@ import io.github.nicolasgoyon.folkhold.world.notice.Notices;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerPatrols;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
 import io.github.nicolasgoyon.folkhold.world.quest.Escorts;
+import io.github.nicolasgoyon.folkhold.world.quest.Hunts;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestDefinitions;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestSystem;
@@ -228,6 +229,7 @@ public final class FolkholdWorld {
         QuestBoards.addAcceptListener(Escorts::onAccepted);
         QuestBoards.addEndListener(Escorts::onEnded);
         QuestBoards.addEndListener(QuestBoards::applyFailurePenalty);
+        NeoForge.EVENT_BUS.addListener(Hunts::onDeath);
         NeoForge.EVENT_BUS.addListener(Escorts::onServerTick);
         NeoForge.EVENT_BUS.addListener(Escorts::onServerStopped);
         SettlementLevels.addProsperitySource(Economies::prosperity);

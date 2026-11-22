@@ -153,6 +153,9 @@ public final class QuestData extends SavedData {
             if (quest.failureReputation() > 0) {
                 entry.putInt("FailureReputation", quest.failureReputation());
             }
+            if (quest.progress() > 0) {
+                entry.putInt("Progress", quest.progress());
+            }
             if (!quest.definitionId().isEmpty()) {
                 entry.putString("Definition", quest.definitionId());
             }
@@ -221,6 +224,7 @@ public final class QuestData extends SavedData {
                     loadItems(entry.getList("RewardItems", Tag.TAG_COMPOUND)));
             quest.setRisk(loadItems(entry.getList("StartItems", Tag.TAG_COMPOUND)),
                     Math.max(0, entry.getInt("FailureReputation")));
+            quest.setProgress(entry.getInt("Progress"));
             if (data.quests.byId(quest.id()).isEmpty()) {
                 data.quests.add(quest);
             }

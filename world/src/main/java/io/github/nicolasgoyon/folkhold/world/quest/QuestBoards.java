@@ -69,6 +69,8 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 public final class QuestBoards {
     /** The item of the icon of an escort. */
     private static final String ESCORT_ICON = "minecraft:chest";
+    /** The item of the icon of a hunt. */
+    private static final String HUNT_ICON = "minecraft:iron_sword";
     /** Colors of the texts on the parchment of the screen. */
     private static final int INK_GOOD = 0x3F6B28;
     private static final int INK_BAD = 0x8E2F22;
@@ -495,6 +497,13 @@ public final class QuestBoards {
                         Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
                                 itemName(quest.target())),
                         quest.count(), secondsLeft, Optional.empty(), village, QuestLogPayload.NO_ENTITY));
+            } else if (quest.kind() == QuestKind.HUNT) {
+                Optional<BlockPos> village = SettlementData.get(server).registry().byId(quest.settlementId())
+                        .map(settlement -> Settlements.position(server, settlement));
+                entries.add(new QuestLogPayload.Entry(quest.id(), HUNT_ICON,
+                        Component.translatable("quest.folkhold_world.active.hunt", quest.progress(), quest.count(),
+                                villageName(server, quest.settlementId())),
+                        0, secondsLeft, Optional.empty(), village, QuestLogPayload.NO_ENTITY));
             } else {
                 String destination = Escorts.caravan(server, quest).map(MobileGroup::destinationId).orElse("");
                 Optional<Entity> merchant = Escorts.merchantEntity(server, quest);
@@ -554,6 +563,10 @@ public final class QuestBoards {
             int have = Deliveries.count(player.getInventory(), ItemIds.item(quest.target()).orElse(Items.AIR));
             progress = Component.translatable("quest.folkhold_world.have", have, quest.count())
                     .withColor(have >= quest.count() ? INK_GOOD : have > 0 ? INK_BAD : INK_MUTED);
+        } else if (quest.kind() == QuestKind.HUNT) {
+            icon = HUNT_ICON;
+            info = Component.translatable("quest.folkhold_world.info.hunt", kind, WorldConfig.QUEST_HUNT_RADIUS.get(),
+                    minutes);
         } else {
             icon = ESCORT_ICON;
             long blocks = Escorts.caravan(server, quest).map(group -> Math.round(group.route().length())).orElse(0L);
@@ -613,6 +626,11 @@ public final class QuestBoards {
                             itemName(quest.target())),
                     info, secondsLeft, action, blocked, ready);
         }
+        if (quest.kind() == QuestKind.HUNT) {
+            info.append(UiStrings.separator()).append(Component.translatable("quest.folkhold_world.active.progress",
+                    Math.min(quest.progress(), quest.count()), quest.count()).withColor(0xA89F8C));
+            return new Active(quest.id(), HUNT_ICON, name(server, quest), info, secondsLeft, action, blocked, false);
+        }
         Optional<MobileGroup> caravan = Escorts.caravan(server, quest);
         caravan.map(QuestBoards::caravanState).ifPresent(state -> info.append(UiStrings.separator()).append(state));
         String destination = caravan.map(MobileGroup::destinationId).orElse("");
@@ -642,6 +660,10 @@ public final class QuestBoards {
     public static Component name(MinecraftServer server, Quest quest) {
         if (quest.kind() == QuestKind.DELIVERY) {
             return Component.translatable("quest.folkhold_world.delivery", quest.count(), itemName(quest.target()));
+        }
+        if (quest.kind() == QuestKind.HUNT) {
+            return Component.translatable("quest.folkhold_world.hunt", quest.count(),
+                    villageName(server, quest.settlementId()));
         }
         String destination = MobileGroupData.get(server).groups().byId(quest.target())
                 .map(MobileGroup::destinationId).orElse("");

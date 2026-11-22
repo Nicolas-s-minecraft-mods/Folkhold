@@ -44,12 +44,15 @@ public final class QuestDefinitionGameTests {
     private QuestDefinitionGameTests() {
     }
 
-    /** An active village of the level 5 with a smelter and no stock: it needs the 4 inputs of the smelter. */
+    /**
+     * An active village of the level 15 with a smelter and no stock: it needs the 4 inputs of the smelter. Its 4
+     * offers give 2 deliveries at most (the share of one need, see {@code quests.maxNeedShare}).
+     */
     private static Settlement smelterVillage(MinecraftServer server, int z) {
         String faction = FactionData.get(server).factions().get(0).id();
         Settlement settlement = new Settlement(UUID.randomUUID().toString(), FAR_X >> 4, z >> 4, faction,
                 "Test definitions", FAR_X, z);
-        settlement.setProgress(5, 0);
+        settlement.setProgress(15, 0);
         settlement.setBiome("minecraft:plains");
         settlement.economy().setPopulation(10);
         settlement.economy().setJobs(List.of("folkhold_world:smelter"));
@@ -102,8 +105,14 @@ public final class QuestDefinitionGameTests {
             helper.assertTrue(QuestSystem.settings(definition).equals(QuestSystem.settings()),
                     "The settings of " + id + " must be the settings of the config");
         });
+        QuestDefinition hunt = all.get("folkhold_world:monster_hunt");
+        helper.assertTrue(hunt != null && hunt.need() == QuestNeed.MONSTERS && hunt.minLevel() == 3
+                && hunt.values().rewardFactor().orElse(0) == 1.0,
+                "The mod must give the hunt of the monsters from the level 3, 1 emerald for each monster: " + hunt);
+        helper.assertTrue(QuestDefinitions.matching(QuestNeed.MONSTERS, 2).isEmpty(),
+                "A village below the level 3 must offer no hunt");
         for (QuestNeed need : QuestNeed.values()) {
-            for (int level : List.of(1, 10, 20)) {
+            for (int level : List.of(3, 10, 20)) {
                 helper.assertTrue(QuestDefinitions.matching(need, level).size() == 1,
                         "One definition must make the offers of " + need + " at the level " + level);
             }
@@ -113,7 +122,7 @@ public final class QuestDefinitionGameTests {
 
     /**
      * A test data pack replaces the delivery of the inputs of the jobs (a reward factor of 10, 3 items at most) and
-     * adds a delivery of its own. The village of the level 5 has 2 offers: the definitions make one offer each in
+     * adds a delivery of its own. The village of the level 15 has 2 deliveries: the definitions make one offer each in
      * turn, in the order of the ids. Each quest keeps the id of its definition.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_definitions_pack")

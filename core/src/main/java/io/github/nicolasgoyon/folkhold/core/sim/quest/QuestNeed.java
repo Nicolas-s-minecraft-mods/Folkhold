@@ -10,7 +10,9 @@ public enum QuestNeed implements SerializedName {
     /** The materials of a construction site that the stock does not have. Kind {@link QuestKind#DELIVERY}. */
     SITE_MATERIALS("site_materials", QuestKind.DELIVERY),
     /** A new caravan that waits for an escort. Kind {@link QuestKind#ESCORT}. */
-    CARAVAN("caravan", QuestKind.ESCORT);
+    CARAVAN("caravan", QuestKind.ESCORT),
+    /** The monsters near a village. Kind {@link QuestKind#HUNT}. */
+    MONSTERS("monsters", QuestKind.HUNT);
 
     private final String serializedName;
     private final QuestKind kind;

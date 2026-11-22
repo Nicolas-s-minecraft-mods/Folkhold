@@ -131,6 +131,26 @@ class QuestDefinitionsTest {
         assertTrue(error.getMessage().contains(expected), "Expected '" + expected + "' in: " + error.getMessage());
     }
 
+    /** The hunt of the mod: from the level 3, 1 emerald for each monster, 15 experience points. */
+    @Test
+    void modHuntIsValid() throws IOException {
+        String path = "/data/folkhold_world/folkhold/quest/monster_hunt.json";
+        try (InputStream stream = QuestDefinitionsTest.class.getResourceAsStream(path)) {
+            assertTrue(stream != null, "Missing file " + path);
+            try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                List<String> warnings = new ArrayList<>();
+                QuestDefinition hunt = QuestDefinitions.parse("folkhold_world:monster_hunt",
+                        JsonParser.parseReader(reader).getAsJsonObject(), warnings::add);
+                assertEquals(QuestNeed.MONSTERS, hunt.need());
+                assertEquals(QuestKind.HUNT, hunt.kind());
+                assertEquals(3, hunt.minLevel());
+                assertEquals(OptionalDouble.of(1.0), hunt.values().rewardFactor());
+                assertEquals(15, hunt.rewards().base().experience());
+                assertEquals(List.of(), warnings);
+            }
+        }
+    }
+
     /** The 3 definitions of the mod are valid, with no warning and no value: all their values come from the config. */
     @Test
     void modDefinitionsAreValid() throws IOException {

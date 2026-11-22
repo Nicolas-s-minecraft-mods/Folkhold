@@ -8,7 +8,9 @@ public enum QuestKind implements SerializedName {
     /** A village with a shortage asks for an item. */
     DELIVERY("delivery"),
     /** The player protects a caravan to its destination. */
-    ESCORT("escort");
+    ESCORT("escort"),
+    /** The player kills monsters near the village. */
+    HUNT("hunt");
 
     private final String serializedName;
 
