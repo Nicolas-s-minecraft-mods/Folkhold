@@ -109,6 +109,23 @@ public final class VillageRepairData extends SavedData {
     }
 
     /**
+     * Forgets the box of a construction site of a village: the repairs then cover its blocks, for example a home that
+     * grows in place and is a piece of the reference of the village (see {@link VillageGrowth}).
+     *
+     * @param heart the position of the village heart
+     * @param box   the box of the site
+     */
+    public void removeConstruction(BlockPos heart, BoundingBox box) {
+        List<BoundingBox> boxes = constructions.get(heart.asLong());
+        if (boxes != null && boxes.remove(box)) {
+            if (boxes.isEmpty()) {
+                constructions.remove(heart.asLong());
+            }
+            setDirty();
+        }
+    }
+
+    /**
      * The box of a construction site of a village that holds a position.
      *
      * @param heart the position of the village heart

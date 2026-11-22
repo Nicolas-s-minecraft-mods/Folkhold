@@ -157,6 +157,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String MARKET_PLOT_TAG = "MarketPlot";
     private static final String LAND_TAG = "LandPieces";
     private static final String LAST_HOME_TAG = "LastHomeTick";
+    private static final String GROWN_HOMES_TAG = "GrownHomes";
 
     /** Name of the village, or null before the village has a faction. */
     @Nullable
@@ -197,6 +198,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
     /** The plot of the market of the village, or null before the growth starts the market. */
     @Nullable
     private VillageMarket.Plot marketPlot;
+    /**
+     * The homes of the village structure that grow in place (see {@link VillageGrowth}): the piece of the step of each
+     * home, at the origin and with the turn of its piece of the structure.
+     */
+    private final List<VillageReference.Piece> grownHomes = new ArrayList<>();
     /** The game time of the start of the last new home of the growth, or -1 with no such home. */
     private long lastHomeTick = -1;
     /** The fields and the mills that the builders of the village started outside the palisade (see {@link VillageLand}). */
@@ -1064,7 +1070,30 @@ public class VillageHeartBlockEntity extends BlockEntity {
             repairReferenceSearched = true;
             repairReference = VillageReference.find(serverLevel, worldPosition).orElse(null);
         }
-        return Optional.ofNullable(repairReference);
+        return Optional.ofNullable(repairReference).map(reference -> reference.withReplaced(grownHomes));
+    }
+
+    /**
+     * The homes of the village structure that grow in place: the piece of the step of each home (see
+     * {@link VillageGrowth}). The reference of the repairs has these pieces (see {@link #repairReference}).
+     *
+     * @return the pieces, in the order of their first growth
+     */
+    public List<VillageReference.Piece> grownHomes() {
+        return Collections.unmodifiableList(grownHomes);
+    }
+
+    /**
+     * Records the piece of the next step of a home that grows in place. The piece takes the place of the piece of the
+     * home with the same origin and the same turn.
+     *
+     * @param piece the piece of the step
+     */
+    public void addGrownHome(VillageReference.Piece piece) {
+        grownHomes.removeIf(found -> found.origin().equals(piece.origin()) && found.rotation() == piece.rotation());
+        grownHomes.add(piece);
+        wallZones = null;
+        setChanged();
     }
 
     /** The rescues of the blocked villagers by the builders of the village (see {@link VillageRescues}). */
@@ -1626,6 +1655,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (lastHomeTick >= 0) {
             tag.putLong(LAST_HOME_TAG, lastHomeTick);
         }
+        if (!grownHomes.isEmpty()) {
+            tag.put(GROWN_HOMES_TAG, VillageLand.save(grownHomes));
+        }
     }
 
     @Override
@@ -1664,5 +1696,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         landPieces.clear();
         landPieces.addAll(VillageLand.load(tag.getList(LAND_TAG, Tag.TAG_COMPOUND)));
         lastHomeTick = tag.contains(LAST_HOME_TAG, Tag.TAG_LONG) ? tag.getLong(LAST_HOME_TAG) : -1;
+        grownHomes.clear();
+        grownHomes.addAll(VillageLand.load(tag.getList(GROWN_HOMES_TAG, Tag.TAG_COMPOUND)));
     }
 }

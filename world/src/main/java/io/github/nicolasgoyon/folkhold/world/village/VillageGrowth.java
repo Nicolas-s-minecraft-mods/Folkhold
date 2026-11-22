@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.level.TierGate;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HomeNeed;
+import io.github.nicolasgoyon.folkhold.core.sim.village.HomeSteps;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
@@ -72,6 +73,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       market of the next tier, then the other buildings, with the setting {@code construction.growth}. A village with
  *       a missing building of the next tier keeps the top level of its tier (see
  *       {@link io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels}).</li>
+ *   <li>A town or a city that needs a home and has no free plot makes one home of the village structure larger in
+ *       place (see {@link #enlarge} and {@link HomeSteps}): the piece of the next step of the home, with a new storey
+ *       and 2 more beds.</li>
  *   <li>Else, a village with a missing building of its level gets this building (see {@link VillageBuildings} and
  *       {@link VillageBuildingTable}). The scan of the heart counts the building signs of each kind. The building comes
  *       from the pool of the houses of the variant of the village: the piece {@code house_<kind>}. A variant with no
@@ -193,6 +197,7 @@ public final class VillageGrowth {
             return Optional.empty();
         }
         heart.checkMarkets(level);
+        settleGrownHomes(level, heart);
         VillageLayout layout = heart.getLayout();
         List<String> posts = postJobs(level.getServer(), settlement.get());
         boolean needsHome = homeNeed(level, heart, settlement.get()) != HomeNeed.Cause.NONE;
@@ -215,6 +220,11 @@ public final class VillageGrowth {
         for (VillageBuildings.Step step : steps) {
             if (isHouseWorkshop(step)) {
                 Attempt attempt = startWorkshop(level, heart, settlement.get(), reference.get(), plots, posts);
+                if (attempt.site().isEmpty() && attempt.complete()
+                        && step.type() == VillageBuildings.StepType.HOME) {
+                    // No free plot holds a new home: a town or a city makes one home larger in place.
+                    attempt = enlarge(level, heart, settlement.get(), reference.get());
+                }
                 if (attempt.site().isPresent() || attempt.complete()) {
                     // A plot in a chunk that is not ready can be free: the heart keeps the last known state.
                     heart.setHomeNoSpace(attempt.site().isEmpty());
@@ -261,6 +271,109 @@ public final class VillageGrowth {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Makes one home of the village structure larger in place (see {@link HomeSteps}): the builders build the piece
+     * of the next step of the home on the piece of the home, with the same origin and the same turn. The home is a
+     * piece of the reference of the village with a piece of a next step: {@code job_<id>} gives
+     * {@code job_<id>_step2}, and {@code job_<id>_step2} gives {@code job_<id>_step3}. The tier of the village gives
+     * the highest step. The home with the lowest step comes first, then the nearest home to the heart. The job post
+     * and the household of the home do not change, and the beds of the step before stay. The heart records the piece
+     * of the step (see {@link VillageHeartBlockEntity#addGrownHome}).
+     *
+     * @return the construction site, or no site when no home can grow
+     */
+    private static Attempt enlarge(ServerLevel level, VillageHeartBlockEntity heart, Settlement settlement,
+            VillageReference reference) {
+        BlockPos heartPos = heart.getBlockPos();
+        int maxStep = HomeSteps.maxStep(LevelTables.get(), settlement.level());
+        record Candidate(VillageReference.Piece piece, int step, ResourceLocation next) {
+        }
+        List<Candidate> candidates = new ArrayList<>();
+        for (VillageReference.Piece piece : reference.pieces()) {
+            int step = homeStep(piece.template());
+            if (step == 0 || !HomeSteps.grows(true, false, step, maxStep)) {
+                continue;
+            }
+            ResourceLocation next = nextStep(piece.template(), step);
+            if (level.getStructureManager().get(next).isPresent()) {
+                candidates.add(new Candidate(piece, step, next));
+            }
+        }
+        candidates.sort(Comparator.comparingInt(Candidate::step)
+                .thenComparingDouble(candidate -> candidate.piece().origin().distSqr(heartPos)));
+        boolean complete = true;
+        for (Candidate candidate : candidates) {
+            StructureTemplate template = level.getStructureManager().get(candidate.next()).orElseThrow();
+            BoundingBox box = GhostPlacement.box(template.getSize(), candidate.piece().rotation(), Mirror.NONE,
+                    candidate.piece().origin());
+            if (!ReadyChunks.isAreaReady(level, box.minX(), box.minZ(), box.maxX(), box.maxZ())) {
+                complete = false;
+                continue;
+            }
+            FolkholdWorld.LOGGER.debug("Village {}: the home {} grows to {}", heartPos, candidate.piece().origin(),
+                    candidate.next());
+            heart.addGrownHome(new VillageReference.Piece(candidate.next(), candidate.piece().origin(),
+                    candidate.piece().rotation()));
+            return new Attempt(Optional.of(BuilderSites.start(level, candidate.next(), candidate.piece().origin(),
+                    candidate.piece().rotation(), Mirror.NONE, heartPos, null)), true);
+        }
+        return new Attempt(Optional.empty(), complete);
+    }
+
+    /**
+     * The step of a home from the template of its piece: 1 for a house-workshop {@code job_<id>}, the step of a
+     * piece {@code job_<id>_step<step>}, 0 for a piece that is not a house-workshop.
+     *
+     * @param template the template of the piece
+     * @return the step, or 0
+     */
+    public static int homeStep(ResourceLocation template) {
+        String path = template.getPath();
+        String name = path.substring(path.lastIndexOf('/') + 1);
+        if (!name.startsWith(JOB_PREFIX)) {
+            return 0;
+        }
+        int at = name.lastIndexOf(STEP_SUFFIX);
+        if (at < 0) {
+            return HomeSteps.FIRST;
+        }
+        try {
+            return Integer.parseInt(name.substring(at + STEP_SUFFIX.length()));
+        } catch (NumberFormatException e) {
+            return HomeSteps.FIRST;
+        }
+    }
+
+    /** The template of the next step of a home of a step. */
+    private static ResourceLocation nextStep(ResourceLocation template, int step) {
+        String path = template.getPath();
+        String first = step == HomeSteps.FIRST ? path : path.substring(0, path.lastIndexOf(STEP_SUFFIX));
+        return ResourceLocation.fromNamespaceAndPath(template.getNamespace(), first + STEP_SUFFIX + (step + 1));
+    }
+
+    /**
+     * Gives the repairs the blocks of the homes that grow in place: the box of a site of a home that grows in place
+     * leaves the boxes that the repairs keep when the site has ended. Then the repairs compare the home with the
+     * piece of its step, and build its missing blocks.
+     */
+    private static void settleGrownHomes(ServerLevel level, VillageHeartBlockEntity heart) {
+        if (heart.grownHomes().isEmpty()) {
+            return;
+        }
+        BlockPos heartPos = heart.getBlockPos();
+        List<BuilderSite> sites = BuilderSites.of(level, heartPos);
+        VillageRepairData data = VillageRepairData.get(level);
+        for (VillageReference.Piece piece : heart.grownHomes()) {
+            boolean active = sites.stream().anyMatch(site -> site.origin().equals(piece.origin())
+                    && site.template().equals(piece.template()));
+            if (active) {
+                continue;
+            }
+            level.getStructureManager().get(piece.template()).ifPresent(template -> data.removeConstruction(heartPos,
+                    GhostPlacement.box(template.getSize(), piece.rotation(), Mirror.NONE, piece.origin())));
+        }
     }
 
     /**
