@@ -206,10 +206,21 @@ public final class QuestHud {
     }
 
     private static Component rowText(Entry entry, Inventory inventory) {
-        if (entry.escort().isPresent()) {
+        return rowText(entry, hasItems(entry) ? count(inventory, entry.itemId()) : 0);
+    }
+
+    /**
+     * The text of a row: what to do, and for a delivery the items of the player. A quest with no items to give (a
+     * hunt, an escort) has a count of 0: its row has no progress of items.
+     *
+     * @param entry the quest
+     * @param have  the items of the player
+     * @return the text
+     */
+    static Component rowText(Entry entry, int have) {
+        if (!hasItems(entry)) {
             return entry.name();
         }
-        int have = count(inventory, entry.itemId());
         boolean ready = have >= entry.count();
         MutableComponent progress = Component.translatable(KEY + "progress", Math.min(have, entry.count()),
                 entry.count());
@@ -218,6 +229,11 @@ public final class QuestHud {
         }
         return Component.empty().append(entry.name()).append(UiStrings.separator().withColor(UiTheme.TEXT_FAINT))
                 .append(progress.withColor(ready ? UiTheme.TEXT_GOOD : UiTheme.TEXT_MUTED));
+    }
+
+    /** True for a quest with items to give: a delivery. */
+    private static boolean hasItems(Entry entry) {
+        return entry.escort().isEmpty() && entry.count() > 0;
     }
 
     private static void renderDelivery(GuiGraphics graphics, Font font, LocalPlayer player, Entry entry,

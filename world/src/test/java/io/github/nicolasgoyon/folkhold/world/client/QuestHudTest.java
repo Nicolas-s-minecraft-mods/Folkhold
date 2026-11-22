@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.nicolasgoyon.folkhold.core.client.ui.UiTheme;
+import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
+import java.util.Optional;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.PlainTextContents;
 import org.junit.jupiter.api.Test;
 
 /** The position of the quest panel below the territory panel ({@link QuestHud#top}). */
@@ -27,5 +31,24 @@ class QuestHudTest {
         assertEquals(4 + 52 + two + 2, QuestHud.top(52, two), "Below 2 rows of status effects and the panel");
         assertTrue(QuestHud.top(0, two) > QuestHud.top(0, one));
         assertTrue(QuestHud.territoryHeight(1, true) >= 4 + 14 + 4, "The banner sets the height of one line");
+    }
+
+    private static QuestLogPayload.Entry entry(String item, int count, boolean escort) {
+        return new QuestLogPayload.Entry("q", item, Component.literal("Name"), count, 600,
+                escort ? Optional.of(new QuestLogPayload.Escort(10, 100, 20, 20, 5, 48, -1)) : Optional.empty(),
+                Optional.empty(), QuestLogPayload.NO_ENTITY);
+    }
+
+    /** A delivery row has the items of the player. A hunt row and an escort row have no progress of items. */
+    @Test
+    void onlyADeliveryRowHasTheProgressOfTheItems() {
+        Component delivery = QuestHud.rowText(entry("minecraft:coal", 4, false), 1);
+        assertTrue(delivery.getContents() instanceof PlainTextContents && delivery.getSiblings().size() == 3,
+                "Name, separator and progress: " + delivery);
+        Component hunt = QuestHud.rowText(entry("minecraft:iron_sword", 0, false), 0);
+        assertEquals("Name", hunt.getString());
+        assertTrue(hunt.getSiblings().isEmpty(), "A hunt has no progress of items: " + hunt);
+        Component escort = QuestHud.rowText(entry("minecraft:chest", 0, true), 0);
+        assertEquals("Name", escort.getString());
     }
 }
