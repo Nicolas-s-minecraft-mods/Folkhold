@@ -113,6 +113,12 @@ final class VillagePieces {
                     StructureTemplatePool.Projection.RIGID), problems);
             add(pieces, new Piece(variant.wall().gate(), Optional.empty(),
                     StructureTemplatePool.Projection.RIGID), problems);
+            variant.wall().stone().ifPresent(stone -> {
+                add(pieces, new Piece(stone.tower(), Optional.empty(), StructureTemplatePool.Projection.RIGID),
+                        problems);
+                add(pieces, new Piece(stone.gate(), Optional.empty(), StructureTemplatePool.Projection.RIGID),
+                        problems);
+            });
         }
         // The pools in sorted order: the pool of a piece is the same in each run.
         List<ResourceLocation> found = new ArrayList<>();

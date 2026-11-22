@@ -912,6 +912,55 @@ def gate_piece():
     return t
 
 
+# ---------------------------------------------------------------- stone wall
+
+# The stone wall of a village of the village tier and higher: the tower, the gate and the columns of the palisade in
+# stone. A stone piece has the shape of its wooden piece: the same blocks with a collision shape, the same stairs and
+# the same watch post. Thus the builders change a wooden piece into its stone piece block by block, and the archers,
+# the villagers and the raiders walk on it as on the wooden piece. The biome variants change the stone: stone bricks,
+# sandstone in the desert and mud bricks in the swamp.
+# A pair (name, ()) is a block with no properties (see plain).
+STONE = {
+    "minecraft:spruce_log": ("minecraft:stone_bricks", ()),
+    "minecraft:stripped_spruce_log": ("minecraft:stone_bricks", ()),
+    "minecraft:spruce_planks": "minecraft:stone_bricks",
+    "minecraft:spruce_slab": "minecraft:stone_brick_slab",
+    "minecraft:spruce_stairs": "minecraft:stone_brick_stairs",
+}
+
+
+def stone(t):
+    """The template in stone: each block of STONE changes to its stone block. The other blocks stay: the cobblestone
+    base, the fence gates, the dark oak roof, the lights and the watch post."""
+    out = Template(*t.size)
+    for pos, ((name, props), nbt) in t.blocks.items():
+        new = STONE.get(name, name)
+        out.blocks[pos] = ((new[0], ()) if isinstance(new, tuple) else (new, props), nbt)
+    return out
+
+
+def stone_tower_piece():
+    """The stone tower: the tower of the palisade (see tower_piece) in stone."""
+    return stone(tower_piece())
+
+
+def stone_gate_piece():
+    """The stone gate: the gate of the palisade (see gate_piece) in stone, with its wooden fence gates."""
+    return stone(gate_piece())
+
+
+def check_stone_pieces():
+    """Each stone piece has the shape of its wooden piece: at each position, the two blocks have the same collision
+    shape (see collision). Stairs and slabs keep their properties."""
+    for wooden, stone_piece in ((tower_piece(), stone_tower_piece()), (gate_piece(), stone_gate_piece())):
+        assert wooden.size == stone_piece.size
+        assert wooden.blocks.keys() == stone_piece.blocks.keys()
+        for pos, ((name, props), _) in wooden.blocks.items():
+            (other, other_props), _ = stone_piece.blocks[pos]
+            same = collision(name, dict(props)) == collision(other, dict(other_props))
+            assert same, f"The stone block {other} at {pos} has another shape than {name}"
+
+
 # ---------------------------------------------------------------- houses
 
 W = 9   # x: 0..8
@@ -4490,6 +4539,8 @@ PIECES = {
     "street_side": lambda: street_side(D),
     "tower": tower_piece,
     "gate": gate_piece,
+    "stone/tower": stone_tower_piece,
+    "stone/gate": stone_gate_piece,
     "house_cottage": cottage,
     "house_barracks": barracks,
     "house_forge": forge,
@@ -5053,6 +5104,8 @@ DESERT = {
     "minecraft:cobblestone_stairs": "minecraft:sandstone_stairs",
     "minecraft:mossy_cobblestone_stairs": "minecraft:sandstone_stairs",
     "minecraft:stone_brick_stairs": "minecraft:sandstone_stairs",
+    "minecraft:stone_brick_slab": "minecraft:cut_sandstone_slab",
+    "minecraft:stone_brick_wall": "minecraft:sandstone_wall",
 }
 # The swamp: mangrove wood, and mud bricks for the stones of the base variant.
 SWAMP = {
@@ -5063,6 +5116,8 @@ SWAMP = {
     "minecraft:cobblestone_stairs": "minecraft:mud_brick_stairs",
     "minecraft:mossy_cobblestone_stairs": "minecraft:mud_brick_stairs",
     "minecraft:stone_brick_stairs": "minecraft:mud_brick_stairs",
+    "minecraft:stone_brick_slab": "minecraft:mud_brick_slab",
+    "minecraft:stone_brick_wall": "minecraft:mud_brick_wall",
 }
 
 
@@ -5325,6 +5380,16 @@ def village_settings(v):
                                   {"facing": "north", "half": "bottom", "shape": "straight", "waterlogged": "false"}),
             },
             "street_stairs": street_stairs(v),
+            "stone": {
+                "tower": v.id("stone/tower"),
+                "gate": v.id("stone/gate"),
+                "palisade": {
+                    "log": v.state("minecraft:stone_bricks"),
+                    "base": v.state("minecraft:cobblestone"),
+                    "point": v.state("minecraft:stone_brick_wall"),
+                    "foundation": v.state("minecraft:cobblestone"),
+                },
+            },
         },
         "homes": v.id("homes"),
     }
@@ -5339,9 +5404,10 @@ def all_variants():
 
 def cave_variant(base):
     """The variant of the cave village: the cave pieces in all the biomes. A cave site selects it (see CaveVillage).
-    The wall of the variant has the cave gate. The cave village has no palisade and no tower: the other settings of
-    the wall are the settings of the base variant."""
-    return {"biomes": [], "start_pool": CAVE.id("plaza"), "wall": {**base["wall"], "gate": CAVE.id("gate")},
+    The wall of the variant has the cave gate and no stone wall. The cave village has no palisade and no tower: the
+    other settings of the wall are the settings of the base variant."""
+    wall = {key: value for key, value in base["wall"].items() if key != "stone"}
+    return {"biomes": [], "start_pool": CAVE.id("plaza"), "wall": {**wall, "gate": CAVE.id("gate")},
             "homes": CAVE.id("homes"), "cave": True}
 
 
@@ -5388,11 +5454,13 @@ def write_json(path, data):
 def main():
     check_home_steps()
     check_cliff_houses()
+    check_stone_pieces()
     for v in all_variants() + [CAVE]:
         folder = os.path.join(DATA, "structure", *v.path("").split("/"))
         os.makedirs(folder, exist_ok=True)
         for name, build in v.pieces.items():
-            path = os.path.join(folder, name + ".nbt")
+            path = os.path.join(folder, *(name + ".nbt").split("/"))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             t = build()
             v.apply(cave_lit(t, name) if v.cave else t).write(path)
             print("wrote", os.path.normpath(path))
