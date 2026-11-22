@@ -26,6 +26,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import javax.annotation.Nullable;
@@ -45,9 +49,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   <li>Header: refresh, the simulation menu (one tick or one cycle for all settlements, the discovery of the
  *       villages around the operator), the map of the world (see {@link AdminMapScreen}), and the caravans and quests
  *       screen.</li>
- *   <li>Left: the settlements. A text filter (name, id or faction) and three chips (state, level range, sort order)
- *       select them. A click on a settlement shows its details. The name of a settlement that is not generated (it
- *       exists only in the simulation) is in italics.</li>
+ *   <li>Left: the settlements. Each row shows the color of the faction at its left, the name, the level and the
+ *       distance, then the faction, the culture and the population. A text filter (name, id, faction or culture)
+ *       and three chips (state, the dialog "Filters", sort order) select them. The dialog "Filters" has optional
+ *       filters that add up: faction, culture, level range and population range (see {@link AdminFilters}). A
+ *       click on a settlement shows its details. The name of a settlement that is not generated (it exists only in
+ *       the simulation) is in italics.</li>
  *   <li>Right: the selected settlement. Its badges (level, state, alert), the action menus (village, economy,
  *       garrison, world), the teleport button, and its rows in two columns with the largest stocks.</li>
  *   <li>The status line shows the result of each action.</li>
@@ -61,7 +68,10 @@ public class AdminScreen extends UiScreen {
     private static final int LIST_MIN = 140;
     private static final int LIST_MAX = 172;
     private static final int CHIP = 14;
-    private static final int LIST_ROW = 14;
+    /** A row of the list: the name, then the faction, the culture and the population. */
+    static final int LIST_ROW = 24;
+    /** The width of the color mark of the faction at the left of a row. */
+    private static final int FACTION_MARK = 3;
     private static final int DETAILS_HEADER = 24;
     private static final int HEADER_BUTTON = 14;
     private static final int SLOT = 18;
@@ -98,8 +108,7 @@ public class AdminScreen extends UiScreen {
 
     // State kept between two openings.
     private static String lastText = "";
-    private static String lastMinLevel = "";
-    private static String lastMaxLevel = "";
+    private static AdminFilters lastFilters = AdminFilters.NONE;
     private static StateFilter lastState = StateFilter.ALL;
     private static Sort lastSort = Sort.DISTANCE;
     @Nullable
@@ -187,8 +196,7 @@ public class AdminScreen extends UiScreen {
     /** Forgets the state kept between two openings. Called when the player leaves a world or a server. */
     public static void clear() {
         lastText = "";
-        lastMinLevel = "";
-        lastMaxLevel = "";
+        lastFilters = AdminFilters.NONE;
         lastState = StateFilter.ALL;
         lastSort = Sort.DISTANCE;
         lastSelected = null;
@@ -314,8 +322,9 @@ public class AdminScreen extends UiScreen {
             lastState = next(lastState);
             rebuild();
         }) + UiTheme.GAP;
-        boolean levelFilter = !lastMinLevel.isEmpty() || !lastMaxLevel.isEmpty();
-        x += chip(x, chipY, levelLabel(), levelFilter, this::openLevelMenu) + UiTheme.GAP;
+        Component filters = lastFilters.count() == 0 ? Component.translatable(KEY + "filters")
+                : Component.translatable(KEY + "filters.count", lastFilters.count());
+        x += chip(x, chipY, filters, lastFilters.count() > 0, this::openFilters) + UiTheme.GAP;
         Component sort = Component.translatable(KEY + "sort." + lastSort.name().toLowerCase(Locale.ROOT));
         chip(x, chipY, sort, false, button -> {
             lastSort = next(lastSort);
@@ -346,52 +355,108 @@ public class AdminScreen extends UiScreen {
         return values[(current.ordinal() + 1) % values.length];
     }
 
-    private static Component levelLabel() {
-        if (lastMinLevel.isEmpty() && lastMaxLevel.isEmpty()) {
-            return Component.translatable(KEY + "levels.all");
-        }
-        if (lastMaxLevel.isEmpty()) {
-            return Component.translatable(KEY + "levels.min", lastMinLevel);
-        }
-        if (lastMinLevel.isEmpty()) {
-            return Component.translatable(KEY + "levels.max", lastMaxLevel);
-        }
-        return Component.translatable(KEY + "levels.range", lastMinLevel, lastMaxLevel);
-    }
-
-    private void openLevelMenu(UiButton button) {
+    /**
+     * Opens the dialog "Filters": the faction, the culture, the level range and the population range. Each filter is
+     * optional, and the filters add up (see {@link AdminFilters}). The faction and the culture open a list of their
+     * values.
+     */
+    private void openFilters(UiButton button) {
+        UiRect anchor = rectOf(button);
         List<UiMenu.Item> items = new ArrayList<>();
-        items.add(new UiMenu.Value(Component.translatable(KEY + "min_level"), lastMinLevel,
-                text -> text.matches("\\d{0,3}"), text -> {
-                    lastMinLevel = text;
-                    rebuild();
-                }));
-        items.add(new UiMenu.Value(Component.translatable(KEY + "max_level"), lastMaxLevel,
-                text -> text.matches("\\d{0,3}"), text -> {
-                    lastMaxLevel = text;
-                    rebuild();
-                }));
+        items.add(UiMenu.Action.of(Component.translatable(KEY + "filters.faction", factionLabel()),
+                () -> openFactions(anchor)));
+        items.add(UiMenu.Action.of(Component.translatable(KEY + "filters.culture", cultureLabel()),
+                () -> openCultures(anchor)));
         items.add(new UiMenu.Separator());
-        UiMenu.Action clear = UiMenu.Action.of(Component.translatable(KEY + "levels.all"), () -> {
-            lastMinLevel = "";
-            lastMaxLevel = "";
+        items.add(number(KEY + "min_level", lastFilters.minLevel(),
+                value -> lastFilters = lastFilters.withLevels(value, lastFilters.maxLevel())));
+        items.add(number(KEY + "max_level", lastFilters.maxLevel(),
+                value -> lastFilters = lastFilters.withLevels(lastFilters.minLevel(), value)));
+        items.add(number(KEY + "filters.min_population", lastFilters.minPopulation(),
+                value -> lastFilters = lastFilters.withPopulation(value, lastFilters.maxPopulation())));
+        items.add(number(KEY + "filters.max_population", lastFilters.maxPopulation(),
+                value -> lastFilters = lastFilters.withPopulation(lastFilters.minPopulation(), value)));
+        items.add(new UiMenu.Separator());
+        UiMenu.Action clear = UiMenu.Action.of(Component.translatable(KEY + "filters.clear"), () -> {
+            lastFilters = AdminFilters.NONE;
             rebuild();
         });
-        items.add(lastMinLevel.isEmpty() && lastMaxLevel.isEmpty() ? clear.disabled(Component.empty()) : clear);
-        UiMenu.open(this, rectOf(button), Component.translatable(KEY + "levels.menu"), items);
+        items.add(lastFilters.count() == 0 ? clear.disabled(Component.empty()) : clear);
+        UiMenu.open(this, anchor, Component.translatable(KEY + "filters"), items);
+    }
+
+    /** A number field of the dialog "Filters": empty for no limit. */
+    private UiMenu.Value number(String key, @Nullable Integer value, Consumer<Integer> apply) {
+        return new UiMenu.Value(Component.translatable(key), value == null ? "" : value.toString(),
+                text -> text.matches("\\d{0,6}"), text -> {
+                    apply.accept(AdminFilters.parse(text));
+                    rebuild();
+                });
+    }
+
+    private Component factionLabel() {
+        return settlements.stream().filter(summary -> summary.factionId().equals(lastFilters.faction())).findFirst()
+                .<Component>map(Summary::faction).orElse(Component.translatable(KEY + "filters.all"));
+    }
+
+    private Component cultureLabel() {
+        return lastFilters.culture() == null ? Component.translatable(KEY + "filters.all")
+                : cultureName(lastFilters.culture());
+    }
+
+    private static Component cultureName(String culture) {
+        return culture.isEmpty() ? Component.translatable(KEY + "filters.unknown")
+                : Component.translatable("folkhold_world.culture." + culture);
+    }
+
+    /** The list of the factions of the settlements, in the order of their names. */
+    private void openFactions(UiRect anchor) {
+        Map<String, Summary> factions = new TreeMap<>();
+        settlements.forEach(summary -> factions.putIfAbsent(summary.faction().getString() + " | "
+                + summary.factionId(), summary));
+        List<UiMenu.Item> items = new ArrayList<>();
+        items.add(choice(Component.translatable(KEY + "filters.all"), lastFilters.faction() == null,
+                () -> lastFilters = lastFilters.withFaction(null)));
+        for (Summary summary : factions.values()) {
+            items.add(choice(summary.faction(), summary.factionId().equals(lastFilters.faction()),
+                    () -> lastFilters = lastFilters.withFaction(summary.factionId())));
+        }
+        UiMenu.open(this, anchor, Component.translatable(KEY + "filters.faction", factionLabel()), items);
+    }
+
+    /** The list of the cultures of the settlements. */
+    private void openCultures(UiRect anchor) {
+        Set<String> cultures = new TreeSet<>();
+        settlements.forEach(summary -> cultures.add(summary.culture()));
+        List<UiMenu.Item> items = new ArrayList<>();
+        items.add(choice(Component.translatable(KEY + "filters.all"), lastFilters.culture() == null,
+                () -> lastFilters = lastFilters.withCulture(null)));
+        for (String culture : cultures) {
+            items.add(choice(cultureName(culture), culture.equals(lastFilters.culture()),
+                    () -> lastFilters = lastFilters.withCulture(culture)));
+        }
+        UiMenu.open(this, anchor, Component.translatable(KEY + "filters.culture", cultureLabel()), items);
+    }
+
+    /** A value of a list of the dialog: a mark before the current value. */
+    private UiMenu.Action choice(Component label, boolean current, Runnable select) {
+        Component text = Component.literal(current ? "● " : "○ ").append(label);
+        return UiMenu.Action.of(text, () -> {
+            select.run();
+            rebuild();
+        });
     }
 
     private void applyFilters() {
         String text = lastText.trim().toLowerCase(Locale.ROOT);
-        int min = parse(lastMinLevel, Integer.MIN_VALUE);
-        int max = parse(lastMaxLevel, Integer.MAX_VALUE);
         visible = settlements.stream()
                 .filter(lastState::accepts)
-                .filter(summary -> summary.level() >= min && summary.level() <= max)
+                .filter(lastFilters::accepts)
                 .filter(summary -> text.isEmpty()
                         || summary.name().toLowerCase(Locale.ROOT).contains(text)
                         || summary.id().toLowerCase(Locale.ROOT).startsWith(text)
-                        || summary.faction().getString().toLowerCase(Locale.ROOT).contains(text))
+                        || summary.faction().getString().toLowerCase(Locale.ROOT).contains(text)
+                        || summary.culture().toLowerCase(Locale.ROOT).contains(text))
                 .sorted(lastSort.comparator)
                 .toList();
         if (list != null) {
@@ -406,14 +471,6 @@ public class AdminScreen extends UiScreen {
         }
     }
 
-    private static int parse(String text, int fallback) {
-        try {
-            return Integer.parseInt(text.trim());
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
-    }
-
     private void select(Summary summary) {
         if (!summary.id().equals(lastSelected)) {
             details = null;
@@ -424,6 +481,17 @@ public class AdminScreen extends UiScreen {
             compactDetails = true;
         }
         rebuild();
+    }
+
+    /**
+     * The second line of a row: the faction in its color, the culture and the population.
+     *
+     * @param summary the settlement
+     * @return the text
+     */
+    static Component rowDetails(Summary summary) {
+        return Component.translatable(KEY + "row_details", summary.faction(), cultureName(summary.culture()),
+                summary.population());
     }
 
     /** The list of the settlements. */
@@ -448,12 +516,16 @@ public class AdminScreen extends UiScreen {
             } else if (index % 2 == 0) {
                 UiDraw.fill(graphics, rect, UiTheme.WOOD_ROW);
             }
+            // The color of the faction at the left of the row.
+            UiDraw.fill(graphics, new UiRect(rect.x() + (selected ? 2 : 0), rect.y() + 2, FACTION_MARK,
+                    rect.height() - 4), 0xFF000000 | item.color());
             UiRect text = rect.inset(UiTheme.PADDING, 0);
-            int y = UiText.textY(text);
+            int x = text.x() + FACTION_MARK;
+            int width = text.right() - x;
+            int y = rect.y() + 3;
             Component info = Component.translatable(KEY + "entry", item.level(),
                     HudDirections.distanceText(item.distance()));
-            int infoWidth = UiText.drawRight(graphics, font, info, text.right(), y, text.width() / 2,
-                    UiTheme.TEXT_MUTED);
+            int infoWidth = UiText.drawRight(graphics, font, info, text.right(), y, width / 2, UiTheme.TEXT_MUTED);
             MutableComponent name = item.active() ? Component.literal(item.name())
                     : Component.translatable(KEY + "ruins_suffix", item.name());
             if (!item.generated()) {
@@ -461,7 +533,8 @@ public class AdminScreen extends UiScreen {
                 name.withStyle(ChatFormatting.ITALIC);
             }
             int color = !item.active() ? UiTheme.TEXT_FAINT : selected ? UiTheme.GOLD : UiTheme.TEXT;
-            UiText.draw(graphics, font, name, text.x(), y, text.width() - infoWidth - UiTheme.PADDING, color);
+            UiText.draw(graphics, font, name, x, y, width - infoWidth - UiTheme.PADDING, color);
+            UiText.draw(graphics, font, rowDetails(item), x, y + UiTheme.LINE + 2, width, UiTheme.TEXT_MUTED);
         }
 
         @Override
