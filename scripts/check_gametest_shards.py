@@ -7,12 +7,25 @@ tests of the shard. A name is "<batch> <test>".
 The check fails when a shard has no report, when two shards do not have the same list of all the tests, or when the
 tests of the shards together are not the list of all the tests (a test in no shard, or in two shards).
 
-Usage: python3 scripts/check_gametest_shards.py <folder> <number of shards>
-The folder has one sub-folder for each shard: folkhold-gametest-shard-<i>.
+Each shard also writes failed-tests.txt in its report folder (see "failures" below): one line for each required test
+that failed, "<test> failed at <position>! <message>". The check shows each failed test of each shard as an error
+annotation and in the job summary. A failed test does not change the result of the check: the result of the shards
+gives the result of the GameTests.
+
+Usage:
+  python3 scripts/check_gametest_shards.py <folder> <number of shards>
+    The folder has one sub-folder for each shard: folkhold-gametest-shard-<i>.
+  python3 scripts/check_gametest_shards.py failures <log> <output file> <shard>
+    Writes the failed required tests of the log of a GameTest server to the output file. Prints an error annotation
+    and a line of the job summary for each of them.
 """
 import collections
 import os
+import re
 import sys
+
+# A failed required test in the log of the GameTest server. An optional test has "(optional)" before its name.
+FAILED = re.compile(r"LogTestReporter\]: (?!\(optional\))(\S+ failed at .*)$")
 
 
 def read(path):
@@ -54,7 +67,51 @@ def check(folder, count):
     return errors, len(all_tests), shards
 
 
+def failures(log):
+    """Returns the lines of the failed required tests of a log, in their order, with no duplicate."""
+    found = []
+    with open(log, encoding="utf-8", errors="replace") as file:
+        for line in file:
+            match = FAILED.search(line.rstrip("\n"))
+            if match and match.group(1) not in found:
+                found.append(match.group(1))
+    return found
+
+
+def failed_tests(folder, count):
+    """Returns the failed tests of each shard, from the files failed-tests.txt of the shards."""
+    result = {}
+    for index in range(1, count + 1):
+        path = os.path.join(folder, f"folkhold-gametest-shard-{index}", "failed-tests.txt")
+        if os.path.isfile(path):
+            result[index] = read(path)
+    return result
+
+
+def annotation(text):
+    """Encodes the characters that the annotation syntax uses."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def write_failures(argv):
+    log, output, shard = argv[2], argv[3], argv[4]
+    found = failures(log) if os.path.isfile(log) else []
+    os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
+    with open(output, "w", encoding="utf-8") as file:
+        file.write("".join(line + "\n" for line in found))
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    lines = [f"Shard {shard}: {len(found)} failed required tests."] + [f"- `{line}`" for line in found]
+    for line in found:
+        print(f"::error title=GameTest failed (shard {shard})::{annotation(line)}")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as file:
+            file.write("\n".join(lines) + "\n")
+    return 0
+
+
 def main(argv):
+    if len(argv) == 5 and argv[1] == "failures":
+        return write_failures(argv)
     if len(argv) != 3:
         print(__doc__)
         return 2
@@ -68,6 +125,11 @@ def main(argv):
         lines.append(f"- {error}")
     if not errors:
         print(f"::notice title=GameTest shards::{total} tests, each in one shard ({counts})")
+    failed = failed_tests(folder, count)
+    for index, tests in sorted(failed.items()):
+        for test in tests[:50]:
+            print(f"::error title=GameTest failed (shard {index}/{count})::{annotation(test)}")
+            lines.append(f"- Shard {index}/{count}: `{test}`")
     if summary:
         with open(summary, "a", encoding="utf-8") as file:
             file.write("\n".join(lines) + "\n")

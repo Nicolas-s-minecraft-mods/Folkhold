@@ -201,6 +201,9 @@ jobs:
           complete=$(grep -o '[0-9]* GAME TESTS COMPLETE IN [0-9.]* min' build/ci-gametest.log | head -1)
           echo "::notice title=GameTest shard ${SHARD}::${tests:-no shard line}; ${complete:-no end line}; Gradle step ${seconds} s"
           echo "Shard ${SHARD}: ${tests:-no shard line}, ${complete:-no end line}, Gradle step ${seconds} s." >> "$GITHUB_STEP_SUMMARY"
+          # The names of the failed tests: annotations of this job, and a file for the job GameTests.
+          python3 scripts/check_gametest_shards.py failures build/ci-gametest.log \
+            dev/run-gametest/shard-report/failed-tests.txt "$SHARD"
           exit "$status"
 
       - name: Report the errors as annotations
@@ -250,7 +253,7 @@ jobs:
           RESULT: ${{ needs.gametest-shard.result }}
         run: |
           if [ "$RESULT" != success ]; then
-            echo "::error title=GameTests::A GameTest shard failed (result: ${RESULT}). See the jobs of the shards."
+            echo "::error title=GameTests::A GameTest shard failed (result: ${RESULT}). The failed tests are in the annotations of the step above and in the summary."
             exit 1
           fi
 
