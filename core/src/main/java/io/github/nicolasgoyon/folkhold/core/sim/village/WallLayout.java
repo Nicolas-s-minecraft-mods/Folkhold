@@ -429,6 +429,31 @@ public final class WallLayout {
         return new WallLayout(ordered, MIN_TOWER_SPACING, List.of(), List.of(), List.of());
     }
 
+    /**
+     * The wall of a closed line with its gates, for example the line of the saved pieces of a village (see
+     * {@link WallLine}). The towers are the towers of the full layout at the tower spacing: a ring around this wall
+     * reads its outline, its gates and its tower spacing only (see {@link #ring}).
+     *
+     * @param corners      the corners of the line, clockwise from the north-west corner of its top row
+     * @param towerSpacing the maximum distance between the middles of 2 towers of an edge
+     * @param gates        the middle block of each gate on the line
+     * @return the wall
+     * @throws IllegalArgumentException when a gate is not on the line
+     */
+    public static WallLayout traced(List<Cell> corners, int towerSpacing, List<Cell> gates) {
+        WallLayout shape = new WallLayout(corners, towerSpacing, List.of(), List.of(), List.of());
+        List<Gate> placed = new ArrayList<>();
+        for (Cell middle : gates) {
+            int edge = shape.edgeAt(middle.x(), middle.z());
+            if (edge < 0) {
+                throw new IllegalArgumentException("The gate " + middle + " is not on the line " + corners);
+            }
+            Side side = shape.sides[edge];
+            placed.add(new Gate(side, side == Side.NORTH || side == Side.SOUTH ? middle.x() : middle.z(), edge));
+        }
+        return build(corners, towerSpacing, placed);
+    }
+
     /** The rectangle around the boxes of the pieces, with the margin and the line, and with sides of a valid size. */
     private static Box rectangle(List<Box> pieces, int margin, int towerSpacing) {
         if (pieces.isEmpty()) {
