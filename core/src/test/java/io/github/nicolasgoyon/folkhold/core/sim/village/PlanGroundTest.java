@@ -199,4 +199,83 @@ class PlanGroundTest {
         assertTrue(PlanGround.band(PlanGroundTest::slope, 0, 0, 0).inside(new Box(0, 0, 40, 4), 0));
         assertEquals(0, band.cost(FOOT + 20, 0));
     }
+
+    /** Flat ground at {@link #LEVEL} to the west of a X, and a terrace a number of blocks higher from this X. */
+    private static PlotTerrain.Terrain step(int foot, int height) {
+        return (x, z) -> {
+            int surface = x < foot ? LEVEL : LEVEL + height;
+            return new PlotTerrain.Column(surface, surface, false);
+        };
+    }
+
+    /**
+     * A plot on flat ground at the level of its street, with a rock face behind it, is a cliff plot. The height of the
+     * face gives the storeys of the house. A low face, a drop under the plot, a high front and lava are not a cliff.
+     */
+    @Test
+    void aPlotBelowARockFaceIsACliffPlot() {
+        // The plot of a home of 9 x 9 blocks to the east of a street, with its connector at x = 0.
+        Box plot = new Box(1, 0, 9, 8);
+        assertEquals(PlanGround.HIGH_CLIFF_STOREYS, PlanGround.core(step(8, 12), 0, 0, 0, LEVEL, 80, MARGIN)
+                .cliff(plot, 0, 4, PlanGround.MAX_RISE));
+        assertEquals(PlanGround.CLIFF_STOREYS, PlanGround.core(step(8, 8), 0, 0, 0, LEVEL, 80, MARGIN)
+                .cliff(plot, 0, 4, PlanGround.MAX_RISE));
+        // The face 4 blocks behind the plot counts.
+        assertEquals(PlanGround.HIGH_CLIFF_STOREYS, PlanGround.core(step(11, 12), 0, 0, 0, LEVEL, 80, MARGIN)
+                .cliff(plot, 0, 4, PlanGround.MAX_RISE));
+        // A step that the level rule accepts, a drop, a step at the front, a face to the side of the street.
+        assertEquals(0, PlanGround.core(step(8, PlanGround.MAX_PLOT_RISE), 0, 0, 0, LEVEL, 80, MARGIN)
+                .cliff(plot, 0, 4, PlanGround.MAX_RISE));
+        assertEquals(0, PlanGround.core(step(8, -12), 0, 0, 0, LEVEL, 80, MARGIN).cliff(plot, 0, 4,
+                PlanGround.MAX_RISE));
+        assertEquals(0, PlanGround.core(step(2, 12), 0, 0, 0, LEVEL, 80, MARGIN).cliff(plot, 0, 4,
+                PlanGround.MAX_RISE));
+        assertEquals(0, PlanGround.core(step(8, 12), 0, 0, 0, LEVEL, 80, MARGIN)
+                .cliff(new Box(-9, 0, -1, 8), 0, 4, PlanGround.MAX_RISE));
+        PlanGround lava = PlanGround.core((x, z) -> new PlotTerrain.Column(x < 8 ? LEVEL : LEVEL + 12,
+                x < 8 ? LEVEL : LEVEL + 12, x == 12), 0, 0, 0, LEVEL, 80, MARGIN);
+        assertEquals(0, lava.cliff(plot, 0, 4, PlanGround.MAX_RISE));
+        // The ground turns with the plaza: in a plan turned 90 degrees, the plot is to the south of its connector in the
+        // world, and the face is to the south of the plot.
+        PlanGround turned = PlanGround.core((x, z) -> step(8, 12).at(z, x), 0, 0, 1, LEVEL, 80, MARGIN);
+        assertEquals(PlanGround.HIGH_CLIFF_STOREYS, turned.cliff(plot, 0, 4, PlanGround.MAX_RISE));
+    }
+
+    /**
+     * A plaza near a rock step that stays in the rise of the rules: the plan has cliff plots on the terrace below the
+     * step. Each cliff plot is a good plot with no setback and no shift, the area of the home of the style, the storeys
+     * of the face, and it holds a home (no building of the level and no job post).
+     */
+    @Test
+    void aPlanBelowARockStepHasCliffPlots() {
+        int cliffs = 0;
+        for (StreetStyle style : StreetStyle.ALL) {
+            for (long seed = 0; seed < 4; seed++) {
+                String name = style.name() + " seed " + seed;
+                PlanGround ground = PlanGround.core(step(12, PlanGround.MAX_RISE), 0, 0, 0, LEVEL,
+                        village().maxRadius(), MARGIN);
+                VillagePlan plan = plan(village(), style, ground, seed);
+                PlotUses.Result uses = PlotUses.assign(plan, List.of(new PlotUses.Building("storehouse",
+                        style.home().name())), 6);
+                for (int i = 0; i < plan.plots().size(); i++) {
+                    Plot plot = plan.plots().get(i);
+                    if (!plot.onCliff()) {
+                        continue;
+                    }
+                    cliffs++;
+                    assertTrue(plot.good() && plot.setback() == 0 && plot.shift() == 0 && !plot.wide(), name);
+                    assertEquals(PlanGround.HIGH_CLIFF_STOREYS, plot.cliff(), name);
+                    assertEquals(plot.cliff(), ground.cliff(plot.area(), plot.x(), plot.z(), plan.rules().rise()),
+                            name);
+                    int width = plot.area().maxX() - plot.area().minX() + 1;
+                    int depth = plot.area().maxZ() - plot.area().minZ() + 1;
+                    assertEquals(style.home().frontage() + style.home().depth(), width + depth, name);
+                    assertEquals(style.home().frontage() * style.home().depth(), width * depth, name);
+                    PlotUses.Type type = uses.uses().get(i).type();
+                    assertTrue(type == PlotUses.Type.HOME || type == PlotUses.Type.FREE, name + " " + type);
+                }
+            }
+        }
+        assertTrue(cliffs > 0, "The plans must have cliff plots");
+    }
 }
