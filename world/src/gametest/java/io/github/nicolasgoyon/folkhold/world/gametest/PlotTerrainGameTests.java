@@ -117,6 +117,10 @@ public final class PlotTerrainGameTests {
     private static final double MAX_SPARE_SHARE = 0.20;
     /** The number of mountain sites of the test of the cliff side. */
     private static final int MOUNTAIN_SITES = 6;
+    /** The number of mountain sites of the measure of the plans and of the first walls. */
+    private static final int MEASURE_MOUNTAIN_SITES = 20;
+    /** The highest start level of a village. */
+    private static final int VILLAGE_LEVEL = 8;
 
     private PlotTerrainGameTests() {
     }
@@ -428,8 +432,9 @@ public final class PlotTerrainGameTests {
      *   <li>For a plan with the level rule, each grid point of each plot with a building is
      *       {@link PlanGround#MAX_PLOT_RISE} blocks or less above or below the surface at its connector. The plots of
      *       the first pieces of the axis streets (the bank and the first jobs) do not obey this rule.</li>
-     *   <li>For a core plan with the outline rule, the line of the first wall around the plan climbs no more than the
-     *       line around the plaza and the first pieces of the axis streets (see {@link PlanGround#climb}).</li>
+     *   <li>For a core plan with the outline rule, the line of the first wall (its free outline, see
+     *       {@link WallLayout#free}) climbs no more than the line of the rectangle around the plaza and the first pieces
+     *       of the axis streets (see {@link PlanGround#climb}).</li>
      *   <li>One site at least has a steep side: a grid point in the radius of the core is not in the region of the
      *       ground with the small rise.</li>
      * </ul>
@@ -503,7 +508,8 @@ public final class PlotTerrainGameTests {
                         start = union(start, plot.area());
                     }
                 }
-                long climb = core.climb(all, plan.rules().rise());
+                // The line of the first wall: the free outline around the plan (see WallLayout#free).
+                long climb = core.climb(line(layout.firstWall().layout()), plan.rules().rise());
                 long first = core.climb(start, plan.rules().rise());
                 if (climb > first) {
                     problems.add(name + ": the line of the first wall climbs " + climb + " blocks, more than the "
@@ -526,6 +532,89 @@ public final class PlotTerrainGameTests {
         helper.assertTrue(steep > 0, "No mountain site has a steep side");
         helper.assertTrue(problems.isEmpty(), "Problems of the ground: " + problems);
         helper.succeed();
+    }
+
+    /**
+     * The measure of the plans and of the first walls at the first {@link #MEASURE_MOUNTAIN_SITES} mountain sites (see
+     * {@link #mountainWallsHaveNoGateOnACliff}): a hamlet, a village and a town of the top level of their tier at each
+     * site. The test runs only with the environment variable {@link #MEASURE_VARIABLE}.
+     *
+     * <p>The log has a line {@code Mountain measure:} for each plan: the rule set of the core plan, the free outline
+     * (true when the first wall is not a rectangle), the climb of the line of the first wall, and the climb of the line
+     * of the rectangle around the same pieces. A climb counts the blocks of the grid points near the line more than
+     * {@link PlanGround#HIGH_RISE} blocks above the plaza (see {@link PlanGround#climb}). The last line {@code Mountain
+     * measure |} gives the plans of each rule set, the free outlines, and the walls with a climb of the free line and of
+     * the rectangle.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_mountains", required = false)
+    public static void measureMountainPlans(GameTestHelper helper) {
+        if (System.getenv(MEASURE_VARIABLE) == null) {
+            helper.succeed();
+            return;
+        }
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        Map<String, Integer> rules = new TreeMap<>();
+        int sites = 0;
+        int plans = 0;
+        int free = 0;
+        int climbing = 0;
+        int climbingRectangles = 0;
+        for (int i = 0; i < TRIES && sites < MEASURE_MOUNTAIN_SITES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.isMountain(context)
+                    || !structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            sites++;
+            FortifiedVillageStructure.Variant variant = measure.variant(context, false);
+            for (int level : new int[] {HAMLET_LEVEL, VILLAGE_LEVEL, TOWN_LEVEL}) {
+                FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, level)
+                        .orElseThrow();
+                PlanGround core = new PlotTerrains(TerrainCache.of(context)).core(layout.center(),
+                        layout.village().get(0).getRotation(), Math.min(FortifiedVillageStructure.firstRadius(
+                                layout.size()), structure.maxDistanceFromCenter()), variant.wall().margin());
+                WallLayout wall = layout.firstWall().layout();
+                List<WallLayout.Box> boxes = new ArrayList<>(layout.village().stream()
+                        .map(piece -> box(piece.getBoundingBox())).toList());
+                // The spaces of the core only: the spaces of the bands are out of the first wall.
+                layout.reserved().stream().map(PlotTerrainGameTests::box).filter(space -> wall.outline()
+                        .contains(space.minX(), space.minZ()) && wall.outline().contains(space.maxX(), space.maxZ()))
+                        .forEach(boxes::add);
+                WallLayout rectangle = WallLayout.plan(boxes, variant.wall().margin(), variant.wall().towerSpacing(),
+                        List.of());
+                long climb = core.climb(line(wall), PlanGround.HIGH_RISE);
+                long rectangleClimb = core.climb(line(rectangle), PlanGround.HIGH_RISE);
+                plans++;
+                rules.merge(layout.plan().rules().name(), 1, Integer::sum);
+                free += wall.isRectangle() ? 0 : 1;
+                climbing += climb > 0 ? 1 : 0;
+                climbingRectangles += rectangleClimb > 0 ? 1 : 0;
+                FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {}: rules {}, free outline {} ({} edges),"
+                        + " climb {}, climb of the rectangle {}", context.chunkPos(), layout.style().name(), level,
+                        layout.plan().rules(), !wall.isRectangle(), wall.edges(), climb, rectangleClimb);
+            }
+        }
+        FolkholdWorld.LOGGER.info("Mountain measure | {} sites | {} plans | rules {} | {} free outlines | {} walls"
+                + " climb | {} rectangles climb |", sites, plans, rules, free, climbing, climbingRectangles);
+        helper.assertTrue(sites == MEASURE_MOUNTAIN_SITES, "Only " + sites + " mountain sites");
+        helper.succeed();
+    }
+
+    /** The blocks of the line of a wall, as pairs (X, Z). */
+    private static List<int[]> line(WallLayout wall) {
+        List<int[]> line = new ArrayList<>();
+        for (int i = 0; i < wall.ringSize(); i++) {
+            WallLayout.Cell cell = wall.ringCell(i);
+            line.add(new int[] {cell.x(), cell.z()});
+        }
+        return line;
+    }
+
+    /** The box of a structure piece on the horizontal plane. */
+    private static WallLayout.Box box(BoundingBox box) {
+        return new WallLayout.Box(box.minX(), box.minZ(), box.maxX(), box.maxZ());
     }
 
     /** The box around 2 boxes of a plan. */
@@ -575,12 +664,12 @@ public final class PlotTerrainGameTests {
             WallLayout.Gate gate = entry.getKey();
             WallLayout.Side side = gate.side();
             int middle = layout.along(gate);
-            int lowest = CliffSide.lowestInFront(layout, side, middle, height);
+            int lowest = CliffSide.lowestInFront(layout, gate.edge(), middle, height);
             if (CliffSide.isCliff(entry.getValue() - lowest)) {
                 problems.add(name + ": the gate " + gate + " at the level " + entry.getValue()
                         + " opens on a drop to " + lowest);
             }
-            WallLayout.Cell cell = layout.cell(side, middle);
+            WallLayout.Cell cell = layout.cell(gate.edge(), middle);
             int x = cell.x() + 2 * side.insideX();
             int z = cell.z() + 2 * side.insideZ();
             boolean path = wall.pieces().stream().anyMatch(piece -> piece instanceof VillagePathPiece

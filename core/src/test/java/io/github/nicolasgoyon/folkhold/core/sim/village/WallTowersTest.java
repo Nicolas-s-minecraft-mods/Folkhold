@@ -23,7 +23,7 @@ class WallTowersTest {
     private static final int SPACING = 40;
 
     /** All the corners have the same view: the flat terrain. */
-    private static int flat(Side side) {
+    private static int flat(Tower corner) {
         return 0;
     }
 
@@ -106,7 +106,7 @@ class WallTowersTest {
         assertFalse(flat.hasCornerTower(Side.EAST) || flat.hasCornerTower(Side.WEST), "The towers: " + flat.towers());
         assertClosed(flat);
 
-        WallLayout view = square().withTowers(5, side -> side == Side.WEST ? 10 : 0, WallTowersTest::anywhere);
+        WallLayout view = square().withTowers(5, corner -> corner.side() == Side.WEST ? 10 : 0, WallTowersTest::anywhere);
         assertTrue(view.hasCornerTower(Side.WEST), "The corner with the largest view has a tower: " + view.towers());
         assertEquals(5, view.towers().size());
         assertClosed(view);
@@ -181,7 +181,7 @@ class WallTowersTest {
             for (Side side : Side.values()) {
                 views.put(side, random.nextInt(3));
             }
-            WallLayout wall = plan.withTowers(count, views::get, WallTowersTest::anywhere);
+            WallLayout wall = plan.withTowers(count, corner -> views.get(corner.side()), WallTowersTest::anywhere);
 
             assertTrue(wall.towers().size() <= Math.max(count, wall.gates().size()), "Too many towers: "
                     + wall.towers());

@@ -14,6 +14,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Gate;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Segment;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Side;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout.Tower;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallOutline;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
 import io.github.nicolasgoyon.folkhold.world.village.VillagePlots.Plot;
@@ -49,8 +50,11 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * new home on each free plot (see {@link WallLayout} and {@link VillagePlots#reserved}).
  *
  * <ul>
- *   <li>A gate goes on each side, on the axis of the start piece: the streets go out of the start piece on these
- *       axes.</li>
+ *   <li>The first wall has a free outline: the rectangle around the pieces, with the high ground of the site cut out
+ *       (see {@link WallLayout#free}). On flat ground, it is the rectangle. A ring is the rectangle around the wall
+ *       inside it, larger by the band (see {@link WallLayout#ring}).</li>
+ *   <li>A gate goes on each of the 4 axes of the start piece, on the first edge of its side that the axis meets: the
+ *       streets go out of the start piece on these axes.</li>
  *   <li>The cliff side (see {@link CliffSide}): where the terrain outside the line goes down steeply, the palisade is
  *       low, and no gate opens. A gate on a cliff moves along its side by 2 blocks at most, or goes away when the wall
  *       keeps another gate.</li>
@@ -134,7 +138,8 @@ public final class VillageWall {
     public static List<StructurePiece> add(Structure.GenerationContext context, TerrainCache heights,
             List<StructurePiece> village, List<BoundingBox> reserved, BlockPos center, WallSettings settings,
             boolean maritime) {
-        return build(context, heights, village, reserved, center, settings, maritime, OptionalInt.empty()).pieces();
+        return build(context, heights, village, reserved, center, settings, maritime, OptionalInt.empty(),
+                WallOutline.Ground.FLAT).pieces();
     }
 
     /**
@@ -189,18 +194,22 @@ public final class VillageWall {
      * {@link #rings}).
      *
      * @param towers the number of towers of the wall (see {@link WallLayout#towers(int)}), or empty for the towers of
-     *               the full layout (see {@link WallLayout#plan}): a tower at each corner, and more towers along the
-     *               sides at the tower spacing of the settings
+     *               the full layout (see {@link WallLayout#plan}): a tower at each outer corner, and more towers along
+     *               the edges at the tower spacing of the settings
+     * @param ground the ground of the site: the free outline of the wall cuts out its high ground (see
+     *               {@link WallLayout#free}). {@link WallOutline.Ground#FLAT} gives the rectangle
      * @return the wall
      */
     public static Wall build(Structure.GenerationContext context, TerrainCache heights, List<StructurePiece> village,
-            List<BoundingBox> reserved, BlockPos center, WallSettings settings, boolean maritime, OptionalInt towers) {
+            List<BoundingBox> reserved, BlockPos center, WallSettings settings, boolean maritime, OptionalInt towers,
+            WallOutline.Ground ground) {
         List<Box> boxes = village.stream().map(piece -> box(piece.getBoundingBox())).toList();
         List<Box> inside = new ArrayList<>(boxes);
         reserved.forEach(space -> inside.add(box(space)));
         List<Gate> gates = List.of(new Gate(Side.NORTH, center.getX()), new Gate(Side.EAST, center.getZ()),
                 new Gate(Side.SOUTH, center.getX()), new Gate(Side.WEST, center.getZ()));
-        WallLayout planned = WallLayout.plan(inside, settings.margin(), settings.towerSpacing(), gates);
+        WallLayout planned = WallLayout.free(inside, settings.margin(), settings.towerSpacing(), gates,
+                new Cell(center.getX(), center.getZ()), ground);
         Terrain terrain = new Terrain(heights);
         int seaLevel = context.chunkGenerator().getSeaLevel();
         boolean[] water = new boolean[planned.ringSize()];
@@ -215,7 +224,7 @@ public final class VillageWall {
         WallLayout gated = withGates(planned, CliffSide.gates(planned,
                 gateDrop(planned, bases, terrain, gate -> arm(planned, gate, stops)), keep));
         WallLayout layout = towers.isPresent()
-                ? gated.withTowers(towers.getAsInt(), side -> cornerView(gated, side, bases, terrain),
+                ? gated.withTowers(towers.getAsInt(), corner -> cornerView(gated, corner.edge(), bases, terrain),
                         tower -> kept(keep, gated.ringIndices(gated.towerBox(tower))))
                 : gated;
         int spare = towers.isPresent() ? Math.max(0, towers.getAsInt() - layout.towers().size()) : 0;
@@ -320,7 +329,7 @@ public final class VillageWall {
             Wall wall = inner;
             WallLayout gated = withGates(planned, CliffSide.ringGates(planned,
                     gateDrop(planned, bases, terrain, gate -> bandArm(planned, gate, band, wall)), keep));
-            ToIntFunction<Side> view = side -> cornerView(gated, side, bases, terrain);
+            ToIntFunction<Tower> view = corner -> cornerView(gated, corner.edge(), bases, terrain);
             Predicate<Tower> allowed = tower -> kept(keep, gated.ringIndices(gated.towerBox(tower)));
             int gateTowers = gated.withTowers(0, view, allowed).towers().size();
             WallLayout layout = gated.withTowers(gateTowers + inner.spareTowers(), view, allowed);
@@ -416,25 +425,26 @@ public final class VillageWall {
 
     /** The parts of a run of palisade in each district cell. */
     private static List<Segment> cut(WallLayout layout, Segment run, ChunkPos start) {
-        Cell first = layout.cell(run.side(), run.from());
-        Cell last = layout.cell(run.side(), run.to());
+        Cell first = layout.cell(run.edge(), run.from());
+        Cell last = layout.cell(run.edge(), run.to());
         List<Integer> cuts = first.x() != last.x() ? RingDistricts.cuts(start.x, first.x(), last.x())
                 : RingDistricts.cuts(start.z, first.z(), last.z());
         List<Segment> parts = new ArrayList<>();
         int from = run.from();
         for (int cut : cuts) {
-            parts.add(new Segment(run.side(), from, run.from() + cut - 1));
+            parts.add(run.between(from, run.from() + cut - 1));
             from = run.from() + cut;
         }
-        parts.add(new Segment(run.side(), from, run.to()));
+        parts.add(run.between(from, run.to()));
         return parts;
     }
 
     /**
      * The path of a gate of a ring across the band: the rows from the ring gate to the flat terrain in front of the
      * gate of the wall inside it ({@link #APPROACH} blocks). The inner gate is on the same axis (see
-     * {@link WallLayout#ring}). The path ends at the level of the inner gate. Empty if the inner wall has no gate there
-     * or if the inner gate opens on water.
+     * {@link WallLayout#ring}). The line of the inner gate is the band or more from the line of the ring: the free
+     * outline of the first wall can have its gate deeper in the box of the wall. The path ends at the level of the inner
+     * gate. Empty if the inner wall has no gate there or if the inner gate opens on water.
      *
      * @param ring  the ring
      * @param gate  the gate of the ring
@@ -446,12 +456,17 @@ public final class VillageWall {
         Optional<Gate> innerGate = inner.gateLevels().keySet().stream()
                 .filter(candidate -> candidate.side() == gate.side() && !inner.waterGates().contains(candidate))
                 .findFirst();
-        int length = band - 2 - APPROACH;
-        if (innerGate.isEmpty() || length < 1) {
+        if (innerGate.isEmpty()) {
             return Optional.empty();
         }
         Side side = gate.side();
-        Cell middle = ring.cell(side, ring.along(gate));
+        Cell middle = ring.cell(gate.edge(), ring.along(gate));
+        Cell inside = inner.layout().cell(innerGate.get().edge(), inner.layout().along(innerGate.get()));
+        int distance = Math.max(band, Math.abs(inside.x() - middle.x()) + Math.abs(inside.z() - middle.z()));
+        int length = distance - 2 - APPROACH;
+        if (length < 1) {
+            return Optional.empty();
+        }
         return Optional.of(new Arm(middle.x() + 2 * side.insideX(), middle.z() + 2 * side.insideZ(), side.insideX(),
                 side.insideZ(), length, OptionalInt.of(inner.gateLevels().get(innerGate.get()))));
     }
@@ -494,11 +509,11 @@ public final class VillageWall {
         List<Segment> runs = new ArrayList<>();
         int start = -1;
         for (int along = segment.from(); along <= segment.to() + 1; along++) {
-            boolean on = along <= segment.to() && keep[layout.ringIndex(segment.side(), along)];
+            boolean on = along <= segment.to() && keep[layout.ringIndex(segment.edge(), along)];
             if (on && start < 0) {
                 start = along;
             } else if (!on && start >= 0) {
-                runs.add(new Segment(segment.side(), start, along - 1));
+                runs.add(segment.between(start, along - 1));
                 start = -1;
             }
         }
@@ -513,9 +528,9 @@ public final class VillageWall {
         List<Segment> parts = new ArrayList<>();
         int start = segment.from();
         for (int along = segment.from() + 1; along <= segment.to() + 1; along++) {
-            if (along > segment.to() || flags[layout.ringIndex(segment.side(), along)]
-                    != flags[layout.ringIndex(segment.side(), start)]) {
-                parts.add(new Segment(segment.side(), start, along - 1));
+            if (along > segment.to() || flags[layout.ringIndex(segment.edge(), along)]
+                    != flags[layout.ringIndex(segment.edge(), start)]) {
+                parts.add(segment.between(start, along - 1));
                 start = along;
             }
         }
@@ -534,29 +549,30 @@ public final class VillageWall {
      */
     private static CliffSide.GateDrop gateDrop(WallLayout layout, int[] bases, Terrain terrain,
             Function<Gate, Optional<Arm>> arm) {
-        return (side, along) -> {
-            Gate gate = new Gate(side, WallLayout.position(layout.outline(), side, along));
+        return (edge, along) -> {
+            Gate gate = new Gate(layout.side(edge), layout.position(edge, along), edge);
             int level = layout.ringIndices(gate).stream().mapToInt(index -> bases[index]).max().orElseThrow();
-            return reachable(level, arm.apply(gate)) - CliffSide.lowestInFront(layout, side, along, terrain::height);
+            return reachable(level, arm.apply(gate)) - CliffSide.lowestInFront(layout, edge, along, terrain::height);
         };
     }
 
     /**
-     * The view of the corner at the start of a side: the number of points of a grid outside the corner that are lower
-     * than the eyes of an archer on a tower of the corner ({@link #TOWER_EYES} blocks above the base of the corner).
-     * The grid has {@link #VIEW_POINTS} x {@link #VIEW_POINTS} points, {@link #VIEW_STEP} blocks apart, in the quarter
-     * outside the 2 sides of the corner. A corner above the terrain around it sees more points.
+     * The view of the outer corner at the start of an edge: the number of points of a grid outside the corner that are
+     * lower than the eyes of an archer on a tower of the corner ({@link #TOWER_EYES} blocks above the base of the
+     * corner). The grid has {@link #VIEW_POINTS} x {@link #VIEW_POINTS} points, {@link #VIEW_STEP} blocks apart, in the
+     * quarter outside the 2 edges of the corner. A corner above the terrain around it sees more points.
      *
      * @param layout  the wall
-     * @param side    the side that starts at the corner
+     * @param edge    the number of the edge that starts at the corner
      * @param bases   the bases of the ring, before the towers and the gates
      * @param terrain the terrain
      * @return the view, from 0 to {@code VIEW_POINTS * VIEW_POINTS}
      */
-    private static int cornerView(WallLayout layout, Side side, int[] bases, Terrain terrain) {
-        Cell corner = layout.cell(side, 0);
-        Side before = side.previous();
-        int eyes = bases[layout.ringIndex(side, 0)] + TOWER_EYES;
+    private static int cornerView(WallLayout layout, int edge, int[] bases, Terrain terrain) {
+        Cell corner = layout.cell(edge, 0);
+        Side side = layout.side(edge);
+        Side before = layout.side(layout.previous(edge));
+        int eyes = bases[layout.ringIndex(edge, 0)] + TOWER_EYES;
         int view = 0;
         for (int i = 1; i <= VIEW_POINTS; i++) {
             for (int j = 1; j <= VIEW_POINTS; j++) {
@@ -598,7 +614,7 @@ public final class VillageWall {
      */
     static boolean isWaterGate(WallLayout layout, Gate gate, IntBinaryOperator top, int seaLevel) {
         Side side = gate.side();
-        Cell middle = layout.cell(side, layout.along(gate));
+        Cell middle = layout.cell(gate.edge(), layout.along(gate));
         int count = 0;
         for (int distance : FRONT) {
             if (isWater(top.applyAsInt(middle.x() - side.insideX() * distance, middle.z() - side.insideZ() * distance),
@@ -638,7 +654,7 @@ public final class VillageWall {
     static Optional<PierPiece> pier(WallLayout layout, Gate gate, int level, IntBinaryOperator top, int seaLevel,
             PierBlocks blocks, BoundingBox limit) {
         Side side = gate.side();
-        Cell middle = layout.cell(side, layout.along(gate));
+        Cell middle = layout.cell(gate.edge(), layout.along(gate));
         int outX = -side.insideX();
         int outZ = -side.insideZ();
         int length = 0;
@@ -697,33 +713,34 @@ public final class VillageWall {
         List<TerrainPiece> pieces = new ArrayList<>();
         for (Segment segment : layout.segments()) {
             Side side = segment.side();
+            int edge = segment.edge();
             for (int from = segment.from(); from <= segment.to(); from += SECTION) {
                 int to = Math.min(from + SECTION - 1, segment.to());
                 int ground = Integer.MIN_VALUE;
                 boolean onWater = true;
                 for (int along = from; along <= to; along++) {
-                    int index = layout.ringIndex(side, along);
+                    int index = layout.ringIndex(edge, along);
                     ground = Math.max(ground, bases[index]);
                     onWater &= water[index];
                 }
                 if (!onWater) {
-                    pieces.add(across(layout.cell(side, from), layout.cell(side, to), side, FLAT_WIDTH, FLAT_WIDTH,
+                    pieces.add(across(layout.cell(edge, from), layout.cell(edge, to), side, FLAT_WIDTH, FLAT_WIDTH,
                             ground, false));
                 }
             }
         }
-        for (Side side : Side.values()) {
-            int index = layout.ringIndex(side, 0);
-            if (!layout.hasCornerTower(side) && !water[index]) {
-                Cell corner = layout.cell(side, 0);
+        for (int edge = 0; edge < layout.edges(); edge++) {
+            int index = layout.ringIndex(edge, 0);
+            if (!layout.hasCornerTower(edge) && !water[index]) {
+                Cell corner = layout.cell(edge, 0);
                 pieces.add(new TerrainPiece(corner.x() - FLAT_WIDTH, corner.z() - FLAT_WIDTH, corner.x() + FLAT_WIDTH,
                         corner.z() + FLAT_WIDTH, bases[index], false));
             }
         }
         for (Gate gate : layout.gates().stream().filter(gateLevels::containsKey).toList()) {
             int middle = layout.along(gate);
-            pieces.add(across(layout.cell(gate.side(), middle - WallLayout.GATE / 2),
-                    layout.cell(gate.side(), middle + WallLayout.GATE / 2), gate.side(),
+            pieces.add(across(layout.cell(gate.edge(), middle - WallLayout.GATE / 2),
+                    layout.cell(gate.edge(), middle + WallLayout.GATE / 2), gate.side(),
                     waterGates.contains(gate) ? 0 : APPROACH, ENTRANCE, gateLevels.get(gate), true));
         }
         return pieces;
@@ -797,7 +814,7 @@ public final class VillageWall {
 
     /** The origin of the template of a tower: the corner of the tower on the line, at the start of the tower. */
     static BlockPos towerOrigin(WallLayout layout, Tower tower, int level) {
-        Cell start = layout.cell(tower.side(), tower.along());
+        Cell start = layout.cell(tower.edge(), tower.along());
         return new BlockPos(start.x(), level, start.z());
     }
 
@@ -807,7 +824,7 @@ public final class VillageWall {
      */
     static BlockPos gateOrigin(WallLayout layout, Gate gate, int level) {
         Side side = gate.side();
-        Cell start = layout.cell(side, layout.along(gate) - WallLayout.GATE / 2);
+        Cell start = layout.cell(gate.edge(), layout.along(gate) - WallLayout.GATE / 2);
         return new BlockPos(start.x() - side.insideX(), level, start.z() - side.insideZ());
     }
 
@@ -826,16 +843,15 @@ public final class VillageWall {
      */
     private static PalisadePiece palisade(WallLayout layout, Segment segment, int[] bases, PalisadeBlocks blocks,
             boolean[] cliffs) {
+        int edge = segment.edge();
         Side side = segment.side();
-        Cell start = layout.cell(side, segment.from());
-        Cell next = layout.cell(side, segment.from() + 1);
+        Cell start = layout.cell(edge, segment.from());
         int[] columns = new int[segment.length()];
         for (int i = 0; i < columns.length; i++) {
-            columns[i] = bases[layout.ringIndex(side, segment.from() + i)];
+            columns[i] = bases[layout.ringIndex(edge, segment.from() + i)];
         }
-        int logs = CliffSide.logs(cliffs[layout.ringIndex(side, segment.from())]);
-        return new PalisadePiece(start.x(), start.z(), next.x() - start.x(), next.z() - start.z(), columns, logs,
-                blocks);
+        int logs = CliffSide.logs(cliffs[layout.ringIndex(edge, segment.from())]);
+        return new PalisadePiece(start.x(), start.z(), side.alongX(), side.alongZ(), columns, logs, blocks);
     }
 
     /**
@@ -909,16 +925,15 @@ public final class VillageWall {
      */
     static Optional<Arm> arm(WallLayout layout, Gate gate, List<Stop> stops) {
         Side side = gate.side();
-        Cell middle = layout.cell(side, layout.along(gate));
+        Cell middle = layout.cell(gate.edge(), layout.along(gate));
         int startX = middle.x() + 2 * side.insideX();
         int startZ = middle.z() + 2 * side.insideZ();
-        Box outline = layout.outline();
         int length = 0;
         OptionalInt end = OptionalInt.empty();
         while (true) {
             int x = startX + length * side.insideX();
             int z = startZ + length * side.insideZ();
-            if (!outline.contains(x, z)) {
+            if (!layout.contains(x, z)) {
                 break;
             }
             Optional<Stop> stop = stops.stream().filter(candidate -> candidate.box().contains(x, z)).findFirst();
