@@ -473,8 +473,10 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      *
      * <p>With a ground, the plan tries the rules of the ground from the strongest ({@link Rules}), and keeps the first
      * plan with all its plots, all its homes and all its wide plots. When no plan has them, it keeps the best plan of
-     * the rules (see {@link #BETTER}), the strongest rules first. The first piece of each axis street and its plots do
-     * not obey the rules of the ground: they keep the bank and the first jobs next to the plaza.
+     * the rules (see {@link #BETTER}), the strongest rules first. The first pieces of the axis streets to the north
+     * and to the south and their plots do not obey the rules of the ground: they keep the bank and the first jobs next
+     * to the plaza. Each rule set first makes the plan with the first pieces of the streets to the east and to the west
+     * on the rules of the ground, then the plan with no rule for these pieces.
      *
      * @param ground  the rules of the terrain (see {@link Ground}), or {@link Ground#ANY}
      * @param stagger true for homes with a random setback and a random shift (see {@link Plot#setback()}). False for
@@ -486,10 +488,30 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         int half = plazaSize / 2;
         Box plaza = new Box(-half, -half, plazaSize - 1 - half, plazaSize - 1 - half);
         long maxRadius = size.maxRadius();
-        List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.ALL, Rules.HIGH, Rules.NO_LEVEL);
-        return firstComplete(rules, rule -> best(seed, random -> new Planner(target,
-                target - size.sparePlots(target), style, box -> box.reach() <= maxRadius, List.of(plaza), true,
-                stagger, terrain, foundation, ground, rule, random).plan(starts)));
+        if (ground == Ground.ANY) {
+            return firstComplete(List.of(Rules.NONE), rule -> best(seed, random -> new Planner(target,
+                    target - size.sparePlots(target), style, box -> box.reach() <= maxRadius, List.of(plaza), true,
+                    stagger, terrain, foundation, ground, rule, false, random).plan(starts)));
+        }
+        // Each rule set first with the side streets on the rules of the ground from the plaza, then with no rule for
+        // their first pieces.
+        List<Rules> rules = List.of(Rules.ALL, Rules.HIGH, Rules.NO_LEVEL);
+        List<Boolean> sides = List.of(true, false);
+        VillagePlan best = null;
+        for (Rules rule : rules) {
+            for (boolean side : sides) {
+                VillagePlan plan = best(seed, random -> new Planner(target, target - size.sparePlots(target), style,
+                        box -> box.reach() <= maxRadius, List.of(plaza), true, stagger, terrain, foundation, ground,
+                        rule, side, random).plan(starts));
+                if (plan.missingPlots() + plan.missingHomes() == 0 && plan.missingWide().isEmpty()) {
+                    return plan;
+                }
+                if (best == null || BETTER.compare(plan, best) < 0) {
+                    best = plan;
+                }
+            }
+        }
+        return best;
     }
 
     /**
@@ -649,7 +671,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.ALL, Rules.REGION, Rules.NONE);
         // A band has no outline rule and no rise: ALL and REGION differ by the level of the plots only.
         return firstComplete(rules, rule -> best(seed, random -> new Planner(target, target - size.sparePlots(target),
-                plain, region, axes, false, true, terrain, foundation, ground, rule, random).plan(starts, optional)));
+                plain, region, axes, false, true, terrain, foundation, ground, rule, false, random)
+                .plan(starts, optional)));
     }
 
     /** A box of the plan as a box of a wall. */
@@ -745,6 +768,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final Ground ground;
         /** The rules of the ground that the plan obeys. */
         private final Rules rules;
+        /** True when the first pieces of the axis streets to the east and to the west obey the rules of the ground. */
+        private final boolean sideRules;
         /** The points of the ground near the plaza, the pieces, the street ends and the plots (see {@link Ground}). */
         private final Set<Long> covered = new HashSet<>();
         private final List<Piece> pieces = new ArrayList<>();
@@ -755,7 +780,8 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
 
         Planner(int target, int needed, StreetStyle style, Predicate<Box> region, List<Box> blocked, boolean axis,
                 boolean stagger, Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, Rules rules,
-                Random random) {
+                boolean sideRules, Random random) {
+            this.sideRules = sideRules;
             this.target = target;
             this.needed = needed;
             this.style = style;
@@ -786,9 +812,19 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             return !rules.outline() || !axis || ground.lineFits(box, rules.rise(), covered);
         }
 
-        /** True for an open end of the first piece of an axis street: it does not obey the rules of the ground. */
+        /**
+         * True for an open end of the first piece of an axis street that does not obey the rules of the ground. The
+         * first pieces of the streets to the north and to the south have plots with roles: they never obey the rules.
+         * With {@link #sideRules}, the first pieces of the streets to the east and to the west obey the rules: on bad
+         * ground, such a street has its street end only.
+         */
         private boolean first(Tail tail) {
-            return axis && tail.parent() < 0 && tail.exit() < 0;
+            return axis && tail.parent() < 0 && tail.exit() < 0 && (!sideRules || hasRoles(tail.start().dir()));
+        }
+
+        /** True for the axis streets with plots with a role on their first piece: north and south. */
+        private static boolean hasRoles(Dir street) {
+            return street == Dir.NORTH || street == Dir.SOUTH;
         }
 
         VillagePlan plan(List<Start> starts) {
@@ -1245,7 +1281,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     .union(slot.area());
             int overflow = slot.along() + wide.frontage() - 1 - wide.frontage() / 2 - (piece.length() - 1);
             boolean next = pieces.stream().anyMatch(p -> p.parent() == slot.piece() && p.exit() == 0);
-            boolean rulesApply = !(axis && piece.parent() < 0) && grounded();
+            boolean rulesApply = !(axis && piece.parent() < 0 && (!sideRules || hasRoles(piece.dir()))) && grounded();
             if (rulesApply && !(ground.inside(area, rules.rise()) && (!rules.level() || ground.level(area, slot.x(), slot.z()))
                     && outlineOk(area))) {
                 return null;
