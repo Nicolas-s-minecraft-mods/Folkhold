@@ -107,6 +107,9 @@ public final class GroupCommandGameTests {
         Settlement village = Settlements.of(server, heart).orElseThrow();
         village.economy().setPopulation(10);
         village.economy().setInitialized(true);
+        // The jobs of the slots come from the random id of the village. A job of level 1 with inputs: the village
+        // needs its items.
+        village.economy().setJobs(List.of("folkhold_world:carpenter"));
         // With no stock, the village needs its items: it offers deliveries.
         TestSupport.emptyStock(village);
         ServerPlayer player = TestSupport.mockPlayer(helper, UUID.randomUUID(), "quest-player");

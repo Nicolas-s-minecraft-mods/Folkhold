@@ -19,6 +19,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.WorldOptions;
@@ -44,6 +45,11 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  *       the scanned chunks.</li>
  *   <li>Stair in the air: a stair at the top of a column of the streets with no collision block below it.</li>
  *   <li>Coarse dirt in a path: a column of coarse dirt between 2 columns of dirt path.</li>
+ *   <li>Street stair with no higher row, or against a cliff: a stair of the streets (on the lower row, facing the
+ *       higher row) where the column in front of it is lower than the stair, or 2 blocks or more higher.</li>
+ *   <li>Path block out of the streets: a dirt path at the top of a column of the village, out of the paths and of the
+ *       template pieces.</li>
+ *   <li>Foundations: the height of the dirt and the cobblestone under the corners of each building.</li>
  * </ul>
  *
  * <p>The log has a line {@code Village ground measure:} for each village, and the line {@code Village ground measure |}
@@ -93,7 +99,8 @@ public final class VillageGroundGameTests {
                 ChunkPos start = new ChunkPos(near.getFirst());
                 found.add(start);
                 Map<String, Integer> counts = scan(level, village.value(), start);
-                counts.forEach((key, value) -> all.merge(key, value, Integer::sum));
+                counts.forEach((key, value) -> all.merge(key, value,
+                        key.startsWith("highest") ? Math::max : Integer::sum));
                 FolkholdWorld.LOGGER.info("Village ground measure: start chunk {}: {}", start, counts);
             }
             FolkholdWorld.LOGGER.info("Village ground measure | {} villages | {} |", found.size(), all);
@@ -136,7 +143,10 @@ public final class VillageGroundGameTests {
                 }));
             }
         }
-        List<BoundingBox> notPaths = start.getPieces().stream().filter(piece -> !(piece instanceof VillagePathPiece))
+        // The boxes of the pieces out of the paths and the stairs of the streets: the box of the stairs of a street
+        // covers its banks.
+        List<BoundingBox> notPaths = start.getPieces().stream().filter(piece -> !(piece instanceof VillagePathPiece)
+                && !(piece instanceof io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece))
                 .map(StructurePiece::getBoundingBox).toList();
         counts.put("pieces", start.getPieces().size());
         counts.put("path pieces", (int) start.getPieces().stream().filter(VillagePathPiece.class::isInstance)
@@ -159,6 +169,25 @@ public final class VillageGroundGameTests {
                                 topPos.below()).isEmpty()) {
                     counts.merge("stair in the air", 1, Integer::sum);
                     sample(counts, "stair in the air", topPos + " " + state + " in " + pieceNames(start, x, top, z));
+                }
+                if (state.getBlock() instanceof StairBlock && isOnStreet(start, topPos)) {
+                    // A stair of a street is on the lower row and faces the higher row: the top of the column in
+                    // front is at the level of the stair.
+                    Direction facing = state.getValue(StairBlock.FACING);
+                    int front = top(chunks, level, x + facing.getStepX(), z + facing.getStepZ());
+                    if (front != Integer.MIN_VALUE && front < top) {
+                        counts.merge("street stair with no higher row", 1, Integer::sum);
+                        sample(counts, "street stair with no higher row", topPos + " " + state + " front " + front);
+                    } else if (front != Integer.MIN_VALUE && front >= top + 2) {
+                        counts.merge("street stair against a cliff", 1, Integer::sum);
+                        sample(counts, "street stair against a cliff", topPos + " " + state + " front " + front);
+                    }
+                }
+                if (state.is(Blocks.DIRT_PATH) && start.getBoundingBox().isInside(topPos)
+                        && !isInAStreet(start, topPos)) {
+                    // A dirt path out of the streets: for example on the side of a cliff, above the street.
+                    counts.merge("path block out of the streets", 1, Integer::sum);
+                    sample(counts, "path block out of the streets", topPos + " in " + pieceNames(start, x, top, z));
                 }
                 if (state.is(Blocks.COARSE_DIRT)
                         && ((isPath(chunks, level, x - 1, z) && isPath(chunks, level, x + 1, z))
@@ -206,6 +235,7 @@ public final class VillageGroundGameTests {
             }
         }
         counts.put("path columns", pathColumns);
+        foundations(chunks, start, counts);
         return counts;
     }
 
@@ -226,6 +256,49 @@ public final class VillageGroundGameTests {
                         ? pool.getElement().toString() : piece.getClass().getSimpleName()).toList();
     }
 
+    /**
+     * Counts the height of the foundation under each corner of each building of a village: the blocks of dirt and of
+     * cobblestone under the lowest layer of the piece, down to the first other block. The counts give the buildings
+     * with a foundation of 4 blocks or more, of 8 or more, and the highest foundation.
+     */
+    private static void foundations(Map<Long, ChunkAccess> chunks, StructureStart start, Map<String, Integer> counts) {
+        for (StructurePiece piece : start.getPieces()) {
+            if (!(piece instanceof net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece pool)
+                    || pool.getElement().toString().contains("/street")) {
+                continue;
+            }
+            BoundingBox box = piece.getBoundingBox();
+            int highest = 0;
+            for (int[] corner : new int[][] {{box.minX(), box.minZ()}, {box.maxX(), box.minZ()},
+                {box.minX(), box.maxZ()}, {box.maxX(), box.maxZ()}}) {
+                ChunkAccess chunk = chunks.get(ChunkPos.asLong(corner[0] >> 4, corner[1] >> 4));
+                if (chunk == null) {
+                    continue;
+                }
+                int depth = 0;
+                for (int y = box.minY() - 1; y > box.minY() - 32; y--) {
+                    BlockState below = chunk.getBlockState(new BlockPos(corner[0], y, corner[1]));
+                    if (!below.is(Blocks.DIRT) && !below.is(Blocks.COBBLESTONE) && !below.is(Blocks.MOSSY_COBBLESTONE)
+                            && !below.is(Blocks.COARSE_DIRT)) {
+                        break;
+                    }
+                    depth++;
+                }
+                highest = Math.max(highest, depth);
+            }
+            if (highest >= 4) {
+                counts.merge("building on a foundation of 4 or more", 1, Integer::sum);
+            }
+            if (highest >= 8) {
+                counts.merge("building on a foundation of 8 or more", 1, Integer::sum);
+                sample(counts, "building on a foundation of 8 or more", box + " " + pool.getElement() + " " + highest);
+            }
+            counts.merge("buildings", 1, Integer::sum);
+            counts.merge("highest foundation", 0, Math::max);
+            counts.put("highest foundation", Math.max(counts.get("highest foundation"), highest));
+        }
+    }
+
     /** True for a block of the ground: dirt, grass, sand, gravel, clay, mud or stone. */
     private static boolean isTerrain(BlockState state) {
         return state.is(BlockTags.DIRT) || state.is(BlockTags.SAND) || state.is(BlockTags.BASE_STONE_OVERWORLD)
@@ -243,6 +316,18 @@ public final class VillageGroundGameTests {
                 || piece instanceof io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece
                 || (piece instanceof net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece pool
                         && pool.getElement().toString().contains("/street")));
+    }
+
+    /**
+     * True for a block in a piece of a village that can have a dirt path: a path, the stairs of the streets, or a
+     * template piece (a street, a gate, the plaza, a tower). The pieces of the terrain ({@code TerrainPiece},
+     * {@code GroundFillPiece}) do not count.
+     */
+    private static boolean isInAStreet(StructureStart start, BlockPos pos) {
+        return start.getPieces().stream().filter(piece -> piece.getBoundingBox().isInside(pos))
+                .anyMatch(piece -> piece instanceof VillagePathPiece
+                        || piece instanceof io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece
+                        || piece instanceof net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece);
     }
 
     /** True for a block of a building or a street: a stair, planks or a slab. */

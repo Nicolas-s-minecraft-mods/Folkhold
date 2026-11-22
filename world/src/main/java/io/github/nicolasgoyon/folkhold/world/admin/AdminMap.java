@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.world.admin;
 
 import io.github.nicolasgoyon.cartofold.api.CartofoldLayers;
+import io.github.nicolasgoyon.cartofold.api.ChunkArea;
 import io.github.nicolasgoyon.cartofold.api.LayerContent;
 import io.github.nicolasgoyon.cartofold.api.LayerInfo;
 import io.github.nicolasgoyon.cartofold.api.LayerUpdate;
@@ -11,6 +12,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
 import io.github.nicolasgoyon.folkhold.core.sim.group.GroupKind;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
+import io.github.nicolasgoyon.folkhold.core.sim.pillager.PillagerCamp;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claimant;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
@@ -23,6 +25,7 @@ import io.github.nicolasgoyon.folkhold.world.network.AdminMapPayload;
 import io.github.nicolasgoyon.folkhold.world.network.AdminMapPayload.Kind;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,7 +49,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
  * The map of the admin screen: the layer {@link #LAYER} of Cartofold, with all the settlements and their territories,
- * the caravans and the traveling merchants. The operator selects a marker and teleports to it.
+ * all the pillager territories of the world, the caravans and the traveling merchants. The operator selects a marker and teleports to it.
  *
  * <ul>
  *   <li>Only the map frames show the layer ({@link MapViewKind#FRAME}). The server sends it only to an operator who
@@ -95,7 +98,8 @@ public final class AdminMap {
     /**
      * The data of the layer at one check, for all the operators.
      *
-     * @param source      the claims and the markers of the settlements: a change sends the layer again
+     * @param source      the claims, the markers of the settlements and the pillager camps: a change sends the layer
+     *                    again
      * @param settlements the markers of the settlements
      * @param groups      the markers of the groups, after the settlements up to the limit of the markers
      * @param content     the full layer, made only when an operator needs it
@@ -212,17 +216,20 @@ public final class AdminMap {
         }
         List<MapMarker> settlementMarkers = settlements;
         List<MapMarker> groupMarkers = groups;
+        List<PillagerCamp> camps = List.copyOf(PillagerData.get(server).camps());
         LayerContent[] made = new LayerContent[1];
         Supplier<LayerContent> content = () -> {
             if (made[0] == null) {
                 List<MapMarker> markers = new ArrayList<>(settlementMarkers);
                 markers.addAll(groupMarkers);
-                made[0] = new LayerContent(INFO, CartofoldMaps.areas(villages(server, claimants), claimants),
-                        List.of(), markers);
+                List<ChunkArea> areas = new ArrayList<>(CartofoldMaps.areas(villages(server, claimants), claimants));
+                areas.addAll(CartofoldMaps.pillagerAreas(camps, camps, claimants));
+                made[0] = new LayerContent(INFO, areas, List.of(), markers);
             }
             return made[0];
         };
-        return new Snapshot(List.of(claimants, settlements), settlements, groups, content, new IdentityHashMap<>());
+        return new Snapshot(List.of(claimants, settlements, camps), settlements, groups, content,
+                new IdentityHashMap<>());
     }
 
     /** Sends the changes of the layer when a settlement or a claim changed, else the changes of the groups. */

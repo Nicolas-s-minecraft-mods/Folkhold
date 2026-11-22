@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claimant;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload.Row;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload.Section;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerFaction;
 import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.Optional;
@@ -51,9 +52,9 @@ class PayloadCodecsTest {
     void adminList() {
         AdminListPayload payload = new AdminListPayload(List.of(
                 new AdminListPayload.Summary("id-1", "Northam", Component.literal("Ash"), 7,
-                        Component.literal("Town"), true, 100, -200, 15, 320, true),
+                        Component.literal("Town"), true, 100, -200, 15, 320, true, "faction_1", 0x3C5A9A, "valeholm"),
                 new AdminListPayload.Summary("id-2", "Ruinton", Component.literal("Oak"), 1,
-                        Component.literal("Hamlet"), false, -5, 5, 0, 0, false)));
+                        Component.literal("Hamlet"), false, -5, 5, 0, 0, false, "faction_2", 0x9A3C3C, "")));
         assertEquals(payload, roundTrip(AdminListPayload.STREAM_CODEC, payload));
     }
 
@@ -85,6 +86,28 @@ class PayloadCodecsTest {
                         0x00FF00)));
         assertEquals(payload, roundTrip(TerritoryMapPayload.STREAM_CODEC, payload));
         assertEquals(TerritoryMapPayload.EMPTY, roundTrip(TerritoryMapPayload.STREAM_CODEC, TerritoryMapPayload.EMPTY));
+        TerritoryMapPayload pillagers = new TerritoryMapPayload(payload.villages(), true);
+        assertEquals(pillagers, roundTrip(TerritoryMapPayload.STREAM_CODEC, pillagers));
+    }
+
+    /**
+     * The legend of the map has each faction of the villages one time, in the order of the discovery, and the pillager
+     * faction only when the player entered a pillager territory.
+     */
+    @Test
+    void legendHasThePillagersWhenThePlayerKnowsACamp() {
+        List<TerritoryMapPayload.Village> villages = List.of(
+                new TerritoryMapPayload.Village(new Claimant("id-1", 0, 0, 1, 2), "Northam", "Ash", 0xAA5500),
+                new TerritoryMapPayload.Village(new Claimant("id-2", 99, 0, 1, 2), "Southam", "Oak", 0x00FF00),
+                new TerritoryMapPayload.Village(new Claimant("id-3", 0, 99, 1, 2), "Westam", "Ash", 0xAA5500));
+        List<TerritoryMapPayload.LegendEntry> without = new TerritoryMapPayload(villages, false).legend();
+        assertEquals(List.of("Ash", "Oak"), without.stream().map(entry -> entry.name().getString()).toList());
+        List<TerritoryMapPayload.LegendEntry> with = new TerritoryMapPayload(villages, true).legend();
+        assertEquals(3, with.size());
+        assertEquals(PillagerFaction.name(), with.get(2).name());
+        assertEquals(PillagerFaction.COLOR, with.get(2).color());
+        assertEquals(List.of(new TerritoryMapPayload.LegendEntry(PillagerFaction.name(), PillagerFaction.COLOR)),
+                new TerritoryMapPayload(List.of(), true).legend());
     }
 
     @Test
