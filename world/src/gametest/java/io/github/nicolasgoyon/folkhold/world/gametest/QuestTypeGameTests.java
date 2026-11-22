@@ -154,7 +154,7 @@ public final class QuestTypeGameTests {
         Map<String, Integer> byItem = new TreeMap<>();
         int total = 0;
         try {
-            while (total < 100) {
+            for (int round = 0; round < 50 && total < 100; round++) {
                 for (Settlement village : villages) {
                     for (Quest quest : QuestSystem.offerQuests(server, village, helper.getLevel().getGameTime())) {
                         total++;
@@ -172,6 +172,7 @@ public final class QuestTypeGameTests {
         FolkholdWorld.LOGGER.info("Quest type sample: {} offers, by type {}, deliveries by item {}", total, byNeed,
                 byItem);
         int sample = total;
+        helper.assertTrue(sample >= 100, "The sample must have 100 offers or more: " + sample);
         helper.assertTrue(byNeed.size() >= 2, "The sample must have 2 types or more: " + byNeed);
         byNeed.forEach((need, count) -> helper.assertTrue((double) count / sample <= MAX_TYPE_SHARE,
                 "The type " + need + " has " + count + " of " + sample + " offers"));
