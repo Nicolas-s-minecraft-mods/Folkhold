@@ -486,7 +486,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         int half = plazaSize / 2;
         Box plaza = new Box(-half, -half, plazaSize - 1 - half, plazaSize - 1 - half);
         long maxRadius = size.maxRadius();
-        List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.values());
+        List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.ALL, Rules.HIGH, Rules.NO_LEVEL);
         return firstComplete(rules, rule -> best(seed, random -> new Planner(target,
                 target - size.sparePlots(target), style, box -> box.reach() <= maxRadius, List.of(plaza), true,
                 stagger, terrain, foundation, ground, rule, random).plan(starts)));
@@ -702,9 +702,14 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             .thenComparingLong(VillagePlan::sideShortfall)
             .thenComparingDouble(VillagePlan::radius);
 
-    /** A plot before the choice of the homes. */
+    /**
+     * A plot before the choice of the homes.
+     *
+     * @param shallow the wide home that takes the place of the home of the style on small ground (a home that is less
+     *                deep than the home of the style), or null. The plot is a wide plot of this home only
+     */
     private record Slot(int x, int z, Dir facing, int piece, int along, boolean east, Box area, PlotRole role,
-            boolean good, boolean foundation, int setback, int shift, int cliff) {
+            boolean good, boolean foundation, int setback, int shift, int cliff, Home shallow) {
         /** True for a plot of a building of the first pieces: it is never wide and never spare. */
         boolean reserved() {
             return role != PlotRole.HOME;
@@ -1049,7 +1054,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     if (cliff > 0 && free(flat, false) && outlineOk(flat)) {
                         grow(flat);
                         slots.add(new Slot(connector[0], connector[1], facing, index, along, east, flat, role, true,
-                                false, 0, 0, cliff));
+                                false, 0, 0, cliff, null));
                         continue;
                     }
                     Box area = area(start, along, east, style.home(), setback, shift);
@@ -1065,10 +1070,43 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                                 || ground.level(area, connector[0], connector[1]);
                         boolean good = level && terrain.test(area);
                         slots.add(new Slot(connector[0], connector[1], facing, index, along, east, area, role, good,
-                                !good && level && foundation.test(area), setback, shift, 0));
+                                !good && level && foundation.test(area), setback, shift, 0, null));
+                        continue;
+                    }
+                    // Small ground: the greedy growth tries a home that is less deep than the home of the style.
+                    Slot shallow = rulesApply && grounded() && role == PlotRole.HOME
+                            ? shallowSlot(start, index, along, east, connector, facing, length(kind)) : null;
+                    if (shallow != null) {
+                        grow(shallow.area());
+                        slots.add(shallow);
                     }
                 }
             }
+        }
+
+        /**
+         * A plot of a wide home that is less deep than the home of the style, at the edge of the street, or null when
+         * no such home fits: the plot is on bad terrain, out of the rules of the ground, or past the end of its piece.
+         * The wide homes go from the least deep.
+         */
+        private Slot shallowSlot(Start start, int index, int along, boolean east, int[] connector, Dir facing,
+                int pieceLength) {
+            List<Home> homes = style.wide().stream().filter(home -> home.depth() < style.home().depth()
+                    && !home.name().equals(VillageBuildings.MARKET)).sorted(Comparator.comparingInt(Home::depth))
+                    .toList();
+            for (Home home : homes) {
+                int overflow = along + home.frontage() - 1 - home.frontage() / 2 - (pieceLength - 1);
+                if (overflow > Math.max(0, style.endOverflow())) {
+                    continue;
+                }
+                Box area = area(start, along, east, home);
+                if (plotFits(area, true) && terrain.test(area)
+                        && (!rules.level() || ground.level(area, connector[0], connector[1]))) {
+                    return new Slot(connector[0], connector[1], facing, index, along, east, area, PlotRole.HOME, true,
+                            false, 0, 0, 0, home);
+                }
+            }
+            return null;
         }
 
         /** True when the area of a plot is free and, when the rules of the ground apply, inside the outline rule. */
@@ -1124,8 +1162,13 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             Map<Slot, Home> wideOf = new LinkedHashMap<>();
             Map<Slot, Box> areas = new HashMap<>();
             Map<String, Integer> missingWide = new LinkedHashMap<>();
+            for (Slot slot : order) {
+                if (slot.shallow() != null) {
+                    wideOf.put(slot, slot.shallow());
+                }
+            }
             for (Home wide : style.wide()) {
-                int marked = 0;
+                int marked = (int) wideOf.values().stream().filter(wide::equals).count();
                 for (Slot slot : List.copyOf(order)) {
                     if (marked >= wide.count()) {
                         break;
@@ -1178,7 +1221,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 plots.add(plot(slot, wideOf.get(slot), areas, false));
             }
             for (Slot slot : rest.subList(0, Math.max(0, count - homes.size()))) {
-                plots.add(plot(slot, null, areas, true));
+                plots.add(plot(slot, slot.shallow(), areas, true));
             }
             return new Choice(plots, target - count, Math.max(0, needed - homes.size()), missingWide);
         }

@@ -28,7 +28,8 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
  * <ul>
  *   <li>A pillager camp is a structure start of the tag {@link #SITES} (by default the vanilla pillager outpost).
  *       When a chunk of the Overworld loads with such a start, the mod records the camp: the center of the box of the
- *       structure, and the radius of the territory from the server config ({@code pillagers.territoryRadius}).</li>
+ *       structure, and the radius of the territory from the server config ({@code pillagers.territoryRadius}). This
+ *       camp takes the place of a camp of the discovery with the same start chunk (see {@link PillagerDiscovery}).</li>
  *   <li>A position is in the territory of a camp when the center of its chunk is in the disc of the camp, and no
  *       settlement claims the chunk (see {@link PillagerCamps}).</li>
  * </ul>
@@ -60,7 +61,7 @@ public final class PillagerTerritories {
             BoundingBox box = start.getBoundingBox();
             PillagerCamp camp = new PillagerCamp(PillagerCamp.id(startChunk.x, startChunk.z), box.getCenter().getX(),
                     box.minY(), box.getCenter().getZ(), WorldConfig.PILLAGER_TERRITORY_RADIUS.get());
-            if (PillagerData.get(level.getServer()).addCamp(camp)) {
+            if (PillagerData.get(level.getServer()).setCamp(camp)) {
                 FolkholdWorld.LOGGER.debug("Pillager camp {} at {} {} {}", camp.id(), camp.x(), camp.y(), camp.z());
             }
         }
