@@ -187,7 +187,57 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     @Override
     public void postProcess(WorldGenLevel level, StructureManager structureManager, ChunkGenerator generator,
             RandomSource random, BoundingBox box, ChunkPos chunkPos, BlockPos pivot) {
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        if (levels.length != length) {
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+            forEachBlock(box, (x, z, edge, row) -> placePath(level, pos, x, z));
+            return;
+        }
+        place(of(level), box);
+    }
+
+    /**
+     * The blocks that a path reads and changes: the level at the generation, or a record of the changes at runtime
+     * (the builders of a new ring, see {@link io.github.nicolasgoyon.folkhold.world.village.RingWall}).
+     */
+    public interface PathBlocks {
+        /** The block at a position. */
+        BlockState get(BlockPos pos);
+
+        /** Changes the block at a position. */
+        void set(BlockPos pos, BlockState state);
+
+        /** The Y of the first free block above the highest block of a column ({@code WORLD_SURFACE}). */
+        int surface(int x, int z);
+    }
+
+    /** The blocks of a level for a path. */
+    static PathBlocks of(WorldGenLevel level) {
+        return new PathBlocks() {
+            @Override
+            public BlockState get(BlockPos pos) {
+                return level.getBlockState(pos);
+            }
+
+            @Override
+            public void set(BlockPos pos, BlockState state) {
+                level.setBlock(pos, state, Block.UPDATE_CLIENTS);
+            }
+
+            @Override
+            public int surface(int x, int z) {
+                return level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+            }
+        };
+    }
+
+    /** A block of a path: its position, true for a block of an edge, and its row. */
+    @FunctionalInterface
+    private interface BlockVisit {
+        void visit(int x, int z, boolean edge, int row);
+    }
+
+    /** Visits each block of the path in a box. */
+    private void forEachBlock(BoundingBox box, BlockVisit visit) {
         int acrossX = stepZ != 0 ? 1 : 0;
         int acrossZ = stepX != 0 ? 1 : 0;
         int half = edges ? EDGE_HALF_WIDTH : HALF_WIDTH;
@@ -196,18 +246,27 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
                 int x = startX + stepX * row + acrossX * side;
                 int z = startZ + stepZ * row + acrossZ * side;
                 if (x >= box.minX() && x <= box.maxX() && z >= box.minZ() && z <= box.maxZ()) {
-                    if (levels.length == length) {
-                        placeRow(level, pos, x, z, levels[row], Math.abs(side) > HALF_WIDTH);
-                    } else {
-                        placePath(level, pos, x, z);
-                    }
+                    visit.visit(x, z, Math.abs(side) > HALF_WIDTH, row);
                 }
             }
         }
-        if (stairs.isEmpty() || levels.length != length) {
+    }
+
+    /**
+     * Places the blocks of the path with levels in a box: the rows, then the stairs (see the rules of the class).
+     *
+     * @param blocks the blocks to read and to change
+     * @param box    the box: the blocks out of it do not change
+     */
+    public void place(PathBlocks blocks, BoundingBox box) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        forEachBlock(box, (x, z, edge, row) -> placeRow(blocks, pos, x, z, levels[row], edge));
+        if (stairs.isEmpty()) {
             return;
         }
         int[] steps = StreetSteps.stairs(levels);
+        int acrossX = stepZ != 0 ? 1 : 0;
+        int acrossZ = stepX != 0 ? 1 : 0;
         for (int row = 0; row < length; row++) {
             if (steps[row] == StreetSteps.NONE) {
                 continue;
@@ -217,7 +276,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
                 int x = startX + stepX * row + acrossX * side;
                 int z = startZ + stepZ * row + acrossZ * side;
                 if (x >= box.minX() && x <= box.maxX() && z >= box.minZ() && z <= box.maxZ()) {
-                    placeStair(level, pos, x, levels[row], z, stairs.get(), facing);
+                    placeStair(blocks, pos, x, levels[row], z, stairs.get(), facing);
                 }
             }
         }
@@ -231,16 +290,22 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      */
     static void placeStair(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int top, int z,
             BlockState stairs, Direction facing) {
-        if (facing == null || !isStreet(level.getBlockState(pos.set(x, top, z)))) {
+        placeStair(of(level), pos, x, top, z, stairs, facing);
+    }
+
+    /** As {@link #placeStair(WorldGenLevel, BlockPos.MutableBlockPos, int, int, int, BlockState, Direction)}. */
+    static void placeStair(PathBlocks level, BlockPos.MutableBlockPos pos, int x, int top, int z,
+            BlockState stairs, Direction facing) {
+        if (facing == null || !isStreet(level.get(pos.set(x, top, z)))) {
             return;
         }
-        BlockState above = level.getBlockState(pos.set(x, top + 1, z));
+        BlockState above = level.get(pos.set(x, top + 1, z));
         if (!(above.isAir() || TerrainPiece.isPlant(above))) {
             return;
         }
         BlockState stair = stairs.hasProperty(StairBlock.FACING) ? stairs.setValue(StairBlock.FACING, facing)
                 : stairs;
-        level.setBlock(pos, stair, Block.UPDATE_CLIENTS);
+        level.set(pos.set(x, top, z).immutable(), stair);
     }
 
     /**
@@ -250,48 +315,48 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      *
      * @param edge true for a block of an edge: its top block is the surface block of the terrain
      */
-    private static void placeRow(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int top,
+    private static void placeRow(PathBlocks level, BlockPos.MutableBlockPos pos, int x, int z, int top,
             boolean edge) {
-        if (!level.getFluidState(pos.set(x, top + 1, z)).isEmpty()) {
+        if (!level.get(pos.set(x, top + 1, z)).getFluidState().isEmpty()) {
             return;
         }
-        if (!level.getFluidState(pos.set(x, top, z)).isEmpty() && !fillWater(level, pos, x, z, top)) {
+        if (!level.get(pos.set(x, top, z)).getFluidState().isEmpty() && !fillWater(level, pos, x, z, top)) {
             return;
         }
         BlockState surface = null;
-        int highest = Math.min(top + MAX_CUT, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1);
+        int highest = Math.min(top + MAX_CUT, level.surface(x, z) - 1);
         for (int y = top + 1; y <= Math.max(highest, top + TerrainPiece.CLEARANCE); y++) {
-            BlockState state = level.getBlockState(pos.set(x, y, z));
+            BlockState state = level.get(pos.set(x, y, z));
             if (TerrainPiece.isTerrain(state)) {
                 surface = state;
             }
             boolean ground = TerrainPiece.isTerrain(state) || state.is(Tags.Blocks.ORES) || isStreet(state);
             if (ground || TerrainPiece.isPlant(state) || (y <= highest && isStreetLight(state))) {
-                level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+                level.set(pos.immutable(), Blocks.AIR.defaultBlockState());
             }
         }
         for (int y = top - 1; y > top - SEARCH; y--) {
-            BlockState state = level.getBlockState(pos.set(x, y, z));
+            BlockState state = level.get(pos.set(x, y, z));
             if (!(state.isAir() || TerrainPiece.isPlant(state))) {
                 if (surface == null && TerrainPiece.isTerrain(state)) {
                     surface = state;
                 }
                 break;
             }
-            level.setBlock(pos, Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.set(pos.immutable(), Blocks.DIRT.defaultBlockState());
         }
-        BlockState state = level.getBlockState(pos.set(x, top, z));
+        BlockState state = level.get(pos.set(x, top, z));
         if (!(state.isAir() || TerrainPiece.isPlant(state) || TerrainPiece.isTerrain(state) || isStreet(state))) {
             return;
         }
         if (edge) {
             if (surface != null && !surface.is(state.getBlock())) {
-                level.setBlock(pos, surface, Block.UPDATE_CLIENTS);
+                level.set(pos.immutable(), surface);
             } else if (!TerrainPiece.isTerrain(state)) {
-                level.setBlock(pos, Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
+                level.set(pos.immutable(), Blocks.DIRT.defaultBlockState());
             }
         } else if (!isStreet(state)) {
-            level.setBlock(pos, Blocks.DIRT_PATH.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.set(pos.immutable(), Blocks.DIRT_PATH.defaultBlockState());
         }
     }
 
@@ -311,16 +376,16 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      *
      * @return true if the water is shallow: the top block of the row is dirt
      */
-    private static boolean fillWater(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int top) {
+    private static boolean fillWater(PathBlocks level, BlockPos.MutableBlockPos pos, int x, int z, int top) {
         int floor = top - 1;
-        while (floor > top - FILL_DEPTH && !level.getFluidState(pos.set(x, floor, z)).isEmpty()) {
+        while (floor > top - FILL_DEPTH && !level.get(pos.set(x, floor, z)).getFluidState().isEmpty()) {
             floor--;
         }
-        if (!level.getFluidState(pos.set(x, floor, z)).isEmpty()) {
+        if (!level.get(pos.set(x, floor, z)).getFluidState().isEmpty()) {
             return false;
         }
         for (int y = floor + 1; y <= top; y++) {
-            level.setBlock(pos.set(x, y, z), Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.set(new BlockPos(x, y, z), Blocks.DIRT.defaultBlockState());
         }
         return true;
     }

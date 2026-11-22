@@ -8,7 +8,9 @@ import io.github.nicolasgoyon.folkhold.world.construction.BuilderSite;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSites;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.RaidMarch;
 import io.github.nicolasgoyon.folkhold.world.village.RingWall;
+import io.github.nicolasgoyon.folkhold.world.village.VillageExits;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
@@ -16,6 +18,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.RingPlans;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +33,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -190,6 +195,39 @@ public final class RingWallGameTests {
         }
         helper.assertTrue(towers > ring.gates().size(), "The ring has the towers of its gates and the spare towers: "
                 + towers);
+        // The path across the band of each gate of the ring: the middle of each row is a block of path.
+        List<VillagePathPiece> paths = planned.stream().filter(VillagePathPiece.class::isInstance)
+                .map(VillagePathPiece.class::cast).toList();
+        helper.assertTrue(paths.size() == ring.gates().size(), "Each ring gate has a path across the band: "
+                + paths.size());
+        for (WallLayout.Gate gate : ring.gates()) {
+            WallLayout.Cell middle = ring.cell(gate.edge(), ring.along(gate));
+            BlockPos row = new BlockPos(middle.x() + 4 * gate.side().insideX(), base,
+                    middle.z() + 4 * gate.side().insideZ());
+            BlockState top = level.getBlockState(row);
+            helper.assertTrue(top.is(Blocks.DIRT_PATH) || top.getBlock() instanceof StairBlock,
+                    "The path of the gate " + gate + " must have a block of path at " + row + ": " + top);
+        }
+        // All the gates of all the walls are reachable from the heart.
+        WallLayout first = walls.get(1).layout();
+        for (WallLayout.Gate gate : first.gates()) {
+            WallLayout.Cell middle = first.cell(gate.edge(), first.along(gate));
+            int x = middle.x() - 3 * gate.side().insideX();
+            int z = middle.z() - 3 * gate.side().insideZ();
+            helper.assertTrue(reached.contains(ChunkPos.asLong(x, z)),
+                    "A walk from the heart must go out of the gate " + gate + " of the first wall");
+        }
+        // A raider far outside marches to the approach of a gate of the outer ring.
+        helper.assertTrue(heart.getLayout().scan(level, heart.scanArea(level)), "The heart must scan the village");
+        List<VillageExits.Approach> approaches = VillageExits.approaches(level, heartPos, heart.getLayout().gates());
+        BlockPos raider = new BlockPos(ring.outline().maxX() + 40, base + 1, heartPos.getZ() + 7);
+        RaidMarch.Leg leg = RaidMarch.next(heartPos, approaches, approach -> false, raider, null);
+        helper.assertTrue(!ring.contains(leg.target().getX(), leg.target().getZ())
+                && ring.gates().stream().anyMatch(gate -> {
+                    WallLayout.Cell middle = ring.cell(gate.edge(), ring.along(gate));
+                    return Math.abs(middle.x() - leg.target().getX()) + Math.abs(middle.z() - leg.target().getZ())
+                            <= VillageExits.APPROACH_DISTANCE + 2;
+                }), "The raider must march to an outer gate: " + leg.target());
 
         settlement.setProgress(HAMLET_LEVEL, 0);
         helper.assertTrue(RingWall.check(level, heart).isEmpty(), "A hamlet starts no new part");

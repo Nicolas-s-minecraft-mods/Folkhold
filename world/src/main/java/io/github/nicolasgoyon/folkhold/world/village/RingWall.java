@@ -15,6 +15,7 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadeBlocks;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.RingPlans;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -43,6 +44,7 @@ import net.minecraft.tags.StructureTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -61,9 +63,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>The plan: the next ring of the village, from its saved pieces and the terrain of the world (see
  *       {@link RingPlans#next}). The heart makes the plan when the chunks around the outer wall, to the band and 16
  *       blocks more, are ready. The heart keeps the pieces of the plan (see {@link State}).</li>
- *   <li>The parts of the ring: each tower, each gate and each segment of palisade is a part. Each piece of flat terrain
- *       goes with the nearest part. The paths across the band, the piers and the fills of the ground are not parts:
- *       the band of a ring at runtime comes later (#656).</li>
+ *   <li>The parts of the ring: each tower, each gate, each segment of palisade and each path across the band is a
+ *       part. Each piece of flat terrain goes with the nearest part of the wall. The piers and the fills of the ground
+ *       are not parts. The streets of the band and their plots come later (#656).</li>
  *   <li>A village of the tier, with builders and no construction site, starts one site for the nearest part to the
  *       heart. The site is a repair site (see {@link BuilderSite#repair}): fences, materials of the stock and delivery
  *       quests. Its blocks are the blocks of the part where the world has another block (see {@link #blocks}).</li>
@@ -251,8 +253,9 @@ public final class RingWall {
         Map<Integer, List<Integer>> terrain = new LinkedHashMap<>();
         for (int i = 0; i < pieces.size(); i++) {
             StructurePiece piece = pieces.get(i);
-            if (piece instanceof PalisadePiece || (piece instanceof PoolElementStructurePiece pool
-                    && pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID)) {
+            if (piece instanceof PalisadePiece || piece instanceof VillagePathPiece
+                    || (piece instanceof PoolElementStructurePiece pool
+                            && pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID)) {
                 main.add(i);
                 terrain.put(i, new ArrayList<>(List.of(i)));
             }
@@ -260,10 +263,12 @@ public final class RingWall {
         if (main.isEmpty()) {
             return List.of();
         }
+        List<Integer> walls = main.stream().filter(index -> !(pieces.get(index) instanceof VillagePathPiece))
+                .toList();
         for (int i = 0; i < pieces.size(); i++) {
-            if (pieces.get(i) instanceof TerrainPiece flat) {
+            if (pieces.get(i) instanceof TerrainPiece flat && !walls.isEmpty()) {
                 BlockPos middle = flat.getBoundingBox().getCenter();
-                int nearest = main.stream().min(Comparator.comparingDouble(index -> distance(pieces.get(index),
+                int nearest = walls.stream().min(Comparator.comparingDouble(index -> distance(pieces.get(index),
                         middle))).orElseThrow();
                 terrain.get(nearest).add(i);
             }
@@ -473,6 +478,8 @@ public final class RingWall {
      *       second column (see {@link PalisadePiece}).</li>
      *   <li>Flat terrain: the terrain and the plants above its ground go, {@link TerrainPiece#CLEARANCE} blocks high.
      *       A hole at its ground and under it gets dirt.</li>
+     *   <li>A path across the band: the blocks of the rules of the generation (see {@link VillagePathPiece#place}), on
+     *       the blocks of the world.</li>
      * </ul>
      *
      * @param level    the level
@@ -512,6 +519,8 @@ public final class RingWall {
                         fill(level, pos.below(), height.applyAsInt(pos.getX(), pos.getZ()), foundation, target);
                     }
                 });
+            } else if (piece instanceof VillagePathPiece path) {
+                path.place(new Recorder(level, target), BoundingBox.infinite());
             } else if (piece instanceof PalisadePiece column) {
                 PalisadeBlocks blocks = column.blocks();
                 int[] bases = column.bases();
@@ -538,6 +547,29 @@ public final class RingWall {
             }
         });
         return Optional.of(changed);
+    }
+
+    /**
+     * The blocks of a path at runtime: the path reads the blocks of the level and the blocks that the part changes
+     * before it, and the record keeps its changes (see {@link VillagePathPiece#place}).
+     */
+    private record Recorder(ServerLevel level, Map<BlockPos, BlockState> target)
+            implements VillagePathPiece.PathBlocks {
+        @Override
+        public BlockState get(BlockPos pos) {
+            BlockState changed = target.get(pos);
+            return changed != null ? changed : level.getBlockState(pos);
+        }
+
+        @Override
+        public void set(BlockPos pos, BlockState state) {
+            target.put(pos.immutable(), state);
+        }
+
+        @Override
+        public int surface(int x, int z) {
+            return level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+        }
     }
 
     /** Fills a column from a position down to the ground, with no more than {@link #MAX_FILL} blocks. */
