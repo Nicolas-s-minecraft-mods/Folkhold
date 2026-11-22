@@ -4409,26 +4409,57 @@ def check_home_steps():
 # A cliff house is a tall house that stands against a rock face (see the pool cliff_houses). It has the plot of a home
 # of the base style (W x D) and a storey of CLIFF_STOREY blocks:
 # - x = 0..CLIFF_BODY - 1: the body of the house. z = 0 is the porch row, z = 1 the front wall, z = D - 1 the back wall.
-#   The back wall is a full wall of stone bricks, with no window and no door: it stands against the rock.
+#   The back wall is a full wall of stone, with no window and no door: it stands against the rock.
 # - x = CLIFF_STAIR: an outside stair of stone along the east wall, 1 block up for each block, from the porch row.
 # - x = CLIFF_STAIR + 1: the parapet of the stair, with a rail.
 # Each storey has its own door: the front door of the ground floor, and a door in the east wall of each upper storey,
 # next to the step of the stair at the level of its floor. Each storey has 2 beds and a lantern. The cliff houses do
-# not grow in place.
+# not grow in place. Each culture has its style of cliff house (see CliffStyle).
 CLIFF_STOREY = 4
 CLIFF_BODY = 7
 CLIFF_STAIR = CLIFF_BODY
 CLIFF_STOREYS = (2, 3)
-CLIFF_BACK = "minecraft:stone_bricks"
 CLIFF_BEDS = 2
-CLIFF_BED_COLOR = "cyan"
 
 
-def cliff_bed(t, x, y, z_foot):
+@dataclasses.dataclass(frozen=True)
+class CliffStyle:
+    """The materials and the shapes of the cliff houses of a style.
+
+    - corner: the block of the posts at the front corners of the body.
+    - wall: the block of a wall at a layer of a storey (1 to 3) and a side ("front" or "side"), from rng.
+    - beam: the block of the top layer of the walls of a storey, by side. It holds the next floor.
+    - back: the block of the back wall and of its gable.
+    - gable: the block of the front gable under the roof.
+    - window: the block of a window. floor, edge: the blocks of the floor of the ground floor and of its edge.
+    - step, support, parapet, rail: the blocks of the outside stair.
+    - bed: the color of the beds.
+    - roof: the function that puts the roof on a house of a number of storeys, and the height of the roof above the
+      top beam.
+    - porch: the function that puts the roof of the porch, the lights and the posts of the porch.
+    """
+    corner: tuple
+    wall: Callable
+    beam: Callable
+    back: str
+    gable: str
+    window: str
+    floor: str
+    edge: Callable
+    step: str
+    support: str
+    parapet: str
+    rail: str
+    bed: str
+    roof: Callable
+    roof_height: int
+    porch: Callable
+
+
+def cliff_bed(t, x, y, z_foot, color):
     """A bed with the foot at (x, y, z_foot) and the head 1 block to the south, against the back wall."""
-    t.set(x, y, z_foot, f"minecraft:{CLIFF_BED_COLOR}_bed", {"facing": "south", "part": "foot", "occupied": "false"})
-    t.set(x, y, z_foot + 1, f"minecraft:{CLIFF_BED_COLOR}_bed",
-          {"facing": "south", "part": "head", "occupied": "false"})
+    t.set(x, y, z_foot, f"minecraft:{color}_bed", {"facing": "south", "part": "foot", "occupied": "false"})
+    t.set(x, y, z_foot + 1, f"minecraft:{color}_bed", {"facing": "south", "part": "head", "occupied": "false"})
 
 
 def cliff_door_row(storey):
@@ -4444,85 +4475,83 @@ def door(t, x, y, z, facing, hinge="left"):
               {"facing": facing, "half": half, "hinge": hinge, "open": "false", "powered": "false"})
 
 
-def cliff_walls(t, rng, storey):
-    """The walls of a storey: a frame of stripped spruce logs, a lower row of stones on the ground floor, plaster
-    (calcite) above it, and the back wall of stone bricks. The top layer is a beam of logs that holds the next
-    floor."""
+def cliff_walls(t, rng, storey, style):
+    """The walls of a storey: the posts at the front corners, the walls of the style, the back wall of stone and the
+    beam at the top layer, which holds the next floor."""
     base = CLIFF_STOREY * storey
     last = CLIFF_BODY - 1
     for x in range(CLIFF_BODY):
         for z in range(1, D):
             if not (x in (0, last) or z in (1, D - 1)):
                 continue
+            side = "front" if z == 1 else "side"
             for y in range(base + 1, base + CLIFF_STOREY + 1):
                 if z == D - 1:
-                    t.set(x, y, z, CLIFF_BACK)
+                    t.set(x, y, z, style.back)
                 elif x in (0, last) and z == 1:
-                    t.set(x, y, z, "minecraft:stripped_spruce_log", LOG_Y)
+                    t.set(x, y, z, *style.corner)
                 elif y == base + CLIFF_STOREY:
-                    t.set(x, y, z, "minecraft:stripped_spruce_log", {"axis": "x" if z == 1 else "z"})
-                elif storey == 0 and y == 1:
-                    t.set(x, y, z, cobble(rng))
+                    t.set(x, y, z, *style.beam(side))
                 else:
-                    t.set(x, y, z, "minecraft:calcite")
-    # The floor of the storey above: planks inside the beam.
+                    t.set(x, y, z, *style.wall(rng, storey, y - base, side))
+    # The floor of the storey above, inside the beam.
     for x in range(1, last):
         for z in range(2, D - 1):
-            t.set(x, base + CLIFF_STOREY, z, "minecraft:spruce_planks")
+            t.set(x, base + CLIFF_STOREY, z, style.floor)
     # Windows: 2 in the front wall and 2 in the west wall. The east wall is behind the stair.
     y = base + 2
     for x in (1, last - 1):
-        t.set(x, y, 1, "minecraft:glass_pane")
+        t.set(x, y, 1, style.window)
     for z in (3, 6):
-        t.set(0, y, z, "minecraft:glass_pane")
+        t.set(0, y, z, style.window)
 
 
-def cliff_rooms(t, storey):
+def cliff_rooms(t, storey, style):
     """The beds, the work blocks and the light of a storey. The door of each storey has a free block inside it."""
     y = CLIFF_STOREY * storey + 1
     last = CLIFF_BODY - 2
     if storey == 0:
-        cliff_bed(t, 1, y, 6)
-        cliff_bed(t, last, y, 6)
+        cliff_bed(t, 1, y, 6, style.bed)
+        cliff_bed(t, last, y, 6, style.bed)
         t.set(3, y, 7, "minecraft:crafting_table")
         t.set(last, y, 3, "minecraft:chest", {"facing": "west", "type": "single", "waterlogged": "false"})
         lantern(t, 1, y, 3)
     elif cliff_door_row(storey) < D - 2:
         # The door is near the front: the beds stand against the back wall.
-        cliff_bed(t, 1, y, 6)
-        cliff_bed(t, last, y, 6)
+        cliff_bed(t, 1, y, 6, style.bed)
+        cliff_bed(t, last, y, 6, style.bed)
         t.set(1, y, 3, "minecraft:barrel", {"facing": "up", "open": "false"})
         lantern(t, 3, y, 7)
     else:
         # The door is near the back: its row stays free on the east side.
-        cliff_bed(t, 1, y, 6)
-        cliff_bed(t, 3, y, 6)
+        cliff_bed(t, 1, y, 6, style.bed)
+        cliff_bed(t, 3, y, 6, style.bed)
         t.set(1, y, 3, "minecraft:chest", {"facing": "south", "type": "single", "waterlogged": "false"})
         lantern(t, last, y, 3)
 
 
-def cliff_stair(t, storeys):
-    """The outside stair along the east wall, from the porch row to the floor of the top storey: a step of stone
-    stairs on a support of stone, a parapet with a rail, and a pier at the end with a rail on it."""
+def cliff_stair(t, storeys, style):
+    """The outside stair along the east wall, from the porch row to the floor of the top storey: a step on a support,
+    a parapet with a rail, and a pier at the end with a rail on it."""
     top = cliff_door_row(storeys - 1)
     rail = CLIFF_STAIR + 1
     for z in range(top + 1):
         for y in range(1, z + 1):
-            t.set(CLIFF_STAIR, y, z, "minecraft:cobblestone")
-        t.set(CLIFF_STAIR, z + 1, z, "minecraft:cobblestone_stairs", stairs("south"))
+            t.set(CLIFF_STAIR, y, z, style.support)
+        t.set(CLIFF_STAIR, z + 1, z, style.step, stairs("south"))
         for y in range(1, z + 2):
-            t.set(rail, y, z, "minecraft:cobblestone")
-        t.set(rail, z + 2, z, "minecraft:spruce_fence")
+            t.set(rail, y, z, style.parapet)
+        t.set(rail, z + 2, z, style.rail)
     end = top + 1
     for x in (CLIFF_STAIR, rail):
         for y in range(1, top + 2):
-            t.set(x, y, end, "minecraft:cobblestone")
-        t.set(x, top + 2, end, "minecraft:spruce_fence")
+            t.set(x, y, end, style.parapet)
+        t.set(x, top + 2, end, style.rail)
 
 
-def cliff_roof(t, storeys):
+def gable_roof(t, storeys, style):
     """A gable roof of dark oak over the body, with the ridge along z, from the front to the back wall. It goes 1 block
-    over the porch row. The gable of the back wall is stone bricks."""
+    over the porch row. The gable of the back wall is the block of the back wall."""
     first = CLIFF_STOREY * storeys + 1
     last = CLIFF_BODY - 1
     for step in range(CLIFF_BODY // 2 + 1):
@@ -4533,17 +4562,122 @@ def cliff_roof(t, storeys):
                 t.set(left, y, z, "minecraft:dark_oak_stairs", stairs("east"))
                 t.set(right, y, z, "minecraft:dark_oak_stairs", stairs("west"))
             elif left == right:
-                t.set(left, y, z, "minecraft:dark_oak_slab", {"type": "bottom", "waterlogged": "false"})
+                t.set(left, y, z, *SLAB_ROW)
         for x in range(left + 1, right):
-            t.set(x, y, 1, "minecraft:calcite")
-            t.set(x, y, D - 1, CLIFF_BACK)
+            t.set(x, y, 1, style.gable)
+            t.set(x, y, D - 1, style.back)
 
 
-def cliff_house(storeys):
-    """A cliff house of 2 or 3 storeys (see CLIFF_STOREY): CLIFF_BEDS beds on each storey, the house sign on the
-    porch, and a door on each storey."""
+def steep_roof(t, storeys, style):
+    """A steep Norse roof of dark oak over the body (2 blocks up for each block to the ridge), with the ridge along z
+    and carved horns at its 2 ends. The ridge is a row of planks with no slab on it, as on a long house (see
+    long_house_shell)."""
+    first = CLIFF_STOREY * storeys + 1
+    mid = (CLIFF_BODY - 1) // 2
+    for x in range(CLIFF_BODY):
+        top = first + 1 + 2 * min(x, CLIFF_BODY - 1 - x)
+        for z in range(D):
+            t.set(x, top - 1, z, "minecraft:dark_oak_planks")
+            if x != mid:
+                t.set(x, top, z, "minecraft:dark_oak_stairs", stairs("east" if x < mid else "west"))
+        if 0 < x < CLIFF_BODY - 1:
+            for y in range(first, top - 1):
+                t.set(x, y, 1, style.gable)
+                t.set(x, y, D - 1, style.back)
+    ridge = first + 1 + 2 * mid
+    for z in (0, D - 1):
+        for x in (mid - 1, mid + 1):
+            t.set(x, ridge - 1, z, "minecraft:spruce_fence")
+            t.set(x, ridge, z, "minecraft:spruce_fence")
+        t.set(mid, ridge, z, "minecraft:spruce_fence")
+
+
+def flat_roof(t, storeys, style):
+    """A flat Sunreach roof: the top beam is the roof, with a parapet of walls and slabs on its edges."""
+    y = CLIFF_STOREY * storeys + 1
+    for x in range(CLIFF_BODY):
+        for z in range(1, D):
+            if x in (0, CLIFF_BODY - 1) or z in (1, D - 1):
+                if (x + z) % 2 == 0:
+                    t.set(x, y, z, "minecraft:sandstone_wall")
+                else:
+                    t.set(x, y, z, "minecraft:smooth_sandstone_slab", {"type": "bottom", "waterlogged": "false"})
+
+
+def slab_porch(t):
+    """A post at the west end of the porch, a roof of slabs at the level of the first beam and 2 torches."""
+    for y in range(1, CLIFF_STOREY):
+        t.set(0, y, 0, "minecraft:spruce_fence")
+    for x in range(CLIFF_BODY):
+        t.set(x, CLIFF_STOREY, 0, *SLAB_ROW)
+    for x in (1, CLIFF_BODY - 2):
+        t.set(x, 3, 0, *wall_torch("north"))
+
+
+def awning_porch(t):
+    """A striped awning of wool over the front door, on the front wall, and 2 torches on the band of terracotta. The
+    awning has no posts: the porch row stays free for the walk to the stair."""
+    mid = (CLIFF_BODY - 1) // 2
+    for x in range(mid - 1, mid + 2):
+        t.set(x, 3, 0, "minecraft:orange_wool" if (x - mid) % 2 == 0 else "minecraft:white_wool")
+    for x in (mid - 2, mid + 2):
+        t.set(x, 3, 0, *wall_torch("north"))
+
+
+def log_along(side):
+    """A spruce log along a wall: along x in the front wall, along z in a side wall."""
+    return "minecraft:spruce_log", {"axis": "x" if side == "front" else "z"}
+
+
+def stripped_along(side):
+    return "minecraft:stripped_spruce_log", {"axis": "x" if side == "front" else "z"}
+
+
+def timber_wall(rng, storey, layer, side):
+    """The wall of the base style: a lower row of stones on the ground floor, plaster above it."""
+    return (cobble(rng), None) if storey == 0 and layer == 1 else ("minecraft:calcite", None)
+
+
+def norse_wall(rng, storey, layer, side):
+    """The wall of a Norse long house: a base of stones on the ground floor, horizontal spruce logs above it."""
+    return (cobble(rng), None) if storey == 0 and layer == 1 else log_along(side)
+
+
+def sun_wall(rng, storey, layer, side):
+    """The wall of a Sunreach house: smooth sandstone, with a band of terracotta at the top layer of each storey."""
+    return ("minecraft:terracotta", None) if layer == CLIFF_STOREY - 1 else ("minecraft:smooth_sandstone", None)
+
+
+CLIFF_STYLES = {
+    None: CliffStyle(
+        corner=("minecraft:stripped_spruce_log", LOG_Y), wall=timber_wall, beam=stripped_along,
+        back="minecraft:stone_bricks", gable="minecraft:calcite", window="minecraft:glass_pane",
+        floor="minecraft:spruce_planks", edge=cobble, step="minecraft:cobblestone_stairs",
+        support="minecraft:cobblestone", parapet="minecraft:cobblestone", rail="minecraft:spruce_fence", bed="cyan",
+        roof=gable_roof, roof_height=CLIFF_BODY // 2 + 1, porch=slab_porch),
+    "valeholm": CliffStyle(
+        corner=("minecraft:stripped_spruce_log", LOG_Y), wall=norse_wall, beam=stripped_along,
+        back="minecraft:cobblestone", gable="minecraft:spruce_planks", window="minecraft:glass_pane",
+        floor="minecraft:spruce_planks", edge=cobble, step="minecraft:mossy_cobblestone_stairs",
+        support="minecraft:mossy_cobblestone", parapet="minecraft:cobblestone", rail="minecraft:spruce_fence",
+        bed="brown", roof=steep_roof, roof_height=2 * ((CLIFF_BODY - 1) // 2) + 2, porch=slab_porch),
+    "sunreach": CliffStyle(
+        corner=("minecraft:cut_sandstone", None), wall=sun_wall, beam=lambda side: ("minecraft:smooth_sandstone", None),
+        back="minecraft:sandstone", gable="minecraft:smooth_sandstone", window="minecraft:iron_bars",
+        floor="minecraft:smooth_sandstone", edge=lambda _rng: "minecraft:sandstone",
+        step="minecraft:smooth_sandstone_stairs", support="minecraft:smooth_sandstone",
+        parapet="minecraft:smooth_sandstone", rail="minecraft:sandstone_wall", bed="orange", roof=flat_roof,
+        roof_height=1, porch=awning_porch),
+}
+
+
+def cliff_house(storeys, culture=None):
+    """A cliff house of 2 or 3 storeys (see CLIFF_STOREY) in the style of a culture (None for the style of all the
+    cultures, see CLIFF_STYLES): CLIFF_BEDS beds on each storey, the house sign on the porch, and a door on each
+    storey."""
+    style = CLIFF_STYLES[culture]
     rng = random.Random(40 + storeys)
-    height = CLIFF_STOREY * storeys + CLIFF_BODY // 2 + 2
+    height = CLIFF_STOREY * storeys + 1 + style.roof_height
     t = Template(W, height, D)
     t.fill(0, 1, 0, W - 1, height - 1, D - 1, "minecraft:air")
     last = CLIFF_BODY - 1
@@ -4551,39 +4685,33 @@ def cliff_house(storeys):
     for x in range(W):
         for z in range(D):
             if x >= CLIFF_STAIR:
-                t.set(x, 0, z, "minecraft:cobblestone")
+                t.set(x, 0, z, style.support)
             elif z == 0:
-                t.set(x, 0, z, "minecraft:cobblestone" if x in (0, last) else "minecraft:spruce_planks")
+                t.set(x, 0, z, style.parapet if x in (0, last) else style.floor)
             else:
                 edge = x in (0, last) or z in (1, D - 1)
-                t.set(x, 0, z, cobble(rng) if edge else "minecraft:spruce_planks")
+                t.set(x, 0, z, style.edge(rng) if edge else style.floor)
     for storey in range(storeys):
-        cliff_walls(t, rng, storey)
+        cliff_walls(t, rng, storey, style)
     # The doors: the front door of the ground floor, and a door in the east wall of each upper storey.
     mid = last // 2
     door(t, mid, 1, 1, "north")
-    t.set(mid, 3, 1, "minecraft:stripped_spruce_log", {"axis": "x"})
+    t.set(mid, 3, 1, *style.beam("front"))
     for storey in range(1, storeys):
         y = CLIFF_STOREY * storey + 1
         door(t, last, y, cliff_door_row(storey), "east")
-        t.set(last, y + 2, cliff_door_row(storey), "minecraft:stripped_spruce_log", {"axis": "z"})
+        t.set(last, y + 2, cliff_door_row(storey), *style.beam("side"))
     for storey in range(storeys):
-        cliff_rooms(t, storey)
-    # The porch: a post at the west end, a roof of slabs at the level of the first beam, 2 torches and the house sign.
-    for y in range(1, CLIFF_STOREY):
-        t.set(0, y, 0, "minecraft:spruce_fence")
-    for x in range(CLIFF_BODY):
-        t.set(x, CLIFF_STOREY, 0, *SLAB_ROW)
-    for x in (1, last - 1):
-        t.set(x, 3, 0, *wall_torch("north"))
+        cliff_rooms(t, storey, style)
+    style.porch(t)
     building_sign(t, last - 1, 1, 0, "house")
-    cliff_stair(t, storeys)
-    cliff_roof(t, storeys)
+    cliff_stair(t, storeys, style)
+    style.roof(t, storeys, style)
     t.jigsaw(W // 2, 1, 0, "north_up", HOUSE_FRONT, "minecraft:empty", "minecraft:empty", "minecraft:air")
     return t
 
 
-def check_cliff_house(name, t, storeys):
+def check_cliff_house(name, t, storeys, style):
     """Stops the script when a cliff house has not the beds of its storeys, has an opening in its back wall, or has a
     door, a work block or a bed with no walk from the porch."""
     if bed_count(t) != CLIFF_BEDS * storeys:
@@ -4591,7 +4719,7 @@ def check_cliff_house(name, t, storeys):
     for x in range(CLIFF_BODY):
         for y in range(1, CLIFF_STOREY * storeys + 1):
             back = state_at(t, x, y, D - 1)[0]
-            if back != CLIFF_BACK:
+            if back != style.back:
                 raise SystemExit(f"{name} has {back} in the back wall at {x} {y}")
     problems = unreachable(t)
     reached = reach(t)
@@ -4604,13 +4732,17 @@ def check_cliff_house(name, t, storeys):
         raise SystemExit(f"{name}: no walk to {problems}")
 
 
-CLIFF_PIECES = {f"cliff_house_{storeys}": functools.partial(cliff_house, storeys) for storeys in CLIFF_STOREYS}
+# The pieces of the cliff houses of each style: cliff_house_<storeys>, in the pool cliff_houses.
+CLIFF_PIECES = {culture: {f"cliff_house_{storeys}": functools.partial(cliff_house, storeys, culture)
+                          for storeys in CLIFF_STOREYS}
+                for culture in CLIFF_STYLES}
 
 
 def check_cliff_houses():
-    for storeys in CLIFF_STOREYS:
-        name = f"cliff_house_{storeys}"
-        check_cliff_house(name, CLIFF_PIECES[name](), storeys)
+    for culture, pieces in CLIFF_PIECES.items():
+        for storeys in CLIFF_STOREYS:
+            name = f"cliff_house_{storeys}"
+            check_cliff_house(f"{culture or 'base'} {name}", pieces[name](), storeys, CLIFF_STYLES[culture])
 
 
 PIECES = {
@@ -4634,7 +4766,7 @@ PIECES = {
     **{f"job_{job}": build for job, build in JOBS.items()},
     **{f"field_{size}": functools.partial(field, LAND, size) for size in FIELDS},
     "mill": functools.partial(windmill, LAND),
-    **CLIFF_PIECES,
+    **CLIFF_PIECES[None],
 }
 
 
@@ -4655,6 +4787,7 @@ STYLES = {
         "house_storehouse_side": norse_storehouse_side,
         "market": functools.partial(market, "deep", "valeholm"),
         **{f"job_{job}": build for job, build in NORSE_JOBS.items()},
+        **CLIFF_PIECES["valeholm"],
     },
     "sunreach": {
         "street_cross": lambda: street_cross(CW),
@@ -4666,6 +4799,7 @@ STYLES = {
         "house_storehouse": sun_storehouse,
         "market": functools.partial(market, "wide", "sunreach"),
         **{f"job_{job}": build for job, build in SUNREACH_JOBS.items()},
+        **CLIFF_PIECES["sunreach"],
     },
 }
 # The pieces of the maritime villages: the village of a site on the coast or on an island, in all the cultures. The
@@ -5351,7 +5485,7 @@ def pools(v):
         **{f"jobs_step{step}": pool([(1, house(f"job_{job}_step{step}")) for job in HOME_STEP_JOBS[v.culture]])
            for step in HOME_STEPS},
         "market": pool([(1, house("market"))]),
-        "cliff_houses": pool([(1, house(name)) for name in CLIFF_PIECES]),
+        "cliff_houses": pool([(1, house(name)) for name in CLIFF_PIECES[None]]),
         "fields": pool([(1, house(f"field_{size}")) for size in FIELDS]),
         "mills": pool([(1, house("mill"))]),
         "streets_first": pool([(1, street("street"))], v.id("street_ends")),

@@ -54,6 +54,8 @@ public final class CliffHouseTemplateGameTests {
     static final Map<String, Integer> CLIFF_HOUSES = Map.of("cliff_house_2", 2, "cliff_house_3", 3);
     /** The height of a storey, in blocks: the floor of the storey n (from 0) is at the layer n times this height. */
     private static final int STOREY = 4;
+    /** The folders of the styles of the cultures with their own cliff houses. */
+    private static final Set<String> CULTURE_STYLES = Set.of("valeholm/", "sunreach/");
     /** The beds of each storey. */
     private static final int STOREY_BEDS = 2;
     /** The width of the body of the house, from x = 0: the stair of the upper doors is east of it. */
@@ -95,6 +97,9 @@ public final class CliffHouseTemplateGameTests {
      *       {@link TemplateReach#reached});</li>
      *   <li>a back wall of full blocks on all the storeys of the body: the wall against the rock has no opening.</li>
      * </ul>
+     *
+     * <p>The cliff houses of the Valeholm and Sunreach styles are not the cliff houses of all the cultures in the same
+     * biome variant: they have the style of their culture.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "home_templates")
     public static void eachCliffHouseHasADoorOnEachStorey(GameTestHelper helper) {
@@ -128,6 +133,13 @@ public final class CliffHouseTemplateGameTests {
                     }
                     pieces++;
                     check(level, template.get(), storeys, problems);
+                    if (CULTURE_STYLES.contains(style)) {
+                        ResourceLocation plain = ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID,
+                                "village/" + variant + name);
+                        if (blocks(level, template.get()).equals(blocks(level, plain))) {
+                            problems.add(template.get() + " has the style of all the cultures");
+                        }
+                    }
                 }
                 if (!names.equals(CLIFF_HOUSES.keySet())) {
                     problems.add(id + " has the pieces " + names + ", not " + new TreeSet<>(CLIFF_HOUSES.keySet()));
@@ -227,6 +239,14 @@ public final class CliffHouseTemplateGameTests {
                             Block.UPDATE_CLIENTS));
             helper.assertTrue(problems.isEmpty(), "Problems of the walk to the cliff house: " + problems);
         }).thenSucceed();
+    }
+
+    /** The blocks of a template by position, as the builders place them, or an empty map with no template. */
+    private static Map<BlockPos, BlockState> blocks(ServerLevel level, ResourceLocation id) {
+        Map<BlockPos, BlockState> blocks = new HashMap<>();
+        level.getStructureManager().get(id).ifPresent(template -> ConstructionTargets.templateBlocks(level, template)
+                .forEach(block -> blocks.put(block.pos(), block.state())));
+        return blocks;
     }
 
     /** Checks one cliff house: see {@link #eachCliffHouseHasADoorOnEachStorey}. */
