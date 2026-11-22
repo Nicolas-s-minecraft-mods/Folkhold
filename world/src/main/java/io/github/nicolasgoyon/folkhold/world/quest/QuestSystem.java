@@ -139,7 +139,7 @@ public final class QuestSystem {
                         item -> Prices.price(catalog.info(item), settlement.economy().stock().count(item),
                                 population, Economies.settings()), offered, 1, now,
                         QuestRewards.settings(definition, rule), definition.id())) {
-                    QuestRewards.apply(quest, rule, settlement);
+                    QuestRewards.apply(quest, definition, rule, settlement);
                     offered.add(quest.target());
                     created.add(quest);
                     made = true;

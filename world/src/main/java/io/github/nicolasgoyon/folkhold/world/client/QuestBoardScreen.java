@@ -380,6 +380,7 @@ public class QuestBoardScreen extends UiScreen {
         UiText.draw(graphics, font, offer.reward(), rect.x() + 5, y, rect.width() - 14 - rightWidth,
                 off ? UiTheme.INK_MUTED : UiTheme.INK);
         UiText.drawRight(graphics, font, right, rect.right() - 5, y, rect.width() / 2, UiTheme.INK_MUTED);
+        UiText.draw(graphics, font, offer.risk(), rect.x() + 5, y + 12, rect.width() - 10, UiTheme.INK_MUTED);
     }
 
     private void renderColumn(GuiGraphics graphics) {

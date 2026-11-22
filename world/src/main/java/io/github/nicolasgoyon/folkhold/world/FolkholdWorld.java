@@ -227,6 +227,7 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(QuestBoards::onLoggedIn);
         QuestBoards.addAcceptListener(Escorts::onAccepted);
         QuestBoards.addEndListener(Escorts::onEnded);
+        QuestBoards.addEndListener(QuestBoards::applyFailurePenalty);
         NeoForge.EVENT_BUS.addListener(Escorts::onServerTick);
         NeoForge.EVENT_BUS.addListener(Escorts::onServerStopped);
         SettlementLevels.addProsperitySource(Economies::prosperity);

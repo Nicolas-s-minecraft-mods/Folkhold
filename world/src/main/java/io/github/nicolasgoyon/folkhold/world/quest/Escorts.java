@@ -119,7 +119,7 @@ public final class Escorts {
                 caravan.id(), 0, reward, values.reputation().orElse(WorldConfig.QUEST_ESCORT_REPUTATION.get()),
                 QuestGenerator.minTier(reward, QuestSystem.settings(definition.get())), offerEnd,
                 minutes * SharedConstants.TICKS_PER_MINUTE, definition.get().id());
-        QuestRewards.apply(quest, rule, origin);
+        QuestRewards.apply(quest, definition.get(), rule, origin);
         QuestData data = QuestData.get(server);
         data.quests().add(quest);
         data.setDirty();

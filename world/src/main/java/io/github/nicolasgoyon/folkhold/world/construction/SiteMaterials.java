@@ -350,7 +350,7 @@ final class SiteMaterials {
                     settlement.factionId(), item, count, reward, settings.deliveryReputation(),
                     QuestGenerator.minTier(reward, settings), questTime + settings.offerLifetime(),
                     settings.deliveryDuration(), definition.get().id());
-            QuestRewards.apply(quest, rule, settlement);
+            QuestRewards.apply(quest, definition.get(), rule, settlement);
             all.add(quest);
             quests.put(item, quest.id());
             changed = true;

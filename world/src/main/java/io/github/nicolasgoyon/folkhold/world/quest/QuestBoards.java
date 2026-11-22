@@ -259,6 +259,8 @@ public final class QuestBoards {
             case ACCEPTED -> Outcome.of(true, "quest_accepted", name(server, quest.get()));
             case TIER_TOO_LOW -> Outcome.of(false, "quest_tier_too_low");
             case TOO_MANY -> Outcome.of(false, "quest_too_many", WorldConfig.QUEST_MAX_ACTIVE.get());
+            case TOO_MANY_START_ITEMS -> Outcome.of(false, "quest_too_many_start_items",
+                    WorldConfig.QUEST_MAX_START_ITEM_QUESTS.get());
             default -> Outcome.of(false, "quest_gone");
         };
     }
@@ -290,8 +292,12 @@ public final class QuestBoards {
         ReputationTier tier = quest.map(found -> tier(server, player, found)).orElse(ReputationTier.NEUTRAL);
         long now = server.overworld().getGameTime();
         Quests.AcceptResult result = data.quests().accept(questId, player.getUUID(), tier, now,
-                WorldConfig.QUEST_MAX_ACTIVE.get());
+                WorldConfig.QUEST_MAX_ACTIVE.get(), WorldConfig.QUEST_MAX_START_ITEM_QUESTS.get());
         if (result == Quests.AcceptResult.ACCEPTED) {
+            // The start items: the player keeps them after a success.
+            for (RewardItem item : quest.get().startItems()) {
+                ItemIds.item(item.item()).ifPresent(found -> giveItems(player, new ItemStack(found), item.count()));
+            }
             ACCEPT_LISTENERS.forEach(listener -> listener.accept(player, quest.get()));
         }
         data.setDirty();
@@ -429,6 +435,22 @@ public final class QuestBoards {
     }
 
     /**
+     * The failure penalty of a quest: a failed quest that a player accepted removes its failure reputation with the
+     * faction and the village of the giver (see {@link io.github.nicolasgoyon.folkhold.core.sim.quest.QuestRisk}).
+     * A player who is not in the game also loses it. A completed quest gives no penalty.
+     *
+     * @param server the server
+     * @param quest  the quest that ended
+     */
+    public static void applyFailurePenalty(MinecraftServer server, Quest quest) {
+        if (quest.state() != QuestState.FAILED || quest.playerId() == null || quest.failureReputation() <= 0) {
+            return;
+        }
+        Reputations.apply(server, quest.playerId(), quest.factionId(), quest.settlementId(),
+                -quest.failureReputation());
+    }
+
+    /**
      * A quest ended in the quest system or with {@link #fail}: the player gets a message for a failed quest, and
      * the listeners get the quest.
      *
@@ -550,7 +572,7 @@ public final class QuestBoards {
                     FactionVisuals.tierName(quest.minTier())));
         }
         return new Offer(quest.id(), quest.kind().serializedName(), icon, name(server, quest), info,
-                QuestRewards.describe(quest),
+                QuestRewards.describe(quest), joined(QuestRewards.risks(quest)),
                 progress, countdown, (int) Math.min(Integer.MAX_VALUE, quest.rewardEmeralds()), minutes, blocked);
     }
 
@@ -559,6 +581,10 @@ public final class QuestBoards {
         int secondsLeft = (int) Math.max(0, (quest.deadline() - now) / SharedConstants.TICKS_PER_SECOND);
         MutableComponent info = Component.translatable("quest.folkhold_world.active.info",
                 villageName(server, quest.settlementId()), quest.rewardEmeralds());
+        if (quest.failureReputation() > 0) {
+            info = Component.translatable("quest.folkhold_world.reward.more", info,
+                    Component.translatable("quest.folkhold_world.failure", quest.failureReputation()));
+        }
         int action = QuestBoardPayload.ACTION_NONE;
         Optional<Component> blocked = Optional.empty();
         boolean ready = false;
@@ -639,6 +665,15 @@ public final class QuestBoards {
         return SettlementData.get(server).registry().byId(settlementId)
                 .<Component>map(settlement -> Component.literal(settlement.name()))
                 .orElse(Component.literal("?"));
+    }
+
+    /** The texts joined with the separator of the rewards, or an empty text for no text. */
+    private static Component joined(List<Component> parts) {
+        MutableComponent text = null;
+        for (Component part : parts) {
+            text = text == null ? part.copy() : Component.translatable("quest.folkhold_world.reward.more", text, part);
+        }
+        return text == null ? Component.empty() : text;
     }
 
     /** Gives items to a player in stacks of their maximum size. An item that does not go in falls. */

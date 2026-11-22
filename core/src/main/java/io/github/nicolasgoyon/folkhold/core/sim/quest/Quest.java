@@ -26,8 +26,10 @@ public final class Quest {
     private long rewardEmeralds;
     private int rewardExperience;
     private List<RewardItem> rewardItems = List.of();
+    private List<RewardItem> startItems = List.of();
+    private int failureReputation;
     private final int rewardReputation;
-    private final ReputationTier minTier;
+    private ReputationTier minTier;
     private final long offerEnd;
     private final long duration;
     private final String definitionId;
@@ -157,6 +159,37 @@ public final class Quest {
         this.rewardEmeralds = emeralds;
         this.rewardExperience = experience;
         this.rewardItems = List.copyOf(items);
+    }
+
+    /** The items that the player gets at the start of the quest. Empty for a quest with no start items. */
+    public List<RewardItem> startItems() {
+        return startItems;
+    }
+
+    /**
+     * The reputation that a player loses with the faction of the giver when the accepted quest fails. 0 for a quest
+     * of a save with no failure penalty.
+     */
+    public int failureReputation() {
+        return failureReputation;
+    }
+
+    /**
+     * Sets the start items and the failure penalty: at the generation (see {@link QuestRisk}) and at the load of the
+     * saved data. A quest with start items is only for the tier {@link QuestRisk#START_ITEMS_TIER} and above.
+     *
+     * @param items      the start items
+     * @param reputation the reputation of a failure, 0 or more
+     */
+    public void setRisk(List<RewardItem> items, int reputation) {
+        if (reputation < 0) {
+            throw new IllegalArgumentException("Invalid failure reputation: " + reputation);
+        }
+        this.startItems = List.copyOf(items);
+        this.failureReputation = reputation;
+        if (!startItems.isEmpty() && !minTier.isAtLeast(QuestRisk.START_ITEMS_TIER)) {
+            minTier = QuestRisk.START_ITEMS_TIER;
+        }
     }
 
     public int rewardReputation() {

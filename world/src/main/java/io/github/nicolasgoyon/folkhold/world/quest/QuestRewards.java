@@ -6,9 +6,11 @@ import io.github.nicolasgoyon.folkhold.core.sim.economy.Recipe;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestGenerator;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestRisk;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.ItemIds;
@@ -68,15 +70,44 @@ public final class QuestRewards {
     }
 
     /**
-     * Gives a reward rule to a new quest of a village: the experience, the items and the goods of the village.
+     * Gives a reward rule to a new quest of a village: the experience, the items and the goods of the village. Also
+     * gives the start items and the failure penalty of the definition (see {@link QuestRisk}).
      *
      * @param quest      the quest, with its emerald reward
+     * @param definition the definition of the quest
      * @param rule       the reward rule
      * @param settlement the village that gives the quest
      */
-    public static void apply(Quest quest, RewardRule rule, Settlement settlement) {
+    public static void apply(Quest quest, QuestDefinition definition, RewardRule rule, Settlement settlement) {
         rule.applyTo(quest, goods(settlement), item -> Prices.price(EconomyData.catalog().info(item),
                 settlement.economy().stock().count(item), settlement.economy().population(), Economies.settings()));
+        definition.risk().applyTo(quest, ThreadLocalRandom.current(), item -> EconomyData.catalog().info(item).price(),
+                WorldConfig.QUEST_FAILURE_REPUTATION.get(), WorldConfig.QUEST_START_ITEMS_PENALTY.get());
+    }
+
+    /**
+     * The texts of the start items and of the failure penalty of a quest.
+     *
+     * @param quest the quest
+     * @return the text of the start items (if the quest has them), then the text of the reputation loss of a
+     *         failure (if it is above 0)
+     */
+    public static List<Component> risks(Quest quest) {
+        List<Component> parts = new ArrayList<>();
+        if (!quest.startItems().isEmpty()) {
+            MutableComponent items = null;
+            for (Component item : extras(0, quest.startItems())) {
+                items = items == null ? item.copy() : Component.translatable("quest.folkhold_world.reward.more",
+                        items, item);
+            }
+            if (items != null) {
+                parts.add(Component.translatable("quest.folkhold_world.start_items", items));
+            }
+        }
+        if (quest.failureReputation() > 0) {
+            parts.add(Component.translatable("quest.folkhold_world.failure", quest.failureReputation()));
+        }
+        return parts;
     }
 
     /**

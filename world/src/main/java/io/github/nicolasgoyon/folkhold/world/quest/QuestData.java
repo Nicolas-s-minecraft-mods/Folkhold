@@ -147,6 +147,12 @@ public final class QuestData extends SavedData {
             if (!quest.rewardItems().isEmpty()) {
                 entry.put("RewardItems", saveItems(quest.rewardItems()));
             }
+            if (!quest.startItems().isEmpty()) {
+                entry.put("StartItems", saveItems(quest.startItems()));
+            }
+            if (quest.failureReputation() > 0) {
+                entry.putInt("FailureReputation", quest.failureReputation());
+            }
             if (!quest.definitionId().isEmpty()) {
                 entry.putString("Definition", quest.definitionId());
             }
@@ -213,6 +219,8 @@ public final class QuestData extends SavedData {
                     entry.getLong("Deadline"));
             quest.setReward(Math.max(0, quest.rewardEmeralds()), Math.max(0, entry.getInt("RewardExperience")),
                     loadItems(entry.getList("RewardItems", Tag.TAG_COMPOUND)));
+            quest.setRisk(loadItems(entry.getList("StartItems", Tag.TAG_COMPOUND)),
+                    Math.max(0, entry.getInt("FailureReputation")));
             if (data.quests.byId(quest.id()).isEmpty()) {
                 data.quests.add(quest);
             }

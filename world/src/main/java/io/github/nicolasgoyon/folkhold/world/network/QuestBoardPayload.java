@@ -52,7 +52,8 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
      * @param itemId    the item of the icon
      * @param name      what to do
      * @param info      the kind, the distance, the time, and the minimum tier
-     * @param reward    the reward: emeralds and reputation
+     * @param reward    the reward: emeralds, reputation, experience and items
+     * @param risk      the start items and the reputation loss of a failure, or empty
      * @param progress  the items of the player for a delivery, or empty
      * @param countdown the seconds before the caravan of an escort leaves, or -1
      * @param emeralds  the reward in emeralds, for the sort
@@ -60,7 +61,7 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
      * @param blocked   the reason why the player cannot accept the offer, or empty
      */
     public record Offer(String questId, String kind, String itemId, Component name, Component info,
-            Component reward, Component progress, int countdown, int emeralds, int minutes,
+            Component reward, Component risk, Component progress, int countdown, int emeralds, int minutes,
             Optional<Component> blocked) {
 
         public static final StreamCodec<RegistryFriendlyByteBuf, Offer> STREAM_CODEC = StreamCodec.of(
@@ -71,6 +72,7 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
                     ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.name);
                     ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.info);
                     ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.reward);
+                    ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.risk);
                     ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, offer.progress);
                     buf.writeVarInt(offer.countdown);
                     buf.writeVarInt(offer.emeralds);
@@ -78,6 +80,7 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
                     ComponentSerialization.TRUSTED_OPTIONAL_STREAM_CODEC.encode(buf, offer.blocked);
                 },
                 buf -> new Offer(buf.readUtf(), buf.readUtf(), buf.readUtf(),
+                        ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
