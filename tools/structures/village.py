@@ -5017,6 +5017,8 @@ def village_settings(v):
                 "deck": v.state("minecraft:spruce_planks"),
                 "post": v.state("minecraft:spruce_log", LOG_UP),
                 "rail": v.state("minecraft:spruce_fence"),
+                "stairs": v.state("minecraft:spruce_stairs",
+                                  {"facing": "north", "half": "bottom", "shape": "straight", "waterlogged": "false"}),
             },
             "street_stairs": street_stairs(v),
         },

@@ -80,7 +80,7 @@ public final class VillageRings {
     /** The biome check of a vanilla start also reads the biome this number of blocks above the sea level. */
     static final int VANILLA_HIGH = 40;
     /** The box of a ring is larger by this number of blocks: its flat terrain and its piers. */
-    static final int RING_MARGIN = VillageWall.PIER_START + PierPiece.MAX_LENGTH;
+    static final int RING_MARGIN = VillageWall.EXIT_REACH;
     /** The number of villages in the cache. */
     private static final int CACHE_SIZE = 64;
     private static final String FILE_ID = "folkhold_village_rings";

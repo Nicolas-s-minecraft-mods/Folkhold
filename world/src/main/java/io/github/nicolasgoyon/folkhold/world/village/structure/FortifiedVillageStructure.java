@@ -244,7 +244,7 @@ public final class FortifiedVillageStructure extends Structure {
      */
     int coreReach(int level) {
         return Math.min(firstRadius(VillageSizes.forLevel(level)), maxDistanceFromCenter) + wall.margin() + 1
-                + VillageWall.PIER_START + PierPiece.MAX_LENGTH;
+                + VillageWall.EXIT_REACH;
     }
 
     /**
@@ -569,7 +569,7 @@ public final class FortifiedVillageStructure extends Structure {
         int rise = outlineRise(plan.rules());
         VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, core.reserved(),
                 start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)),
-                (x, z) -> ground.high(x, z, rise));
+                (x, z) -> ground.high(x, z, rise), !(VillageRings.enabled() && size.rings() > 0));
         // The stairs of the streets on the slopes, after the paths of the gates: a path has its own stairs.
         List<StructurePiece> wallPieces = new ArrayList<>(wall.pieces());
         wallPieces.addAll(StreetStepsPiece.of(plan, start.center(), turn, start.terrain(), paths(wall.pieces()),

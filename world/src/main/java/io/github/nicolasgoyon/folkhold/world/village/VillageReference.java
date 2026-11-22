@@ -8,6 +8,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PortPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
@@ -67,8 +68,8 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  *   <li>The plots are the places for a house along the streets, with and without a house (see
  *       {@link VillagePlots}).</li>
  *   <li>The homes are the pool of the homes that the builders build on the free plots (see {@link VillageGrowth}).</li>
- *   <li>The piers are the boxes of the piers at the water gates (see {@link PierPiece}): the deck, the rails and the
- *       posts down to the floor of the water.</li>
+ *   <li>The piers are the boxes of the piers, the bridges and the ports at the water gates (see {@link PierPiece}
+ *       and {@link PortPiece}): the decks, the rails, the steps and the posts down to the floor of the water.</li>
  *   <li>The paths are the boxes of the paths from the gates to the plaza and across the bands of the rings (see
  *       {@link VillagePathPiece}). The gate fronts are the boxes of the flat terrain that clears its space in front of
  *       and behind each gate (see {@link TerrainPiece#clears()}). The clearing of the trees uses them (see
@@ -351,8 +352,8 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
             } else if (piece instanceof PalisadePiece palisade) {
                 palisades.add(Palisade.of(palisade));
                 palisadeBoxes.add(palisade.getBoundingBox());
-            } else if (piece instanceof PierPiece pier) {
-                piers.add(pier.getBoundingBox());
+            } else if (piece instanceof PierPiece || piece instanceof PortPiece) {
+                piers.add(piece.getBoundingBox());
             } else if (piece instanceof VillagePathPiece path) {
                 paths.add(path.getBoundingBox());
             } else if (piece instanceof TerrainPiece terrain && terrain.clears()) {

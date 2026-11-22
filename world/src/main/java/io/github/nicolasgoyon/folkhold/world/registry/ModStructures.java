@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.village.structure.GroundFillPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.OptionalReplaceProcessor;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PortPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.RockShellProcessor;
 import io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
@@ -52,6 +53,10 @@ public final class ModStructures {
     /** A pier from a water gate of a village ({@link PierPiece}). */
     public static final DeferredHolder<StructurePieceType, StructurePieceType> PIER =
             PIECES.register("pier", () -> PierPiece::new);
+
+    /** A port at a water gate of the outer wall of a village on large water ({@link PortPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> PORT =
+            PIECES.register("port", () -> PortPiece::new);
 
     /** The stairs of a street piece of a village on a slope ({@link StreetStepsPiece}). */
     public static final DeferredHolder<StructurePieceType, StructurePieceType> STREET_STEPS =
