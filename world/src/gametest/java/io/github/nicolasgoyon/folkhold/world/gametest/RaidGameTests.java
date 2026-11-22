@@ -78,12 +78,12 @@ public final class RaidGameTests {
      * test has access to the sky: the GameTest server puts no roof of barriers on it, so the columns end at the
      * terrain.
      *
-     * <p>The check of the sky ({@link RaidSpawns.Check#NO_SKY}) reads the sky light ({@code Level#canSeeSky}). The light
-     * engine updates the light of the new blocks of the test (the pit, the roof) on the background executor of the
-     * game, after a time that changes with the other work of this executor. The GameTest server ticks faster than real
-     * time: a limit in ticks can end before the update, and the bottom of the pit then has no sky light. Thus the
-     * checks wait for the light with the real-time limit {@link TestSupport#WORKER_SECONDS} (see
-     * {@link TestSupport#thenWaitForWorker}).
+     * <p>The check of the sky ({@link RaidSpawns.Check#NO_SKY}) reads the height map ({@link RaidSpawns#underSky}),
+     * which changes at once with the blocks of the test (the pit, the roof): the checks of the positions do not depend
+     * on the light engine. The test also checks that each spawn position has the sky light ({@code Level#canSeeSky}).
+     * The light engine updates the light on the background executor of the game, after a time that changes with the
+     * other work of this executor. Thus the checks wait with the real-time limit {@link TestSupport#WORKER_SECONDS}
+     * (see {@link TestSupport#thenWaitForWorker}).
      *
      * <p>The test has {@link #SPAWN_RUNS} runs, one after the other. Each run builds the scene again from a flat
      * ground (see {@link #buildSpawnScene}): the light of the pit and of the roof changes again in each run, and the
@@ -106,6 +106,9 @@ public final class RaidGameTests {
                 buildSpawnScene(helper);
                 start[0] = System.nanoTime();
                 skyAtStart[0] = helper.getLevel().canSeeSky(pit);
+                // The checks of the sky and of the hole do not wait for the light: they pass in the tick of the change.
+                assertCheck(helper, new BlockPos(4, 1, 16), RaidSpawns.Check.NO_SKY);
+                assertCheck(helper, new BlockPos(16, -2, 4), RaidSpawns.Check.HOLLOW);
             });
             TestSupport.thenWaitForWorker(helper, sequence, () -> {
                 checks[0]++;

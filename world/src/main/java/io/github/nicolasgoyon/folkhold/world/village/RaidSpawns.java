@@ -69,7 +69,10 @@ public final class RaidSpawns {
         FLUID,
         /** The ground is not in the tag {@link #GROUND}. */
         NOT_GROUND,
-        /** The position is not under the open sky. */
+        /**
+         * The position is not under the open sky: a block that stops the motion or a fluid is above it (see
+         * {@link #underSky}).
+         */
         NO_SKY,
         /** A ravager has no room at the position. */
         NO_ROOM,
@@ -133,6 +136,20 @@ public final class RaidSpawns {
         return Optional.empty();
     }
 
+    /**
+     * True if a position is under the open sky: no block that stops the motion (leaves included) and no fluid is
+     * above it. The check reads the height map {@link Heightmap.Types#MOTION_BLOCKING}, which changes at once with the
+     * blocks. It does not read the sky light: the light engine updates the light on an other thread, some time after a
+     * change of the blocks. A glass roof stops the sky for this check.
+     *
+     * @param level the level
+     * @param pos   the position of the feet
+     * @return true if no block of the height map is at the position or above it
+     */
+    public static boolean underSky(ServerLevel level, BlockPos pos) {
+        return pos.getY() >= level.getHeight(Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ());
+    }
+
     /** The first position above the ground of a column. Leaves do not count as ground. */
     static BlockPos surface(ServerLevel level, int x, int z) {
         return new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
@@ -157,7 +174,7 @@ public final class RaidSpawns {
         if (!ground.is(GROUND)) {
             return Check.NOT_GROUND;
         }
-        if (!level.canSeeSky(pos)) {
+        if (!underSky(level, pos)) {
             return Check.NO_SKY;
         }
         if (!level.noCollision(EntityType.RAVAGER.getSpawnAABB(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5))) {
