@@ -14,7 +14,7 @@ logoFile = "${mod_id}_logo.png"
 description = '''${mod_description}'''
 
 # Two linked minecarts do not push each other. Access to the offers of villagers. The anvil shows high levels and
-# has no "Too Expensive!" limit.
+# has no "Too Expensive!" limit. A limit of the extra ticks of the optional mod Slumber during a sleep.
 [[mixins]]
 config = "folkhold_balance.mixins.json"
 

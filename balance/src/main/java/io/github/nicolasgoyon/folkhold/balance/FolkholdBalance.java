@@ -13,9 +13,11 @@ import io.github.nicolasgoyon.folkhold.balance.registry.ModAttachments;
 import io.github.nicolasgoyon.folkhold.balance.registry.ModEntities;
 import io.github.nicolasgoyon.folkhold.balance.registry.ModItems;
 import io.github.nicolasgoyon.folkhold.balance.registry.ModLootModifiers;
+import io.github.nicolasgoyon.folkhold.balance.sleep.SleepTicks;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
@@ -28,6 +30,8 @@ import org.slf4j.Logger;
 public final class FolkholdBalance {
     public static final String MOD_ID = "folkhold_balance";
     public static final Logger LOGGER = LogUtils.getLogger();
+    /** The mod id of the optional mod Slumber (see {@link SleepTicks}). */
+    private static final String SLUMBER_ID = "slumber";
 
     public FolkholdBalance(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.SERVER, BalanceConfig.SPEC);
@@ -59,6 +63,9 @@ public final class FolkholdBalance {
         NeoForge.EVENT_BUS.addListener(VillagerOffers::onConversion);
         // Lowest priority: the anvil recipes of other mods set their output first.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, AnvilRules::onAnvilUpdate);
+        if (ModList.get().isLoaded(SLUMBER_ID)) {
+            NeoForge.EVENT_BUS.addListener(SleepTicks::onServerTick);
+        }
         LOGGER.info("{} {} loaded", MOD_ID, modContainer.getModInfo().getVersion());
     }
 }
