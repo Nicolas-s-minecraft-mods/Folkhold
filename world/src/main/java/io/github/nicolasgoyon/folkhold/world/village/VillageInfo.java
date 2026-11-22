@@ -59,6 +59,8 @@ import net.minecraft.world.item.Item;
  * <p>The village part is in sections:
  * <ul>
  *   <li><b>village</b>: faction, culture, level and tier, experience (bar), alert state, position.</li>
+ *   <li><b>growth</b>: the next level, the buildings of the next tier and what stops them, the free job posts and
+ *       the state of the new home (see {@link VillageGrowthInfo}).</li>
  *   <li><b>garrison</b>: for each role, the units alive and dead, and the configured count (segments).</li>
  *   <li><b>economy</b>: the market (state, hours, market day, see {@link VillageLife}), population (bar), housing
  *       (bar), food, treasury of the faction, and the main stocks with their price.</li>
@@ -141,6 +143,7 @@ public final class VillageInfo {
         settlement.ifPresent(found -> {
             sections.add(economySection(server, heart, found));
             sections.add(VillageLife.jobsSection(heart, found));
+            sections.add(VillageGrowthInfo.growthSection(heart, found));
             sections.add(territorySection(server, found));
         });
         int level = settlement.map(Settlement::level).orElse(0);
