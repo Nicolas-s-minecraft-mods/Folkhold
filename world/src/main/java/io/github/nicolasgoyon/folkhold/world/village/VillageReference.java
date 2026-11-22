@@ -243,8 +243,8 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
     /**
      * This reference with the pieces of another reference after its pieces, for example the pieces of a ring that the
      * builders build (see {@link RingWall}): the template pieces, the palisades, the piers, the paths and the gate
-     * fronts of the two references. The area is the box around the two areas. The plots, the pool of the homes and the
-     * streets of this reference stay.
+     * fronts of the two references, their plots and the columns of their streets. The area is the box around the two
+     * areas. The pool of the homes and the recorded blocks of the streets of this reference stay.
      *
      * @param other the other reference
      * @return the reference
@@ -262,7 +262,11 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
         allFronts.addAll(other.gateFronts);
         Optional<BoundingBox> box = area.isEmpty() ? other.area : other.area.isEmpty() ? area
                 : BoundingBox.encapsulatingBoxes(List.of(area.get(), other.area.get()));
-        return new VillageReference(allPieces, allPalisades, box, plots, homes, allPiers, streetColumns, streets,
+        List<VillagePlots.Plot> allPlots = new ArrayList<>(plots);
+        allPlots.addAll(other.plots);
+        List<BlockPos> allColumns = new ArrayList<>(streetColumns);
+        allColumns.addAll(other.streetColumns);
+        return new VillageReference(allPieces, allPalisades, box, allPlots, homes, allPiers, allColumns, streets,
                 allPaths, allFronts);
     }
 

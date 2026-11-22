@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
+import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSite;
 import io.github.nicolasgoyon.folkhold.world.construction.BuilderSites;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
@@ -12,7 +13,9 @@ import io.github.nicolasgoyon.folkhold.world.village.RaidMarch;
 import io.github.nicolasgoyon.folkhold.world.village.RingWall;
 import io.github.nicolasgoyon.folkhold.world.village.VillageExits;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
+import io.github.nicolasgoyon.folkhold.world.village.VillageGrowth;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
+import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
@@ -29,6 +32,7 @@ import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.ChunkPos;
@@ -39,10 +43,12 @@ import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -95,9 +101,14 @@ public final class RingWallGameTests {
         VillageHeartBlockEntity heart = (VillageHeartBlockEntity) level.getBlockEntity(heartPos);
         heart.ensureSettlement();
         VillageHearts.register(level, heartPos);
-        heart.setRepairReference(VillageReference.of(level, hamlet.pieces()).orElseThrow());
+        // The core has no free plot: the growth of the test takes a plot of the band.
+        VillageReference core = VillageReference.of(level, hamlet.pieces()).orElseThrow();
+        heart.setRepairReference(new VillageReference(core.pieces(), core.palisades(), core.area(),
+                core.plots().stream().filter(VillagePlots.Plot::built).toList(), land.homes().unwrapKey()
+                        .map(ResourceKey::location), core.piers(), core.streetColumns(), core.streets(), core.paths(),
+                core.gateFronts()));
         heart.ringWall().clear();
-        heart.ringWall().setSite(new RingWall.Site(land, start, hamlet.center()));
+        heart.ringWall().setSite(new RingWall.Site(land, start, hamlet.center(), Optional.of(hamlet.village().get(0))));
         Settlement settlement = Settlements.of(level.getServer(), heart).orElseThrow();
         Settlements.startEconomy(level.getServer(), settlement);
         settlement.setProgress(HAMLET_LEVEL, 0);
@@ -140,8 +151,17 @@ public final class RingWallGameTests {
         // The builders put the blocks of the sites in place.
         Map<BlockPos, BlockState> blocks = RingWall.startedBlocks(level, heart);
         blocks.forEach((pos, state) -> level.setBlock(pos, state, Block.UPDATE_CLIENTS));
-        helper.assertTrue(RingWall.startedBlocks(level, heart).isEmpty(),
-                "The ring must have no block that is not in place");
+        // A street follows the top of the terrain: after its blocks, a light of the street is the top. The other
+        // parts have each block in place.
+        List<BoundingBox> streetBoxes = heart.ringWall().pieces(level).stream().filter(piece -> piece
+                instanceof PoolElementStructurePiece pool && pool.getElement().getProjection()
+                        == StructureTemplatePool.Projection.TERRAIN_MATCHING).map(StructurePiece::getBoundingBox)
+                .toList();
+        List<BlockPos> left = RingWall.startedBlocks(level, heart).keySet().stream().filter(pos -> streetBoxes
+                .stream().noneMatch(box -> box.minX() <= pos.getX() && pos.getX() <= box.maxX()
+                        && box.minZ() <= pos.getZ() && pos.getZ() <= box.maxZ())).toList();
+        helper.assertTrue(left.isEmpty(), "The ring must have no block that is not in place: " + left.stream()
+                .limit(5).map(pos -> pos + " " + level.getBlockState(pos)).toList());
 
         int seaLevel = generator.getSeaLevel();
         List<VillageWall.Wall> walls = RingPlans.walls(reference, land.wall().towerSpacing(),
@@ -228,6 +248,25 @@ public final class RingWallGameTests {
                     return Math.abs(middle.x() - leg.target().getX()) + Math.abs(middle.z() - leg.target().getZ())
                             <= VillageExits.APPROACH_DISTANCE + 2;
                 }), "The raider must march to an outer gate: " + leg.target());
+
+        // The band of the ring has its streets and its free plots, and the growth takes a plot of the band.
+        BoundingBox inner = BoundingBox.fromCorners(new BlockPos(first.outline().minX(), 0, first.outline().minZ()),
+                new BlockPos(first.outline().maxX(), 0, first.outline().maxZ()));
+        List<VillagePlots.Plot> bandPlots = reference.plots().stream().filter(plot -> !plot.built()
+                && ring.contains(plot.connector().getX(), plot.connector().getZ())
+                && !first.contains(plot.connector().getX(), plot.connector().getZ())).toList();
+        helper.assertTrue(!bandPlots.isEmpty(), "The band of the ring must have free plots");
+        long streets = planned.stream().filter(piece -> piece instanceof PoolElementStructurePiece pool
+                && pool.getElement().getProjection() == StructureTemplatePool.Projection.TERRAIN_MATCHING).count();
+        helper.assertTrue(streets > 0, "The band of the ring must have streets");
+        TestSupport.setConfigForTest(helper, WorldConfig.CONSTRUCTION_GROWTH, true);
+        settlement.setJobPosts(Optional.of(List.of()));
+        Optional<BuilderSite> growth = VillageGrowth.check(level, heart);
+        helper.assertTrue(growth.isPresent() && !inner.isInside(growth.get().origin().getX(), 0,
+                growth.get().origin().getZ()) && ring.contains(growth.get().origin().getX(),
+                growth.get().origin().getZ()), "The growth must take a plot of the band: "
+                + growth.map(BuilderSite::origin) + ", need " + VillageGrowth.homeNeed(level, heart, settlement));
+        BuilderSites.stop(level);
 
         settlement.setProgress(HAMLET_LEVEL, 0);
         helper.assertTrue(RingWall.check(level, heart).isEmpty(), "A hamlet starts no new part");
