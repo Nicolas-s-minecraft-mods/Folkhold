@@ -18,7 +18,9 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.netty.channel.embedded.EmbeddedChannel;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +39,7 @@ import net.minecraft.gametest.framework.GameTestInfo;
 import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.gametest.framework.GameTestSequence;
+import net.minecraft.gametest.framework.GameTestTicker;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
@@ -65,6 +68,7 @@ import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.fml.util.ObfuscationReflectionHelper;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.event.EventHooks;
 
@@ -144,6 +148,14 @@ final class TestSupport {
         }
     }
 
+    /**
+     * The margin around the area of another running test, in blocks. The framework puts 5 blocks between the cells of
+     * 2 tests, so the margins of 2 cells do not touch.
+     */
+    private static final double OTHER_TEST_MARGIN = 2.0;
+    /** The private list of the running tests of the GameTest framework. */
+    private static final Field RUNNING_TESTS = ObfuscationReflectionHelper.findField(GameTestTicker.class,
+            "testInfos");
     /** The entities of an earlier test this far from the test area are removed, in blocks. */
     private static final double SWEEP_DISTANCE = 64.0;
     /**
@@ -232,14 +244,17 @@ final class TestSupport {
      * Removes what an earlier test can leave behind when it fails: its units, monsters and villagers within
      * {@link #SWEEP_DISTANCE} blocks of the test area, its drops in the test area (see {@link #removeDrops}), the
      * kept groups of the materializer, and a day time that is not noon. A test does not depend on the success of the
-     * test before it.
+     * test before it. The entities in the areas of the other running tests stay (see {@link #otherRunningAreas}).
      */
     static void sweep(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         AABB area = helper.getBounds().inflate(SWEEP_DISTANCE);
+        List<AABB> running = otherRunningAreas(helper);
         for (Entity entity : level.getEntitiesOfClass(Entity.class, area, entity ->
                 entity instanceof FactionUnit || entity instanceof Monster || entity instanceof Villager)) {
-            entity.discard();
+            if (running.stream().noneMatch(other -> other.contains(entity.position()))) {
+                entity.discard();
+            }
         }
         removeDrops(level, helper.getBounds().inflate(DROP_MARGIN));
         for (MobileGroup group : MobileGroupData.get(level.getServer()).groups().all()) {
@@ -247,6 +262,54 @@ final class TestSupport {
         }
         // The day time at the start of each test. This is not a change of the test: it has no restore.
         level.setDayTime(NOON);
+    }
+
+    /**
+     * The areas of the other tests that run at the same time as a test: the other tests of its batch that are not
+     * done. Each area has a margin of {@link #OTHER_TEST_MARGIN} blocks on the 4 sides, and goes from the bottom to
+     * the top of the level. A test can put an entity above its structure, for example on a tower. The tests of one
+     * batch start at the same time, in cells side by side. Thus the cleanup of a test must keep the entities and the
+     * settlements in these areas.
+     *
+     * @param helper the helper of the test
+     * @return the areas, in absolute positions
+     */
+    static List<AABB> otherRunningAreas(GameTestHelper helper) {
+        Collection<GameTestInfo> tests;
+        try {
+            @SuppressWarnings("unchecked")
+            Collection<GameTestInfo> running = (Collection<GameTestInfo>) RUNNING_TESTS.get(GameTestTicker.SINGLETON);
+            tests = running;
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("The running GameTests are not available", e);
+        }
+        ServerLevel level = helper.getLevel();
+        List<AABB> areas = new ArrayList<>();
+        for (GameTestInfo test : tests) {
+            if (test != helper.testInfo && !test.isDone()) {
+                AABB bounds = test.getStructureBounds().inflate(OTHER_TEST_MARGIN, 0.0, OTHER_TEST_MARGIN);
+                areas.add(new AABB(bounds.minX, level.getMinBuildHeight(), bounds.minZ, bounds.maxX,
+                        level.getMaxBuildHeight(), bounds.maxZ));
+            }
+        }
+        return areas;
+    }
+
+    /**
+     * Fails the test when an entity is not in the level, or when the level did not tick the entity on each tick since
+     * a game time. A test with an entity that does not tick can pass and check nothing.
+     *
+     * @param helper the helper of the test
+     * @param entity the entity
+     * @param added  the game time when the test added the entity to the level
+     */
+    static void assertTicks(GameTestHelper helper, Entity entity, long added) {
+        long elapsed = helper.getLevel().getGameTime() - added;
+        helper.assertTrue(!entity.isRemoved(), "The entity must stay in the level: " + entity + ", removal "
+                + entity.getRemovalReason());
+        // The entity gets its first tick on the tick after the test adds it.
+        helper.assertTrue(entity.tickCount >= elapsed - 1, "The entity must tick on each tick: " + entity.tickCount
+                + " ticks in " + elapsed + " ticks of the level, " + entity);
     }
 
     /**
@@ -271,20 +334,23 @@ final class TestSupport {
     }
 
     /**
-     * Puts in ruins the active settlements near the test that are outside the test area. Each batch has one test,
-     * so these settlements are of earlier tests. An active settlement claims the territory around it, and a
-     * territory of another faction changes the chase area of the units of the test.
+     * Puts in ruins the active settlements of the earlier tests near the test: the settlements outside the test area
+     * and outside the areas of the other running tests (see {@link #otherRunningAreas}). An active settlement claims
+     * the territory around it, and a territory of another faction changes the chase area of the units of the test.
      */
     static void retireEarlierSettlements(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         SettlementData data = SettlementData.get(server);
         AABB area = helper.getBounds().inflate(2.0);
         BlockPos center = BlockPos.containing(area.getCenter());
+        List<AABB> running = otherRunningAreas(helper);
         boolean changed = false;
         for (Settlement settlement : data.registry().all()) {
             boolean inside = settlement.x() >= area.minX && settlement.x() <= area.maxX
                     && settlement.z() >= area.minZ && settlement.z() <= area.maxZ;
-            if (settlement.isActive() && !inside
+            boolean other = running.stream().anyMatch(box -> settlement.x() >= box.minX
+                    && settlement.x() <= box.maxX && settlement.z() >= box.minZ && settlement.z() <= box.maxZ);
+            if (settlement.isActive() && !inside && !other
                     && settlement.distanceSquared(center.getX(), center.getZ()) <= RETIRE_RADIUS * RETIRE_RADIUS) {
                 settlement.setState(SettlementState.RUINS);
                 changed = true;

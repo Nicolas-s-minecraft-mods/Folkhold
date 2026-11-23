@@ -48,6 +48,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * the west. The stair of the tower goes up to the west, along the palisade: the stair {@code k} (1 to 7) is in the
  * layer {@code k}. The palisade has 4 logs, and every second column has a point. The top of a column without a point,
  * next to the stairs 6 and 7, is a dead end: a vanilla villager drops on it from the stair, and cannot jump back.
+ *
+ * <p>Each test checks that its villagers stay in the level and tick on each tick (see
+ * {@link TestSupport#assertTicks}). A villager that does not tick does not move, and a test can then pass with no
+ * check.
  */
 @GameTestHolder(FolkholdWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -99,9 +103,11 @@ public final class WallAccessGameTests {
         scene(helper);
         BlockPos trap = trapColumnTop(helper);
         Villager villager = villager(helper, STAIR_FOOT, null);
+        long added = helper.getLevel().getGameTime();
         helper.startSequence()
                 .thenIdle(SETTLE_TICKS)
                 .thenExecute(() -> {
+                    TestSupport.assertTicks(helper, villager, added);
                     Path up = villager.getNavigation().createPath(helper.absolutePos(trap), 0);
                     helper.assertTrue(up != null && up.canReach(), "A vanilla villager must find a path from the foot "
                             + "of the stair to the top of the column " + trap + ": " + describe(helper, up) + ", "
@@ -111,6 +117,7 @@ public final class WallAccessGameTests {
                 .thenWaitUntil(() -> helper.assertTrue(villager.onGround(), "The villager must land: "
                         + state(helper, villager)))
                 .thenExecute(() -> {
+                    TestSupport.assertTicks(helper, villager, added);
                     helper.assertTrue(villager.blockPosition().equals(helper.absolutePos(trap)),
                             "The villager must stand on the top of the column: " + villager.blockPosition());
                     Path down = villager.getNavigation().createPath(helper.absolutePos(STAIR_FOOT), 0);
@@ -132,6 +139,7 @@ public final class WallAccessGameTests {
         BlockPos trap = trapColumnTop(helper);
         BlockPos stair = new BlockPos(EAST_START_X + STAIRS - 4, 5, TOWER_ORIGIN.getZ() + 1);
         Villager villager = villager(helper, STAIR_FOOT, heart);
+        long added = helper.getLevel().getGameTime();
         helper.assertTrue(villager.getNavigation() instanceof FolkNavigation, "The villager must have the navigation"
                 + " of the villagers");
         helper.assertTrue(zones.contains(helper.absolutePos(PLATFORM)) && zones.contains(helper.absolutePos(trap))
@@ -141,6 +149,7 @@ public final class WallAccessGameTests {
         helper.startSequence()
                 .thenIdle(SETTLE_TICKS)
                 .thenExecute(() -> {
+                    TestSupport.assertTicks(helper, villager, added);
                     for (BlockPos target : List.of(PLATFORM, trap, stair)) {
                         Path path = villager.getNavigation().createPath(helper.absolutePos(target), 0);
                         helper.assertTrue(path == null || !path.canReach(), "The villager must find no path to "
@@ -165,11 +174,13 @@ public final class WallAccessGameTests {
         VillageHeartBlockEntity heart = scene(helper);
         WallZones zones = heart.wallZones(helper.getLevel());
         Villager villager = villager(helper, PLATFORM, heart);
+        long added = helper.getLevel().getGameTime();
         BlockPos heartPos = helper.absolutePos(HEART);
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(villager.onGround(), "The villager must land: "
                         + state(helper, villager)))
                 .thenExecute(() -> {
+                    TestSupport.assertTicks(helper, villager, added);
                     helper.assertTrue(zones.contains(villager.blockPosition()), "The villager must stand on the "
                             + "platform: " + villager.blockPosition());
                     Path down = villager.getNavigation().createPath(heartPos, FolkNavigation.LEAVE_CLOSE_ENOUGH);
@@ -186,6 +197,7 @@ public final class WallAccessGameTests {
                     helper.assertTrue(!zones.contains(villager.blockPosition()) && villager.onGround(),
                             "The villager must walk down to the ground: " + villager.blockPosition());
                 })
+                .thenExecute(() -> TestSupport.assertTicks(helper, villager, added))
                 .thenSucceed();
     }
 
@@ -204,6 +216,7 @@ public final class WallAccessGameTests {
                 ModProfessions.HANDYMAN.get(), VillageFolk.professionOf("folkhold_world:farmer"),
                 VillageFolk.professionOf("folkhold_world:mason"), VillagerProfession.NONE);
         List<Villager> villagers = new ArrayList<>();
+        long added = helper.getLevel().getGameTime();
         for (int i = 0; i < professions.size(); i++) {
             Villager villager = villager(helper, STAIR_FOOT.offset(i % 3, 0, 2 + i / 3), heart);
             villager.setVillagerData(villager.getVillagerData().setProfession(professions.get(i)).setLevel(1));
@@ -226,6 +239,12 @@ public final class WallAccessGameTests {
         helper.onEachTick(() -> {
             long time = helper.getLevel().getGameTime() - start;
             if (time % TARGET_TICKS == 0) {
+                // The success of the test removes its entities. A check on the same tick comes after it.
+                for (Villager villager : villagers) {
+                    if (!helper.testInfo.isDone()) {
+                        TestSupport.assertTicks(helper, villager, added);
+                    }
+                }
                 for (Villager villager : villagers) {
                     villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
                             new WalkTarget(targets.get(random.nextInt(targets.size())), 0.6F, 0));
@@ -241,6 +260,9 @@ public final class WallAccessGameTests {
             }
         });
         helper.runAtTickTime(WANDER_TICKS, () -> {
+            for (Villager villager : villagers) {
+                TestSupport.assertTicks(helper, villager, added);
+            }
             helper.assertTrue(problems.isEmpty(), "No villager must go on the wall: " + problems + ", tower "
                     + towerBox);
             helper.succeed();
