@@ -146,6 +146,92 @@ public final class JobTradeOffers {
     }
 
     /**
+     * One job trade of a source, with the price and the uses of the trade screen.
+     *
+     * @param trade     the trade of the job file
+     * @param item      the item of the trade
+     * @param use       the trade with the count of one use
+     * @param emeralds  the emeralds of one use
+     * @param uses      the uses that the trade screen shows now: the remaining uses of the week, limited by the stock
+     *                  or by the treasury. 0 or more.
+     * @param remaining the remaining uses of the week
+     * @param weekly    the uses of the week at the goods tier of the source
+     */
+    public record Quote(JobTrade trade, Item item, JobTrade use, int emeralds, int uses, int remaining, int weekly) {
+    }
+
+    /** The state of a settlement and of a source that all the trades of the source use. */
+    private record Context(Stock stock, Map<String, Integer> items, int population, int capacity, long treasury,
+            EconomySettings economy, JobTradeRules.Settings settings, Set<String> inputs, int goodsTier, String key) {
+
+        static Context of(MinecraftServer server, Settlement settlement, WorkerSkills.Source source) {
+            Stock stock = settlement.economy().stock();
+            return new Context(stock, stock.asMap(), settlement.economy().population(),
+                    LevelTables.get().traits(settlement.level()).stockCapacity(),
+                    SettlementData.get(server).treasury(settlement.factionId()), Economies.settings(),
+                    Economies.jobTradeSettings(), JobTradeOffers.inputs(settlement),
+                    JobTradeRules.goodsTier(Economies.wealthTier(settlement),
+                            JobSkills.level(source.experience(settlement))), sourceKey(source));
+        }
+    }
+
+    /**
+     * The job trades of a source for a week, with the price and the uses of the trade screen. This list also has the
+     * trades with no use now. The admin screen shows it (see
+     * {@link io.github.nicolasgoyon.folkhold.world.admin.JobTradeView}).
+     *
+     * @param server     the server
+     * @param settlement the settlement
+     * @param tier       the reputation tier of the player
+     * @param source     the source of the job trades
+     * @param week       the week
+     * @return the quotes, in the order of the selection. A trade of an item that the game does not know, or of an
+     *         emerald, has no quote.
+     */
+    public static List<Quote> quotes(MinecraftServer server, Settlement settlement, ReputationTier tier,
+            WorkerSkills.Source source, long week) {
+        Context context = Context.of(server, settlement, source);
+        double factor = Merchants.priceFactor(tier);
+        List<Quote> quotes = new ArrayList<>();
+        for (JobTrade trade : selection(settlement, source, week)) {
+            quote(context, settlement, source, week, trade, factor).ifPresent(quotes::add);
+        }
+        return quotes;
+    }
+
+    private static Optional<Quote> quote(Context context, Settlement settlement, WorkerSkills.Source source,
+            long week, JobTrade trade, double factor) {
+        Optional<Item> item = ItemIds.item(trade.item()).filter(found -> found != Items.EMERALD);
+        if (item.isEmpty()) {
+            return Optional.empty();
+        }
+        int weekly = JobTradeRules.weeklyUses(trade, context.goodsTier());
+        int remaining = weekly - settlement.jobTradeUses().used(context.key(), source.jobId(), week, trade);
+        int maxStack = new ItemStack(item.get()).getMaxStackSize();
+        double price = JobTradeRules.price(trade, context.items(), EconomyData.catalog(), context.population(),
+                context.economy(), context.settings()) * factor;
+        boolean sell = trade.direction() == JobTrade.Direction.SELL;
+        JobTradeRules.Offer offer = JobTradeRules.offer(trade, price, maxStack,
+                sell ? 2 * EMERALD_STACK : EMERALD_STACK);
+        JobTrade use = offer.trade();
+        if (use.count() > maxStack) {
+            return Optional.empty();
+        }
+        int uses;
+        if (sell) {
+            uses = JobTradeRules.sellUses(use, remaining, context.items(), context.inputs(), EconomyData.catalog(),
+                    context.population());
+        } else {
+            Stock stock = context.stock();
+            int target = Prices.target(EconomyData.catalog().info(use.item()), context.population());
+            uses = JobTradeRules.buyUses(use, remaining, stock.count(use.item()),
+                    context.capacity() - stock.count(use.item()), target, context.treasury(), offer.emeralds());
+        }
+        return Optional.of(new Quote(trade, item.get(), use, offer.emeralds(), Math.max(0, uses),
+                Math.max(0, remaining), weekly));
+    }
+
+    /**
      * The job trades of a source as offers of the trade screen. A trade with no use now does not show.
      *
      * @param server     the server
@@ -160,57 +246,34 @@ public final class JobTradeOffers {
     public static List<MerchantOffer> offers(MinecraftServer server, Settlement settlement, ReputationTier tier,
             WorkerSkills.Source source, long week, Set<String> hidden) {
         List<MerchantOffer> offers = new ArrayList<>();
-        Stock stock = settlement.economy().stock();
-        Map<String, Integer> items = stock.asMap();
-        int population = settlement.economy().population();
-        int capacity = LevelTables.get().traits(settlement.level()).stockCapacity();
-        long treasury = SettlementData.get(server).treasury(settlement.factionId());
-        EconomySettings economy = Economies.settings();
-        JobTradeRules.Settings settings = Economies.jobTradeSettings();
+        Context context = Context.of(server, settlement, source);
         double factor = Merchants.priceFactor(tier);
-        Set<String> inputs = inputs(settlement);
-        int goodsTier = JobTradeRules.goodsTier(Economies.wealthTier(settlement),
-                JobSkills.level(source.experience(settlement)));
-        String key = sourceKey(source);
         for (JobTrade trade : selection(settlement, source, week)) {
-            Optional<Item> item = ItemIds.item(trade.item()).filter(found -> found != Items.EMERALD);
-            if (item.isEmpty() || hidden.contains(JobTradeUses.tradeKey(trade))) {
+            if (hidden.contains(JobTradeUses.tradeKey(trade))) {
                 continue;
             }
-            int remaining = JobTradeRules.weeklyUses(trade, goodsTier)
-                    - settlement.jobTradeUses().used(key, source.jobId(), week, trade);
-            int maxStack = new ItemStack(item.get()).getMaxStackSize();
-            double price = JobTradeRules.price(trade, items, EconomyData.catalog(), population, economy, settings)
-                    * factor;
-            boolean sell = trade.direction() == JobTrade.Direction.SELL;
-            JobTradeRules.Offer offer = JobTradeRules.offer(trade, price, maxStack,
-                    sell ? 2 * EMERALD_STACK : EMERALD_STACK);
-            JobTrade use = offer.trade();
-            if (use.count() > maxStack) {
+            Optional<Quote> found = quote(context, settlement, source, week, trade, factor);
+            if (found.isEmpty() || found.get().uses() <= 0) {
                 continue;
             }
-            int uses;
+            Quote quote = found.get();
+            JobTrade use = quote.use();
             MerchantOffer merchantOffer;
-            if (sell) {
-                uses = JobTradeRules.sellUses(use, remaining, items, inputs, EconomyData.catalog(), population);
-                int costA = Math.min(EMERALD_STACK, offer.emeralds());
-                int costB = offer.emeralds() - costA;
+            if (trade.direction() == JobTrade.Direction.SELL) {
+                int costA = Math.min(EMERALD_STACK, quote.emeralds());
+                int costB = quote.emeralds() - costA;
                 merchantOffer = new MerchantOffer(new ItemCost(Items.EMERALD, costA),
                         costB > 0 ? Optional.of(new ItemCost(Items.EMERALD, costB)) : Optional.empty(),
-                        sellItem(server, settlement, tier, source, week, trade, new ItemStack(item.get(), use.count())),
-                        Math.max(0, uses), 0, Merchants.PRICE_MULTIPLIER);
+                        sellItem(server, settlement, tier, source, week, trade,
+                                new ItemStack(quote.item(), use.count())),
+                        quote.uses(), 0, Merchants.PRICE_MULTIPLIER);
             } else {
-                int target = Prices.target(EconomyData.catalog().info(use.item()), population);
-                uses = JobTradeRules.buyUses(use, remaining, stock.count(use.item()),
-                        capacity - stock.count(use.item()), target, treasury, offer.emeralds());
-                merchantOffer = new MerchantOffer(new ItemCost(item.get(), use.count()), Optional.empty(),
-                        new ItemStack(Items.EMERALD, offer.emeralds()), Math.max(0, uses), 0,
+                merchantOffer = new MerchantOffer(new ItemCost(quote.item(), use.count()), Optional.empty(),
+                        new ItemStack(Items.EMERALD, quote.emeralds()), quote.uses(), 0,
                         Merchants.PRICE_MULTIPLIER);
             }
-            if (uses > 0) {
-                MARKS.put(merchantOffer, new Mark(key, source.jobId(), week, trade, use));
-                offers.add(merchantOffer);
-            }
+            MARKS.put(merchantOffer, new Mark(context.key(), source.jobId(), week, trade, use));
+            offers.add(merchantOffer);
         }
         return offers;
     }

@@ -6,10 +6,13 @@ import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeRules;
 import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.admin.JobTradeView;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.JobTradeEnchantments;
 import io.github.nicolasgoyon.folkhold.world.economy.JobTradeOffers;
 import io.github.nicolasgoyon.folkhold.world.economy.WorkerSkills;
+import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +22,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -151,5 +155,59 @@ public final class JobTradeGameTests {
             data.addTreasury(faction, treasury - data.treasury(faction));
         }
         helper.succeed();
+    }
+
+    /**
+     * The admin view of the job trades: the tab of the posts shows the trades of the week of each source, with the
+     * prices of the trade screen. The tab of the trade lists shows all the trades of the job file, with the uses of
+     * the week at each goods tier.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "job_trades_view")
+    public static void adminViewShowsTheJobTrades(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement settlement = new Settlement("job_trade_view_test", 0, 0, "job_trade_view_test", "Test", 0, 0);
+        settlement.setProgress(20, 0);
+        settlement.economy().setJobs(List.of(BLACKSMITH));
+        settlement.jobSkills().setSlot(BLACKSMITH, 250);
+        settlement.economy().stock().set("minecraft:iron_sword", 8);
+        WorkerSkills.Source source = new WorkerSkills.Source(null, BLACKSMITH);
+        helper.assertTrue(JobTradeView.sources(settlement).equals(List.of(source)),
+                "The source must be the job slot: " + JobTradeView.sources(settlement));
+
+        VillageInfoPayload view = JobTradeView.build(server, settlement);
+        helper.assertTrue(view.sections().size() == 3, "The view must have 3 tabs: " + view.sections().size());
+        long week = JobTradeOffers.week(server.overworld());
+        List<JobTradeOffers.Quote> neutral = JobTradeOffers.quotes(server, settlement, ReputationTier.NEUTRAL,
+                source, week);
+        List<JobTradeOffers.Quote> ally = JobTradeOffers.quotes(server, settlement, ReputationTier.ALLY, source,
+                week);
+        helper.assertTrue(neutral.size() == JobTradeRules.tradeCount(5) && ally.size() == neutral.size(),
+                "A Master must have 4 job trades: " + neutral.size());
+        List<VillageInfoPayload.Row> posts = view.sections().get(0).rows();
+        helper.assertTrue(posts.stream().filter(row -> row.meterKind() == VillageInfoPayload.HEADING).count() == 1,
+                "The tab of the posts must have one heading for the source");
+        List<VillageInfoPayload.Row> trades = posts.stream().filter(JobTradeGameTests::isTradeRow).toList();
+        helper.assertTrue(trades.size() == neutral.size(), "Expected a row for each trade: " + trades.size());
+        for (int index = 0; index < trades.size(); index++) {
+            Object[] args = ((TranslatableContents) trades.get(index).value().getContents()).getArgs();
+            JobTradeOffers.Quote quote = neutral.get(index);
+            helper.assertTrue(args[0].equals(quote.emeralds()) && args[2].equals(ally.get(index).emeralds())
+                    && args[3].equals(quote.remaining()) && args[4].equals(quote.weekly())
+                    && args[5].equals(quote.uses()), "The row must show the quote of the trade: " + quote);
+        }
+
+        List<VillageInfoPayload.Row> lists = view.sections().get(1).rows();
+        int fileTrades = EconomyData.jobs().get(BLACKSMITH).trades().size();
+        helper.assertTrue(lists.stream().filter(JobTradeGameTests::isTradeRow).count() == fileTrades,
+                "The tab of the trade lists must show the " + fileTrades + " trades of the job file");
+        JobTrade sword = new JobTrade(JobTrade.Direction.SELL, "minecraft:diamond_sword", 1, 4, 1, List.of(), true, 1);
+        helper.assertTrue(JobTradeView.usesByTier(sword).equals("- · - · - · 1 · 2"),
+                "A trade of the level 4 has uses at the goods tiers 4 and 5: " + JobTradeView.usesByTier(sword));
+        helper.succeed();
+    }
+
+    private static boolean isTradeRow(VillageInfoPayload.Row row) {
+        return row.label().getContents() instanceof TranslatableContents contents
+                && (contents.getKey().endsWith("job_trades.sell") || contents.getKey().endsWith("job_trades.buy"));
     }
 }
