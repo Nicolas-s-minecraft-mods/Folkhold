@@ -103,6 +103,35 @@ class SettlementDataTest {
         assertTrue(again.registry().byId("old").orElseThrow().legacyJobs(), "The mark must survive the save");
     }
 
+    /** The skill of the posts and of the job slots with no post survives the save. An old save has no skill. */
+    @Test
+    void jobSkillsSurviveSaveAndLoad() {
+        SettlementData data = new SettlementData();
+        Settlement scanned = settlement("scanned");
+        JobPosts.Post farm = new JobPosts.Post("folkhold_world:farmer", 1, 64, 2, 2);
+        scanned.setJobPosts(Optional.of(List.of(farm)));
+        scanned.jobSkills().add(farm, 75);
+        scanned.jobSkills().addSlot("folkhold_world:baker", 12);
+        data.registry().add(scanned);
+        data.registry().add(settlement("old"));
+
+        CompoundTag tag = data.save(new CompoundTag(), null);
+        ListTag saved = tag.getList("Settlements", Tag.TAG_COMPOUND);
+        for (int i = 0; i < saved.size(); i++) {
+            CompoundTag entry = saved.getCompound(i);
+            assertEquals(entry.getString("Id").equals("scanned"), entry.contains("JobSkills"),
+                    "Only a settlement with a skill saves the key: " + entry.getString("Id"));
+        }
+        SettlementData loaded = SettlementData.load(tag, null);
+
+        Settlement again = loaded.registry().byId("scanned").orElseThrow();
+        assertEquals(75, again.jobSkills().experience(farm));
+        assertEquals(12, again.jobSkills().slotExperience("folkhold_world:baker"));
+        assertEquals(scanned.jobSkills().posts(), again.jobSkills().posts());
+        assertTrue(loaded.registry().byId("old").orElseThrow().jobSkills().isEmpty(),
+                "An old settlement must start at Novice");
+    }
+
     private static Settlement settlement(String id) {
         return new Settlement(id, 0, 0, "faction", "Village " + id, 8, 8);
     }

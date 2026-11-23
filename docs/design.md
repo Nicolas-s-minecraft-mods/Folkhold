@@ -1217,7 +1217,7 @@ A surplus lowers the price down to ×0.5. A shortage raises the price up to ×3.
 
 ### Job trades (planned)
 
-**Planned** (#1006): this section is the target design of the job trades. The code has only the part "Source of the trades": the trade lists of the job files (`JobTrade`, `Job.trades`). No worker shows a job trade. The section "Trade with the player" gives the trades that the workers show.
+**Planned** (#1006): this section is the target design of the job trades. The code has two parts: "Source of the trades" (the trade lists of the job files, `JobTrade`, `Job.trades`) and "Skill of the workers" (`JobSkills`, `WorkerSkills`). No worker shows a job trade. The section "Trade with the player" gives the trades that the workers show.
 
 In this section, a **need trade** is an offer of `JobTrades` (see "Trade with the player"). The worker sells the outputs of its job from the stock, and buys the inputs that the village needs. A **job trade** is a new offer from the trade list of the job. The need trades stay. For the player, the two kinds are the same kind of trade, in the same trade screen.
 
@@ -1261,11 +1261,20 @@ In this section, a **need trade** is an offer of `JobTrades` (see "Trade with th
 
 #### Skill of the workers
 
-- The skill is new: each job post has an experience in its job. The skill level comes from the experience, with the thresholds of the vanilla villagers: Novice (0), Apprentice (10), Journeyman (70), Expert (150), Master (250).
-- The post keeps the experience, not the villager entity. The workers of the village show the job of a post (see "Job posts"), and an entity can change. A post is a job sign at a position: a new post at the same position with the same job keeps the experience. A post that changes its job starts at 0.
-- Gains (start values to tune): 2 experience for each cycle with the post active. 1 experience for each use of a need trade, and 2 for each use of a job trade.
-- The worker entity of a post gets the skill level as its vanilla villager level. Thus the trade screen shows the vanilla name of the level (Novice to Master) and the experience bar.
-- A worker with no post (a legacy job slot, see "Job posts") has the skill of a legacy slot of its job. The settlement data keeps it.
+- Each job post has an experience in its job (`JobSkills`). The skill level comes from the experience, with the thresholds of the vanilla villagers: Novice (0), Apprentice (10), Journeyman (70), Expert (150), Master (250).
+- The post keeps the experience, not the villager entity. The workers of the village show the job of a post (see "Job posts"), and an entity can change. A post is a job sign at a position. A new post at the same position with the same job keeps the experience, also after a scan with no sign at the position. A scan with a post of a new job at a known position resets the experience of this position to 0.
+- Gains (server config, section `economy`):
+
+  | Option | Default | Gain |
+  | --- | --- | --- |
+  | `skillCycleExperience` | 2 | For each active post at each cycle (`Economies.runCycle`). |
+  | `skillNeedTradeExperience` | 1 | For the post of the worker, at each trade that the village pays (`Merchants.onTrade`). A trade that the stock or the treasury cannot pay gives no experience. |
+  | `skillJobTradeExperience` | 2 | For each use of a job trade. No worker shows a job trade (see #1064). |
+
+- A job slot with no post has the skill of its job id. Examples: a legacy job slot (see "Job posts"), or a job slot of a village with no scan. All the slots of a job id share one experience. Each job id gets the gain of a cycle one time, also with 2 slots of the job.
+- The skill of a worker (`WorkerSkills.sourceOf`) is the skill of the post of its job sign (memory `JOB_SITE`). The job of this post must have the profession of the worker. A worker with no such post has the skill of the first active job slot with no post and with its profession. The builders, the handymen and the inhabitants with no job have no skill.
+- At each check of the heart, each loaded worker gets the skill level of its post as its vanilla villager level (`WorkerSkills.apply`). It also gets the experience of its post as its vanilla experience. After a trade, the worker and its open trade screen get the new level at once. Thus the trade screen shows the vanilla name of the level (Novice to Master) and the experience bar. The vanilla experience is 1 or more: a villager with 0 vanilla experience and no workstation loses its profession. Thus a Novice post with 0 experience shows 1 experience.
+- The vanilla level of a worker changes the badge on its clothes. The vanilla trades of the level do not apply. The offers of the workers give no vanilla experience, thus the vanilla level does not change by itself.
 
 #### Trade tiers
 
@@ -1337,7 +1346,8 @@ Options for the open point (reputation and wealth, with a low skill):
 
 #### Saved data and old worlds
 
-- Each job post gets its experience and the uses of its job trades of the week (week number and uses by trade). A legacy job slot gets the same values by job id. The values are new optional keys of the settlement data.
+- The settlement data keeps the skills in the optional key `JobSkills` of each settlement. `Posts` has the position of the job sign, the job id and the experience of each post. `Slots` has the experience of the job slots with no post, by job id. A settlement with no skill has no key.
+- **Planned**: each job post gets the uses of its job trades of the week (week number and uses by trade). A legacy job slot gets the same values by job id. The values are new optional keys of the settlement data.
 - The weekly selection is not saved: the seed gives it again.
 - An old world: each post starts at Novice with 0 experience. The first trade of the week selects the job trades. The need trades do not change. The villagers get the vanilla level of their post: in an old world, all the workers show Novice.
 - A data pack job file with no list `trades` gets a list from its recipe (see "Source of the trades").
