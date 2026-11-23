@@ -5,6 +5,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.StreetSteps;
 import io.github.nicolasgoyon.folkhold.world.registry.ModStructures;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.OptionalInt;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -45,6 +46,10 @@ import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
  *       becomes the surface block of the terrain of its column (grass, sand).</li>
  * </ul>
  *
+ * <p>A path with a margin has more blocks of terrain on each side, out of the edges: the cut and the fill of a street
+ * (see {@link StreetRamps}). These blocks follow the rules of an edge. The path of a street keeps the lights of its
+ * street that stand on a row: a light post with its lowest block 1 block above the level of the row.
+ *
  * <p>A path with a stair block puts a stair where 2 rows side by side have a difference of 1 block (see
  * {@link StreetSteps}): on the 3 blocks of path of the lower row, facing the higher row. A path of an earlier save has
  * no stair block, and it gets no stairs.
@@ -73,6 +78,10 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     private final boolean edges;
     /** The stair of the level changes, or empty for no stairs. */
     private final Optional<BlockState> stairs;
+    /** The number of blocks of terrain on each side, out of the edges. */
+    private final int margin;
+    /** True for the path of a street: it keeps the lights that stand on its rows. */
+    private final boolean street;
 
     /**
      * Makes a path with no edges.
@@ -114,7 +123,26 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      */
     public VillagePathPiece(int startX, int startZ, int stepX, int stepZ, int[] levels, boolean edges,
             Optional<BlockState> stairs) {
-        super(ModStructures.VILLAGE_PATH.get(), 0, boundingBox(startX, startZ, stepX, stepZ, levels, edges));
+        this(startX, startZ, stepX, stepZ, levels, edges, stairs, 0, false);
+    }
+
+    /**
+     * Makes a path with stairs and a margin.
+     *
+     * @param startX the X of the middle of the first row
+     * @param startZ the Z of the middle of the first row
+     * @param stepX  the X step from a row to the next one: -1, 0 or 1
+     * @param stepZ  the Z step from a row to the next one: -1, 0 or 1
+     * @param levels the level of each row: the Y of its top block, at least one row
+     * @param edges  true for a path with an edge of terrain on each side: the width of a street
+     * @param stairs the stair of the level changes, or empty for no stairs
+     * @param margin the number of blocks of terrain on each side, out of the edges: 0 or more
+     * @param street true for the path of a street: it keeps the lights that stand on its rows
+     */
+    public VillagePathPiece(int startX, int startZ, int stepX, int stepZ, int[] levels, boolean edges,
+            Optional<BlockState> stairs, int margin, boolean street) {
+        super(ModStructures.VILLAGE_PATH.get(), 0, boundingBox(startX, startZ, stepX, stepZ, levels,
+                halfWidth(edges, margin)));
         this.startX = startX;
         this.startZ = startZ;
         this.stepX = stepX;
@@ -123,6 +151,8 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         this.levels = levels.clone();
         this.edges = edges;
         this.stairs = stairs;
+        this.margin = margin;
+        this.street = street;
     }
 
     /** Loads a path. */
@@ -137,6 +167,8 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         this.edges = tag.getBoolean("Edges");
         this.stairs = tag.contains("Stairs") ? Optional.of(NbtUtils.readBlockState(BuiltInRegistries.BLOCK
                 .asLookup(), tag.getCompound("Stairs"))) : Optional.empty();
+        this.margin = tag.getInt("Margin");
+        this.street = tag.getBoolean("Street");
     }
 
     /** The stair of the level changes, or empty for no stairs. */
@@ -154,8 +186,34 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         return edges;
     }
 
-    private static BoundingBox boundingBox(int startX, int startZ, int stepX, int stepZ, int[] levels,
-            boolean edges) {
+    /** The number of blocks of terrain on each side, out of the edges. */
+    public int margin() {
+        return margin;
+    }
+
+    /**
+     * The level of the row of the path at a position, in the width of the path and its edges. The margin is not a part
+     * of this width.
+     *
+     * @param x the X of the position
+     * @param z the Z of the position
+     * @return the level of the row, or empty if the position is not on the path
+     */
+    public OptionalInt levelAt(int x, int z) {
+        int along = stepX != 0 ? (x - startX) * stepX : (z - startZ) * stepZ;
+        int across = stepX != 0 ? z - startZ : x - startX;
+        if (along < 0 || along >= length || Math.abs(across) > halfWidth(edges, 0)) {
+            return OptionalInt.empty();
+        }
+        return OptionalInt.of(levels[along]);
+    }
+
+    /** The number of blocks on each side of the middle of a path. */
+    private static int halfWidth(boolean edges, int margin) {
+        return (edges ? EDGE_HALF_WIDTH : HALF_WIDTH) + margin;
+    }
+
+    private static BoundingBox boundingBox(int startX, int startZ, int stepX, int stepZ, int[] levels, int half) {
         int length = levels.length;
         if (length < 1) {
             throw new IllegalArgumentException("A path needs at least one row");
@@ -165,7 +223,6 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         int endX = startX + stepX * (length - 1);
         int endZ = startZ + stepZ * (length - 1);
         // The width goes across the direction of the path.
-        int half = edges ? EDGE_HALF_WIDTH : HALF_WIDTH;
         int wideX = stepZ != 0 ? half : 0;
         int wideZ = stepX != 0 ? half : 0;
         return new BoundingBox(Math.min(startX, endX) - wideX, minY, Math.min(startZ, endZ) - wideZ,
@@ -182,6 +239,12 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         tag.putIntArray("Levels", levels);
         tag.putBoolean("Edges", edges);
         stairs.ifPresent(state -> tag.put("Stairs", NbtUtils.writeBlockState(state)));
+        if (margin > 0) {
+            tag.putInt("Margin", margin);
+        }
+        if (street) {
+            tag.putBoolean("Street", true);
+        }
     }
 
     @Override
@@ -240,7 +303,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     private void forEachBlock(BoundingBox box, BlockVisit visit) {
         int acrossX = stepZ != 0 ? 1 : 0;
         int acrossZ = stepX != 0 ? 1 : 0;
-        int half = edges ? EDGE_HALF_WIDTH : HALF_WIDTH;
+        int half = halfWidth(edges, margin);
         for (int row = 0; row < length; row++) {
             for (int side = -half; side <= half; side++) {
                 int x = startX + stepX * row + acrossX * side;
@@ -260,7 +323,8 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      */
     public void place(PathBlocks blocks, BoundingBox box) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        forEachBlock(box, (x, z, edge, row) -> placeRow(blocks, pos, x, z, levels[row], edge));
+        forEachBlock(box, (x, z, edge, row) -> placeRow(blocks, pos, x, z, levels[row], edge,
+                street && isStreetLight(blocks.get(pos.set(x, levels[row] + 1, z)))));
         if (stairs.isEmpty()) {
             return;
         }
@@ -313,10 +377,11 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      * it gets dirt, and its top block becomes a block of path or the surface block of the terrain. Shallow water at the
      * level of the row gets dirt down to its floor. Deep water and water above the level of the row do not change.
      *
-     * @param edge true for a block of an edge: its top block is the surface block of the terrain
+     * @param edge   true for a block of an edge: its top block is the surface block of the terrain
+     * @param lights true to keep the street lights above the row: a light post that stands on the row
      */
     private static void placeRow(PathBlocks level, BlockPos.MutableBlockPos pos, int x, int z, int top,
-            boolean edge) {
+            boolean edge, boolean lights) {
         if (!level.get(pos.set(x, top + 1, z)).getFluidState().isEmpty()) {
             return;
         }
@@ -331,7 +396,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
                 surface = state;
             }
             boolean ground = TerrainPiece.isTerrain(state) || state.is(Tags.Blocks.ORES) || isStreet(state);
-            if (ground || TerrainPiece.isPlant(state) || (y <= highest && isStreetLight(state))) {
+            if (ground || TerrainPiece.isPlant(state) || (!lights && y <= highest && isStreetLight(state))) {
                 level.set(pos.immutable(), Blocks.AIR.defaultBlockState());
             }
         }

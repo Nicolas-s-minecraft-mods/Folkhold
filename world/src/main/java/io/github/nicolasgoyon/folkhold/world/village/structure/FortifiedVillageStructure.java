@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTable;
 import io.github.nicolasgoyon.folkhold.core.sim.village.CaveSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HeartSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlanGround;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanVersion;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PlotUses;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
@@ -18,6 +19,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallOutline;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.faction.CultureMap;
 import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
@@ -123,6 +125,8 @@ public final class FortifiedVillageStructure extends Structure {
     private static final int MAX_RANGE = JigsawStructure.MAX_TOTAL_STRUCTURE_RANGE;
     /** The terrain adaptation changes the terrain at this distance from a piece, in blocks. */
     private static final int ADAPTATION_RANGE = 12;
+    /** The blocks of cut and fill on each side of a street with no loaded configuration. */
+    public static final int STREET_CUT_FILL = 1;
 
     public static final MapCodec<FortifiedVillageStructure> CODEC = RecordCodecBuilder
             .<FortifiedVillageStructure>mapCodec(instance -> instance.group(
@@ -469,12 +473,16 @@ public final class FortifiedVillageStructure extends Structure {
      * @param rings    the rings of the village, each with the streets and the buildings of its band (see
      *                 {@link VillageWall.Wall#band()}): all the rings of the tier, before the rule of the near
      *                 villages (see {@link VillageRings})
+     * @param streets  the ramp profiles of the streets of the core, after the first wall (see {@link StreetRamps}):
+     *                 empty in a world of an earlier plan version, where the stairs of the streets are a part of the
+     *                 wall pieces
      */
     public record Layout(int level, VillageSize size, StreetStyle style, VillagePlan plan, BlockPos center,
             List<PoolElementStructurePiece> village, List<BoundingBox> reserved, List<StructurePiece> wall, int built,
             int free, List<String> posts, List<String> problems, VillageWall.Wall firstWall, List<VillagePlan> bands,
-            List<VillageWall.Wall> rings) {
+            List<VillageWall.Wall> rings, List<StructurePiece> streets) {
         public Layout {
+            streets = List.copyOf(streets);
             village = List.copyOf(village);
             posts = List.copyOf(posts);
             reserved = List.copyOf(reserved);
@@ -484,21 +492,23 @@ public final class FortifiedVillageStructure extends Structure {
             rings = List.copyOf(rings);
         }
 
-        /** A layout with no ring. */
+        /** A layout with no ring and no ramp profile of the streets. */
         public Layout(int level, VillageSize size, StreetStyle style, VillagePlan plan, BlockPos center,
                 List<PoolElementStructurePiece> village, List<BoundingBox> reserved, List<StructurePiece> wall,
                 int built, int free, List<String> posts, List<String> problems, VillageWall.Wall firstWall) {
             this(level, size, style, plan, center, village, reserved, wall, built, free, posts, problems, firstWall,
-                    List.of(), List.of());
+                    List.of(), List.of(), List.of());
         }
 
         /**
-         * The pieces of the village structure: the plaza first, then the streets, the buildings of the core and the
-         * first wall. The ring districts place the rings and their bands (see {@link VillageRings}).
+         * The pieces of the village structure: the plaza first, then the streets, the buildings of the core, the
+         * first wall and the ramp profiles of the streets. The ring districts place the rings and their bands (see
+         * {@link VillageRings}).
          */
         public List<StructurePiece> pieces() {
             List<StructurePiece> pieces = new ArrayList<>(village);
             pieces.addAll(wall);
+            pieces.addAll(streets);
             return pieces;
         }
 
@@ -683,10 +693,22 @@ public final class FortifiedVillageStructure extends Structure {
         VillageWall.Wall wall = VillageWall.build(context, start.terrain(), village, core.reserved(),
                 start.center(), start.variant().wall(), start.maritime(), OptionalInt.of(towers(size)), high,
                 !(VillageRings.enabled() && size.rings() > 0));
-        // The stairs of the streets on the slopes, after the paths of the gates: a path has its own stairs.
         List<StructurePiece> wallPieces = new ArrayList<>(wall.pieces());
-        wallPieces.addAll(StreetStepsPiece.of(plan, start.center(), turn, start.terrain(), paths(wall.pieces()),
-                start.variant().wall().streetStairs()));
+        List<StructurePiece> streets = new ArrayList<>();
+        if (VillagePlanVersion.atLeast(PlanVersion.STREET_RAMP)) {
+            // The ramp profile of the streets, after the paths of the gates: an axis street follows its gate path.
+            StreetRamps.Result ramps = StreetRamps.of(plan, start.center(), turn,
+                    start.plaza().getBoundingBox().minY(), VillageWall.heights(start.terrain()),
+                    wall.pieces().stream().filter(VillagePathPiece.class::isInstance)
+                            .map(VillagePathPiece.class::cast).toList(),
+                    streetCutFill(), start.variant().wall().streetStairs());
+            StreetRamps.junctions(core.pieces(), ramps);
+            streets.addAll(ramps.paths());
+        } else {
+            // The stairs of the streets on the slopes, after the paths of the gates: a path has its own stairs.
+            wallPieces.addAll(StreetStepsPiece.of(plan, start.center(), turn, start.terrain(), paths(wall.pieces()),
+                    start.variant().wall().streetStairs()));
+        }
         int built = core.built();
         int free = core.free();
         int placedPosts = uses.posts();
@@ -736,7 +758,7 @@ public final class FortifiedVillageStructure extends Structure {
         List<PoolElementStructurePiece> corePieces = new ArrayList<>(List.of(start.plaza()));
         corePieces.addAll(core.pieces());
         return new Layout(level, size, style, plan, start.center(), corePieces, reserved, wallPieces, built, free,
-                pieces.postJobs(), problems, wall, bandPlans, rings);
+                pieces.postJobs(), problems, wall, bandPlans, rings, streets);
     }
 
     /**
@@ -783,6 +805,14 @@ public final class FortifiedVillageStructure extends Structure {
      */
     public static int firstRadius(VillageSize size) {
         return hasBands(size) ? size.coreRadius() : size.maxRadius();
+    }
+
+    /**
+     * The blocks of cut and fill on each side of a street with a ramp profile: the option {@code streetCutFill}, or
+     * {@link #STREET_CUT_FILL} with no loaded configuration.
+     */
+    private static int streetCutFill() {
+        return WorldConfig.SPEC.isLoaded() ? WorldConfig.STREET_CUT_FILL.get() : STREET_CUT_FILL;
     }
 
     /** The boxes of the paths from the gates in some pieces of a wall. */
