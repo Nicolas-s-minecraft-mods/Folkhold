@@ -65,7 +65,7 @@ public final class SettlementCommands {
     private static final int MAX_RUNS = 1000;
     private static final int INFO_STOCKS = 12;
 
-    private static final SuggestionProvider<CommandSourceStack> SETTLEMENT_IDS = (context, builder) ->
+    static final SuggestionProvider<CommandSourceStack> SETTLEMENT_IDS = (context, builder) ->
             SharedSuggestionProvider.suggest(SettlementData.get(context.getSource().getServer()).registry().all()
                     .stream().map(Settlement::id), builder);
 
