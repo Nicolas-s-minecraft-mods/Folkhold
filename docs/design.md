@@ -1335,7 +1335,15 @@ Options for the open point (reputation and wealth, with a low skill):
 
 #### Implementation issues
 
-The split into implementation issues is in the sub-issues of #1006.
+| Issue | Part | Waits for |
+| --- | --- | --- |
+| #1061 | Trade lists in the job files, with a level for each trade | — |
+| #1062 | Skill of the job posts, from Novice to Master | — |
+| #1063 | Goods tier, weekly selection, volumes and prices | #1061 |
+| #1064 | The job trades in the trade screen, with the need trades | #1062, #1063 |
+| #1065 | Enchanted items, with no Mending | #1064 |
+| #1066 | Reputation and wealth with a low skill (option A or B) | #1064 |
+| #1067 | Trade lists of all job files, with the high tiers | #1061 |
 
 ### Bank
 
