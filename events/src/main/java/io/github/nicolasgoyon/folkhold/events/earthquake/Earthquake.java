@@ -5,6 +5,8 @@ import io.github.nicolasgoyon.folkhold.events.block.EventBlockTags;
 import io.github.nicolasgoyon.folkhold.events.common.BlockChanges;
 import io.github.nicolasgoyon.folkhold.events.common.BlockRules;
 import io.github.nicolasgoyon.folkhold.events.common.EventMath;
+import io.github.nicolasgoyon.folkhold.events.common.StabilizerZone;
+import io.github.nicolasgoyon.folkhold.events.common.Stabilizers;
 import io.github.nicolasgoyon.folkhold.events.common.WorldEvent;
 import io.github.nicolasgoyon.folkhold.events.config.EventsConfig;
 import io.github.nicolasgoyon.folkhold.events.network.EarthquakeShakePayload;
@@ -129,6 +131,9 @@ public final class Earthquake implements WorldEvent {
             implements BlockChanges.Change {
     }
 
+    /** The earthquake finds the stabilizers near its area at this interval, in ticks. */
+    private static final int STABILIZER_INTERVAL = 20;
+
     private final ServerLevel level;
     private final BlockPos center;
     private final EarthquakeSettings settings;
@@ -136,6 +141,8 @@ public final class Earthquake implements WorldEvent {
     private final BlockChanges<Change> pending = new BlockChanges<>();
     private Phase phase = Phase.ANNOUNCE;
     private int elapsed;
+    /** The stabilizers near the area. The earthquake finds them again each {@link #STABILIZER_INTERVAL} ticks. */
+    private StabilizerZone stabilizers = StabilizerZone.EMPTY;
     private long[] columns = new long[0];
     private int nextColumn;
     private int columnsPerTick = 1;
@@ -201,6 +208,9 @@ public final class Earthquake implements WorldEvent {
             return;
         }
         elapsed++;
+        if (elapsed % STABILIZER_INTERVAL == 1) {
+            stabilizers = Stabilizers.near(level, center, settings.radius());
+        }
         if (elapsed == 1) {
             announce();
         }
@@ -514,6 +524,10 @@ public final class Earthquake implements WorldEvent {
     private boolean apply(Change change) {
         BlockPos pos = change.pos();
         BlockState state = change.expected();
+        // A stabilizer can appear between the examination and the change.
+        if (isStabilized(pos)) {
+            return false;
+        }
         return switch (change.action()) {
             case FALL -> fall(pos, state, change.side());
             case SHATTER -> level.destroyBlock(pos, false);
@@ -542,12 +556,12 @@ public final class Earthquake implements WorldEvent {
     }
 
     /**
-     * True if the earthquake can change a block: a block with a collision box, no fluid, not protected, not a part
-     * of a double block, not attached to another block, not a part of a natural tree, and not the support of a block
-     * that must stay (see {@link BlockRules#holdsABlock}).
+     * True if the earthquake can change a block: no stabilizer near it, a block with a collision box, no fluid, not
+     * protected, not a part of a double block, not attached to another block, not a part of a natural tree, and not
+     * the support of a block that must stay (see {@link BlockRules#holdsABlock}).
      */
     private boolean isMovable(BlockPos pos, BlockState state) {
-        if (!BlockRules.isChangeable(level, pos, state)) {
+        if (isStabilized(pos) || !BlockRules.isChangeable(level, pos, state)) {
             return false;
         }
         if (state.is(BlockTags.LEAVES)) {
@@ -575,5 +589,10 @@ public final class Earthquake implements WorldEvent {
             case STURDY -> EventsConfig.EARTHQUAKE_STURDY_CHANCE.get();
             case RESISTANT -> EventsConfig.EARTHQUAKE_RESISTANT_CHANCE.get();
         };
+    }
+
+    /** True if a stabilizer protects a position (see {@link Stabilizers}). */
+    private boolean isStabilized(BlockPos pos) {
+        return stabilizers.covers(pos.getX(), pos.getY(), pos.getZ());
     }
 }

@@ -12,6 +12,7 @@ import io.github.nicolasgoyon.folkhold.blocks.feature.FeatureBlock;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
@@ -85,6 +86,17 @@ public final class ModBlocks {
                     .strength(1.5F, 3.0F)
                     .sound(SoundType.WOOD)
                     .noOcclusion()));
+
+    /**
+     * The stabilizer: reinforced foundations of stone and copper. The events mod protects the blocks near it from the
+     * natural events (tag {@code folkhold_events:stabilizer}). It has the strength of a copper block.
+     */
+    public static final DeferredBlock<Block> STABILIZER = BLOCKS.registerSimpleBlock("stabilizer",
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_ORANGE)
+                    .strength(3.0F, 6.0F)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.COPPER));
 
     private ModBlocks() {
     }

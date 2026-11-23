@@ -5,6 +5,8 @@ import io.github.nicolasgoyon.folkhold.events.block.EventBlockTags;
 import io.github.nicolasgoyon.folkhold.events.common.BlockChanges;
 import io.github.nicolasgoyon.folkhold.events.common.BlockRules;
 import io.github.nicolasgoyon.folkhold.events.common.EventMath;
+import io.github.nicolasgoyon.folkhold.events.common.StabilizerZone;
+import io.github.nicolasgoyon.folkhold.events.common.Stabilizers;
 import io.github.nicolasgoyon.folkhold.events.common.WorldEvent;
 import io.github.nicolasgoyon.folkhold.events.config.EventsConfig;
 import io.github.nicolasgoyon.folkhold.events.network.ModNetwork;
@@ -152,6 +154,9 @@ public final class Storm implements WorldEvent {
     private record Flying(FallingBlockEntity entity, IntSet hit) {
     }
 
+    /** The storm finds the stabilizers near its area at this interval, in ticks. */
+    private static final int STABILIZER_INTERVAL = 20;
+
     private final ServerLevel level;
     private final BlockPos center;
     private final StormSettings settings;
@@ -165,6 +170,8 @@ public final class Storm implements WorldEvent {
     private final List<Flying> flying = new ArrayList<>();
     private Phase phase = Phase.ANNOUNCE;
     private int elapsed;
+    /** The stabilizers near the area. The storm finds them again each {@link #STABILIZER_INTERVAL} ticks. */
+    private StabilizerZone stabilizers = StabilizerZone.EMPTY;
 
     private long[] columns = new long[0];
     private int nextColumn;
@@ -262,6 +269,9 @@ public final class Storm implements WorldEvent {
             return;
         }
         elapsed++;
+        if (elapsed % STABILIZER_INTERVAL == 1) {
+            stabilizers = Stabilizers.near(level, center, settings.radius());
+        }
         if (elapsed == 1) {
             announce();
         }
@@ -451,12 +461,12 @@ public final class Storm implements WorldEvent {
     }
 
     /**
-     * True if the wind can tear up a block: a block that an event can change, not the trunk of a natural tree, not the
+     * True if the wind can tear up a block: no stabilizer near it, a block that an event can change, not the trunk of a natural tree, not the
      * support of a block that must stay, natural leaves or a block with an item (not a double slab), and with a free
      * path for a block that flies (see {@link #flightStart}).
      */
     private boolean canTear(BlockPos pos, BlockState state) {
-        if (!BlockRules.isChangeable(level, pos, state)
+        if (isStabilized(pos) || !BlockRules.isChangeable(level, pos, state)
                 || (state.is(BlockTags.LOGS) && BlockRules.isTreeTrunk(level, pos))
                 || BlockRules.holdsABlock(level, pos)) {
             return false;
@@ -689,5 +699,10 @@ public final class Storm implements WorldEvent {
             case STURDY -> EventsConfig.STORM_STURDY_CHANCE.get();
             case RESISTANT -> EventsConfig.STORM_RESISTANT_CHANCE.get();
         };
+    }
+
+    /** True if a stabilizer protects a position (see {@link Stabilizers}). */
+    private boolean isStabilized(BlockPos pos) {
+        return stabilizers.covers(pos.getX(), pos.getY(), pos.getZ());
     }
 }

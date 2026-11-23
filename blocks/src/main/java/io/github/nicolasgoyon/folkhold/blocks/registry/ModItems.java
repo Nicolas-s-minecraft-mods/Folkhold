@@ -33,6 +33,8 @@ public final class ModItems {
 
     public static final DeferredItem<BlockItem> JOB_SIGN = ITEMS.registerSimpleBlockItem(ModBlocks.JOB_SIGN);
 
+    public static final DeferredItem<BlockItem> STABILIZER = ITEMS.registerSimpleBlockItem(ModBlocks.STABILIZER);
+
     private ModItems() {
     }
 
@@ -57,6 +59,7 @@ public final class ModItems {
             event.accept(BRAZIER.get());
             BUILDING_SIGNS.values().forEach(item -> event.accept(item.get()));
             event.accept(JOB_SIGN.get());
+            event.accept(STABILIZER.get());
         }
     }
 }

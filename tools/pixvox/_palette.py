@@ -26,6 +26,8 @@ BRICK = ramp("#985543", n=5, spread=0.26, hue_shift=12)
 MORTAR = ramp("#a59f97", n=3, spread=0.12, hue_shift=8)
 # Wrought iron of the bands, the frames and the rivets.
 IRON = ramp("#646a73", n=5, spread=0.44, hue_shift=10, tint=0.012)
+# Copper of the bands and the bolts of the stabilizer.
+COPPER = ramp("#b4684a", n=5, spread=0.40, hue_shift=18)
 # Gold of the locks and of the emblems.
 GOLD = ramp("#d1a43c", n=5, spread=0.38, hue_shift=20)
 # The warm glow of the heart of a village.

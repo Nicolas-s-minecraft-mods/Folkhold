@@ -64,6 +64,8 @@
   "folkhold_events.configuration.regionSize": "Taille des régions d'événements (blocs)",
   "folkhold_events.configuration.regionMinDays": "Pause minimale d'une région (jours)",
   "folkhold_events.configuration.regionMaxDays": "Pause maximale d'une région (jours)",
+  "folkhold_events.configuration.stabilizerRadius": "Rayon de protection d'un stabilisateur (blocs)",
+  "folkhold_events.stabilizer.tooltip": "Les séismes et les tempêtes ne changent aucun bloc à %s blocs ou moins.",
   "folkhold_events.configuration.storm": "Tempêtes",
   "folkhold_events.configuration.storms": "Tempêtes naturelles",
   "folkhold_events.configuration.stormDimensions": "Dimensions avec des tempêtes naturelles",
