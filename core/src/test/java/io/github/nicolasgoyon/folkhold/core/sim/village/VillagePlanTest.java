@@ -159,6 +159,33 @@ class VillagePlanTest {
         }
     }
 
+    /**
+     * Small ground: a Valeholm village in a small radius gets short segments where the segments do not fit, and more
+     * plots than with no short segment. On large ground, the plan has no short segment.
+     */
+    @Test
+    void valeholmGetsShortSegmentsOnSmallGround() {
+        VillageSize full = VillageSizeTable.DEFAULT.size("village").orElseThrow();
+        VillageSize small = new VillageSize(full.tier(), full.plots(), full.bedsPerPlot(), full.spareShare(), 52,
+                full.rings(), full.wall(), full.minTerritoryRadius());
+        int shortPlots = 0;
+        int plainPlots = 0;
+        boolean shortPiece = false;
+        for (long seed = 0; seed < 4; seed++) {
+            VillagePlan withShort = plan(small, StreetStyle.VALEHOLM, VillagePlanTest::good, seed);
+            VillagePlan plain = plan(small, StreetStyle.VALEHOLM.withoutShort(), VillagePlanTest::good, seed);
+            shortPiece |= withShort.pieces().stream().anyMatch(piece -> piece.kind() == Kind.SHORT
+                    && piece.length() == StreetStyle.VALEHOLM.shortSegment());
+            shortPlots += withShort.plots().size();
+            plainPlots += plain.plots().size();
+            assertTrue(plain.pieces().stream().noneMatch(piece -> piece.kind() == Kind.SHORT));
+        }
+        assertTrue(shortPiece, "A small Valeholm plan must have a short segment");
+        assertTrue(shortPlots > plainPlots, shortPlots + " plots with short segments, " + plainPlots + " with none");
+        assertTrue(plan(full, StreetStyle.BASE, VillagePlanTest::good, 1).pieces().stream()
+                .noneMatch(piece -> piece.kind() == Kind.SHORT));
+    }
+
     /** The same seed gives the same plan. */
     @Test
     void sameSeedGivesTheSamePlan() {

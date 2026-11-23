@@ -664,7 +664,10 @@ public final class FortifiedVillageStructure extends Structure {
                         .map(VillageBuildings.Requirement::kind).collect(Collectors.toSet()));
         List<PlotUses.Building> buildings = pieces.buildings(
                 VillageBuildings.kinds(VillageBuildingTable.get(), level), styleOf(start.variant()));
-        StreetStyle style = PlotUses.withWide(styleOf(start.variant()), buildings);
+        // The short segment of small ground applies from its plan version.
+        StreetStyle variantStyle = VillagePlanVersion.atLeast(PlanVersion.SHORT_SEGMENT) ? styleOf(start.variant())
+                : styleOf(start.variant()).withoutShort();
+        StreetStyle style = PlotUses.withWide(variantStyle, buildings);
         // A plaza that moved from the start keeps its plan in the range of the structure.
         int radius = Math.min(firstRadius(size), maxDistanceFromCenter - start.shift());
         VillageSize limited = new VillageSize(size.tier(), size.plots(), size.bedsPerPlot(), size.spareShare(), radius,
