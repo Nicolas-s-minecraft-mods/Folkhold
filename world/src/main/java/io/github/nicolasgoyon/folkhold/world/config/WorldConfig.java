@@ -127,6 +127,9 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_CYCLE_EXPERIENCE;
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_NEED_TRADE_EXPERIENCE;
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_JOB_TRADE_EXPERIENCE;
+    public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_SELL_MARKUP;
+    public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_BUY_MARKDOWN;
+    public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_WORK_FACTOR;
 
     public static final ModConfigSpec.IntValue GROUP_BLOCKS_PER_TICK;
     public static final ModConfigSpec.IntValue GROUP_MAX_GROUPS;
@@ -791,6 +794,18 @@ public final class WorldConfig {
                 .comment("Experience that a job post gets for each use of a job trade of the trade list of its job.")
                 .translation(KEY_PREFIX + "economySkillJobTradeExperience")
                 .defineInRange("skillJobTradeExperience", 2, 0, 1000);
+        ECONOMY_JOB_TRADE_SELL_MARKUP = builder
+                .comment("Factor of the local price when a worker sells with a job trade of the trade list of its job.")
+                .translation(KEY_PREFIX + "economyJobTradeSellMarkup")
+                .defineInRange("jobTradeSellMarkup", 1.30, 0.1, 10.0);
+        ECONOMY_JOB_TRADE_BUY_MARKDOWN = builder
+                .comment("Factor of the local price when a worker buys with a job trade of the trade list of its job.")
+                .translation(KEY_PREFIX + "economyJobTradeBuyMarkdown")
+                .defineInRange("jobTradeBuyMarkdown", 0.70, 0.01, 10.0);
+        ECONOMY_JOB_TRADE_WORK_FACTOR = builder
+                .comment("Factor of the sum of the local prices of the materials of a job trade that a worker makes to order.")
+                .translation(KEY_PREFIX + "economyJobTradeWorkFactor")
+                .defineInRange("jobTradeWorkFactor", 1.25, 0.1, 10.0);
         builder.pop();
 
         builder.comment("Mobile groups: caravans and traveling merchants.")
