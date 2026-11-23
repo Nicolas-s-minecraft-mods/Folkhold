@@ -19,6 +19,7 @@
   "folkhold_events.configuration.earthquakeDimensions": "Dimensions avec des séismes naturels",
   "folkhold_events.configuration.earthquakeMinDays": "Temps minimal entre deux séismes (jours de jeu)",
   "folkhold_events.configuration.earthquakeMaxDays": "Temps maximal entre deux séismes (jours de jeu)",
+  "folkhold_events.configuration.earthquakeTerrainFactors": "Facteurs de fréquence des tags de biomes",
   "folkhold_events.configuration.earthquakeMinStrength": "Force minimale",
   "folkhold_events.configuration.earthquakeMaxStrength": "Force maximale",
   "folkhold_events.configuration.earthquakeMaxActive": "Nombre maximal de séismes actifs",
