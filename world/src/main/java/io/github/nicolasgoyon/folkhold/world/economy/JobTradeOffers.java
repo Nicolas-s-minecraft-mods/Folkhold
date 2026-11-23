@@ -111,10 +111,38 @@ public final class JobTradeOffers {
         }
         int skill = JobSkills.level(source.experience(settlement));
         int tier = JobTradeRules.goodsTier(Economies.wealthTier(settlement), skill);
-        long seed = source.post() != null
+        return JobTradeRules.select(job.trades(), tier, JobTradeRules.tradeCount(skill), seed(settlement, source, week));
+    }
+
+    /** The seed of the selection of a source in a week (see {@link JobTradeRules#seed}). */
+    private static long seed(Settlement settlement, WorkerSkills.Source source, long week) {
+        return source.post() != null
                 ? JobTradeRules.seed(settlement.id(), source.post().x(), source.post().y(), source.post().z(), week)
                 : JobTradeRules.seed(settlement.id() + "/" + source.jobId(), 0, 0, 0, week);
-        return JobTradeRules.select(job.trades(), tier, JobTradeRules.tradeCount(skill), seed);
+    }
+
+    /**
+     * The item of a sell trade. A trade with {@code enchant} can give an enchanted item (see
+     * {@link JobTradeEnchantments}). The draw uses the seed of the week, the trade and the reputation tier: the same
+     * player gets the same item during the week, and a new start of the trade does not draw again.
+     *
+     * @param server     the server
+     * @param settlement the settlement
+     * @param tier       the reputation tier of the player
+     * @param source     the source of the job trade
+     * @param week       the week
+     * @param trade      the trade of the job file
+     * @param stack      the item with no enchantments
+     * @return the item
+     */
+    public static ItemStack sellItem(MinecraftServer server, Settlement settlement, ReputationTier tier,
+            WorkerSkills.Source source, long week, JobTrade trade, ItemStack stack) {
+        if (!trade.enchant() || trade.direction() != JobTrade.Direction.SELL) {
+            return stack;
+        }
+        long seed = seed(settlement, source, week) * 31 + JobTradeUses.tradeKey(trade).hashCode();
+        return JobTradeEnchantments.enchant(stack, JobSkills.level(source.experience(settlement)), tier,
+                server.registryAccess(), seed * 31 + JobTradeEnchantments.reputationLevel(tier));
     }
 
     /**
@@ -169,7 +197,8 @@ public final class JobTradeOffers {
                 int costB = offer.emeralds() - costA;
                 merchantOffer = new MerchantOffer(new ItemCost(Items.EMERALD, costA),
                         costB > 0 ? Optional.of(new ItemCost(Items.EMERALD, costB)) : Optional.empty(),
-                        new ItemStack(item.get(), use.count()), Math.max(0, uses), 0, Merchants.PRICE_MULTIPLIER);
+                        sellItem(server, settlement, tier, source, week, trade, new ItemStack(item.get(), use.count())),
+                        Math.max(0, uses), 0, Merchants.PRICE_MULTIPLIER);
             } else {
                 int target = Prices.target(EconomyData.catalog().info(use.item()), population);
                 uses = JobTradeRules.buyUses(use, remaining, stock.count(use.item()),

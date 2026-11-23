@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.world.config;
 
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Reach;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeRules;
 import io.github.nicolasgoyon.folkhold.core.sim.schedule.DaySchedule;
 import java.util.List;
 import net.neoforged.neoforge.common.ModConfigSpec;
@@ -129,6 +130,9 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_JOB_TRADE_EXPERIENCE;
     public static final ModConfigSpec.BooleanValue ECONOMY_JOB_TRADES_ENABLED;
     public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_SELL_MARKUP;
+    public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_NEUTRAL;
+    public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_FRIEND;
+    public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_ALLY;
     public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_BUY_MARKDOWN;
     public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_WORK_FACTOR;
 
@@ -800,6 +804,9 @@ public final class WorldConfig {
                         "With false, the workers show only the trades of the stock and of the needs of the village.")
                 .translation(KEY_PREFIX + "economyJobTradesEnabled")
                 .define("jobTradesEnabled", true);
+        ECONOMY_JOB_TRADE_ENCHANT_NEUTRAL = enchantChances(builder, "Neutral", 0);
+        ECONOMY_JOB_TRADE_ENCHANT_FRIEND = enchantChances(builder, "Friend", 1);
+        ECONOMY_JOB_TRADE_ENCHANT_ALLY = enchantChances(builder, "Ally", 2);
         ECONOMY_JOB_TRADE_SELL_MARKUP = builder
                 .comment("Factor of the local price when a worker sells with a job trade of the trade list of its job.")
                 .translation(KEY_PREFIX + "economyJobTradeSellMarkup")
@@ -1266,5 +1273,19 @@ public final class WorldConfig {
     }
 
     private WorldConfig() {
+    }
+
+    /**
+     * The chances of an enchanted item of a job trade for a reputation tier: 5 values from 0 to 1, from Novice to
+     * Master (see {@link JobTradeRules#ENCHANT_CHANCES}).
+     */
+    private static ModConfigSpec.ConfigValue<List<? extends Double>> enchantChances(ModConfigSpec.Builder builder,
+            String tier, int row) {
+        return builder
+                .comment("Chances (0 to 1) of an enchanted item in a job trade with \"enchant\" for a player " + tier
+                        + ",", "for a worker Novice, Apprentice, Journeyman, Expert and Master. Use 5 decimal values.")
+                .translation(KEY_PREFIX + "economyJobTradeEnchant" + tier)
+                .defineList("jobTradeEnchant" + tier, JobTradeRules.ENCHANT_CHANCES.get(row), () -> 0.0,
+                        value -> value instanceof Double chance && chance >= 0.0 && chance <= 1.0);
     }
 }
