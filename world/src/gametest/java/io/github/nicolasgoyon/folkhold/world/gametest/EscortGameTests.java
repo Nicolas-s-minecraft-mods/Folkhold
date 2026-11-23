@@ -21,6 +21,7 @@ import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
 import io.github.nicolasgoyon.folkhold.world.group.CaravanInteractions;
 import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
+import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import io.github.nicolasgoyon.folkhold.world.quest.AmbushSpawns;
 import io.github.nicolasgoyon.folkhold.world.quest.Deliveries;
@@ -39,6 +40,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -223,6 +226,69 @@ public final class EscortGameTests {
                 "The log must give the distance and the time to come back");
         helper.assertTrue(target, "The log must give the position of the caravan as the target");
         helper.succeed();
+    }
+
+    /**
+     * The row of an active escort on the quest board gives the ambush: the raiders that stay. With no living raider,
+     * the row gives the state of the caravan again.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_board_ambush")
+    public static void boardRowGivesTheAmbushOfTheEscort(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerLevel level = helper.getLevel();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+        BlockPos start = helper.absolutePos(START);
+        player.teleportTo(start.getX(), start.getY(), start.getZ());
+        GroupMaterializer.materialize(level, caravan);
+        long now = level.getGameTime();
+
+        Component before = boardRow(player, origin, quest);
+        Mob raider = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(raider));
+        Escorts.update(server, now);
+        Component during = boardRow(player, origin, quest);
+        raider.kill();
+        Escorts.update(server, now + 20);
+        Component after = boardRow(player, origin, quest);
+        raider.discard();
+
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertFalse(hasKey(before, AMBUSH_KEY), "The row must not give an ambush before the attack: "
+                + before.getString());
+        helper.assertTrue(hasKey(during, AMBUSH_KEY) && during.getString().contains(AMBUSH_RAIDERS),
+                "The row must give the ambush with 1 raider: " + during.getString());
+        helper.assertFalse(hasKey(after, AMBUSH_KEY), "The row must not give the ambush after the death of the "
+                + "raider: " + after.getString());
+        helper.succeed();
+    }
+
+    private static final String AMBUSH_KEY = "quest.folkhold_world.caravan.ambush";
+    /** The argument of the ambush text for 1 raider. */
+    private static final String AMBUSH_RAIDERS = "1";
+
+    /** The information of the row of an active quest on the quest board of a village. */
+    private static Component boardRow(ServerPlayer player, Settlement village, Quest quest) {
+        return QuestBoards.board(player, village).active().stream()
+                .filter(active -> active.questId().equals(quest.id())).findFirst()
+                .map(QuestBoardPayload.Active::info).orElse(Component.empty());
+    }
+
+    /** True if a text or one of its parts is a translation with a key. */
+    private static boolean hasKey(Component text, String key) {
+        if (text.getContents() instanceof TranslatableContents translatable && translatable.getKey().equals(key)) {
+            return true;
+        }
+        for (Object argument : text.getContents() instanceof TranslatableContents translatable
+                ? translatable.getArgs() : new Object[0]) {
+            if (argument instanceof Component part && hasKey(part, key)) {
+                return true;
+            }
+        }
+        return text.getSiblings().stream().anyMatch(sibling -> hasKey(sibling, key));
     }
 
     private static QuestLogPayload.Escort escortOf(QuestLogPayload log, Quest quest) {

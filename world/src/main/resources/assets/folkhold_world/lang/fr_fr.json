@@ -831,6 +831,7 @@
   "quest.folkhold_world.caravan.waiting": "caravane en attente",
   "quest.folkhold_world.caravan.traveling": "%s / %s blocs",
   "quest.folkhold_world.caravan.stopped": "caravane arrêtée",
+  "quest.folkhold_world.caravan.ambush": "embuscade : %s pillards restants",
   "folkhold_world.reputation_tier_title.sworn_enemy": "Ennemi juré",
   "folkhold_world.reputation_tier_title.hostile": "Hostile",
   "folkhold_world.reputation_tier_title.neutral": "Neutre",

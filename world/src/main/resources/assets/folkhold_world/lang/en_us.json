@@ -831,6 +831,7 @@
   "quest.folkhold_world.caravan.waiting": "caravan waits",
   "quest.folkhold_world.caravan.traveling": "%s / %s blocks",
   "quest.folkhold_world.caravan.stopped": "caravan stopped",
+  "quest.folkhold_world.caravan.ambush": "ambush: %s raiders left",
   "folkhold_world.reputation_tier_title.sworn_enemy": "Sworn enemy",
   "folkhold_world.reputation_tier_title.hostile": "Hostile",
   "folkhold_world.reputation_tier_title.neutral": "Neutral",

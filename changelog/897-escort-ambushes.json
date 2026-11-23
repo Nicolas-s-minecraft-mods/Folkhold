@@ -1,5 +1,5 @@
 {
   "category": "changed",
-  "en_us": "Pillagers ambush the escorted caravans in the place of monsters. Each escort has a difficulty with stars on the quest board: more guards, more ambushes, vindicators, a ravager and a larger reward. The merchant waits while the pillagers are near.",
-  "fr_fr": "Des pillards tendent des embuscades aux caravanes escortées. Chaque escorte a une difficulté avec des étoiles sur le tableau de quêtes : plus de gardes, plus d'embuscades, des vindicateurs, un ravageur et une plus grande récompense. Le marchand attend tant que les pillards sont proches."
+  "en_us": "Pillagers ambush the escorted caravans in the place of monsters. Each escort has a difficulty with stars on the quest board: more guards, more ambushes, vindicators, a ravager and a larger reward. The merchant waits while the pillagers are near, and the quest board shows the ambush.",
+  "fr_fr": "Des pillards tendent des embuscades aux caravanes escortées. Chaque escorte a une difficulté en étoiles sur le tableau de quêtes : plus de gardes, d'embuscades, des vindicateurs, un ravageur et plus de récompense. Le marchand attend tant que des pillards sont là, et le tableau montre l'embuscade."
 }
