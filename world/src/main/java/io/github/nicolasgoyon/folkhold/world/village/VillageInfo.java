@@ -310,6 +310,7 @@ public final class VillageInfo {
         }
         rows.add(row("treasury", Component.translatable(KEY + "emeralds",
                 SettlementData.get(server).treasury(settlement.factionId()))));
+        rows.addAll(VillageLife.skillRows(settlement));
         economy.stock().asMap().entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                 .limit(STOCK_ROWS)

@@ -14,6 +14,7 @@ import io.github.nicolasgoyon.folkhold.world.economy.JobTradeOffers;
 import io.github.nicolasgoyon.folkhold.world.economy.WorkerSkills;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
+import io.github.nicolasgoyon.folkhold.world.village.VillageLife;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.Holder;
@@ -22,6 +23,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
@@ -209,5 +211,46 @@ public final class JobTradeGameTests {
     private static boolean isTradeRow(VillageInfoPayload.Row row) {
         return row.label().getContents() instanceof TranslatableContents contents
                 && (contents.getKey().endsWith("job_trades.sell") || contents.getKey().endsWith("job_trades.buy"));
+    }
+
+    /**
+     * The economy tab of the heart screen shows the skill of each post with a job and of each job slot with no post:
+     * the level and the experience, with a bar of the progress in the level below Master. A post with a blank job
+     * sign has no row.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "job_trades_heart_skills")
+    public static void heartScreenShowsTheSkillOfThePosts(GameTestHelper helper) {
+        JobPosts.Post farm = new JobPosts.Post("folkhold_world:farmer", 5, 64, 2, 2);
+        JobPosts.Post blank = new JobPosts.Post("", 9, 64, 2, 2);
+        Settlement settlement = new Settlement("job_trade_skill_test", 0, 0, "job_trade_skill_test", "Test", 0, 0);
+        settlement.setJobPosts(Optional.of(List.of(FORGE, blank, farm)));
+        settlement.jobSkills().add(FORGE, 85);
+        List<VillageInfoPayload.Row> rows = VillageLife.skillRows(settlement);
+        helper.assertTrue(rows.size() == 3 && rows.get(0).meterKind() == VillageInfoPayload.HEADING,
+                "Expected a heading and 2 posts: " + rows.size());
+        assertSkillRow(helper, rows.get(1), "merchant.level.3", 85, 70, 150);
+        assertSkillRow(helper, rows.get(2), "merchant.level.1", 0, 0, 10);
+
+        Settlement slots = new Settlement("job_trade_skill_slots", 0, 0, "job_trade_skill_slots", "Test", 0, 0);
+        slots.economy().setJobs(List.of(BLACKSMITH, BLACKSMITH));
+        slots.jobSkills().setSlot(BLACKSMITH, 300);
+        List<VillageInfoPayload.Row> slotRows = VillageLife.skillRows(slots);
+        helper.assertTrue(slotRows.size() == 2, "A job id with 2 slots must have one row: " + slotRows.size());
+        Object[] args = ((TranslatableContents) slotRows.get(1).value().getContents()).getArgs();
+        helper.assertTrue(slotRows.get(1).meterKind() == VillageInfoPayload.METER_NONE
+                && ((TranslatableContents) ((Component) args[0]).getContents()).getKey().equals("merchant.level.5")
+                && args[1].equals(300), "A Master slot must show its experience with no bar");
+        helper.assertTrue(VillageLife.skillRows(new Settlement("job_trade_skill_none", 0, 0, "none", "Test", 0, 0))
+                .isEmpty(), "A settlement with no job must have no rows");
+        helper.succeed();
+    }
+
+    private static void assertSkillRow(GameTestHelper helper, VillageInfoPayload.Row row, String level,
+            int experience, int start, int next) {
+        Object[] args = ((TranslatableContents) row.value().getContents()).getArgs();
+        helper.assertTrue(((TranslatableContents) ((Component) args[0]).getContents()).getKey().equals(level)
+                && args[1].equals(experience) && args[2].equals(next)
+                && row.meterKind() == VillageInfoPayload.METER_BAR && row.meter() == experience - start
+                && row.meterMax() == next - start, "Expected " + level + " with " + experience + " experience");
     }
 }
