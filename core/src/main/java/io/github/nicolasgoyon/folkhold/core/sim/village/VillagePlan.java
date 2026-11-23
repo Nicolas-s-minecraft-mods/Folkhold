@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.core.sim.village;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle.Home;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -483,13 +484,70 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      */
     public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
             Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed, boolean stagger) {
+        return plan(size, target, style, plazaSize, starts, terrain, foundation, ground, seed, stagger, false);
+    }
+
+    /**
+     * As {@link #plan(VillageSize, int, StreetStyle, int, List, Predicate, Predicate, Ground, long, boolean)}, with or
+     * with no role streets on the best ground.
+     *
+     * <p>With the role streets, the bank goes to the axis street with the best ground, and the first job posts to the
+     * next axis street with the best ground (see {@link #roleStreets}). Only these 2 first pieces do not obey the rules
+     * of the ground. A closed end of a street after a piece gets no street end on ground out of the rules.
+     *
+     * @param roleStreets true for the role streets on the best ground
+     */
+    public static VillagePlan plan(VillageSize size, int target, StreetStyle style, int plazaSize, List<Start> starts,
+            Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed, boolean stagger,
+            boolean roleStreets) {
         int half = plazaSize / 2;
         Box plaza = new Box(-half, -half, plazaSize - 1 - half, plazaSize - 1 - half);
         long maxRadius = size.maxRadius();
         List<Rules> rules = ground == Ground.ANY ? List.of(Rules.NONE) : List.of(Rules.ALL, Rules.HIGH, Rules.NO_LEVEL);
         return firstComplete(rules, rule -> best(seed, random -> new Planner(target,
                 target - size.sparePlots(target), style, box -> box.reach() <= maxRadius, List.of(plaza), true,
-                stagger, terrain, foundation, ground, rule, random).plan(starts)));
+                stagger, terrain, foundation, ground, rule, random).withRoleStreets(roleStreets).plan(starts)));
+    }
+
+    /**
+     * The directions of the role streets of a core: the bank, then the first job posts. The score of an axis street is
+     * the sum of the costs of the ground (see {@link Ground#cost}) on the grid points of the area of its first piece:
+     * the segment, the street end after it, and the homes on its 2 sides. The bank takes the street with the lowest
+     * score, and the first job posts the next one. With the same score, the north comes first for the bank and the
+     * south for the jobs, then the east and the west.
+     *
+     * @param ground    the rules of the terrain
+     * @param style     the style of the street pieces
+     * @param starts    the starts of the axis streets
+     * @return the direction of the bank street, then the direction of the street of the first job posts
+     */
+    public static List<Dir> roleStreets(Ground ground, StreetStyle style, List<Start> starts) {
+        Map<Dir, Double> scores = new EnumMap<>(Dir.class);
+        for (Start start : starts) {
+            double score = 0;
+            Box area = Planner.boxOf(start, -style.home().depth(), 0, StreetStyle.WIDTH - 1 + style.home().depth(),
+                    style.segment() + StreetStyle.END - 1);
+            for (int x = area.minX(); x <= area.maxX(); x += PlanGround.STEP) {
+                for (int z = area.minZ(); z <= area.maxZ(); z += PlanGround.STEP) {
+                    score += ground.cost(x, z);
+                }
+            }
+            scores.put(start.dir(), score);
+        }
+        Dir bank = best(scores, List.of(Dir.NORTH, Dir.SOUTH, Dir.EAST, Dir.WEST), null);
+        Dir jobs = best(scores, List.of(Dir.SOUTH, Dir.NORTH, Dir.EAST, Dir.WEST), bank);
+        return List.of(bank, jobs);
+    }
+
+    /** The direction with the lowest score, in the order of a list, with no excluded direction. */
+    private static Dir best(Map<Dir, Double> scores, List<Dir> order, Dir excluded) {
+        Dir best = null;
+        for (Dir dir : order) {
+            if (dir != excluded && scores.containsKey(dir) && (best == null || scores.get(dir) < scores.get(best))) {
+                best = dir;
+            }
+        }
+        return best;
     }
 
     /**
@@ -752,6 +810,12 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         private final List<Tail> tails = new ArrayList<>();
         /** The ends where no piece fits: they keep their street end. */
         private final List<Tail> closed = new ArrayList<>();
+        /** True for the role streets on the best ground (see {@link VillagePlan#roleStreets}). */
+        private boolean roleStreets;
+        /** The direction of the street of the bank. */
+        private Dir bankStreet = Dir.NORTH;
+        /** The direction of the street of the first job posts. */
+        private Dir jobStreet = Dir.SOUTH;
 
         Planner(int target, int needed, StreetStyle style, Predicate<Box> region, List<Box> blocked, boolean axis,
                 boolean stagger, Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, Rules rules,
@@ -786,9 +850,19 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             return !rules.outline() || !axis || ground.lineFits(box, rules.rise(), covered);
         }
 
-        /** True for an open end of the first piece of an axis street: it does not obey the rules of the ground. */
+        /** Sets the role streets on the best ground. */
+        Planner withRoleStreets(boolean best) {
+            roleStreets = best;
+            return this;
+        }
+
+        /**
+         * True for an open end of the first piece of an axis street that does not obey the rules of the ground: each
+         * first piece, or only the first pieces of the role streets.
+         */
         private boolean first(Tail tail) {
-            return axis && tail.parent() < 0 && tail.exit() < 0;
+            return axis && tail.parent() < 0 && tail.exit() < 0 && (!roleStreets || tail.start().dir() == bankStreet
+                    || tail.start().dir() == jobStreet);
         }
 
         VillagePlan plan(List<Start> starts) {
@@ -805,8 +879,13 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         VillagePlan plan(List<Start> starts, Set<Start> optional) {
             // The first pieces of the streets to the north and to the south come first: their plots have roles.
             List<Start> ordered = new ArrayList<>(starts);
+            if (axis && roleStreets && grounded()) {
+                List<Dir> roles = roleStreets(ground, style, starts);
+                bankStreet = roles.get(0);
+                jobStreet = roles.get(1);
+            }
             if (axis) {
-                ordered.sort(Comparator.comparing(start -> start.dir() != Dir.NORTH && start.dir() != Dir.SOUTH));
+                ordered.sort(Comparator.comparing(start -> start.dir() != bankStreet && start.dir() != jobStreet));
             }
             for (Start start : ordered) {
                 Tail tail = new Tail(start, false, -1, -1, box(start, StreetStyle.END), 0);
@@ -849,6 +928,10 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             }
             tails.addAll(closed);
             closed.clear();
+            if (roleStreets && grounded()) {
+                // A closed end after a piece on ground out of the rules gets no street end: the path stops there.
+                tails.removeIf(tail -> tail.parent() >= 0 && !ground.inside(tail.end(), rules.rise()));
+            }
             Choice choice = choose();
             for (Tail tail : tails) {
                 pieces.add(new Piece(Kind.END, tail.start().x(), tail.start().z(), tail.start().dir(), StreetStyle.END,
@@ -935,7 +1018,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             return boxOf(start, 0, 0, StreetStyle.WIDTH - 1, length - 1);
         }
 
-        private static Box boxOf(Start start, int across1, int along1, int across2, int along2) {
+        static Box boxOf(Start start, int across1, int along1, int across2, int along2) {
             int[] a = at(start, across1, along1);
             int[] b = at(start, across2, along2);
             return Box.of(a[0], a[1], b[0], b[1]);
@@ -1122,14 +1205,14 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         }
 
         /** The role of a plot of the first piece of an axis street, from its row (0 near the plaza) and its side. */
-        private static PlotRole role(Dir street, int row, boolean east) {
-            if (street == Dir.NORTH && row == 0 && !east) {
+        private PlotRole role(Dir street, int row, boolean east) {
+            if (street == bankStreet && row == 0 && !east) {
                 return PlotRole.BANK;
             }
-            if (street == Dir.SOUTH && row == 0) {
+            if (street == jobStreet && row == 0) {
                 return east ? PlotRole.JOBS_START : PlotRole.JOBS_FIRST;
             }
-            return street == Dir.SOUTH && row == 1 && !east ? PlotRole.JOBS_START : PlotRole.HOME;
+            return street == jobStreet && row == 1 && !east ? PlotRole.JOBS_START : PlotRole.HOME;
         }
 
         /** The box of a home on a plot: centered on the plot along the street, outside the box of the piece. */

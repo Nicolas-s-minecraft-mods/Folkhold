@@ -625,6 +625,7 @@ public final class PlotTerrainGameTests {
         int plans = 0;
         int free = 0;
         int climbing = 0;
+        long climbSum = 0;
         int climbingRectangles = 0;
         int ringCount = 0;
         int cutRings = 0;
@@ -673,6 +674,7 @@ public final class PlotTerrainGameTests {
                 rules.merge(layout.plan().rules().name(), 1, Integer::sum);
                 free += wall.isRectangle() ? 0 : 1;
                 climbing += climb > 0 ? 1 : 0;
+                climbSum += climb;
                 climbingRectangles += rectangleClimb > 0 ? 1 : 0;
                 FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {}: rules {}, free outline {} ({} edges),"
                         + " climb {}, climb of the rectangle {}, {} plots of {}, {} missing plots, {} missing homes,"
@@ -707,8 +709,9 @@ public final class PlotTerrainGameTests {
             }
         }
         FolkholdWorld.LOGGER.info("Mountain measure | {} sites | {} plans | rules {} | {} free outlines | {} walls"
-                + " climb | {} rectangles climb | {} missing plots | {} missing homes | {} home beds | {} job posts |",
-                sites, plans, rules, free, climbing, climbingRectangles, missingPlots, missingHomes, homeBeds, posts);
+                + " climb | sum of the climbs {} | {} rectangles climb | {} missing plots | {} missing homes | {} home"
+                + " beds | {} job posts |", sites, plans, rules, free, climbing, climbSum, climbingRectangles,
+                missingPlots, missingHomes, homeBeds, posts);
         FolkholdWorld.LOGGER.info("Mountain ring measure | {} rings | {} cut | {} rings climb | {} rectangles climb |"
                 + " {} rings on high ground | {} rectangles on high ground | {} bands miss plots or homes |", ringCount,
                 cutRings, climbingRings, climbingBoxes, highRings, highBoxes, missingBand);

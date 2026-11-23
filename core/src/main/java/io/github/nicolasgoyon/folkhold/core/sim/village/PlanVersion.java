@@ -21,6 +21,7 @@ import java.util.OptionalInt;
  *   <li>The rules of a world with no saved version.</li>
  *   <li>{@link #STREET_RAMP}: each street of the core has a ramp profile, with a cut and a fill on each side.</li>
  *   <li>{@link #HOUSE_LEVEL}: each house on a street of the core stands at the level of the profile at its plot.</li>
+ *   <li>{@link #ROLE_STREETS}: the bank and the first job posts go to the axis streets with the best ground.</li>
  * </ol>
  */
 public final class PlanVersion {
@@ -30,8 +31,10 @@ public final class PlanVersion {
     public static final int STREET_RAMP = 2;
     /** The version of the houses at the level of their street (see {@link StreetRamp}). */
     public static final int HOUSE_LEVEL = 3;
+    /** The version of the role streets on the best ground (see {@link VillagePlan#roleStreets}). */
+    public static final int ROLE_STREETS = 4;
     /** The version of a new world: the version of the last rule. */
-    public static final int LATEST = HOUSE_LEVEL;
+    public static final int LATEST = ROLE_STREETS;
 
     private PlanVersion() {
     }

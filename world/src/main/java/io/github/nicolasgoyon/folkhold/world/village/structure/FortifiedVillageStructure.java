@@ -675,7 +675,8 @@ public final class FortifiedVillageStructure extends Structure {
         PlanGround ground = plots.core(start.center(), turn, radius, start.variant().wall().margin());
         VillagePlan plan = VillagePlan.plan(limited, bands ? size.corePlots(target) : target, style, plazaSize,
                 VillagePlan.Start.around(plazaSize), plots.plan(start.center(), turn),
-                plots.foundation(start.center(), turn), ground, seed, true);
+                plots.foundation(start.center(), turn), ground, seed, true,
+                VillagePlanVersion.atLeast(PlanVersion.ROLE_STREETS));
         VillagePlanPieces.Posts posts = posts(context, start.center(), level, seed);
         int beds = Math.max(0, LevelTables.get().traits(level).maxPopulation() - VillageBeds.staff());
         PlotUses.Result uses = PlotUses.assign(plan, buildings, posts.count());

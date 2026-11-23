@@ -159,6 +159,56 @@ class VillagePlanTest {
         }
     }
 
+    /** A ground with a cost on the high ground to the north of the plaza (z below -12): the rest is flat. */
+    private static final VillagePlan.Ground HIGH_NORTH = new VillagePlan.Ground() {
+        @Override
+        public boolean inside(Box box, int rise) {
+            return true;
+        }
+
+        @Override
+        public boolean level(Box area, int x, int z) {
+            return true;
+        }
+
+        @Override
+        public double cost(int x, int z) {
+            return z < -12 ? 20 : 0;
+        }
+
+        @Override
+        public boolean lineFits(Box box, int rise, java.util.Set<Long> covered) {
+            return true;
+        }
+
+        @Override
+        public void cover(Box box, java.util.Set<Long> covered) {
+        }
+
+        @Override
+        public int cliff(Box area, int x, int z, int rise) {
+            return 0;
+        }
+    };
+
+    /**
+     * The role streets on the best ground: with high ground to the north, the bank goes to another axis street. On flat
+     * ground, the bank stays on the north street and the first job posts on the south street.
+     */
+    @Test
+    void bankGoesToTheStreetWithTheBestGround() {
+        assertEquals(List.of(Dir.SOUTH, Dir.EAST), VillagePlan.roleStreets(HIGH_NORTH, StreetStyle.BASE, STARTS));
+        assertEquals(List.of(Dir.NORTH, Dir.SOUTH),
+                VillagePlan.roleStreets(VillagePlan.Ground.ANY, StreetStyle.BASE, STARTS));
+        VillageSize size = VillageSizeTable.DEFAULT.size("village").orElseThrow();
+        VillagePlan plan = VillagePlan.plan(size, size.plots(0, 0), StreetStyle.BASE, PLAZA, STARTS,
+                VillagePlanTest::good, box -> false, HIGH_NORTH, 5, true, true);
+        Plot bank = plan.plots().stream().filter(plot -> plot.role() == PlotRole.BANK).findFirst().orElseThrow();
+        assertEquals(Dir.SOUTH, plan.pieces().get(bank.piece()).dir());
+        assertTrue(plan.plots().stream().filter(plot -> plot.role() == PlotRole.JOBS_FIRST)
+                .allMatch(plot -> plan.pieces().get(plot.piece()).dir() == Dir.EAST));
+    }
+
     /** The same seed gives the same plan. */
     @Test
     void sameSeedGivesTheSamePlan() {

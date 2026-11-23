@@ -51,11 +51,12 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * The pieces of a village from its plan (see {@link VillagePlan}): the street pieces and the buildings on the plots.
  *
  * <ul>
- *   <li>The plan uses the frame of the plaza template: its north is the side of the street of the bank. The plan turns
- *       with the plaza: the middle of the plaza is (0, 0) of the plan.</li>
+ *   <li>The plan uses the frame of the plaza template. The plan turns with the plaza: the middle of the plaza is
+ *       (0, 0) of the plan.</li>
  *   <li>Each street piece is the element of its pool with the length of the piece (rotation {@code NONE}, along z):
- *       {@code streets_bank} for the first piece of the street to the north and {@code streets_first} for the first
- *       piece of the other axis streets, {@code streets_next} for a segment or a crossroad,
+ *       {@code streets_bank} for the first piece of the street of the bank (the piece of the plot with the role of
+ *       the bank, see {@link VillagePlan.PlotRole}) and {@code streets_first} for the first piece of the other axis
+ *       streets, {@code streets_next} for a segment or a crossroad,
  *       {@code streets_side} for the start of a side street and {@code street_ends} for a street end. The pools are in
  *       the folder of the pool of the homes of the variant. The piece follows the terrain, as in a jigsaw
  *       structure.</li>
@@ -299,10 +300,14 @@ final class VillagePlanPieces {
             int first = pieces.size();
             int firstReserved = reserved.size();
             List<PoolElementStructurePiece> streets = new ArrayList<>();
-            for (Piece piece : plan.pieces()) {
+            // The first piece of the street of the bank: the piece of the plot with the role of the bank.
+            int bankPiece = plan.plots().stream().filter(plot -> plot.role() == VillagePlan.PlotRole.BANK)
+                    .mapToInt(Plot::piece).findFirst().orElse(-1);
+            for (int i = 0; i < plan.pieces().size(); i++) {
+                Piece piece = plan.pieces().get(i);
                 PoolElementStructurePiece parent = piece.parent() >= 0 ? streets.get(piece.parent())
                         : band ? null : plaza;
-                streets.add(street(piece, parent, band));
+                streets.add(street(piece, parent, band, bankPiece >= 0 ? i == bankPiece : piece.dir() == Dir.NORTH));
             }
             streets.stream().filter(street -> street != null).forEach(pieces::add);
             homesLeft = laterHomes
@@ -421,12 +426,11 @@ final class VillagePlanPieces {
          * The piece of a street, connected to the piece before it. Null if its pool has no element of its length. The
          * first piece of a band street has no piece before it: it starts at the side of the path across the band.
          */
-        private PoolElementStructurePiece street(Piece piece, PoolElementStructurePiece parent, boolean band) {
+        private PoolElementStructurePiece street(Piece piece, PoolElementStructurePiece parent, boolean band,
+                boolean bank) {
             String name = switch (piece.kind()) {
-                case SEGMENT, CROSS -> piece.parent() >= 0 || band ? "streets_next" : switch (piece.dir()) {
-                    case NORTH -> "streets_bank";
-                    case SOUTH, EAST, WEST -> "streets_first";
-                };
+                case SEGMENT, CROSS -> piece.parent() >= 0 || band ? "streets_next"
+                        : bank ? "streets_bank" : "streets_first";
                 case SIDE -> "streets_side";
                 case END -> "street_ends";
             };
