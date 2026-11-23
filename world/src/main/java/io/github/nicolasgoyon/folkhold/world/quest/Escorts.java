@@ -53,6 +53,7 @@ import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.event.EventHooks;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -79,6 +80,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>The raiders of an ambush or of a patrol appear at a position with a walk path to the merchant (see
  *       {@link AmbushSpawns}). The merchant waits while they live. It continues when no raider is near it for a
  *       delay (see {@link #attackers}).</li>
+ *   <li>Each raider of an attack keeps the id of its caravan ({@link #ATTACK_TAG}). When a raider loads again, for
+ *       example after a restart of the server, it joins the attack of its caravan again (see
+ *       {@link #onEntityJoin}).</li>
  *   <li>Each second, the player of an escort gets the state of the caravan in the quest HUD, with the number of
  *       raiders of the attack.</li>
  * </ul>
@@ -86,6 +90,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class Escorts {
     /** Key in the persistent data of an ambush raider. */
     public static final String AMBUSH_TAG = "folkhold_world:ambush";
+    /** Key in the persistent data of a raider that attacks a caravan: the id of the caravan. */
+    public static final String ATTACK_TAG = "folkhold_world:attack";
     private static final int CHECK_INTERVAL = 20;
     /** The check of the escorts, one time in each {@link #CHECK_INTERVAL} of game time. */
     private static final IntervalCheck CHECK = new IntervalCheck(CHECK_INTERVAL);
@@ -101,7 +107,10 @@ public final class Escorts {
     private static final Map<String, Long> AWAY_SINCE = new HashMap<>();
     /** The progress of the remaining ambushes of each escort, by quest id. Not saved. */
     private static final Map<String, Deque<Double>> AMBUSHES = new HashMap<>();
-    /** The raiders that attack each caravan with entities, by caravan id. Not saved. */
+    /**
+     * The raiders that attack each caravan with entities, by caravan id. Not saved: the raiders keep the id of their
+     * caravan, and a raider that loads joins the attack again.
+     */
     private static final Map<String, Attack> ATTACKS = new HashMap<>();
 
     /**
@@ -112,6 +121,9 @@ public final class Escorts {
      */
     private record Attack(Set<UUID> raiders, long lastNear) {
     }
+
+    /** The last game time near the merchant of an attack that starts at the load of a raider: no time. */
+    private static final long NEVER_NEAR = Long.MIN_VALUE / 2;
 
     private Escorts() {
     }
@@ -570,14 +582,41 @@ public final class Escorts {
         }
         Attack old = ATTACKS.get(group.id());
         Set<UUID> ids = new HashSet<>(old == null ? Set.of() : old.raiders());
-        raiders.forEach(raider -> ids.add(raider.getUUID()));
+        raiders.forEach(raider -> {
+            ids.add(raider.getUUID());
+            raider.getPersistentData().putString(ATTACK_TAG, group.id());
+        });
         ATTACKS.put(group.id(), new Attack(ids, level.getGameTime()));
+    }
+
+    /**
+     * A raider of an attack that loads in the Overworld joins the attack of its caravan again: after a restart of the
+     * server, or when its chunk loads again. The caravan must have an accepted escort. An attack that starts at the
+     * load has no time near the merchant: the merchant waits only when a raider is near it (see {@link #attackers}).
+     *
+     * @param event the event. The listener does not receive a canceled event.
+     */
+    public static void onEntityJoin(EntityJoinLevelEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !(event.getEntity() instanceof Mob raider)
+                || level != level.getServer().overworld()) {
+            return;
+        }
+        String groupId = raider.getPersistentData().getString(ATTACK_TAG);
+        if (groupId.isEmpty() || active(level.getServer()).stream().noneMatch(quest -> quest.target().equals(groupId))) {
+            return;
+        }
+        Attack old = ATTACKS.get(groupId);
+        Set<UUID> ids = new HashSet<>(old == null ? Set.of() : old.raiders());
+        ids.add(raider.getUUID());
+        ATTACKS.put(groupId, new Attack(ids, old == null ? NEVER_NEAR : old.lastNear()));
     }
 
     /**
      * The number of living raiders that attack a caravan, for the wait of the merchant. The attack ends when all its
      * raiders are dead or unloaded, or when no raider is at {@link WorldConfig#QUEST_ESCORT_AMBUSH_DISTANCE} blocks
-     * or less from the merchant for {@link WorldConfig#QUEST_ESCORT_AMBUSH_SECONDS}. Then the method gives 0.
+     * or less from the merchant for {@link WorldConfig#QUEST_ESCORT_AMBUSH_SECONDS}. Then the method gives 0. With no
+     * merchant entity, the method gives 0 and the attack stays: after a restart, the raiders can load before the
+     * merchant. A living raider with no target attacks the merchant: a raider that loads again has no target.
      *
      * @param level the level
      * @param group the caravan
@@ -595,10 +634,17 @@ public final class Escorts {
             Entity raider = level.getEntity(id);
             if (raider != null && raider.isAlive()) {
                 living.add(raider);
+                if (raider instanceof Mob mob && mob.getTarget() == null && merchant.isPresent()
+                        && merchant.get() instanceof LivingEntity target && target.isAlive()) {
+                    mob.setTarget(target);
+                }
             }
         }
-        if (merchant.isEmpty() || living.isEmpty()) {
+        if (living.isEmpty()) {
             ATTACKS.remove(group.id());
+            return 0;
+        }
+        if (merchant.isEmpty()) {
             return 0;
         }
         double distance = WorldConfig.QUEST_ESCORT_AMBUSH_DISTANCE.get();

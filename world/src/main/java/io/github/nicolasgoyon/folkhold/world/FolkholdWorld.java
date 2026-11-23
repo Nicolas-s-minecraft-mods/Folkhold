@@ -250,6 +250,8 @@ public final class FolkholdWorld {
         NeoForge.EVENT_BUS.addListener(Hunts::onDeath);
         NeoForge.EVENT_BUS.addListener(Escorts::onServerTick);
         NeoForge.EVENT_BUS.addListener(Escorts::onServerStopped);
+        // After the listeners that cancel the entities of the groups: a canceled raider does not join an attack.
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOW, Escorts::onEntityJoin);
         SettlementLevels.addProsperitySource(Economies::prosperity);
         LOGGER.info("{} {} loaded", MOD_ID, modContainer.getModInfo().getVersion());
     }
