@@ -224,7 +224,8 @@ public final class CartofoldMaps {
 
     /**
      * The layer of the territories: one area for each discovered village with a territory, and the pillager
-     * territories. Each area shows only on the chunks that the player explored ({@link ChunkArea#onlyExplored()}).
+     * territories. Each area shows its colors on the chunks that the player explored, and shows in grey on its other
+     * chunks that exist in the world ({@link ChunkArea#greyUnexplored()}).
      *
      * @param map       the discovered territories of a player
      * @param claimants the claims of all the settlements now
@@ -234,8 +235,8 @@ public final class CartofoldMaps {
     public static LayerContent territories(TerritoryMapPayload map, List<Claimant> claimants,
             List<ChunkArea> pillagers) {
         List<ChunkArea> areas = new ArrayList<>();
-        areas(map.villages(), claimants).forEach(area -> areas.add(area.withOnlyExplored(true)));
-        pillagers.forEach(area -> areas.add(area.withOnlyExplored(true)));
+        areas(map.villages(), claimants).forEach(area -> areas.add(area.withGreyUnexplored(true)));
+        pillagers.forEach(area -> areas.add(area.withGreyUnexplored(true)));
         return new LayerContent(info(TERRITORIES, 10), areas, List.of(), List.of());
     }
 
