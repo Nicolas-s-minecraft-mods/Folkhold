@@ -213,9 +213,9 @@ public final class EconomyData extends SimpleJsonResourceReloadListener {
     /**
      * Reads one trade of the list {@code trades} of a job file.
      *
-     * <p>A trade is not valid when it has {@code sell} and {@code buy}, or neither of them. It is also not valid
-     * with an item that the game does not know, a level out of 1 to 5, a count, a volume or a weight below 1, or
-     * {@code materials} or {@code enchant} on a buy trade.
+     * <p>A trade is not valid when it has {@code sell} and {@code buy}, or neither of them. An item that the game
+     * does not know and a level out of 1 to 5 are not valid. A count, a volume or a weight below 1 is not valid.
+     * A buy trade with {@code materials} or {@code enchant} is not valid.
      *
      * @param json      the trade
      * @param knownItem true for an item id that the game knows
