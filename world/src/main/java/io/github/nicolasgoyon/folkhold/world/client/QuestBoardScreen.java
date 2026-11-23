@@ -420,13 +420,31 @@ public class QuestBoardScreen extends UiScreen {
     }
 
     private void confirmAbandon(Active quest) {
-        UiDialog.builder(this, Component.translatable(KEY + "abandon.title"))
+        confirmAbandon(this, quest.name(), quest.failureReputation(), quest.questId(), board.settlementId());
+    }
+
+    /**
+     * Opens the confirmation of an abandon, for the quest board and the journal. The dialog shows the reputation
+     * that the player loses.
+     *
+     * @param screen            the screen under the dialog
+     * @param name              the name of the quest
+     * @param failureReputation the reputation that the player loses, 0 or more
+     * @param questId           the id of the quest
+     * @param settlementId      the village of the quest board, or an empty string for the journal
+     */
+    static void confirmAbandon(Screen screen, Component name, int failureReputation, String questId,
+            String settlementId) {
+        Component message = failureReputation > 0
+                ? Component.translatable(KEY + "abandon.message", name, failureReputation)
+                : Component.translatable(KEY + "abandon.message_no_loss", name);
+        UiDialog.builder(screen, Component.translatable(KEY + "abandon.title"))
                 .danger()
-                .message(Component.translatable(KEY + "abandon.message", quest.name()))
+                .message(message)
                 .cancel(Component.translatable(KEY + "abandon.keep"))
                 .confirm(Component.translatable(KEY + "abandon"),
                         () -> PacketDistributor.sendToServer(new QuestActionPayload(QuestBoardPayload.ACTION_ABANDON,
-                                quest.questId(), board.settlementId())))
+                                questId, settlementId)))
                 .open();
     }
 

@@ -42,10 +42,11 @@ public record JournalPayload(List<Village> villages, List<Faction> factions, lon
      * @param story       the story of an offer, or empty
      * @param details     the lines of the detail panel of an offer (as on the quest board), or empty for an active
      *                    quest
+     * @param failureReputation the reputation that the player loses at a failure or an abandon, 0 or more
      */
     public record Quest(String questId, boolean active, String villageId, String village, String itemId,
             Component name, Component progress, Component reward, Component risk, int secondsLeft, Component story,
-            List<QuestDetail> details) {
+            List<QuestDetail> details, int failureReputation) {
 
         static void write(RegistryFriendlyByteBuf buf, Quest quest) {
             buf.writeUtf(quest.questId);
@@ -60,6 +61,7 @@ public record JournalPayload(List<Village> villages, List<Faction> factions, lon
             buf.writeVarInt(quest.secondsLeft);
             ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, quest.story);
             QuestDetail.STREAM_CODEC.apply(ByteBufCodecs.list()).encode(buf, quest.details);
+            buf.writeVarInt(quest.failureReputation);
         }
 
         static Quest read(RegistryFriendlyByteBuf buf) {
@@ -69,7 +71,7 @@ public record JournalPayload(List<Village> villages, List<Faction> factions, lon
                     ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                     ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf), buf.readVarInt(),
                     ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
-                    QuestDetail.STREAM_CODEC.apply(ByteBufCodecs.list()).decode(buf));
+                    QuestDetail.STREAM_CODEC.apply(ByteBufCodecs.list()).decode(buf), buf.readVarInt());
         }
     }
 

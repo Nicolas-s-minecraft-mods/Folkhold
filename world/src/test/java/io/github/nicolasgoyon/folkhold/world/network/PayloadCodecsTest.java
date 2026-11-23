@@ -152,11 +152,11 @@ class PayloadCodecsTest {
         JournalPayload payload = new JournalPayload(List.of(), List.of(), 12, "", List.of(
                 new JournalPayload.Quest("q-1", true, "v-1", "Northam", "minecraft:bread", Component.literal("Bring"),
                         Component.literal("4 / 8"), Component.literal("5 emeralds"), Component.literal("Failure"),
-                        600, Component.empty(), List.of()),
+                        600, Component.empty(), List.of(), 16),
                 new JournalPayload.Quest("q-2", false, "v-2", "Southam", "minecraft:iron_sword",
                         Component.literal("Hunt"), Component.empty(), Component.literal("4 emeralds"),
                         Component.empty(), 90, Component.literal("The wolves came back."),
-                        List.of(new QuestDetail(Component.literal("Time"), Component.literal("20 min"))))));
+                        List.of(new QuestDetail(Component.literal("Time"), Component.literal("20 min"))), 0)));
         assertEquals(payload, roundTrip(JournalPayload.STREAM_CODEC, payload));
     }
 
@@ -173,7 +173,7 @@ class PayloadCodecsTest {
                                 Optional.of(Component.literal("Friends only")))),
                 List.of(new QuestBoardPayload.Active("q-3", "minecraft:bread", Component.literal("Bring"),
                         Component.literal("Northam · 5"), 600, QuestBoardPayload.ACTION_DELIVER,
-                        Optional.of(Component.literal("Missing 2")), false)),
+                        Optional.of(Component.literal("Missing 2")), false, 16)),
                 Optional.of(Component.literal("Quest accepted")), true);
         assertEquals(payload, roundTrip(QuestBoardPayload.STREAM_CODEC, payload));
     }
