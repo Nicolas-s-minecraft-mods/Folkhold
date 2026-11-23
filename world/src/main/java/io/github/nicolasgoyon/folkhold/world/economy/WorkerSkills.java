@@ -26,9 +26,9 @@ import net.minecraft.world.inventory.MerchantMenu;
  *       post of a worker gets {@code skillNeedTradeExperience} for each trade of a player with this worker (see
  *       {@link Merchants#onTrade}).</li>
  *   <li>A worker gets the skill level of its post as its vanilla villager level, and the experience of its post as
- *       its vanilla experience, with 1 or more (see {@link #apply}). Thus the trade screen shows the vanilla name of
- *       the level and the experience bar. The vanilla experience of 1 or more keeps the profession of a villager with
- *       no vanilla workstation (see {@link VillageFolk}).</li>
+ *       its vanilla experience (see {@link #apply}). Thus the trade screen shows the vanilla name of
+ *       the level and the experience bar. The vanilla experience is 1 or more, as for each villager of the village
+ *       (see {@link VillageFolk}).</li>
  * </ul>
  */
 public final class WorkerSkills {
