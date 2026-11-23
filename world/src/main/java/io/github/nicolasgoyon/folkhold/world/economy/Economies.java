@@ -7,7 +7,10 @@ import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrade;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeRules;
 import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
+import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTable;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.tick.TickScheduler.TickInfo;
@@ -65,6 +68,25 @@ public final class Economies {
         return new EconomySettings(WorldConfig.ECONOMY_WORKERS_PER_JOB.get(), WorldConfig.ECONOMY_DECAY_RATE.get(),
                 defaults.growthRate(), WorldConfig.ECONOMY_ELASTICITY.get(), defaults.minPriceFactor(),
                 defaults.maxPriceFactor(), defaults.sellMarkup(), defaults.buyMarkdown());
+    }
+
+    /** The factors of the prices of the job trades from the server configuration (see {@link JobTradeRules}). */
+    public static JobTradeRules.Settings jobTradeSettings() {
+        return new JobTradeRules.Settings(WorldConfig.ECONOMY_JOB_TRADE_SELL_MARKUP.get(),
+                WorldConfig.ECONOMY_JOB_TRADE_BUY_MARKDOWN.get(), WorldConfig.ECONOMY_JOB_TRADE_WORK_FACTOR.get());
+    }
+
+    /**
+     * The wealth tier of a settlement for the job trades: the rank of the tier of its level, from 1 (hamlet) to 5
+     * (capital).
+     *
+     * @param settlement the settlement
+     * @return the wealth tier, 1 to 5
+     */
+    public static int wealthTier(Settlement settlement) {
+        LevelTable table = LevelTables.get();
+        int rank = table.tiers().indexOf(table.tier(settlement.level())) + 1;
+        return Math.max(JobTrade.MIN_LEVEL, Math.min(JobTrade.MAX_LEVEL, rank));
     }
 
     /** The {@link io.github.nicolasgoyon.folkhold.world.settlement.SettlementSystem} of the economy. */

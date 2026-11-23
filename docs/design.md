@@ -1217,7 +1217,7 @@ A surplus lowers the price down to ×0.5. A shortage raises the price up to ×3.
 
 ### Job trades (planned)
 
-**Planned** (#1006): this section is the target design of the job trades. The code has two parts: "Source of the trades" (the trade lists of the job files, `JobTrade`, `Job.trades`) and "Skill of the workers" (`JobSkills`, `WorkerSkills`). No worker shows a job trade. The section "Trade with the player" gives the trades that the workers show.
+**Planned** (#1006): this section is the target design of the job trades. The code has these parts: "Source of the trades" (the trade lists of the job files, `JobTrade`, `Job.trades`) and "Skill of the workers" (`JobSkills`, `WorkerSkills`). It also has the pure rules of the goods tier, of the weekly selection, of the volumes and of the prices (`JobTradeRules`). No worker shows a job trade. The section "Trade with the player" gives the trades that the workers show.
 
 In this section, a **need trade** is an offer of `JobTrades` (see "Trade with the player"). The worker sells the outputs of its job from the stock, and buys the inputs that the village needs. A **job trade** is a new offer from the trade list of the job. The need trades stay. For the player, the two kinds are the same kind of trade, in the same trade screen.
 
@@ -1322,6 +1322,8 @@ Options for the open point (reputation and wealth, with a low skill):
 - The number of job trades of a post (start values to tune): 2 at Novice. 3 at Apprentice and Journeyman. 4 at Expert and Master.
 - The selection is a weighted draw from the trades of the goods tier (`level` of `G` or less). It has one trade at most for each item and each direction. A list with sell trades and buy trades gives one trade of each direction or more. The trades of the level `G` have a weight × 2: a skilled worker shows its best goods.
 - The uses of the selected trades are for the whole week. They do not refill before the next week.
+- Rules of the code (`JobTradeRules.select`): when the candidates have the two directions, the first draw takes a sell trade. The second draw takes a buy trade. The next draws take any direction. The selection keeps the order of the trade list. The seed mixes the hash of the settlement id, the position of the job sign and the week.
+- The wealth tier `W` is the rank of the tier of the level of the village (`Economies.wealthTier`).
 
 #### Prices and volumes
 
@@ -1330,6 +1332,9 @@ Options for the open point (reputation and wealth, with a low skill):
 - Volume of a sell trade: the smallest of the remaining weekly uses and of the trades that the stock gives now. The stock keeps a reserve: an item that an active job of the village uses as an input keeps half of its stock target.
 - Volume of a buy trade: the smallest of the remaining weekly uses, of the free stock capacity and of the treasury of the faction. A job trade can fill the stock up to 1.5 × its target, above the need of a need trade.
 - Each use changes the stock and the treasury, as a need trade.
+- The weekly uses of a trade (`JobTradeRules.weeklyUses`) are `volume × (1 + 0.5 × (G - level))`, rounded, 1 or more.
+- The price of one trade (`JobTradeRules.price`) is the local price of one item × the count of the trade × the factor.
+- The factors are options of the server config, section `economy`: `jobTradeSellMarkup` (1.30), `jobTradeBuyMarkdown` (0.70) and `jobTradeWorkFactor` (1.25).
 
 #### Trade screen
 
