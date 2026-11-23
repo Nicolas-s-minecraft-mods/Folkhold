@@ -45,6 +45,7 @@ final class VillagePlanMap {
                     case CROSS -> '+';
                     case SIDE -> 's';
                     case END -> 'e';
+                    case SHORT -> '-';
                 };
             }
         }

@@ -21,6 +21,7 @@ import java.util.OptionalInt;
  *   <li>The rules of a world with no saved version.</li>
  *   <li>{@link #STREET_RAMP}: each street of the core has a ramp profile, with a cut and a fill on each side.</li>
  *   <li>{@link #HOUSE_LEVEL}: each house on a street of the core stands at the level of the profile at its plot.</li>
+ *   <li>{@link #SHORT_SEGMENT}: the core of a Valeholm village puts a short segment where a segment does not fit.</li>
  * </ol>
  */
 public final class PlanVersion {
@@ -30,8 +31,10 @@ public final class PlanVersion {
     public static final int STREET_RAMP = 2;
     /** The version of the houses at the level of their street (see {@link StreetRamp}). */
     public static final int HOUSE_LEVEL = 3;
+    /** The version of the short segment of the Valeholm streets on small ground (see {@link StreetStyle}). */
+    public static final int SHORT_SEGMENT = 4;
     /** The version of a new world: the version of the last rule. */
-    public static final int LATEST = HOUSE_LEVEL;
+    public static final int LATEST = SHORT_SEGMENT;
 
     private PlanVersion() {
     }

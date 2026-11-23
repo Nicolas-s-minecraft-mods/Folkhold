@@ -265,7 +265,12 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
         /** {@code street_side}: the start of a side street, with no plot. */
         SIDE,
         /** {@code street_end}: the end of a street. */
-        END
+        END,
+        /**
+         * {@code street_short}: a short segment with 1 plot row, for small ground. Only the core of a style with a
+         * short segment has it (see {@link StreetStyle#shortSegment()}).
+         */
+        SHORT
     }
 
     /** A box of blocks on the horizontal plane. The minimum and maximum values are in the box. */
@@ -832,13 +837,17 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                         : axis && tail.level() < MAX_LEVEL ? List.of(Kind.SEGMENT, Kind.CROSS)
                                 : List.of(Kind.SEGMENT));
                 kinds.removeIf(kind -> !fits(tail, kind));
+                if (kinds.isEmpty() && shortFits(tail)) {
+                    // Small ground: a short segment where the segment does not fit.
+                    kinds.add(Kind.SHORT);
+                }
                 if (kinds.isEmpty()) {
                     closed.add(tail);
                 } else if (tail.side()) {
                     // A side street starts with its piece with no plot and a segment after it.
                     add(tail, Kind.SIDE);
                     Tail next = tails.remove(tails.size() - 1);
-                    add(next, Kind.SEGMENT);
+                    add(next, fits(next, Kind.SEGMENT) || !shortFits(next) ? Kind.SEGMENT : Kind.SHORT);
                 } else {
                     // The second piece of 2 opposite axis streets is a crossroad: their side streets go into the 4
                     // quarters. Then an axis street opens side streets more often than a side street.
@@ -892,6 +901,11 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                     && (tail.start().dir().dx() == 0) == crossNorthSouth;
         }
 
+        /** True if a short segment fits an open end: only in the core of a style with a short segment. */
+        private boolean shortFits(Tail tail) {
+            return axis && style.hasShort() && !tail.side() && fits(tail, Kind.SHORT);
+        }
+
         private boolean enough() {
             return slots.size() >= target && slots.stream().filter(s -> s.good() || s.reserved()).count() >= needed;
         }
@@ -921,6 +935,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 case CROSS -> style.cross();
                 case SIDE -> style.side();
                 case END -> StreetStyle.END;
+                case SHORT -> style.shortSegment();
             };
         }
 
@@ -1000,8 +1015,19 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 Start next = exits(start, kind).get(0);
                 Box side = box(start, length(kind));
                 boxes.add(side);
-                return free(side, rulesApply)
-                        && fits(new Tail(next, false, -1, 0, side, tail.level()), Kind.SEGMENT, rulesApply, boxes);
+                Tail after = new Tail(next, false, -1, 0, side, tail.level());
+                if (!free(side, rulesApply)) {
+                    return false;
+                }
+                List<Kind> segments = axis && style.hasShort() ? List.of(Kind.SEGMENT, Kind.SHORT) : List.of(Kind.SEGMENT);
+                for (Kind segmentKind : segments) {
+                    List<Box> segment = new ArrayList<>();
+                    if (fits(after, segmentKind, rulesApply, segment)) {
+                        boxes.addAll(segment);
+                        return true;
+                    }
+                }
+                return false;
             }
             Box box = box(start, length(kind));
             boxes.add(box);
@@ -1034,7 +1060,7 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
                 grow(box(exit, StreetStyle.END));
             }
             List<Integer> plotZ = kind == Kind.SEGMENT ? style.segmentPlots()
-                    : kind == Kind.CROSS ? style.crossPlots() : List.of();
+                    : kind == Kind.CROSS ? style.crossPlots() : kind == Kind.SHORT ? style.shortPlots() : List.of();
             for (int row = 0; row < plotZ.size(); row++) {
                 int along = plotZ.get(row);
                 for (boolean east : new boolean[] {false, true}) {

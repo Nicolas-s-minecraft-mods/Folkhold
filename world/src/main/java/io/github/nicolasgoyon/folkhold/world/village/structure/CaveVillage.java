@@ -314,7 +314,8 @@ public final class CaveVillage {
         List<PlotUses.Building> buildings = pieces.buildings(
                 VillageBuildings.kinds(VillageBuildingTable.get(), level), FortifiedVillageStructure.styleOf(
                         start.variant()));
-        StreetStyle style = PlotUses.withWide(FortifiedVillageStructure.styleOf(start.variant()), buildings);
+        StreetStyle style = PlotUses.withWide(FortifiedVillageStructure.styleOf(start.variant()).withoutShort(),
+                buildings);
         long seed = VillagePlanPieces.seed(context.seed(), context.chunkPos());
         VillagePlan plan = plan(structure, size, style, start, rock ? heights(start.terrain()) : null, seed);
         VillagePlanPieces.Posts posts = FortifiedVillageStructure.posts(context, start.center(), level, seed);
@@ -344,7 +345,7 @@ public final class CaveVillage {
 
     /** The style of the plan of a level, with its wide plots. */
     private static StreetStyle style(VillagePlanPieces.Builder pieces, Start start, int level) {
-        StreetStyle base = FortifiedVillageStructure.styleOf(start.variant());
+        StreetStyle base = FortifiedVillageStructure.styleOf(start.variant()).withoutShort();
         return PlotUses.withWide(base, pieces.buildings(VillageBuildings.kinds(VillageBuildingTable.get(), level),
                 base));
     }

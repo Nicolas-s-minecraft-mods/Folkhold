@@ -1301,6 +1301,9 @@ LONG_WALL_TOP = 3
 # A Norse street: a segment of 21 blocks with 2 plots on each side, for the long houses.
 NORSE_STREET_LENGTH = 21
 NORSE_PLOTS = (6, 16)
+# A short Norse street for small ground: a segment of 13 blocks with 1 plot on each side (StreetStyle.shortSegment).
+NORSE_SHORT_LENGTH = 13
+NORSE_SHORT_PLOTS = (8,)
 
 
 def steep_roof_top(across, width):
@@ -1593,6 +1596,24 @@ def norse_street(bank=False, next_street=False):
         t.jigsaw(STREET_WIDTH - 1, 1, z, "east_up", PLOT, HOUSE_FRONT, HOUSE_POOL, "minecraft:air")
     lamp_post(t, STREET_WIDTH - 1, NORSE_PLOTS[0] + 5)
     lamp_post(t, 0, NORSE_STREET_LENGTH - 1)
+    return t
+
+
+def norse_short_street():
+    """A short Norse street along z: a segment of NORSE_SHORT_LENGTH blocks with 1 plot on each side
+    (NORSE_SHORT_PLOTS), for small ground. The plan puts it where the segment of NORSE_STREET_LENGTH blocks does not
+    fit. The connector at the end of the segment targets the pool streets_next."""
+    rng = random.Random(34)
+    t = Template(STREET_WIDTH, 4, NORSE_SHORT_LENGTH)
+    street_path(t, rng, NORSE_SHORT_LENGTH)
+    mid = STREET_WIDTH // 2
+    t.jigsaw(mid, 0, 0, "north_up", STREET, "minecraft:empty", "minecraft:empty", "minecraft:dirt_path")
+    t.jigsaw(mid, 0, NORSE_SHORT_LENGTH - 1, "south_up", STREET_NEXT, STREET, NEXT_STREETS_POOL,
+             "minecraft:dirt_path")
+    for z in NORSE_SHORT_PLOTS:
+        t.jigsaw(0, 1, z, "west_up", PLOT, HOUSE_FRONT, HOUSE_POOL, "minecraft:air")
+        t.jigsaw(STREET_WIDTH - 1, 1, z, "east_up", PLOT, HOUSE_FRONT, HOUSE_POOL, "minecraft:air")
+    lamp_post(t, STREET_WIDTH - 1, NORSE_SHORT_LENGTH - 1)
     return t
 
 # ---------------------------------------------------------------- Sunreach style (desert and Mediterranean)
@@ -5022,6 +5043,7 @@ STYLES = {
         "street": norse_street,
         "street_bank": lambda: norse_street(bank=True),
         "street_next": lambda: norse_street(next_street=True),
+        "street_short": norse_short_street,
         "street_cross": lambda: street_cross(SL),
         "street_side": lambda: street_side(LD),
         "house_cottage": norse_cottage,
@@ -5748,7 +5770,9 @@ def pools(v):
         "streets_first": pool([(1, street("street"))], v.id("street_ends")),
         "streets_bank": pool([(1, street("street_bank"))], v.id("street_ends")),
         "street_ends": pool([(1, street("street_end"))]),
-        "streets_next": pool([(2, street("street_next")), (1, street("street_cross"))], v.id("street_ends")),
+        "streets_next": pool([(2, street("street_next")), (1, street("street_cross"))]
+                             + ([(1, street("street_short"))] if "street_short" in v.pieces else []),
+                             v.id("street_ends")),
         "streets_side": pool([(1, street("street_side"))], v.id("street_ends")),
     }
 
