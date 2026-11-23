@@ -10,16 +10,19 @@ import io.github.nicolasgoyon.folkhold.events.storm.StormMath;
 import io.github.nicolasgoyon.folkhold.events.storm.StormSettings;
 import io.github.nicolasgoyon.folkhold.events.storm.Storms;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
@@ -40,6 +43,7 @@ import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -135,6 +139,63 @@ public final class StormGameTests {
                             + brickLost);
                     helper.assertTrue(woodLost <= wood.size() / 2, "The wind tears up only the exposed blocks, not "
                             + woodLost + " blocks");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A stabilizer in the floor protects a sphere of 16 blocks: in a strong storm, no block in the sphere changes. Two
+     * houses of dirt and wood are at the same distance from the center. The house in the sphere keeps all its blocks,
+     * and the house outside the sphere takes damage.
+     */
+    @GameTest(template = "quake_arena", timeoutTicks = 600, batch = "storm_stabilizer", skyAccess = true)
+    public static void stabilizerProtectsTheBlocksNearIt(GameTestHelper helper) {
+        prepare(helper, 40, 32);
+        EventTestSupport.setConfigForTest(helper, EventsConfig.STABILIZER_RADIUS, 16);
+        Block stabilizer = BuiltInRegistries.BLOCK
+                .getOptional(ResourceLocation.fromNamespaceAndPath("folkhold_blocks", "stabilizer"))
+                .orElseThrow(() -> new IllegalStateException("The test needs the stabilizer of the blocks mod"));
+        // The house in the sphere is at 9 blocks of the stabilizer or nearer. The house outside is at 18 blocks or
+        // more.
+        BlockPos stabilizerPos = new BlockPos(16, 0, 4);
+        helper.setBlock(stabilizerPos, stabilizer);
+        Map<BlockPos, Block> protectedHouse = EventTestSupport.buildHouse(helper, 14, 5, Blocks.DIRT,
+                Blocks.OAK_PLANKS);
+        Map<BlockPos, Block> outside = EventTestSupport.buildHouse(helper, 14, 22, Blocks.DIRT, Blocks.OAK_PLANKS);
+        BlockPos absoluteStabilizer = helper.absolutePos(stabilizerPos);
+        Map<BlockPos, BlockState> inside = new LinkedHashMap<>();
+        for (int x = 0; x < 40; x++) {
+            for (int y = 0; y < 12; y++) {
+                for (int z = 0; z < 32; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = helper.getBlockState(pos);
+                    if (!state.isAir() && helper.absolutePos(pos).distSqr(absoluteStabilizer) <= 16 * 16) {
+                        inside.put(pos, state);
+                    }
+                }
+            }
+        }
+        helper.assertTrue(inside.keySet().containsAll(protectedHouse.keySet()),
+                "The protected house must be in the sphere of the stabilizer");
+        Storm storm = start(helper, new BlockPos(20, 1, 16), settings(helper, 20, 10.0, 100, 8, 200));
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(storm.isDone(), "The storm must end"))
+                .thenIdle(EventTestSupport.LANDING_TICKS)
+                .thenExecute(() -> {
+                    int changed = 0;
+                    for (Map.Entry<BlockPos, BlockState> entry : inside.entrySet()) {
+                        if (helper.getBlockState(entry.getKey()) != entry.getValue()) {
+                            changed++;
+                        }
+                    }
+                    int outsideLost = EventTestSupport.lost(helper, outside);
+                    FolkholdEvents.LOGGER.info("Storm stabilizer test: {} of {} blocks changed in the sphere, the "
+                            + "house outside lost {} of {} blocks", changed, inside.size(), outsideLost,
+                            outside.size());
+                    EventTestSupport.removeDebris(helper);
+                    helper.assertTrue(outsideLost > 0, "The house outside the sphere must take damage");
+                    helper.assertTrue(changed == 0, changed + " blocks changed in the sphere of the stabilizer");
                 })
                 .thenSucceed();
     }
