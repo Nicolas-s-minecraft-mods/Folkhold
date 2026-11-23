@@ -3,10 +3,12 @@ package io.github.nicolasgoyon.folkhold.world.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import io.github.nicolasgoyon.folkhold.world.village.RaidShelters;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.WorkerBrains;
 import java.util.function.Predicate;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Holder;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 import net.minecraft.world.entity.ai.behavior.OneShot;
@@ -23,7 +25,8 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * place is not a point of interest of the expected type. A worker of a faction village keeps a job sign as its job
  * site and a market sign as its meeting point. A villager of a faction village does not claim a vanilla workstation
  * and keeps its profession with no job site. A worker keeps its job site and its meeting point after a long walk with
- * no path to the place (see {@link WorkerBrains}).
+ * no path to the place (see {@link WorkerBrains}). In a raid at a faction village, a villager of the village stays in
+ * its shelter (see {@link RaidShelters}).
  */
 @Mixin(VillagerGoalPackages.class)
 // Mixin calls the injected methods.
@@ -37,6 +40,8 @@ abstract class VillagerGoalPackagesMixin {
             + "Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;ZLjava/util/Optional;)"
             + "Lnet/minecraft/world/entity/ai/behavior/BehaviorControl;";
     private static final String RESET = "Lnet/minecraft/world/entity/ai/behavior/ResetProfession;create()"
+            + "Lnet/minecraft/world/entity/ai/behavior/BehaviorControl;";
+    private static final String RAID_STATUS = "Lnet/minecraft/world/entity/ai/behavior/SetRaidStatus;create()"
             + "Lnet/minecraft/world/entity/ai/behavior/BehaviorControl;";
     private static final String WALK = "Lnet/minecraft/world/entity/ai/behavior/SetWalkTargetFromBlockMemory;create("
             + "Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;FIII)"
@@ -68,6 +73,12 @@ abstract class VillagerGoalPackagesMixin {
     @ModifyExpressionValue(method = "getCorePackage", at = @At(value = "INVOKE", target = RESET))
     private static BehaviorControl<Villager> folkhold_world$keepProfession(BehaviorControl<Villager> reset) {
         return WorkerBrains.keepProfession(reset);
+    }
+
+    /** The behavior of the core package that sets the raid activity. */
+    @ModifyExpressionValue(method = "getCorePackage", at = @At(value = "INVOKE", target = RAID_STATUS))
+    private static BehaviorControl<LivingEntity> folkhold_world$raidShelter(BehaviorControl<LivingEntity> status) {
+        return RaidShelters.withShelter(status);
     }
 
     /** The walk to the job site in the work package: the only call of {@code SetWalkTargetFromBlockMemory}. */
