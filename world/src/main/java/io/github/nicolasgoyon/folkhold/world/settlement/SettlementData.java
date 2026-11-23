@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeUses;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementRegistry;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementState;
@@ -237,6 +238,9 @@ public final class SettlementData extends SavedData {
             if (!settlement.jobSkills().isEmpty()) {
                 entry.put("JobSkills", saveSkills(settlement.jobSkills()));
             }
+            if (!settlement.jobTradeUses().isEmpty()) {
+                entry.put("JobTradeUses", saveTradeUses(settlement.jobTradeUses()));
+            }
             if (settlement.lastFallPenalty() != Settlement.NO_FALL_PENALTY) {
                 entry.putLong("LastFallPenalty", settlement.lastFallPenalty());
             }
@@ -299,6 +303,7 @@ public final class SettlementData extends SavedData {
                 settlement.setJobPosts(Optional.of(loadPosts(entry.getList("JobPosts", Tag.TAG_COMPOUND))));
             }
             loadSkills(settlement.jobSkills(), entry.getCompound("JobSkills"));
+            loadTradeUses(settlement.jobTradeUses(), entry.getList("JobTradeUses", Tag.TAG_COMPOUND));
             settlement.setLastFallPenalty(entry.contains("LastFallPenalty") ? entry.getLong("LastFallPenalty")
                     : Settlement.NO_FALL_PENALTY);
             loadEconomy(settlement.economy(), entry.getCompound("Economy"));
@@ -372,6 +377,39 @@ public final class SettlementData extends SavedData {
         }
         CompoundTag slots = tag.getCompound("Slots");
         slots.getAllKeys().forEach(job -> skills.setSlot(job, slots.getInt(job)));
+    }
+
+    /**
+     * Writes the uses of the job trades of the week: a list of {@code Source} (see {@link JobTradeUses}), {@code Job},
+     * {@code Week} and {@code Uses} (the uses by trade key).
+     */
+    private static ListTag saveTradeUses(JobTradeUses uses) {
+        ListTag list = new ListTag();
+        uses.sources().forEach((source, week) -> {
+            CompoundTag sourceTag = new CompoundTag();
+            sourceTag.putString("Source", source);
+            sourceTag.putString("Job", week.jobId());
+            sourceTag.putLong("Week", week.week());
+            CompoundTag counts = new CompoundTag();
+            week.uses().forEach(counts::putInt);
+            sourceTag.put("Uses", counts);
+            list.add(sourceTag);
+        });
+        return list;
+    }
+
+    /** Reads the uses of the job trades of the week. A save with no key has no uses. */
+    private static void loadTradeUses(JobTradeUses uses, ListTag list) {
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag sourceTag = list.getCompound(i);
+            CompoundTag counts = sourceTag.getCompound("Uses");
+            Map<String, Integer> values = new HashMap<>();
+            counts.getAllKeys().forEach(key -> values.put(key, Math.max(0, counts.getInt(key))));
+            String source = sourceTag.getString("Source");
+            if (!source.isEmpty()) {
+                uses.set(source, new JobTradeUses.Week(sourceTag.getString("Job"), sourceTag.getLong("Week"), values));
+            }
+        }
     }
 
     /** Reads the job posts of a settlement. A post with no sign position or no job is skipped. */

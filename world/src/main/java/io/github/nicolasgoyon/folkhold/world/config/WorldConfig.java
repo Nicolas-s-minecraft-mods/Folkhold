@@ -127,6 +127,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_CYCLE_EXPERIENCE;
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_NEED_TRADE_EXPERIENCE;
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_JOB_TRADE_EXPERIENCE;
+    public static final ModConfigSpec.BooleanValue ECONOMY_JOB_TRADES_ENABLED;
     public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_SELL_MARKUP;
     public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_BUY_MARKDOWN;
     public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_WORK_FACTOR;
@@ -794,6 +795,11 @@ public final class WorldConfig {
                 .comment("Experience that a job post gets for each use of a job trade of the trade list of its job.")
                 .translation(KEY_PREFIX + "economySkillJobTradeExperience")
                 .defineInRange("skillJobTradeExperience", 2, 0, 1000);
+        ECONOMY_JOB_TRADES_ENABLED = builder
+                .comment("Turns on the job trades: each worker also shows the trades of the trade list of its job.",
+                        "With false, the workers show only the trades of the stock and of the needs of the village.")
+                .translation(KEY_PREFIX + "economyJobTradesEnabled")
+                .define("jobTradesEnabled", true);
         ECONOMY_JOB_TRADE_SELL_MARKUP = builder
                 .comment("Factor of the local price when a worker sells with a job trade of the trade list of its job.")
                 .translation(KEY_PREFIX + "economyJobTradeSellMarkup")

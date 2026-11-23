@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.core.sim.settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeUses;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,7 @@ public final class Settlement {
     private String biome = "";
     private final EconomyState economy = new EconomyState();
     private final JobSkills jobSkills = new JobSkills();
+    private final JobTradeUses jobTradeUses = new JobTradeUses();
     private List<Gate> gates = List.of();
     private int beds = VillagePlaces.UNKNOWN;
     private List<JobPosts.Post> jobPosts;
@@ -210,6 +212,11 @@ public final class Settlement {
     /** The skill of the job posts and of the job slots with no post (see {@link JobSkills}). */
     public JobSkills jobSkills() {
         return jobSkills;
+    }
+
+    /** The uses of the job trades of the week of the posts and of the job slots with no post. */
+    public JobTradeUses jobTradeUses() {
+        return jobTradeUses;
     }
 
     /** The gates of the palisade, as the heart saw them the last time. Empty if the heart did not see them. */

@@ -289,6 +289,41 @@ public final class JobTradeRules {
         return value * settings.sellMarkup();
     }
 
+    /**
+     * A job trade as an offer of the trade screen: the trade with the count of one use, and the emeralds of one use.
+     *
+     * @param trade    the trade, with the count of one use
+     * @param emeralds the emeralds of one use (1 or more)
+     */
+    public record Offer(JobTrade trade, int emeralds) {
+    }
+
+    /**
+     * The offer of a trade at a price. A price of 1 emerald or more gives the emeralds of the price: rounded for a
+     * sell trade, rounded down for a buy trade. A trade with no materials and a price below 1 emerald costs 1
+     * emerald, with more items: {@code 1 / price} times the count, rounded down to sell and rounded up to buy. The
+     * count of one use is not above the maximum stack size.
+     *
+     * @param trade    the trade
+     * @param price    the price of the trade (see {@link #price}), with the discount of the reputation
+     * @param maxStack the maximum stack size of the item
+     * @param maxCost  the maximum of the emeralds of one use
+     * @return the offer
+     */
+    public static Offer offer(JobTrade trade, double price, int maxStack, int maxCost) {
+        boolean sell = trade.direction() == JobTrade.Direction.SELL;
+        if (price >= 1.0 || !trade.materials().isEmpty()) {
+            long emeralds = sell ? Math.round(price) : (long) Math.floor(price);
+            return new Offer(trade, (int) Math.max(1, Math.min(maxCost, emeralds)));
+        }
+        double times = 1.0 / Math.max(price, 1e-6);
+        int factor = (int) (sell ? Math.floor(times) : Math.ceil(times));
+        factor = Math.max(1, Math.min(factor, Math.max(1, maxStack / trade.count())));
+        JobTrade scaled = new JobTrade(trade.direction(), trade.item(), trade.count() * factor, trade.level(),
+                trade.volume(), trade.materials(), trade.enchant(), trade.weight());
+        return new Offer(scaled, 1);
+    }
+
     private static double localPrice(String item, Map<String, Integer> stock, ItemCatalog catalog, int population,
             EconomySettings economy) {
         return Prices.price(catalog.info(item), stock.getOrDefault(item, 0), population, economy);
