@@ -11,5 +11,13 @@
   "weight": 25,
   "biomes": ["#minecraft:is_taiga"],
   "profession": "folkhold_world:lumberjack",
-  "cultures": {"valeholm": 3}
+  "cultures": {"valeholm": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:spruce_log", "count": 12}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:stick", "count": 8}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:spruce_sapling", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:stone_axe", "count": 1}, "level": 1, "volume": 1},
+    {"sell": {"item": "minecraft:stripped_spruce_log", "count": 8}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:spruce_log", "count": 8}]},
+    {"sell": {"item": "minecraft:campfire", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:stick", "count": 3}, {"item": "minecraft:coal", "count": 1}, {"item": "minecraft:spruce_log", "count": 3}]}
+  ]
 }

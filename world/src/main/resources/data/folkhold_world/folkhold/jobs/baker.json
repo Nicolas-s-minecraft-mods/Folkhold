@@ -8,5 +8,11 @@
   "min_level": 1,
   "weight": 15,
   "profession": "folkhold_world:baker",
-  "cultures": {"ashmark": 3}
+  "cultures": {"ashmark": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:bread", "count": 4}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:wheat", "count": 12}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:cookie", "count": 8}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:wheat", "count": 2}, {"item": "minecraft:cocoa_beans", "count": 1}]},
+    {"sell": {"item": "minecraft:cake", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:wheat", "count": 3}, {"item": "minecraft:sugar_cane", "count": 2}, {"item": "minecraft:egg", "count": 1}]}
+  ]
 }

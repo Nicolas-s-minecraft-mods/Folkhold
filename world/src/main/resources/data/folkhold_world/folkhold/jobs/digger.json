@@ -10,5 +10,14 @@
   ],
   "min_level": 1,
   "weight": 8,
-  "profession": "minecraft:mason"
+  "profession": "minecraft:mason",
+  "trades": [
+    {"sell": {"item": "minecraft:sand", "count": 12}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:gravel", "count": 8}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:clay_ball", "count": 8}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:dirt", "count": 8}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:stone_shovel", "count": 1}, "level": 1, "volume": 1},
+    {"sell": {"item": "minecraft:clay", "count": 2}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:clay_ball", "count": 8}]},
+    {"sell": {"item": "minecraft:coarse_dirt", "count": 4}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:dirt", "count": 2}, {"item": "minecraft:gravel", "count": 2}]}
+  ]
 }

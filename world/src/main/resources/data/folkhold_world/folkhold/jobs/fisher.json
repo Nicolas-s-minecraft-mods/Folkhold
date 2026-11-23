@@ -8,5 +8,13 @@
   "weight": 15,
   "biomes": ["#minecraft:is_ocean", "#minecraft:is_beach", "#minecraft:is_river", "minecraft:swamp", "minecraft:mangrove_swamp"],
   "profession": "minecraft:fisherman",
-  "cultures": {"valeholm": 3}
+  "cultures": {"valeholm": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:cod", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:salmon", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:ink_sac", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:cooked_cod", "count": 6}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:cod", "count": 6}, {"item": "minecraft:coal", "count": 1}]},
+    {"sell": {"item": "minecraft:cooked_salmon", "count": 3}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:salmon", "count": 3}, {"item": "minecraft:coal", "count": 1}]},
+    {"sell": {"item": "minecraft:fishing_rod", "count": 1}, "level": 3, "volume": 1, "enchant": true, "materials": [{"item": "minecraft:stick", "count": 3}, {"item": "minecraft:string", "count": 2}]}
+  ]
 }
