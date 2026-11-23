@@ -1,7 +1,9 @@
 package io.github.nicolasgoyon.folkhold.world.village.structure;
 
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanVersion;
 import io.github.nicolasgoyon.folkhold.core.sim.village.StreetRamp;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
+import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -10,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.IntBinaryOperator;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -17,6 +20,7 @@ import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pools.JigsawJunction;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
 /**
  * The ramp profile of the streets of a village plan in the world (see {@link StreetRamp}).
@@ -30,6 +34,9 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
  *       this piece: the stair between the 2 pieces is a part of the path.</li>
  *   <li>The junctions between 2 street pieces go to the level of the profile at their block. Thus the terrain
  *       adaptation of the junctions follows the profile.</li>
+ *   <li>From the plan version {@link PlanVersion#HOUSE_LEVEL}, each house on a plot of a street stands at the level
+ *       of the profile at its plot: its connector goes 1 block above the top block of the street (see
+ *       {@link #moveHouses}). Its foundation can grow on a slope. A cliff house stays against its rock face.</li>
  *   <li>The rows of the profile are the levels of the top blocks. The heights of the terrain come from the terrain
  *       cache of the layout, as for the paths of the gates (see {@link VillageWall#heights}).</li>
  * </ul>
@@ -147,6 +154,75 @@ final class StreetRamps {
                             level.getAsInt() + 1 + street.getGroundLevelDelta(), junction.getSourceZ(),
                             junction.getDeltaY(), junction.getDestProjection()));
                 }
+            }
+        }
+    }
+
+    /**
+     * Moves the houses on the plots of the streets up or down to the level of the profile at their plot: the connector
+     * of a house goes 1 block above the top block of the street. The junctions between the house and its street move
+     * with it. A cliff house ({@link CavePiece}) does not move.
+     *
+     * @param templates the templates
+     * @param village   the pieces of the village
+     * @param ramps     the profile of the streets
+     */
+    static void moveHouses(StructureTemplateManager templates, List<? extends StructurePiece> village,
+            Result ramps) {
+        List<StructurePiece> pieces = List.copyOf(village);
+        for (VillagePlots.Plot plot : VillagePlots.of(templates, pieces)) {
+            OptionalInt level = ramps.level(plot.connector().getX(), plot.connector().getZ());
+            if (!plot.built() || level.isEmpty()) {
+                continue;
+            }
+            // The house stands in front of the connector, or a setback away from it (see VillagePlan.Plot#setback).
+            for (int setback = 0; setback <= VillagePlan.MAX_SETBACK; setback++) {
+                BlockPos front = plot.front().relative(plot.facing(), setback);
+                if (moveHouse(templates, pieces, plot, front, level.getAsInt())) {
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Moves the house of a plot with its connector at a position: true if a house has its connector there. */
+    private static boolean moveHouse(StructureTemplateManager templates, List<StructurePiece> pieces,
+            VillagePlots.Plot plot, BlockPos front, int level) {
+        for (StructurePiece piece : pieces) {
+            if (!(piece instanceof PoolElementStructurePiece house) || house instanceof CavePiece
+                    || VillageWall.isStreet(house)
+                    || !house.getBoundingBox().isInside(front.getX(), house.getBoundingBox().minY(), front.getZ())) {
+                continue;
+            }
+            OptionalInt y = VillagePlots.connectorY(templates, house, plot.target(), front.getX(), front.getZ());
+            if (y.isEmpty()) {
+                continue;
+            }
+            int move = level + 1 - y.getAsInt();
+            if (move != 0) {
+                house.move(0, move, 0);
+                shift(house.getJunctions(), move, junction -> true);
+                for (StructurePiece other : pieces) {
+                    if (other instanceof PoolElementStructurePiece street && VillageWall.isStreet(street)) {
+                        shift(street.getJunctions(), move, junction -> junction.getDestProjection()
+                                == StructureTemplatePool.Projection.RIGID
+                                && junction.getSourceX() == plot.front().getX()
+                                && junction.getSourceZ() == plot.front().getZ());
+                    }
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** Moves the junctions of a list that pass a test up or down. */
+    private static void shift(List<JigsawJunction> junctions, int move, Predicate<JigsawJunction> test) {
+        for (int i = 0; i < junctions.size(); i++) {
+            JigsawJunction junction = junctions.get(i);
+            if (test.test(junction)) {
+                junctions.set(i, new JigsawJunction(junction.getSourceX(), junction.getSourceGroundY() + move,
+                        junction.getSourceZ(), junction.getDeltaY(), junction.getDestProjection()));
             }
         }
     }
