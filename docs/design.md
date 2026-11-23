@@ -1211,6 +1211,139 @@ A surplus lowers the price down to ×0.5. A shortage raises the price up to ×3.
 - No trade below the neutral tier. Friends and allies get a discount.
 - The player can sell surplus items (ore, crops). This lowers their local price. To get the best price, the player must sell in different places.
 - The currency stays the emerald. The treasury of each faction is finite. Its sales fill it.
+- **Planned**: job trades by level that change each week (see "Job trades (planned)"). The skill of the worker, the wealth of the village and the reputation of the player select them.
+
+### Job trades (planned)
+
+**Planned** (#1006): this section is the target design of the job trades. The code has no part of it. The section "Trade with the player" gives the trades of this time.
+
+In this section, a **need trade** is an offer of `JobTrades` (see "Trade with the player"). The worker sells the outputs of its job from the stock, and buys the inputs that the village needs. A **job trade** is a new offer from the trade list of the job. The need trades stay. For the player, the two kinds are the same kind of trade, in the same trade screen.
+
+#### Source of the trades
+
+- Each job file (`data/folkhold_world/folkhold/jobs/<id>.json`) gets an optional list `trades`. Each trade has:
+
+  | Field | Meaning |
+  | --- | --- |
+  | `sell` or `buy` | The item and the count of one trade. `sell`: the worker sells the item. `buy`: the worker buys the item. |
+  | `level` | The trade tier, 1 to 5 (see "Trade tiers"). |
+  | `volume` | The uses of the trade in one week, at the trade tier 1. |
+  | `materials` | Optional, for a sell trade: the stock items that one trade uses. With no `materials`, the trade uses the item itself from the stock. |
+  | `enchant` | Optional, for a sell trade of an item that can have enchantments: the trade can give an enchanted item (see "Trade tiers"). |
+  | `weight` | Optional, default 1: the weight of the trade in the weekly selection. |
+
+- A job file with no list `trades` gets a list from its recipe. Each output is a sell trade, and each input is a buy trade. An output with a chance of 0.3 or more has the level 1. An output with a lower chance has the level 2. Each input has the level 1. Thus each job of the job files has job trades with no change of its file.
+- A sell trade with `materials` gives an item that the recipe of the job does not make. The worker makes it to order from the stock. Example: the blacksmith sells a diamond sword at the level 4 with the materials 2 diamonds and 1 stick. The diamonds come from the stock (the miner, the caravans, the player). There is no magic restock.
+- Example of a list for the blacksmith (start values to tune):
+
+  ```json
+  "trades": [
+    {"sell": {"item": "minecraft:iron_sword", "count": 1}, "level": 1, "volume": 4},
+    {"buy": {"item": "minecraft:iron_ingot", "count": 8}, "level": 1, "volume": 16},
+    {"buy": {"item": "minecraft:coal", "count": 16}, "level": 1, "volume": 16},
+    {"sell": {"item": "minecraft:iron_chestplate", "count": 1}, "level": 2, "volume": 2, "enchant": true},
+    {"sell": {"item": "minecraft:diamond_sword", "count": 1}, "level": 4, "volume": 1, "enchant": true,
+     "materials": [{"item": "minecraft:diamond", "count": 2}, {"item": "minecraft:stick", "count": 1}]},
+    {"sell": {"item": "minecraft:diamond_chestplate", "count": 1}, "level": 5, "volume": 1, "enchant": true,
+     "materials": [{"item": "minecraft:diamond", "count": 8}]}
+  ]
+  ```
+
+#### Skill of the workers
+
+- The skill is new: each job post has an experience in its job. The skill level comes from the experience, with the thresholds of the vanilla villagers: Novice (0), Apprentice (10), Journeyman (70), Expert (150), Master (250).
+- The post keeps the experience, not the villager entity. The workers of the village show the job of a post (see "Job posts"), and an entity can change. A post is a job sign at a position: a new post at the same position with the same job keeps the experience. A post that changes its job starts at 0.
+- Gains (start values to tune): 2 experience for each cycle with the post active. 1 experience for each use of a need trade, and 2 for each use of a job trade.
+- The worker entity of a post gets the skill level as its vanilla villager level. Thus the trade screen shows the vanilla name of the level (Novice to Master) and the experience bar.
+- A worker with no post (a legacy job slot, see "Job posts") has the skill of a legacy slot of its job. The settlement data keeps it.
+
+#### Trade tiers
+
+Three values select the job trades:
+
+- **W**, the wealth of the village: the tier of its level. Hamlet 1, village 2, town 3, city 4, capital 5.
+- **S**, the skill of the post: Novice 1 to Master 5.
+- **R**, the reputation of the player with the village: Neutral 1, Friend 2, Ally 3. Below Neutral, the workers do not trade (no change).
+
+| Pair | Effect | Rule (start values to tune) |
+| --- | --- | --- |
+| Wealth and skill | Trades of a higher tier, and more volume | The goods tier is `G = min(W, S)`. A trade is in the selection when its `level` is `G` or less. The volume of a trade is `volume × (1 + 0.5 × (G - level))`. Thus a Novice in a capital sells only trades of the level 1, and a Master in a hamlet also. |
+| Skill and reputation | Items with a chance of enchantments | A sell trade with `enchant` gives an enchanted item with the chance of the table below. The enchantment levels are those of an enchanting table at `5 × S` levels (5 to 25). |
+| Reputation and wealth, with a low skill | Open point | For a post with `S` of 2 or less. See the options below. |
+
+Chance of an enchanted item (start values to tune):
+
+| Skill | Neutral | Friend | Ally |
+| --- | --- | --- | --- |
+| Novice, Apprentice | 0 % | 0 % | 0 % |
+| Journeyman | 0 % | 10 % | 20 % |
+| Expert | 5 % | 20 % | 35 % |
+| Master | 10 % | 30 % | 50 % |
+
+Examples of the goods tier:
+
+| `G` | Smallest village and skill | Blacksmith | Miner | Farmer |
+| --- | --- | --- | --- | --- |
+| 1 | hamlet, Novice | iron tools, shield | coal, raw copper | wheat, carrots |
+| 2 | village, Apprentice | iron armor | raw iron, redstone | more volume |
+| 3 | town, Journeyman | chainmail armor, bell | raw gold, lapis lazuli | golden carrots |
+| 4 | city, Expert | diamond tools | diamond (small volume) | more volume |
+| 5 | capital, Master | diamond armor | diamond | more volume |
+
+Options for the open point (reputation and wealth, with a low skill):
+
+- **Option A, lower prices**: a Friend or an Ally pays less for the job trades of a post with a low skill. The factor is `1 - 0.025 × (W - 1)` for a Friend. It is `1 - 0.05 × (W - 1)` for an Ally, down to 0.8 in a capital. The factor multiplies the discount of the tier (see "Trade with the player"). The rich village pays for the training of its young workers.
+- **Option B, more experience**: a trade of a Friend or an Ally gives more experience to a post with a low skill. The factor is `1 + 0.25 × (W - 1)` for a Friend. It is `1 + 0.5 × (W - 1)` for an Ally, up to 3 in a capital. The player trains the workers, and the village gets its high tiers sooner.
+- Proposal: option B. The prices stay simple, the effect stays in the world, and the player has a goal. A question to the owner selects the option.
+
+#### Weekly rotation
+
+- The job trades change each game week: 7 cycles (7 game days, 70 abstract ticks with the default interval). The week number is the same in all villages: `game day / 7`.
+- At the first trade of a week, each post selects its job trades for the week. The seed is the id of the settlement, the position of the post and the week number. Thus the selection needs no save, and it is the same after a restart.
+- The number of job trades of a post (start values to tune): 2 at Novice. 3 at Apprentice and Journeyman. 4 at Expert and Master.
+- The selection is a weighted draw from the trades of the goods tier (`level` of `G` or less). It has one trade at most for each item and each direction. A list with sell trades and buy trades gives one trade of each direction or more. The trades of the level `G` have a weight × 2: a skilled worker shows its best goods.
+- The uses of the selected trades are for the whole week. They do not refill before the next week.
+
+#### Prices and volumes
+
+- The price comes from the local price of the item (see "Price formula"), so it follows the stock of the village. A sell trade with `materials` has the sum of the local prices of its materials, × 1.25 for the work (start value).
+- The need trades keep their prices: `P × 1.15` to sell and `P × 0.85` to buy. The job trades have a worse price (start values to tune): `P × 1.30` to sell and `P × 0.70` to buy. The discount of a Friend or an Ally applies to both.
+- Volume of a sell trade: the smallest of the remaining weekly uses and of the trades that the stock gives now. The stock keeps a reserve: an item that an active job of the village uses as an input keeps half of its stock target.
+- Volume of a buy trade: the smallest of the remaining weekly uses, of the free stock capacity and of the treasury of the faction. A job trade can fill the stock up to 1.5 × its target, above the need of a need trade.
+- Each use changes the stock and the treasury, as a need trade.
+
+#### Trade screen
+
+- The worker shows its need trades first, then its job trades. A job trade with the same item and the same direction as a need trade does not show. The need trade gives the better price.
+- The offer count of the level (see "Trade with the player") limits the need trades only. The job trades come in addition.
+- The market rule and the market hours apply to the job trades. The extra offers of the market day stay need trades.
+- The workers of a profession show the same need trades. Each post shows its own job trades: they follow its skill.
+
+#### Enchantments and the Mending rule
+
+- The balance mod removes Mending from the villager trades (see "Fairer trades"). Its filter wraps the trade listings of the vanilla villagers. The job trades do not come from these listings, so the world mod applies the rule itself.
+- An enchanted item of a job trade gets its enchantments from `#minecraft:tradeable`, with no enchantment of the tag `#folkhold_world:not_in_job_trades` (default: `minecraft:mending`). When the balance mod is present, the list `enchantments` of its section `blockedEnchantments` is also excluded.
+- The job trades sell no enchanted books. The jobs do not produce them (see "Jobs and recipes").
+
+#### Saved data and old worlds
+
+- Each job post gets its experience and the uses of its job trades of the week (week number and uses by trade). A legacy job slot gets the same values by job id. The values are new optional keys of the settlement data.
+- The weekly selection is not saved: the seed gives it again.
+- An old world: each post starts at Novice with 0 experience. The first trade of the week selects the job trades. The need trades do not change. The villagers get the vanilla level of their post: in an old world, all the workers show Novice.
+- A data pack job file with no list `trades` gets a list from its recipe (see "Source of the trades").
+- The option `economy.jobTrades.enabled` (default true) turns on the job trades. With false, the trade screen shows the need trades only, and the posts still get experience.
+
+#### Implementation issues
+
+| Issue | Part | Waits for |
+| --- | --- | --- |
+| #1061 | Trade lists in the job files, with a level for each trade | — |
+| #1062 | Skill of the job posts, from Novice to Master | — |
+| #1063 | Goods tier, weekly selection, volumes and prices | #1061 |
+| #1064 | The job trades in the trade screen, with the need trades | #1062, #1063 |
+| #1065 | Enchanted items, with no Mending | #1064 |
+| #1066 | Reputation and wealth with a low skill (option A or B) | #1064 |
+| #1067 | Trade lists of all job files, with the high tiers | #1061 |
 
 ### Bank
 
