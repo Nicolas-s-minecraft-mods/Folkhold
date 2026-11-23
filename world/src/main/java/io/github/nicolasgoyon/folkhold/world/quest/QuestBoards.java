@@ -82,6 +82,7 @@ public final class QuestBoards {
     /** Colors of the texts on the wood of the screen. */
     private static final int TEXT_GOOD = 0x9AD07E;
     private static final int TEXT_WARN = 0xE0A635;
+    private static final int TEXT_BAD = 0xE8846F;
     /** A player this far outside the village radius can still use the quest screen: the reach of a click. */
     private static final double ACTION_MARGIN = 8.0;
     private static final List<BiConsumer<ServerPlayer, Quest>> ACCEPT_LISTENERS = new ArrayList<>();
@@ -705,15 +706,26 @@ public final class QuestBoards {
                     quest.failureReputation());
         }
         Optional<MobileGroup> caravan = Escorts.caravan(server, quest);
-        caravan.map(QuestBoards::caravanState).ifPresent(state -> info.append(UiStrings.separator()).append(state));
+        caravan.map(group -> caravanState(group, Escorts.raiders(server.overworld(), group)))
+                .ifPresent(state -> info.append(UiStrings.separator()).append(state));
         String destination = caravan.map(MobileGroup::destinationId).orElse("");
         return new Active(quest.id(), ESCORT_ICON,
                 Component.translatable("quest.folkhold_world.active.escort", villageName(server, destination)),
                 info, secondsLeft, action, blocked, false, quest.failureReputation());
     }
 
-    /** The state of the caravan of an escort, for the screen. */
-    private static Component caravanState(MobileGroup group) {
+    /**
+     * The state of the caravan of an escort, for the screen. An attack on the caravan comes first: the merchant waits
+     * while raiders live.
+     *
+     * @param group   the caravan
+     * @param raiders the living raiders of the attack on the caravan (see {@link Escorts#raiders})
+     * @return the text of the state
+     */
+    static Component caravanState(MobileGroup group, int raiders) {
+        if (raiders > 0) {
+            return Component.translatable("quest.folkhold_world.caravan.ambush", raiders).withColor(TEXT_BAD);
+        }
         return switch (group.state()) {
             case WAITING -> Component.translatable("quest.folkhold_world.caravan.waiting").withColor(0xA89F8C);
             case TRAVELING -> Component.translatable("quest.folkhold_world.caravan.traveling",

@@ -42,9 +42,11 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -692,10 +694,33 @@ public class JournalScreen extends UiScreen {
         });
     }
 
-    /** The list of the quests: the active quests of the player, then the offers of the visited villages. */
+    /**
+     * The list of the quests: the active quests of the player, then the offers of the visited villages. Each row of an
+     * active quest has an abandon button "✕" at the right, with the confirmation of the quest board.
+     */
     private final class QuestList extends UiList<JournalPayload.Quest> {
         QuestList(UiRect rect) {
             super(rect);
+        }
+
+        /** The abandon button of the row of an active quest. */
+        private UiRect abandonButton(UiRect row) {
+            UiRect text = row.inset(UiTheme.PADDING, 0);
+            int size = Math.max(0, row.height() - 2);
+            return new UiRect(text.right() - size, row.y() + 1, size, size);
+        }
+
+        @Override
+        protected boolean onRowClick(JournalPayload.Quest item, int index, UiRect rect, double mouseX,
+                double mouseY) {
+            if (!item.active() || !abandonButton(rect).contains(mouseX, mouseY)) {
+                return false;
+            }
+            Minecraft.getInstance().getSoundManager().play(
+                    SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            QuestBoardScreen.confirmAbandon(JournalScreen.this, item.name(), item.failureReputation(), item.questId(),
+                    "");
+            return true;
         }
 
         @Override
@@ -709,9 +734,22 @@ public class JournalScreen extends UiScreen {
             rowBackground(graphics, rect, index, hovered, selected);
             UiRect text = rect.inset(UiTheme.PADDING, 0);
             int y = UiText.textY(text);
+            int right = text.right();
+            if (item.active()) {
+                UiRect button = abandonButton(rect);
+                boolean over = button.contains(mouseX, mouseY);
+                UiDraw.box(graphics, button, over ? 0xFF6E2820 : UiTheme.DANGER,
+                        over ? 0xFFE06A55 : UiTheme.DANGER_EDGE, false);
+                UiText.drawCentered(graphics, font, Component.literal("✕"), button, UiTheme.DANGER_TEXT);
+                if (over) {
+                    setTooltipForNextRenderPass(Component.translatable(KEY + "quest.abandon_hint"));
+                }
+                right = button.x() - UiTheme.GAP;
+            }
             Component mark = Component.translatable(KEY + (item.active() ? "quest.mark_active" : "quest.mark_offer"));
-            int markWidth = UiText.drawRight(graphics, font, mark, text.right(), y, text.width() / 3,
+            int markWidth = UiText.drawRight(graphics, font, mark, right, y, text.width() / 3,
                     item.active() ? UiTheme.GOLD : UiTheme.TEXT_MUTED);
+            markWidth += text.right() - right;
             UiText.draw(graphics, font, item.name(), text.x(), y, text.width() - markWidth - UiTheme.PADDING,
                     UiTheme.TEXT);
         }

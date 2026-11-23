@@ -383,12 +383,23 @@ public final class Escorts {
         Long since = AWAY_SINCE.get(quest.id());
         int awaySeconds = since == null ? -1 : (int) Math.max(0,
                 WorldConfig.QUEST_ESCORT_AWAY_SECONDS.get() - (level.getGameTime() - since) / 20L);
-        Attack attack = ATTACKS.get(group.id());
-        int raiders = attack == null ? 0 : (int) attack.raiders().stream().map(level::getEntity)
-                .filter(entity -> entity != null && entity.isAlive()).count();
         return Optional.of(new QuestLogPayload.Escort((int) Math.round(group.progress()),
                 (int) Math.round(group.route().length()), health, maxHealth, Math.min(distance, 99_999),
-                WorldConfig.QUEST_ESCORT_DISTANCE.get(), awaySeconds, raiders));
+                WorldConfig.QUEST_ESCORT_DISTANCE.get(), awaySeconds, raiders(level, group)));
+    }
+
+    /**
+     * The living raiders of the attack on a caravan: an ambush or a patrol. The merchant waits while this number is
+     * above 0.
+     *
+     * @param level the level of the caravan
+     * @param group the caravan
+     * @return the number of living raiders, or 0 with no attack
+     */
+    public static int raiders(ServerLevel level, MobileGroup group) {
+        Attack attack = ATTACKS.get(group.id());
+        return attack == null ? 0 : (int) attack.raiders().stream().map(level::getEntity)
+                .filter(entity -> entity != null && entity.isAlive()).count();
     }
 
     /**
