@@ -39,6 +39,7 @@ import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.Handymen;
+import io.github.nicolasgoyon.folkhold.world.village.RaidShelters;
 import io.github.nicolasgoyon.folkhold.world.village.RingWall;
 import io.github.nicolasgoyon.folkhold.world.village.StoneWall;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
@@ -1650,6 +1651,10 @@ public class VillageHeartBlockEntity extends BlockEntity {
                     && RingWall.check(serverLevel, heart).isEmpty()) {
                 VillageLand.check(serverLevel, heart);
             }
+        }
+        if (heart.layout.isScanned() && level instanceof ServerLevel serverLevel
+                && RaidShelters.raidAt(serverLevel, pos).isPresent()) {
+            RaidShelters.shelter(serverLevel, VillageFolk.inhabitants(serverLevel, pos), heart.layout.beds());
         }
         long calmDelayTicks = WorldConfig.CALM_DELAY_SECONDS.get() * 20L;
         if (heart.alertState != AlertState.CALM && level.getGameTime() - heart.lastBellTick >= BELL_INTERVAL) {
