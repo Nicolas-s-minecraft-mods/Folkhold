@@ -93,6 +93,39 @@ public final class JobTradeRules {
         return 5 * Math.max(JobSkills.MIN_LEVEL, Math.min(JobSkills.MAX_LEVEL, skill));
     }
 
+    /** The highest skill level of a low skill: Apprentice. */
+    public static final int LOW_SKILL = 2;
+
+    /**
+     * The factor of the experience of a trade for a post with a low skill (skill {@link #LOW_SKILL} or lower): a rich
+     * village pays for the training of its young workers when a Friend or an Ally trades.
+     *
+     * @param skill      the skill level of the post, 1 to 5
+     * @param wealth     the wealth tier of the village, 1 to 5
+     * @param reputation the reputation level of the player: 1 Neutral, 2 Friend, 3 Ally
+     * @param friendStep the factor increase for each wealth tier above 1, for a Friend (0.25)
+     * @param allyStep   the factor increase for each wealth tier above 1, for an Ally (0.5)
+     * @return {@code 1 + step × (wealth - 1)} for a Friend or an Ally and a low skill, else 1
+     */
+    public static double lowSkillFactor(int skill, int wealth, int reputation, double friendStep, double allyStep) {
+        if (skill > LOW_SKILL || reputation < 2) {
+            return 1.0;
+        }
+        double step = reputation == 2 ? friendStep : allyStep;
+        return 1.0 + Math.max(0.0, step) * Math.max(0, Math.min(JobTrade.MAX_LEVEL, wealth) - 1);
+    }
+
+    /**
+     * The experience of a trade with the factor of a low skill (see {@link #lowSkillFactor}).
+     *
+     * @param gain   the gain of the trade
+     * @param factor the factor
+     * @return {@code gain × factor}, rounded to the nearest integer
+     */
+    public static int trainedGain(int gain, double factor) {
+        return (int) Math.round(Math.max(0, gain) * factor);
+    }
+
     /**
      * The goods tier of a post.
      *

@@ -235,6 +235,8 @@
   "folkhold_world.configuration.economySkillCycleExperience": "Experience of a job post for each cycle",
   "folkhold_world.configuration.economySkillNeedTradeExperience": "Experience of a job post for each trade",
   "folkhold_world.configuration.economySkillJobTradeExperience": "Experience of a job post for each job trade",
+  "folkhold_world.configuration.economySkillFriendStep": "Training of a low skill by a Friend",
+  "folkhold_world.configuration.economySkillAllyStep": "Training of a low skill by an Ally",
   "folkhold_world.configuration.economyJobTradesEnabled": "Job trades",
   "folkhold_world.configuration.economyJobTradeEnchantNeutral": "Enchanted job trades for a Neutral player",
   "folkhold_world.configuration.economyJobTradeEnchantFriend": "Enchanted job trades for a Friend",

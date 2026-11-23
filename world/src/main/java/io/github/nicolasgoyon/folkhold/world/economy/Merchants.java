@@ -335,9 +335,11 @@ public final class Merchants {
                     ? JobTradeOffers.apply(server, settlement, event.getMerchantOffer(), mark.get())
                     : applyTrade(server, settlement, event.getMerchantOffer());
             if (paid) {
+                ReputationTier tier = event.getEntity() instanceof ServerPlayer trader
+                        ? Reputations.tier(server, trader, heart) : ReputationTier.NEUTRAL;
                 WorkerSkills.addTrade(settlement, worker, mark.isPresent()
                         ? WorldConfig.ECONOMY_SKILL_JOB_TRADE_EXPERIENCE.get()
-                        : WorldConfig.ECONOMY_SKILL_NEED_TRADE_EXPERIENCE.get());
+                        : WorldConfig.ECONOMY_SKILL_NEED_TRADE_EXPERIENCE.get(), tier);
             } else if (event.getEntity() instanceof ServerPlayer player) {
                 cancel(player, event.getMerchantOffer());
             }
