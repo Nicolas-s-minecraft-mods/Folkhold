@@ -128,6 +128,25 @@ class QuestsTest {
     }
 
     @Test
+    void tierComesFromTheBaseReward() {
+        // A definition with the factor 3.0: 10 × 1.0 × 3.0 = 30 emeralds, above the threshold of 20.
+        QuestGenerator.Settings factor = new QuestGenerator.Settings(1000, 500, 3.0, 20, 32, 20);
+        Quest delivery = QuestGenerator.deliveries("village", "faction", Map.of("minecraft:iron_ingot", 10),
+                item -> 1.0, Set.of(), 1, 0, factor, "a:delivery", 1.5).get(0);
+        Quest hunt = QuestGenerator.hunt("village", "faction", 20, 0, factor, "a:hunt", 1.5);
+
+        assertEquals(30, delivery.rewardEmeralds(), "The factor of the definition gives the reward");
+        assertEquals(ReputationTier.NEUTRAL, delivery.minTier(), "The base reward 10 × 1.0 × 1.5 is below 20");
+        assertEquals(ReputationTier.FRIEND, QuestGenerator.deliveries("village", "faction",
+                Map.of("minecraft:iron_ingot", 20), item -> 1.0, Set.of(), 1, 0, factor, "a:delivery", 1.5).get(0)
+                .minTier(), "The base reward 20 × 1.0 × 1.5 is above 20");
+        assertEquals(21, hunt.rewardEmeralds(), "7 monsters × 3.0");
+        assertEquals(ReputationTier.NEUTRAL, hunt.minTier(), "The base reward 7 × 1.5 is below 20");
+        assertEquals(ReputationTier.NEUTRAL, QuestGenerator.minTier(10, 1.5, SETTINGS));
+        assertEquals(ReputationTier.FRIEND, QuestGenerator.minTier(14, 1.5, SETTINGS), "14 × 1.5 = 21");
+    }
+
+    @Test
     void deliveryQuantityHasAMaximum() {
         List<Quest> quests = QuestGenerator.deliveries("village", "faction", Map.of("minecraft:bread", 500),
                 item -> 0.01, Set.of(), 1, 0, SETTINGS);

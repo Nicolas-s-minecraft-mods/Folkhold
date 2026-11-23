@@ -134,7 +134,8 @@ public final class Escorts {
                 values.durationMinutes().orElse(WorldConfig.QUEST_ESCORT_MINUTES.get()));
         Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
                 caravan.id(), 0, reward, values.reputation().orElse(WorldConfig.QUEST_ESCORT_REPUTATION.get()),
-                QuestGenerator.minTier(reward, QuestSystem.settings(definition.get())), offerEnd,
+                QuestGenerator.minTier((double) caravan.payment(), WorldConfig.QUEST_ESCORT_REWARD_SHARE.get(),
+                        QuestSystem.settings(definition.get())), offerEnd,
                 minutes * SharedConstants.TICKS_PER_MINUTE, definition.get().id());
         quest.setDifficulty(difficulty);
         QuestRewards.apply(quest, definition.get(), rule, origin);

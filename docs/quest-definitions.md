@@ -69,7 +69,7 @@ coal, redstone, cobblestone and flint.
 | `conditions.max_level` | no | no maximum | The highest level of a village with offers of the definition. |
 | `reward.factor` | no | config | Delivery: the factor of the local price of the items. Escort: the share of the payment of the caravan. Hunt: the emeralds for each monster. |
 | `reward.reputation` | no | config | The reputation of the reward. |
-| `reward.friend_reward` | no | config | A quest with this reward in emeralds or more is only for the friend tier and the ally tier. |
+| `reward.friend_reward` | no | config | A quest with this base reward in emeralds or more is only for the friend tier and the ally tier. The base reward uses the factor of the server config, not `reward.factor`, the factor of a special reward or the escort difficulty. |
 | `reward.experience` | no | 0 | The experience points that the player gets. |
 | `reward.items` | no | none | The items that the player gets: `item` (an item id) and `count` (1 by default). An unknown item id is an error. |
 | `reward.goods_share` | no | 0 | The share of the emerald reward (0 to 1) that the village pays in its goods: the outputs of its active jobs in its stock. |
