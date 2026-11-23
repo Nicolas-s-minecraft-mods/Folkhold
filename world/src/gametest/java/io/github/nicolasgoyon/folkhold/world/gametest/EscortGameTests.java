@@ -38,6 +38,7 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -539,6 +540,69 @@ public final class EscortGameTests {
                 "With no raider near for the delay, the merchant must continue: " + afterDelay);
         helper.assertTrue(waitsAgain == GroupState.STOPPED && afterDeath == GroupState.TRAVELING,
                 "The merchant must continue when the raiders are dead: " + waitsAgain + ", " + afterDeath);
+        helper.succeed();
+    }
+
+    /**
+     * A raider of an attack that loads again, for example after a restart of the server, joins the attack of its
+     * caravan again. The merchant waits while the raider is near it, and the raider attacks the merchant. A raider that
+     * loads far from the merchant does not stop it.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_ambush_restart")
+    public static void theRaiderOfAnAttackJoinsTheAttackAgainWhenItLoads(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerLevel level = helper.getLevel();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+        BlockPos start = helper.absolutePos(START);
+        player.teleportTo(start.getX(), start.getY(), start.getZ());
+        GroupMaterializer.materialize(level, caravan);
+        Entity merchant = level.getEntity(caravan.merchant().orElseThrow().id());
+        long now = level.getGameTime();
+        double distance = WorldConfig.QUEST_ESCORT_AMBUSH_DISTANCE.get();
+
+        Mob raider = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(raider));
+        String tag = raider.getPersistentData().getString(Escorts.ATTACK_TAG);
+        Escorts.update(server, now);
+        GroupState waits = caravan.state();
+        // The unload of the raider ends the attack, as a restart of the server.
+        CompoundTag saved = new CompoundTag();
+        raider.save(saved);
+        raider.discard();
+        Escorts.update(server, now + 20);
+        GroupState unloaded = caravan.state();
+        Mob loaded = (Mob) EntityType.loadEntityRecursive(saved, level, entity -> entity);
+        level.addFreshEntity(loaded);
+        Escorts.update(server, now + 40);
+        GroupState waitsAgain = caravan.state();
+        boolean attacks = loaded.getTarget() == merchant;
+        loaded.discard();
+        Escorts.update(server, now + 60);
+
+        // A raider that loads far from the merchant: above it, out of the distance of the attack.
+        Mob far = EntityType.PILLAGER.create(level);
+        far.setNoAi(true);
+        far.setNoGravity(true);
+        far.moveTo(merchant.getX(), merchant.getY() + distance + 8, merchant.getZ(), 0.0F, 0.0F);
+        far.getPersistentData().putString(Escorts.ATTACK_TAG, caravan.id());
+        level.addFreshEntity(far);
+        Escorts.update(server, now + 80);
+        GroupState farState = caravan.state();
+        far.discard();
+
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertTrue(tag.equals(caravan.id()), "The raider must keep the id of its caravan: " + tag);
+        helper.assertTrue(waits == GroupState.STOPPED && unloaded == GroupState.TRAVELING,
+                "The merchant must wait for the raider, then continue when it unloads: " + waits + ", " + unloaded);
+        helper.assertTrue(waitsAgain == GroupState.STOPPED,
+                "The merchant must wait for the raider that loads again: " + waitsAgain);
+        helper.assertTrue(attacks, "The raider that loads again must attack the merchant: " + loaded.getTarget());
+        helper.assertTrue(farState == GroupState.TRAVELING,
+                "A raider that loads far from the merchant must not stop it: " + farState);
         helper.succeed();
     }
 
