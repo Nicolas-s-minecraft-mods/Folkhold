@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 import com.mojang.datafixers.util.Pair;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,11 +23,16 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.TerrainAdjustment;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
+import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -40,6 +46,13 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * <ul>
  *   <li>Step: a column next to a dirt path, out of the other pieces, with a top block 2 blocks or more lower
  *       ({@code low}) or higher ({@code high}) than the top of the path. The issue accepts 1 block.</li>
+ *   <li>Place of a step: the distance from the path column to the nearest end of a street piece ({@code at end},
+ *       {@code near end}, {@code mid}), the pieces near the path column ({@code building}, {@code arm} for a path from
+ *       a gate, {@code junction} for a junction between 2 streets), and the distance of the path column and of the side
+ *       column from the noise surface with no structure, in bands of 2 blocks. The key {@code path columns} with a band
+ *       gives the path columns in this band.</li>
+ *   <li>Step past the edge: a column at 2 blocks from a path, 2 blocks or more lower or higher than the column between
+ *       it and the path.</li>
  *   <li>Wood in a low step: a stair or planks at the top of such a column (a hole with spruce blocks).</li>
  *   <li>Loose block: a stair, planks or a slab at the top of a column, out of the boxes of all the structure pieces of
  *       the scanned chunks.</li>
@@ -146,11 +159,15 @@ public final class VillageGroundGameTests {
         // The boxes of the pieces out of the paths and the stairs of the streets: the box of the stairs of a street
         // covers its banks.
         List<BoundingBox> notPaths = start.getPieces().stream().filter(piece -> !(piece instanceof VillagePathPiece)
-                && !(piece instanceof io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece))
+                && !(piece instanceof StreetStepsPiece))
                 .map(StructurePiece::getBoundingBox).toList();
         counts.put("pieces", start.getPieces().size());
         counts.put("path pieces", (int) start.getPieces().stream().filter(VillagePathPiece.class::isInstance)
                 .count());
+        List<BoundingBox> streets = start.getPieces().stream()
+                .filter(piece -> piece instanceof PoolElementStructurePiece pool
+                        && pool.getElement().toString().contains("/street"))
+                .map(StructurePiece::getBoundingBox).toList();
         int pathColumns = 0;
         for (int x = box.minX(); x <= box.maxX(); x++) {
             for (int z = box.minZ(); z <= box.maxZ(); z++) {
@@ -200,6 +217,8 @@ public final class VillageGroundGameTests {
                     continue;
                 }
                 pathColumns++;
+                String band = endBand(streets, x, z);
+                counts.merge("path columns " + band, 1, Integer::sum);
                 for (Direction side : SIDES) {
                     int nx = x + side.getStepX();
                     int nz = z + side.getStepZ();
@@ -217,6 +236,16 @@ public final class VillageGroundGameTests {
                         continue;
                     }
                     int step = neighbor - top;
+                    if (step <= -2 || step >= 2) {
+                        counts.merge("step " + band, 1, Integer::sum);
+                        counts.merge("step " + causes(start, x, z), 1, Integer::sum);
+                        counts.merge("step path off the noise " + Math.abs(top - noise(level, x, z)) / 2 * 2
+                                + " side off the noise " + Math.abs(neighbor - noise(level, nx, nz)) / 2 * 2, 1,
+                                Integer::sum);
+                        sample(counts, "step " + band, "path " + new BlockPos(x, top, z) + " noise " + noise(level, x, z)
+                                + " side " + new BlockPos(nx, neighbor, nz) + " noise " + noise(level, nx, nz)
+                                + " junctions " + junctionsNear(start, x, z) + " rigid " + rigidNear(start, x, z));
+                    }
                     if (step <= -2) {
                         counts.merge("low step", 1, Integer::sum);
                         sample(counts, "low step", new BlockPos(nx, neighbor, nz) + " " + next + " below the path at "
@@ -231,12 +260,144 @@ public final class VillageGroundGameTests {
                     } else if (step == -1) {
                         counts.merge("step of 1 down", 1, Integer::sum);
                     }
+                    pastTheEdge(chunks, level, notPaths, counts, band, nx + side.getStepX(), nz + side.getStepZ(),
+                            neighbor);
                 }
             }
         }
         counts.put("path columns", pathColumns);
         foundations(chunks, start, counts);
         return counts;
+    }
+
+    /**
+     * Counts a step past the edge of a street: the column at 2 blocks from a path column, 2 blocks or more lower or
+     * higher than the column at 1 block ({@code side}). The count uses the same filters as the step next to the path.
+     * The key {@code step past the edge} gives all these steps, and the keys with the band give their distance to the
+     * nearest end of a street piece ({@link #endBand}).
+     */
+    private static void pastTheEdge(Map<Long, ChunkAccess> chunks, ServerLevel level, List<BoundingBox> notPaths,
+            Map<String, Integer> counts, String band, int x, int z, int side) {
+        int top = top(chunks, level, x, z);
+        if (top == Integer.MIN_VALUE) {
+            return;
+        }
+        BlockState state = block(chunks, x, top, z);
+        if (state.is(Blocks.DIRT_PATH) || !state.getFluidState().isEmpty() || (!isTerrain(state) && !isWood(state))
+                || notPaths.stream().anyMatch(piece -> piece.isInside(x, top, z))) {
+            return;
+        }
+        int step = top - side;
+        if (step <= -2 || step >= 2) {
+            counts.merge("step past the edge", 1, Integer::sum);
+            counts.merge("step past the edge " + band, 1, Integer::sum);
+            sample(counts, "step past the edge", new BlockPos(x, top, z) + " " + state + " side at " + side);
+        }
+    }
+
+    /**
+     * The band of the distance from a column to the nearest end of a street piece: {@code at end} (2 blocks or less),
+     * {@code near end} (3 to 5 blocks) or {@code mid} (6 blocks or more). The end of a piece is the short side of its
+     * box, across the street.
+     */
+    private static String endBand(List<BoundingBox> streets, int x, int z) {
+        int best = Integer.MAX_VALUE;
+        for (BoundingBox box : streets) {
+            boolean alongZ = box.getZSpan() >= box.getXSpan();
+            for (int end : alongZ ? new int[] {box.minZ(), box.maxZ()} : new int[] {box.minX(), box.maxX()}) {
+                int across = alongZ ? Math.max(0, Math.max(box.minX() - x, x - box.maxX()))
+                        : Math.max(0, Math.max(box.minZ() - z, z - box.maxZ()));
+                int along = Math.abs((alongZ ? z : x) - end);
+                best = Math.min(best, Math.max(across, along));
+            }
+        }
+        return best <= 2 ? "at end" : best <= 5 ? "near end" : "mid";
+    }
+
+    /** The Y of the top block of the noise terrain of a column, with no structure. */
+    private static int noise(ServerLevel level, int x, int z) {
+        return level.getChunkSource().getGenerator().getBaseHeight(x, z,
+                Heightmap.Types.WORLD_SURFACE_WG, level,
+                level.getChunkSource().randomState()) - 1;
+    }
+
+    /** The junctions of the pieces of a start at 6 blocks or less from a column: the position and the level. */
+    private static List<String> junctionsNear(StructureStart start, int x, int z) {
+        List<String> near = new ArrayList<>();
+        for (StructurePiece piece : start.getPieces()) {
+            if (piece instanceof PoolElementStructurePiece pool) {
+                for (var junction : pool.getJunctions()) {
+                    if (Math.abs(junction.getSourceX() - x) <= 6 && Math.abs(junction.getSourceZ() - z) <= 6) {
+                        near.add(junction.getSourceX() + " " + junction.getSourceGroundY() + " "
+                                + junction.getSourceZ() + " " + junction.getDestProjection());
+                    }
+                }
+            }
+        }
+        return near;
+    }
+
+    /**
+     * The pieces of a start that the beard reads as rigid boxes, at 6 blocks or less from a column: the rigid pool
+     * pieces, the pieces with a terrain adjustment of their own ({@link PieceBeardifierModifier}) that is not
+     * {@code none}, and the other pieces.
+     */
+    private static List<String> rigidNear(StructureStart start, int x, int z) {
+        List<String> near = new ArrayList<>();
+        for (StructurePiece piece : start.getPieces()) {
+            BoundingBox box = piece.getBoundingBox();
+            if (Math.max(0, Math.max(box.minX() - x, x - box.maxX())) > 6
+                    || Math.max(0, Math.max(box.minZ() - z, z - box.maxZ())) > 6) {
+                continue;
+            }
+            if (piece instanceof PieceBeardifierModifier modifier) {
+                if (modifier.getTerrainAdjustment() != TerrainAdjustment.NONE) {
+                    near.add(piece.getClass().getSimpleName() + " floor "
+                            + (modifier.getBeardifierBox().minY() + modifier.getGroundLevelDelta()) + " "
+                            + modifier.getBeardifierBox());
+                }
+            } else if (piece instanceof PoolElementStructurePiece pool) {
+                if (pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID) {
+                    near.add(pool.getElement() + " floor " + (box.minY() + pool.getGroundLevelDelta()) + " " + box);
+                }
+            } else {
+                near.add(piece.getClass().getSimpleName() + " floor " + box.minY() + " " + box);
+            }
+        }
+        return near;
+    }
+
+    /**
+     * The pieces near a path column: {@code building} for the box of a rigid building at 6 blocks or less, {@code arm}
+     * for the box of a path from a gate, {@code junction} for a junction between 2 streets at 3 blocks or less.
+     */
+    private static String causes(StructureStart start, int x, int z) {
+        boolean building = false;
+        boolean arm = false;
+        boolean junction = false;
+        for (StructurePiece piece : start.getPieces()) {
+            BoundingBox box = piece.getBoundingBox();
+            int far = Math.max(Math.max(0, Math.max(box.minX() - x, x - box.maxX())),
+                    Math.max(0, Math.max(box.minZ() - z, z - box.maxZ())));
+            if (piece instanceof VillagePathPiece && far <= 1) {
+                arm = true;
+            }
+            if (piece instanceof PoolElementStructurePiece pool) {
+                boolean street = pool.getElement().toString().contains("/street");
+                if (!street && far <= 6 && pool.getElement().getProjection()
+                        == StructureTemplatePool.Projection.RIGID) {
+                    building = true;
+                }
+                for (var link : pool.getJunctions()) {
+                    if (street && link.getDestProjection()
+                            == StructureTemplatePool.Projection.TERRAIN_MATCHING
+                            && Math.max(Math.abs(link.getSourceX() - x), Math.abs(link.getSourceZ() - z)) <= 3) {
+                        junction = true;
+                    }
+                }
+            }
+        }
+        return "near [" + (building ? "building " : "") + (arm ? "arm " : "") + (junction ? "junction" : "") + "]";
     }
 
     /** The number of logged samples of each kind of artifact, for each village. */
@@ -252,7 +413,7 @@ public final class VillageGroundGameTests {
     /** The kinds of the pieces of a start that contain a block. */
     private static List<String> pieceNames(StructureStart start, int x, int y, int z) {
         return start.getPieces().stream().filter(piece -> piece.getBoundingBox().isInside(x, y, z))
-                .map(piece -> piece instanceof net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece pool
+                .map(piece -> piece instanceof PoolElementStructurePiece pool
                         ? pool.getElement().toString() : piece.getClass().getSimpleName()).toList();
     }
 
@@ -263,7 +424,7 @@ public final class VillageGroundGameTests {
      */
     private static void foundations(Map<Long, ChunkAccess> chunks, StructureStart start, Map<String, Integer> counts) {
         for (StructurePiece piece : start.getPieces()) {
-            if (!(piece instanceof net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece pool)
+            if (!(piece instanceof PoolElementStructurePiece pool)
                     || pool.getElement().toString().contains("/street")) {
                 continue;
             }
@@ -313,8 +474,8 @@ public final class VillageGroundGameTests {
         List<StructurePiece> in = start.getPieces().stream().filter(piece -> piece.getBoundingBox().isInside(pos))
                 .toList();
         return !in.isEmpty() && in.stream().allMatch(piece -> piece instanceof VillagePathPiece
-                || piece instanceof io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece
-                || (piece instanceof net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece pool
+                || piece instanceof StreetStepsPiece
+                || (piece instanceof PoolElementStructurePiece pool
                         && pool.getElement().toString().contains("/street")));
     }
 
@@ -326,8 +487,8 @@ public final class VillageGroundGameTests {
     private static boolean isInAStreet(StructureStart start, BlockPos pos) {
         return start.getPieces().stream().filter(piece -> piece.getBoundingBox().isInside(pos))
                 .anyMatch(piece -> piece instanceof VillagePathPiece
-                        || piece instanceof io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece
-                        || piece instanceof net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece);
+                        || piece instanceof StreetStepsPiece
+                        || piece instanceof PoolElementStructurePiece);
     }
 
     /** True for a block of a building or a street: a stair, planks or a slab. */
