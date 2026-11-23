@@ -46,7 +46,7 @@ The pinned versions are in `modpack/mods/*.pw.toml`.
 | Terrain | The Roads More Travelled | `the-roads-more-travelled` | 0.5.1 | Beta |
 | Aging | Immersive Weathering: Renewed | `immersive-weather-renewed` | 1.0.4 | Beta, unofficial port. Requires Moonlight Lib |
 | Navigation | Small Ships | `small-ships` | 2.0.0-b2.1 | Beta |
-| Navigation | Cartofold | `cartofold` | 0.33.12 | Required by `folkhold_world`. Minimap (the key Y shows or hides it), map of the explored world (key M), survey maps. The jar of its GitHub Release |
+| Navigation | Cartofold | `cartofold` | 0.43.6 | Required by `folkhold_world`. Minimap (the key Y shows or hides it), map of the explored world (key M), survey maps. The jar of its GitHub Release |
 | Terrain | Tectonic | `tectonic` | 3.0.28 | Large continents, deep oceans, mountain ranges. Requires Lithostitched |
 | Light | LambDynamicLights | `lambdynamiclights` | 4.8.11 | Client only |
 | Time | Slumber | `slumbermod` | 1.0.0 | Pinned. MIT license. While all the players sleep, the server runs extra ticks of the levels in place of the night skip. Server side: the pack installs it on both sides, so that a single player world (integrated server) also has it. See "Sleep" below |
