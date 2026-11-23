@@ -21,6 +21,8 @@ import java.util.OptionalInt;
  *   <li>The rules of a world with no saved version.</li>
  *   <li>{@link #STREET_RAMP}: each street of the core has a ramp profile, with a cut and a fill on each side.</li>
  *   <li>{@link #HOUSE_LEVEL}: each house on a street of the core stands at the level of the profile at its plot.</li>
+ *   <li>{@link #ARM_WIDTH}: the path from a gate to the plaza stops at the first row with a building in its width,
+ *       not only on its middle. A gate off the axis of its street gives a path off this axis.</li>
  * </ol>
  */
 public final class PlanVersion {
@@ -30,8 +32,10 @@ public final class PlanVersion {
     public static final int STREET_RAMP = 2;
     /** The version of the houses at the level of their street (see {@link StreetRamp}). */
     public static final int HOUSE_LEVEL = 3;
+    /** The version of the paths of the gates that stop at a building in their width. */
+    public static final int ARM_WIDTH = 4;
     /** The version of a new world: the version of the last rule. */
-    public static final int LATEST = HOUSE_LEVEL;
+    public static final int LATEST = ARM_WIDTH;
 
     private PlanVersion() {
     }
