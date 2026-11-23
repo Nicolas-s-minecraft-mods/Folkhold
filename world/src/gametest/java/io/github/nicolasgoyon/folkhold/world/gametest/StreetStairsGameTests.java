@@ -7,6 +7,7 @@ import io.github.nicolasgoyon.folkhold.world.group.RoadNetwork;
 import io.github.nicolasgoyon.folkhold.world.village.StreetBlocks;
 import io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
+import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -18,6 +19,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.TerrainAdjustment;
+import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -62,6 +65,27 @@ public final class StreetStairsGameTests {
             tops[row] = levels[row] - base;
         }
         checkStairs(helper, tops, new boolean[levels.length]);
+        helper.succeed();
+    }
+
+    /**
+     * The street pieces with no template do not change the shape of the terrain. Their boxes go 16 blocks under the
+     * street. The terrain adaptation of the village reads a piece with no terrain adjustment of its own as a rigid box,
+     * with its floor at the lowest layer of the box. Such a floor makes holes in the rock under the street.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "street_stairs")
+    public static void theStreetPiecesWithNoTemplateDoNotShapeTheTerrain(GameTestHelper helper) {
+        BlockPos start = helper.absolutePos(new BlockPos(1, 1, 1));
+        List<StructurePiece> pieces = List.of(
+                new StreetStepsPiece(start.getX(), start.getZ(), 0, 1, new boolean[4], start.getY() - 16,
+                        start.getY() + 16, STAIRS),
+                new VillagePathPiece(start.getX(), start.getZ(), 1, 0, new int[] {start.getY(), start.getY() + 1},
+                        true, Optional.of(STAIRS)));
+        for (StructurePiece piece : pieces) {
+            helper.assertTrue(piece instanceof PieceBeardifierModifier modifier
+                    && modifier.getTerrainAdjustment() == TerrainAdjustment.NONE,
+                    piece.getClass().getSimpleName() + " must not change the shape of the terrain");
+        }
         helper.succeed();
     }
 
