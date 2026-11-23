@@ -695,8 +695,26 @@ public class JournalScreen extends UiScreen {
     }
 
     /**
+     * The mark at the right of a row of the tab "Quests": the ambush on the caravan of an active escort, else "Active"
+     * for an active quest, else "Offer".
+     *
+     * @param active  true for an active quest of the player
+     * @param raiders the living raiders of the attack on the caravan of an escort, from the quest log (see
+     *                {@link ClientQuestLog#raiders}), or 0
+     * @return the text of the mark
+     */
+    static Component rowMark(boolean active, int raiders) {
+        if (active && raiders > 0) {
+            return Component.translatable("quest.folkhold_world.caravan.ambush", raiders);
+        }
+        return Component.translatable(KEY + (active ? "quest.mark_active" : "quest.mark_offer"));
+    }
+
+    /**
      * The list of the quests: the active quests of the player, then the offers of the visited villages. Each row of an
-     * active quest has an abandon button "✕" at the right, with the confirmation of the quest board.
+     * active quest has an abandon button "✕" at the right, with the confirmation of the quest board. The row of an
+     * active escort shows the ambush on its caravan in red, from the quest log that the server sends each second
+     * during an escort.
      */
     private final class QuestList extends UiList<JournalPayload.Quest> {
         QuestList(UiRect rect) {
@@ -746,9 +764,10 @@ public class JournalScreen extends UiScreen {
                 }
                 right = button.x() - UiTheme.GAP;
             }
-            Component mark = Component.translatable(KEY + (item.active() ? "quest.mark_active" : "quest.mark_offer"));
-            int markWidth = UiText.drawRight(graphics, font, mark, right, y, text.width() / 3,
-                    item.active() ? UiTheme.GOLD : UiTheme.TEXT_MUTED);
+            int raiders = item.active() ? ClientQuestLog.raiders(ClientQuestLog.get(), item.questId()) : 0;
+            Component mark = rowMark(item.active(), raiders);
+            int markWidth = UiText.drawRight(graphics, font, mark, right, y, text.width() / (raiders > 0 ? 2 : 3),
+                    raiders > 0 ? UiTheme.TEXT_BAD : item.active() ? UiTheme.GOLD : UiTheme.TEXT_MUTED);
             markWidth += text.right() - right;
             UiText.draw(graphics, font, item.name(), text.x(), y, text.width() - markWidth - UiTheme.PADDING,
                     UiTheme.TEXT);
