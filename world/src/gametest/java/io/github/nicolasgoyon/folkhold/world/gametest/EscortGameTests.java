@@ -418,7 +418,8 @@ public final class EscortGameTests {
      * An ambush point in a hole of 5 by 5 blocks, 4 blocks deep: the raiders appear out of the hole, on the floor,
      * with a walk path to the merchant.
      */
-    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_hole")
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_hole",
+            skyAccess = true)
     public static void ambushInAHoleAppearsWhereTheMerchantCanBeReached(GameTestHelper helper) {
         BlockPos merchant = helper.absolutePos(new BlockPos(2, 1, 16));
         BlockPos hole = helper.absolutePos(new BlockPos(18, 1, 16));
@@ -436,7 +437,8 @@ public final class EscortGameTests {
                     new Route.Point(merchant.getX() + 28, merchant.getZ())));
             pos = AmbushSpawns.find(level, route, 16.0, merchant, false).orElse(null);
             helper.assertTrue(pos != null && RaidSpawns.canWalk(level, pos, merchant),
-                    "The ambush must have a position with a path to the merchant: " + pos);
+                    "The ambush must have a position with a path to the merchant: " + pos + ", checks "
+                            + checks(helper));
         } finally {
             for (int i = 0; i < pit.size(); i++) {
                 level.setBlockAndUpdate(helper.absolutePos(pit.get(i)), before.get(i));
@@ -453,7 +455,8 @@ public final class EscortGameTests {
      * An ambush point under a roof of 7 by 7 blocks, 5 blocks above the floor: the raiders appear on the floor, not
      * on the roof, with a walk path to the merchant.
      */
-    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_roof")
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_roof",
+            skyAccess = true)
     public static void ambushUnderARoofAppearsWhereTheMerchantCanBeReached(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos merchant = helper.absolutePos(new BlockPos(2, 1, 16));
@@ -471,7 +474,8 @@ public final class EscortGameTests {
                     new Route.Point(merchant.getX() + 28, merchant.getZ())));
             pos = AmbushSpawns.find(level, route, 16.0, merchant, false).orElse(null);
             helper.assertTrue(pos != null && RaidSpawns.canWalk(level, pos, merchant),
-                    "The ambush must have a position with a path to the merchant: " + pos);
+                    "The ambush must have a position with a path to the merchant: " + pos + ", checks "
+                            + checks(helper));
         } finally {
             for (int i = 0; i < roof.size(); i++) {
                 level.setBlockAndUpdate(helper.absolutePos(roof.get(i)), before.get(i));
@@ -536,6 +540,18 @@ public final class EscortGameTests {
         helper.assertTrue(waitsAgain == GroupState.STOPPED && afterDeath == GroupState.TRAVELING,
                 "The merchant must continue when the raiders are dead: " + waitsAgain + ", " + afterDeath);
         helper.succeed();
+    }
+
+    /** The checks of the columns of the line z = 16 of the large arena, for the message of a failure. */
+    private static String checks(GameTestHelper helper) {
+        StringBuilder text = new StringBuilder();
+        for (int x = 4; x <= 30; x += 2) {
+            BlockPos column = helper.absolutePos(new BlockPos(x, 1, 13));
+            BlockPos pos = AmbushSpawns.surface(helper.getLevel(), column.getX(), column.getZ());
+            text.append(x).append(':').append(helper.relativePos(pos).getY()).append(' ')
+                    .append(AmbushSpawns.check(helper.getLevel(), pos, false)).append(", ");
+        }
+        return text.toString();
     }
 
     private static Mob spawnRaider(ServerLevel level, BlockPos pos) {
