@@ -5,14 +5,7 @@
   "plugin": "io.github.nicolasgoyon.folkhold.balance.BalanceMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "AbstractMinecartMixin",
-    "AbstractVillagerAccessor",
-    "EnchantmentMixin",
-    "MerchantOfferAccessor",
     "SlumberSimulatorMixin"
-  ],
-  "client": [
-    "AnvilScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
