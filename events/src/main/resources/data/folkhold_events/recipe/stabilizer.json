@@ -1,0 +1,17 @@
+{
+  "neoforge:conditions": [
+    {"type": "neoforge:mod_loaded", "modid": "folkhold_blocks"}
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "CSC",
+    "SCS",
+    "CSC"
+  ],
+  "key": {
+    "C": {"item": "minecraft:copper_ingot"},
+    "S": {"tag": "minecraft:stone_crafting_materials"}
+  },
+  "result": {"id": "folkhold_blocks:stabilizer", "count": 1}
+}

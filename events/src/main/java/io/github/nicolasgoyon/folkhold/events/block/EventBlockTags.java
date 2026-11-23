@@ -27,6 +27,9 @@ import net.minecraft.world.level.block.state.BlockState;
  *   <li>{@code folkhold_events:natural_tree}: a part of a natural tree that no event moves, in addition to the trunks
  *       below natural leaves. The entries are optional: the branches, the trunk shells, the roots and the rooty soil of
  *       Dynamic Trees. A change to one of these blocks can break the full tree.</li>
+ *   <li>{@code folkhold_events:stabilizer}: a block that protects the blocks near it from all the events (see
+ *       {@link io.github.nicolasgoyon.folkhold.events.common.Stabilizers}). The entry is optional: the stabilizer of
+ *       the Folkhold blocks mod.</li>
  * </ul>
  */
 public final class EventBlockTags {
@@ -38,6 +41,7 @@ public final class EventBlockTags {
     public static final TagKey<Block> CRACKABLE = tag("crackable");
     public static final TagKey<Block> PROTECTED = tag("protected");
     public static final TagKey<Block> NATURAL_TREE = tag("natural_tree");
+    public static final TagKey<Block> STABILIZER = tag("stabilizer");
 
     private EventBlockTags() {
     }

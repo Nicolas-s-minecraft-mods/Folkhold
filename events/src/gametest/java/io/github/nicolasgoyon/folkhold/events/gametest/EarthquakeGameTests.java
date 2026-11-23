@@ -8,6 +8,7 @@ import io.github.nicolasgoyon.folkhold.events.earthquake.Earthquake;
 import io.github.nicolasgoyon.folkhold.events.earthquake.EarthquakeSettings;
 import io.github.nicolasgoyon.folkhold.events.earthquake.Earthquakes;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -175,6 +176,63 @@ public final class EarthquakeGameTests {
                     }
                     helper.assertTrue(helper.getBlockEntity(chestPos) instanceof ChestBlockEntity chest
                             && chest.getItem(0).is(Items.DIAMOND), "The chest and its content must stay in place");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A stabilizer in the floor protects a sphere of 16 blocks: in a strong earthquake, no block in the sphere
+     * changes. A house and a floating plank outside the sphere, at the same distance from the epicenter, take damage.
+     */
+    @GameTest(template = "quake_arena", timeoutTicks = 600, batch = "earthquake_stabilizer", skyAccess = true)
+    public static void stabilizerProtectsTheBlocksNearIt(GameTestHelper helper) {
+        prepare(helper, 40, 32);
+        EventTestSupport.setConfigForTest(helper, EventsConfig.STABILIZER_RADIUS, 16);
+        Block stabilizer = BuiltInRegistries.BLOCK
+                .getOptional(ResourceLocation.fromNamespaceAndPath("folkhold_blocks", "stabilizer"))
+                .orElseThrow(() -> new IllegalStateException("The test needs the stabilizer of the blocks mod"));
+        BlockPos stabilizerPos = new BlockPos(6, 0, 16);
+        helper.setBlock(stabilizerPos, stabilizer);
+        EventTestSupport.buildHouse(helper, 4, 14, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS);
+        Map<BlockPos, Block> outside = EventTestSupport.buildHouse(helper, 28, 14, Blocks.OAK_PLANKS,
+                Blocks.OAK_PLANKS);
+        BlockPos floatingInside = new BlockPos(12, 4, 8);
+        BlockPos floatingOutside = new BlockPos(24, 4, 8);
+        helper.setBlock(floatingInside, Blocks.OAK_PLANKS);
+        helper.setBlock(floatingOutside, Blocks.OAK_PLANKS);
+        BlockPos absoluteStabilizer = helper.absolutePos(stabilizerPos);
+        Map<BlockPos, BlockState> inside = new LinkedHashMap<>();
+        for (int x = 0; x < 40; x++) {
+            for (int y = 0; y < 12; y++) {
+                for (int z = 0; z < 32; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = helper.getBlockState(pos);
+                    if (!state.isAir() && helper.absolutePos(pos).distSqr(absoluteStabilizer) <= 16 * 16) {
+                        inside.put(pos, state);
+                    }
+                }
+            }
+        }
+        Earthquake earthquake = start(helper, new BlockPos(18, 1, 16), new EarthquakeSettings(20, 10.0, 0, 60, 64));
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(earthquake.isDone(), "The earthquake must end"))
+                .thenIdle(LANDING_TICKS)
+                .thenExecute(() -> {
+                    int changed = 0;
+                    for (Map.Entry<BlockPos, BlockState> entry : inside.entrySet()) {
+                        if (helper.getBlockState(entry.getKey()) != entry.getValue()) {
+                            changed++;
+                        }
+                    }
+                    int outsideLost = EventTestSupport.lost(helper, outside);
+                    boolean floatingFell = !helper.getBlockState(floatingOutside).is(Blocks.OAK_PLANKS);
+                    FolkholdEvents.LOGGER.info("Stabilizer test: {} of {} blocks changed in the sphere, the house "
+                            + "outside lost {} of {} blocks", changed, inside.size(), outsideLost, outside.size());
+                    EventTestSupport.removeDebris(helper);
+                    helper.assertTrue(outsideLost > 0, "The house outside the sphere must take damage");
+                    helper.assertTrue(floatingFell, "The floating plank outside the sphere must fall");
+                    helper.assertTrue(changed == 0, changed + " blocks changed in the sphere of the stabilizer");
                 })
                 .thenSucceed();
     }

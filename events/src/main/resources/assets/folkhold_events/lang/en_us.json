@@ -64,6 +64,8 @@
   "folkhold_events.configuration.regionSize": "Size of the event regions (blocks)",
   "folkhold_events.configuration.regionMinDays": "Shortest pause of a region (days)",
   "folkhold_events.configuration.regionMaxDays": "Longest pause of a region (days)",
+  "folkhold_events.configuration.stabilizerRadius": "Radius of the protection of a stabilizer (blocks)",
+  "folkhold_events.stabilizer.tooltip": "Earthquakes and storms change no block at %s blocks or nearer.",
   "folkhold_events.configuration.storm": "Storms",
   "folkhold_events.configuration.storms": "Natural storms",
   "folkhold_events.configuration.stormDimensions": "Dimensions with natural storms",

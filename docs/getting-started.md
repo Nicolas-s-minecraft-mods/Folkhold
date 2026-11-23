@@ -249,7 +249,7 @@ A script does not write a PNG file when its pixels do not change.
 
 ## Blocks from PixVox
 
-The blocks of the library `blocks` come from the descriptions in `tools/pixvox`: village heart, watch post, bank chest, bank wall, brazier, building signs and quest board. [PixVox](https://github.com/nicolas-goyon/PixVox) makes them: a description is a volume of voxels in Python, and PixVox reads the texture of each face on the volume. PixVox renders each block as the game does, checks the export, and makes a review board. The container has PixVox. Change a description, then run the export:
+The blocks of the library `blocks` come from the descriptions in `tools/pixvox`: village heart, watch post, bank chest, bank wall, brazier, building signs, quest board and stabilizer. [PixVox](https://github.com/nicolas-goyon/PixVox) makes them: a description is a volume of voxels in Python, and PixVox reads the texture of each face on the volume. PixVox renders each block as the game does, checks the export, and makes a review board. The container has PixVox. Change a description, then run the export:
 
 ```bash
 python3 tools/pixvox/export.py            # models/block/<model>.json and textures/block/<model>/

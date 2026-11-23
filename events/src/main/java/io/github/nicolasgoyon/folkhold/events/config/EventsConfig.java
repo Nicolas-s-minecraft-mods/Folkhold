@@ -26,6 +26,7 @@ public final class EventsConfig {
     public static final ModConfigSpec.IntValue REGION_SIZE;
     public static final ModConfigSpec.IntValue REGION_MIN_DAYS;
     public static final ModConfigSpec.IntValue REGION_MAX_DAYS;
+    public static final ModConfigSpec.IntValue STABILIZER_RADIUS;
 
     public static final ModConfigSpec.DoubleValue FRAGILE_BELOW;
     public static final ModConfigSpec.DoubleValue RESISTANT_FROM;
@@ -104,6 +105,11 @@ public final class EventsConfig {
                 .comment("Longest pause of a region after a natural event, in game days.")
                 .translation(KEY_PREFIX + "regionMaxDays")
                 .defineInRange("regionMaxDays", DEFAULT_REGION_MAX_DAYS, 0, 1000);
+        STABILIZER_RADIUS = builder
+                .comment("Radius in blocks of the protection of a stabilizer. No event changes a block at this",
+                        "distance from a stabilizer or nearer. 0 turns off the protection.")
+                .translation(KEY_PREFIX + "stabilizerRadius")
+                .defineInRange("stabilizerRadius", 16, 0, 64);
         builder.pop();
 
         builder.comment("Classes of the blocks for the natural events. The block tags folkhold_events:fragile,",
