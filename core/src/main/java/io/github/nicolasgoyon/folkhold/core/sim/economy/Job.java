@@ -14,9 +14,11 @@ import java.util.Map;
  *                 empty list means all biomes.
  * @param cultures the multiplier of the weight in the settlements of a culture, by culture id (1 or more). A culture
  *                 that is not in the map does not change the weight.
+ * @param trades   the job trades of the job (see {@link JobTrade}). An empty list means that the job has no job
+ *                 trades.
  */
 public record Job(String id, Recipe recipe, int minLevel, int weight, List<String> biomes,
-        Map<String, Integer> cultures) {
+        Map<String, Integer> cultures, List<JobTrade> trades) {
 
     public Job {
         if (id == null || id.isBlank() || minLevel < 1 || weight < 1) {
@@ -27,9 +29,16 @@ public record Job(String id, Recipe recipe, int minLevel, int weight, List<Strin
         }
         biomes = List.copyOf(biomes);
         cultures = Map.copyOf(cultures);
+        trades = List.copyOf(trades);
     }
 
-    /** A job with the same weight in all the cultures. */
+    /** A job with the trade list of its recipe (see {@link JobTrade#fromRecipe}). */
+    public Job(String id, Recipe recipe, int minLevel, int weight, List<String> biomes,
+            Map<String, Integer> cultures) {
+        this(id, recipe, minLevel, weight, biomes, cultures, JobTrade.fromRecipe(recipe));
+    }
+
+    /** A job with the same weight in all the cultures, and with the trade list of its recipe. */
     public Job(String id, Recipe recipe, int minLevel, int weight, List<String> biomes) {
         this(id, recipe, minLevel, weight, biomes, Map.of());
     }
@@ -42,6 +51,7 @@ public record Job(String id, Recipe recipe, int minLevel, int weight, List<Strin
      */
     public Job forCulture(String culture) {
         int multiplier = culture == null ? 1 : cultures.getOrDefault(culture, 1);
-        return multiplier == 1 ? this : new Job(id, recipe, minLevel, weight * multiplier, biomes, cultures);
+        return multiplier == 1 ? this : new Job(id, recipe, minLevel, weight * multiplier, biomes, cultures,
+                trades);
     }
 }

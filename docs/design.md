@@ -1217,7 +1217,7 @@ A surplus lowers the price down to ×0.5. A shortage raises the price up to ×3.
 
 ### Job trades (planned)
 
-**Planned** (#1006): this section is the target design of the job trades. The code has no part of it. The section "Trade with the player" gives the trades of this time.
+**Planned** (#1006): this section is the target design of the job trades. The code has only the part "Source of the trades": the trade lists of the job files (`JobTrade`, `Job.trades`). No worker shows a job trade. The section "Trade with the player" gives the trades that the workers show.
 
 In this section, a **need trade** is an offer of `JobTrades` (see "Trade with the player"). The worker sells the outputs of its job from the stock, and buys the inputs that the village needs. A **job trade** is a new offer from the trade list of the job. The need trades stay. For the player, the two kinds are the same kind of trade, in the same trade screen.
 
@@ -1234,7 +1234,15 @@ In this section, a **need trade** is an offer of `JobTrades` (see "Trade with th
   | `enchant` | Optional, for a sell trade of an item that can have enchantments: the trade can give an enchanted item (see "Trade tiers"). |
   | `weight` | Optional, default 1: the weight of the trade in the weekly selection. |
 
-- A job file with no list `trades` gets a list from its recipe. Each output is a sell trade, and each input is a buy trade. An output with a chance of 0.3 or more has the level 1. An output with a lower chance has the level 2. Each input has the level 1. Thus each job of the job files has job trades with no change of its file.
+- The field `count` of `sell` and `buy` is optional (default 1). The field `enchant` is optional (default false).
+- A trade that is not valid stays out of the list, and the log gets a warning (`EconomyData.parseTrade`). The other trades of the file stay. A trade is not valid in these conditions:
+  - It has `sell` and `buy`, or neither of them.
+  - Its item or the item of a material is not in the item registry (or is `minecraft:air`).
+  - Its `level` is out of 1 to 5.
+  - Its `count`, its `volume`, its `weight` or the count of a material is below 1.
+  - It is a buy trade with `materials` or with `enchant`.
+- A job file with no list `trades` gets a list from its recipe (`JobTrade.fromRecipe`). Each output is a sell trade, and each input is a buy trade, with the count of the recipe. An output with a chance of 0.3 or more has the level 1. An output with a lower chance has the level 2. Each input has the level 1. The volume is the use of the recipe in one week: 7 × the chance, rounded, 1 or more. The weight is 1. Thus each job of the job files has job trades with no change of its file.
+- A job file with an empty list `trades` has no job trades. The list of the file replaces the list of the recipe: the recipe adds no trade to it.
 - A sell trade with `materials` gives an item that the recipe of the job does not make. The worker makes it to order from the stock. Example: the blacksmith sells a diamond sword at the level 4 with the materials 2 diamonds and 1 stick. The diamonds come from the stock (the miner, the caravans, the player). There is no magic restock.
 - Example of a list for the blacksmith (start values to tune):
 
