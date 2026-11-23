@@ -33,8 +33,9 @@ import net.neoforged.fml.config.ModConfigs;
  *   <li>The enchantment levels are those of an enchanting table at {@code 5 × S} levels (see
  *       {@link JobTradeRules#enchantLevel}).</li>
  *   <li>The enchantments come from {@code #minecraft:tradeable}, with no enchantment of the tag
- *       {@link #NOT_IN_JOB_TRADES} (default: Mending). When the balance mod is present, its list
- *       {@code blockedEnchantments.enchantments} is also excluded.</li>
+ *       {@link #NOT_IN_JOB_TRADES} (default: Mending). When the mod Markethold is present, its list
+ *       {@code blockedEnchantments.enchantments} is also excluded. The world mod reads this list from the server
+ *       config of Markethold, with no compile dependency on Markethold.</li>
  *   <li>The job trades sell no enchanted books: a book gets no enchantment.</li>
  * </ul>
  */
@@ -42,10 +43,10 @@ public final class JobTradeEnchantments {
     /** The enchantments that the job trades do not give. */
     public static final TagKey<Enchantment> NOT_IN_JOB_TRADES = TagKey.create(Registries.ENCHANTMENT,
             ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "not_in_job_trades"));
-    /** The id of the balance mod. */
-    private static final String BALANCE = "folkhold_balance";
-    /** The path of the list of the blocked enchantments in the server config of the balance mod. */
-    private static final String BALANCE_LIST = "blockedEnchantments.enchantments";
+    /** The id of the mod Markethold. */
+    private static final String MARKETHOLD = "markethold";
+    /** The path of the list of the blocked enchantments in the server config of Markethold. */
+    private static final String MARKETHOLD_LIST = "blockedEnchantments.enchantments";
 
     private JobTradeEnchantments() {
     }
@@ -82,14 +83,14 @@ public final class JobTradeEnchantments {
 
     /**
      * The enchantments that the job trades can give: {@code #minecraft:tradeable}, with no enchantment of
-     * {@link #NOT_IN_JOB_TRADES} and of the blocked list of the balance mod.
+     * {@link #NOT_IN_JOB_TRADES} and of the blocked list of Markethold.
      *
      * @param registries the registries of the level
      * @return the enchantments
      */
     public static List<Holder<Enchantment>> pool(RegistryAccess registries) {
         Registry<Enchantment> registry = registries.registryOrThrow(Registries.ENCHANTMENT);
-        Predicate<Holder<Enchantment>> blocked = balanceBlocked();
+        Predicate<Holder<Enchantment>> blocked = marketholdBlocked();
         List<Holder<Enchantment>> pool = new ArrayList<>();
         for (Holder<Enchantment> enchantment : registry.getTagOrEmpty(EnchantmentTags.TRADEABLE)) {
             if (!enchantment.is(NOT_IN_JOB_TRADES) && !blocked.test(enchantment)) {
@@ -123,20 +124,20 @@ public final class JobTradeEnchantments {
     }
 
     /**
-     * The blocked enchantments of the balance mod: the ids and the tags ({@code #namespace:path}) of its list. With no
-     * balance mod, no enchantment.
+     * The blocked enchantments of Markethold: the ids and the tags ({@code #namespace:path}) of its list. With no
+     * Markethold, no enchantment.
      */
-    private static Predicate<Holder<Enchantment>> balanceBlocked() {
+    private static Predicate<Holder<Enchantment>> marketholdBlocked() {
         List<String> entries = new ArrayList<>();
-        if (!ModList.get().isLoaded(BALANCE)) {
+        if (!ModList.get().isLoaded(MARKETHOLD)) {
             return enchantment -> false;
         }
-        for (ModConfig config : ModConfigs.getModConfigs(BALANCE)) {
+        for (ModConfig config : ModConfigs.getModConfigs(MARKETHOLD)) {
             if (config.getType() != ModConfig.Type.SERVER || config.getLoadedConfig() == null) {
                 continue;
             }
             CommentedConfig values = config.getLoadedConfig().config();
-            Object list = values.get(BALANCE_LIST);
+            Object list = values.get(MARKETHOLD_LIST);
             if (list instanceof List<?> items) {
                 items.stream().filter(String.class::isInstance).map(String.class::cast).forEach(entries::add);
             }

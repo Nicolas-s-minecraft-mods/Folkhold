@@ -1489,12 +1489,12 @@ The item "Job trades" of the Economy menu of the admin screen opens the job trad
 
 #### Enchantments and the Mending rule
 
-- The balance mod removes Mending from the villager trades (see "Fairer trades"). Its filter wraps the trade listings of the vanilla villagers. The job trades do not come from these listings, so the world mod applies the rule itself.
-- An enchanted item of a job trade gets its enchantments from `#minecraft:tradeable`, with no enchantment of the tag `#folkhold_world:not_in_job_trades` (default: `minecraft:mending`). When the balance mod is present, the list `enchantments` of its section `blockedEnchantments` is also excluded.
+- The mod Markethold of the modpack removes Mending from the villager trades. Its filter wraps the trade listings of the vanilla villagers. The job trades do not come from these listings, so the world mod applies the rule itself.
+- An enchanted item of a job trade gets its enchantments from `#minecraft:tradeable`, with no enchantment of the tag `#folkhold_world:not_in_job_trades` (default: `minecraft:mending`). When Markethold is present, the list `enchantments` of its section `blockedEnchantments` is also excluded.
 - The job trades sell no enchanted books. The jobs do not produce them (see "Jobs and recipes"). A book gets no enchantment.
 - Code (`JobTradeEnchantments`, `JobTradeOffers.sellItem`): the draw of a sell trade with `enchant` uses a seed from the week, the post, the trade and the reputation tier. Thus a player gets the same item during the week, and a new start of the trade does not draw again.
 - The chances of the table are options of the server config, section `economy`: `jobTradeEnchantNeutral`, `jobTradeEnchantFriend` and `jobTradeEnchantAlly`. Each option has 5 decimal values, from Novice to Master. A list with an other size uses the start values.
-- The world mod reads the list of the balance mod from the server config of the balance mod, when the balance mod is present. The world mod does not need the balance mod.
+- The world mod reads the list of Markethold from the server config of Markethold (`markethold-server.toml`), when Markethold is present. The world mod does not need Markethold and has no compile dependency on it.
 
 #### Saved data and old worlds
 
@@ -1797,7 +1797,7 @@ Each culture has a short history. Players find it in books in villages and ruins
 
 ## Balance mod: farms, villagers, chunk loading
 
-This mod does not need the world mod. It limits infinite farms with regional budgets, not with the detection of farm designs. It also gives expensive chunk loading or an offline catch-up.
+This mod does not need the world mod. It limits the extra ticks of the fast nights of Slumber (see "Base modpack", "Sleep"). Planned: it limits infinite farms with regional budgets, not with the detection of farm designs. It also gives expensive chunk loading or an offline catch-up.
 
 ### Regional spawn saturation
 
@@ -1817,269 +1817,28 @@ This mod does not need the world mod. It limits infinite farms with regional bud
 - The mod replaces the vanilla restock with a stock for each offer that refills slowly. If the world mod is present, the offers use the village stock.
 - **Clean reroll** of a master villager: an item or a paid village service gives a new list of offers. Cooldown: 5 game days.
 - Offers with too much value (rare enchanted books, valuable items) have a maximum number of purchases each week.
-- **Implemented** (`FilteredListing`, `VillagerOffers`, `BlockedEnchantmentsLootModifier`): villagers do not sell the
-  blocked enchantments. The default list has Mending only (constant `BlockedEnchantments.DEFAULT`, config key
-  `enchantments`).
-  - The result of a trade offer never has a blocked enchantment, as an enchantment or as a stored enchantment of a
-    book. The filter wraps each trade listing of the villagers and of the wandering trader, also the listings of
-    other mods. When an offer has a blocked enchantment, the listing makes the offer again, up to `rerollAttempts`
-    times. When all the attempts fail, the villager takes an offer from a different listing.
-  - When a villager or a wandering trader joins a level, each blocked enchantment in its offers changes to a random
-    enchantment of `#minecraft:tradeable`. The new enchantment is compatible with the other enchantments of the item,
-    and the item supports it (for an item that is not a book). The level stays the same, in the range of the new enchantment. A vanilla book offer
-    gets a new price from the vanilla formula. The uses and the other values of the offer stay the same.
-  - A cured zombie villager gets its offers after it joins the level. The mod cleans these offers after the
-    conversion.
-  - When the server loads its config, it logs a warning for each id or tag of `enchantments` that does not exist.
-  - Fishing: each blocked enchantment in the fishing loot changes to a random enchantment of
-    `#minecraft:on_random_loot`, with the same rules. The weights of the enchantments give the chance of each new
-    enchantment, as in the vanilla loot functions. The loot modifier reads the id of the table that the game rolls:
-    `minecraft:gameplay/fishing`, not its nested table `gameplay/fishing/treasure`.
-  - Chest loot does not change by default: Mending stays an exploration reward. The enchanting table never gives
-    Mending (tag `#minecraft:in_enchanting_table`).
-  - The trades of the experiment "Villager Trade Rebalance" do not go through the NeoForge trade events. The filter
-    does not see their new offers. The offers change when the villager joins a level again.
-
-| Source of Mending | Vanilla | Folkhold default |
-| --- | --- | --- |
-| Librarian, new offer | yes | no (new attempt) |
-| Librarian, existing offer | yes | no (enchantment replaced) |
-| Fishing | yes | no (enchantment replaced) |
-| Chests | yes | yes |
-| Enchanting table | no | no |
-
-Section `blockedEnchantments` of `folkhold_balance-server.toml`:
-
-| Value | Default | Meaning |
-| --- | --- | --- |
-| `enchantments` | `["minecraft:mending"]` | Enchantment ids or tags (`#namespace:path`) |
-| `inTrades` | true | Villagers and wandering traders make no new offers with a blocked enchantment |
-| `cleanExistingOffers` | true | Replace the blocked enchantments in the offers of a villager that joins a level. Needs `inTrades` |
-| `rerollAttempts` | 10 | New attempts for an offer with a blocked enchantment |
-| `inFishing` | true | Replace the blocked enchantments in the fishing loot |
-| `inChestLoot` | false | Replace the blocked enchantments in the chest loot (tables `chests/...`) |
+- The mod Markethold of the modpack removes the blocked enchantments (default: Mending) from the villager trades and from the fishing loot. Its documentation gives the rules and the options.
 
 ### Anvil
 
-- **Implemented** (`AnvilRules`, `AnvilCost`): no level cap and no "Too Expensive!" limit. An enchantment level such as Efficiency 20 is possible, but very expensive. All costs are in levels.
-- **Merge**: the vanilla rule with no max level. Two equal levels give the level + 1, two different levels give the higher level. Efficiency 20 thus needs 2¹⁵ books of Efficiency V. The config key `levelCaps` can set a cap for each enchantment. By default there is no cap. The game stores a maximum level of 255.
-- The **enchantment cost** is exponential in the level of the result: `operationCost + ceil(k × Σ w × (2^b − 2^a))`. a is the level on the left item (0 if none), and b is the level of the result. w is the weight of the enchantment: its `anvil_cost`, or the config key `weights`. Level 0 has the value 0, not 2⁰. Each level costs double the level before it, as the vanilla prior work penalty. The default k is 0.5: the vanilla max levels stay near the vanilla costs, and each level above the vanilla max is much more expensive. A book is not cheaper than an item. A level built in steps is never cheaper than the same level in one operation. Each additional step costs one more `operationCost`, and the rounding up of each step can add 1 level.
-- The **repair cost** is separate. A full repair costs `base + ceil(r × Σ w × level)` for the current enchantments of the item, curses excluded. The base comes from the repair material. A repair with n units of material costs `ceil(full × min(n, 4) / 4)`. The anvil uses the material units of the vanilla loop: each unit repairs a quarter of the maximum durability, rounded down. Thus an item with a maximum durability that is not a multiple of 4 can use a fifth unit. An example is an iron pickaxe at 249 damage of 250. A repair with a second item of the same type counts the repaired durability in quarters, rounded up. The vanilla durability rule stays (sum of the two items + 12 %).
-- There is **no prior work penalty**: the result has a `repair_cost` of 0, and the anvil ignores the `repair_cost` of the inputs. A repair of the same item thus always has the same cost.
-- A rename adds 1 level. Each incompatible enchantment adds 1 level. A book with only incompatible enchantments gives no result. An operation that changes nothing gives no result. The anvil still takes damage.
-- The anvil does not enchant a stack of more than one item. A cost above 32,767 levels gives no result: the menu sends the cost to the client as a short.
-- The client shows the cost in place of "Too Expensive!" (red when the player has too few levels). It shows a level with no translation as a number, for example "Efficiency 20".
-- The anvil recipes of other mods have priority. The listener of the balance mod runs last, and does nothing when another mod sets an output.
-- With `enabled = false`, the anvil is vanilla, and the levels above X have no number.
-- Villagers do not sell Mending, and fishing does not give it (see "Fairer trades"). The repair cost is then an important choice.
-
-Example: weights of the vanilla `anvil_cost` and default factors (k = 0.5, r = 1). The weights are 1 for Efficiency, Sharpness and Protection, 2 for Unbreaking, 4 for Fortune, Looting and Mending, and 8 for Thorns. The vanilla column is a book on an item with no prior work penalty: the vanilla anvil also adds 1, 3, 7, 15... levels for 1, 2, 3, 4... earlier operations on each input, and shows "Too Expensive!" at 40 levels or more.
-
-| Action | Cost (levels) | Vanilla |
-| --- | --- | --- |
-| Book Efficiency V or Sharpness V on an item with no enchantments | 17 | 5 |
-| Book Protection IV / Unbreaking III / Fortune III / Mending | 9 / 9 / 17 / 5 | 4 / 3 / 6 / 2 |
-| Book Thorns III | 33 | 12 |
-| Two books Efficiency IV, Unbreaking II or Protection III (the level + 1) | 9 / 5 / 5 | 5 / 3 / 4 |
-| One book Efficiency V + Unbreaking III + Fortune III + Mending on a pickaxe | 45 | 16 |
-| One book Protection IV + Unbreaking III + Mending on a chestplate | 21 | 9 |
-| Book Efficiency III / V on Efficiency II | 3 / 15 | 3 / 5 |
-| Efficiency VI / VII / VIII / X, from the level before it | 17 / 33 / 65 / 257 | not possible |
-| Book Efficiency X on Efficiency V / five steps V + V, VI + VI, ... | 497 / 501 | not possible |
-| Efficiency XV from no enchantment / Efficiency XVI | 16,385 / no result (32,769) | not possible |
-| Book Unbreaking IV / V on Unbreaking III | 9 / 25 | not possible |
-| Full repair: Eff II + Unb III + Mending / Eff II + Unb III | 16 / 12 |
-| Full repair: Eff V + Unb III / Eff X + Unb III / Eff XX + Unb III | 15 / 20 / 30 |
-| Iron pickaxe, full repair: Eff II / Eff II + Unb III | 5 / 11 |
-
-Section `anvil` of `folkhold_balance-server.toml`:
-
-| Value | Default | Meaning |
-| --- | --- | --- |
-| `enabled` | true | Use these rules. False gives the vanilla anvil |
-| `mergeRule` | `VANILLA` | `VANILLA` or `SUM` (the levels add together) |
-| `enchantCostFactor` | 0.5 | Factor k of the enchantment cost |
-| `operationCost` | 1 | Fixed cost of an operation that raises a level |
-| `weights` | `[]` | `"id=weight"` or `"#tag=weight"`. Other enchantments use their `anvil_cost` |
-| `repairEnchantFactor` | 1.0 | Factor r of the repair cost |
-| `repairBaseCost` | planks 1, leather 1, stone tool materials 2, gold 2, iron 3, turtle scute 3, diamond 4, netherite 5 | `"material=cost"` or `"#tag=cost"`. Chainmail uses iron |
-| `repairDefaultBaseCost` | 3 | Base for an item with no material in `repairBaseCost` |
-| `priorWorkPenalty` | false | Add the vanilla prior work penalty |
-| `levelCaps` | `[]` | `"id=level"` or `"#tag=level"` |
-| `absoluteMaxLevel` | 255 | Largest level of all enchantments |
+The mod Runehold of the modpack gives an anvil with no level cap and no "Too Expensive!" limit. Its documentation gives the rules and the options.
 
 ### Chunk loading
 
 | Option | Principle | Cost | Use |
 | --- | --- | --- | --- |
 | World anchor | A block that keeps 3×3 chunks loaded | Fuel (for example 1 coal block each hour), maximum 2 anchors for each player | Critical machines |
-| Train (`rails.loadChunks`, off by default) | A locomotive that runs, has fuel and moves keeps loaded the chunks of its train and the chunks on a straight line 32 blocks in front of it. Each of these chunks ticks its entities. Around each of these chunks, a 3 × 3 area of chunks ticks its blocks | The fuel of the locomotive: while it loads chunks, it burns its fuel as at its maximum speed, also when it does not move. Maximum `maxLoadingTrains` (8) locomotives for the whole server | Long rail lines far from the players |
 | Offline catch-up | When the chunk loads again, compatible blocks calculate the missed production | 50 % yield, maximum 3 game days | Crops, furnaces, beehives, machines of the mod |
 
 The catch-up is reliable only for our own blocks and some simple vanilla blocks (crops, furnaces). It does not cover redstone contraptions.
 
 All thresholds are in `folkhold_balance-server.toml`, with a "soft" preset and a "strict" preset.
 
-## Balance mod: rails
+## Trains
 
-The rails stay vanilla. The player links minecarts with a chain to make a train. A locomotive of the mod at the front pulls the train. A vanilla furnace minecart pulls or pushes the train from any position in the train.
+The mod Railhold of the modpack gives the trains: chain links between minecarts, locomotives, storage minecarts and the chunk loading of a train. Its documentation gives the rules and the options.
 
-### Links
-
-- **Implemented** (`CartLinks`, `ChainUse`): the player uses the item "chain" on a first minecart, then on a second minecart. The action bar shows the first minecart. The link uses 1 chain. The chain does not start the vanilla interaction (ride, chest menu).
-- The first minecart goes in front of the second minecart. When the ends of the two minecarts do not permit this order, the second minecart goes in front.
-- A minecart has a maximum of one front link and one back link. A link cannot make a loop. The gap between the two minecarts (see "Train") must be the maximum gap or less. All the minecarts of the two trains must be loaded.
-- Shears, or an empty main hand while the player sneaks, remove the front link of a minecart. A minecart with no front link loses its back link. The chain drops. An empty hand without sneak still lets the player ride.
-- Each minecart keeps its links in a data attachment: the UUID of the minecart in front and the UUID of the minecart behind. The links stay after a save and a reload of the world.
-
-### Train
-
-- **Implemented** (`Trains`, `Coupling`): the game ticks the entities in a random order. Thus the mod moves the trains after the entities, at the end of the tick of each level. It finds each train one time. Then it corrects the motion of each minecart in order from the driver of the train to the two ends of the train. The correction of a minecart uses the corrected motion of the next minecart toward the driver. Thus a long train has no delay of one tick for each minecart.
-- The driver is the front minecart when it is a locomotive or a vanilla furnace minecart with a push (with fuel). If not, the driver is the first vanilla furnace minecart with a push, also when it is behind its wagons. A vanilla furnace minecart moves in the direction of its push, from the position of the player that gives the fuel.
-- **Implemented** (`TrainPush`): a train with no driver of these two types follows the minecart that gets a push. Thus a push on any minecart moves all the train. Each tick, the mod keeps the motion of each minecart after the correction of the chains. In the next tick, the speed gain of a minecart is its horizontal speed minus this kept speed. This gain is the change that the vanilla tick gives: a player push, a powered rail, a slope, a rider or a collision. The chains do not cause a gain. The vanilla slowdown and a brake only decrease the speed, and a curve changes only the direction, so they do not cause a gain.
-  - The minecart with the largest gain drives the train for this tick, if this gain is more than 0.001 blocks per tick.
-  - Two pushes in opposite directions at rest: the larger push drives the train. The chains then move the other minecart with the train. For two equal pushes, the driver of the last tick drives. If it does not get a push, the minecart nearest to the front of the train drives.
-  - If no minecart has a gain, the driver of the last tick drives again. Thus a train that a push started coasts with the same driver. A new train with no push has the front minecart as its driver.
-  - A push against the motion of a moving train decreases the speed of its minecart. It is not a gain, and the train ignores it. Thus the larger of two opposite pushes drives only when the train is at rest, or when this push makes its minecart faster than before.
-  - A train on a slope with no push: the minecarts on the slope down get a gain. The minecart with the largest gain drives. The train goes down the slope. A minecart on the slope up loses speed and does not drive.
-  - A brake (a powered rail with no power) decreases the speed of its minecart. It is not a gain, so the brake does not change the driver.
-    - If the braked minecart is not the driver, the chains give back to it the speed of the train. Thus the brake slows the train only a little.
-    - If the braked minecart is the driver (for example, the minecart that a push started), it stays the driver. The chains then slow the other minecarts to its speed, and the brake stops all the train.
-- The break counter of a link has the key of the back minecart of the link. Thus a change of the driver does not change the counter.
-- **Implemented** (`CartEnds`): the gap of a link is the distance between the positions of the two minecarts minus the length of one minecart. This length is 1.25 blocks, the length of the vanilla minecart model. On a straight rail, it is the distance between the two ends that face each other. The server uses the gap for all the rules of the chain. The gap changes smoothly in a curve and on a slope. Thus the chain does not jolt a minecart when it goes onto a new rail.
-- The chain attaches at the ends of the two minecarts that face each other. An end is at 0.625 blocks from the position of the minecart, along the rail under it. It is along the diagonal of a curve, and up 45 degrees on a slope, as the vanilla renderer turns the minecart. A minecart that is not on a rail turns to the other minecart. On a curve rail, the minecart turns 45 degrees. While a minecart is on the curve rail, the distance between the two ends is more than the gap. The difference is up to about 1 block for some ticks.
-- In each link, the minecart nearer to the driver (the leader) pulls or pushes the other minecart (the follower). The mod changes only the speed of the follower, along its rail:
-  - below the buffer gap (0.15 blocks), or when the gap of the next tick goes below the buffer gap: the follower slows down. It moves away from the leader when the leader comes nearer. Two linked minecarts do not push each other as vanilla minecarts do, and they do not touch. In a curve, the straight line between the two minecarts is shorter than the rails between them. Thus the gap can go below the buffer gap, and the follower then slows down for a short time.
-  - from the buffer gap to the rest gap (0.2 blocks), the chain is slack.
-  - from the rest gap to the maximum gap, a spring with damping pulls the follower.
-  - above the maximum gap, the chain acts as a rigid bar.
-- Thus two linked minecarts keep a visible gap of about 0.2 blocks on a straight rail. The gap goes from the buffer gap when the leader pushes or brakes, to a little more than the rest gap when the leader pulls. In a curve and on a slope, the gap changes for a short time, from 0 to 0.5 blocks. The two minecarts do not touch.
-- The motion of a minecart stays below the speed limit of its rail, so that a minecart does not leave a curve.
-- A link breaks when the gap stays above the break gap for some ticks. This tolerance keeps the train together after a lag of some ticks. The chain drops at the middle of the link.
-- A link breaks and drops the chain when a minecart is destroyed or goes through a portal. A link does not break when a minecart unloads.
-- A train stops as one unit when one of its minecarts is not loaded. It also stops when a minecart is in a chunk at the edge of the simulation distance (the level does not tick its entities). Each minecart that ticks goes back to its position before the tick, and its motion is zero: no slope, powered rail or rider moves it. A furnace minecart keeps its push, and its fuel burns. The links wait, and the break counters do not increase. Thus two linked minecarts are never much farther apart than the break gap.
-- Each link drops its chain when it breaks. A repair never drops a chain, so a link that only one minecart has owns no chain.
-- The mod repairs the links each tick. It removes a link that only one minecart has. When `maxCarts` is less than the size of a train, the links after `maxCarts` minecarts break and drop their chains.
-- Every second, the mod removes the dead links: links to a minecart that does not exist any more. An example is a minecart that was destroyed while the other minecart was not loaded. A link is dead when these conditions are true:
-  - its minecart ticks,
-  - all the chunks within `breakGap` + 3.25 blocks of it have their entities loaded and tick them. This distance is the break gap, the two half lengths and a margin of 2 blocks,
-  - the level does not give the other minecart.
-
-  The link must be dead in 2 checks in a row, because the entities of a chunk load after the chunk.
-- The client draws a chain between the ends of the two minecarts of each link, as a leash. The sag of the chain is 0.25 blocks for each block of length, 0.12 blocks at most: a short chain is almost straight. The server sends the links to the players that track a minecart when a link changes, and when a player starts to track a minecart. The data attachments do not go to the client.
-
-### Locomotive
-
-- **Implemented** (`Locomotive`, `FurnaceLocomotive`, `CartItem`, `Traction`): the furnace locomotive is a minecart that pulls the minecarts behind it. Recipe: furnace minecart, 4 iron ingots and 1 piston. The item and the dispenser place it on a rail as a vanilla minecart. It looks like the vanilla furnace minecart with a copper color on the furnace. The item has the icon of the furnace minecart in a copper color. It has no screen, and no player rides it.
-- The player adds a furnace fuel with a right click (1 coal = 1600 units, a lava bucket gives back the bucket). A right click with an empty hand starts or stops the locomotive. The action bar shows the state and the fuel, in blocks.
-- On start, the locomotive goes away from the minecart behind it, or away from the player when it has no minecart behind it. Then its direction follows the rails.
-- Each tick, the speed of the locomotive changes by (pull − resistance) / mass:
-  - pull: the pulling force at speed 0, less in a line to 0 at the maximum speed. A locomotive that is stopped or has no fuel brakes with its pulling force.
-  - mass: the mass of the locomotive plus the mass of each minecart behind it. The mass of a wagon is `wagonMass` plus `cargoMass` multiplied by the fill ratio of its slots (the count of each stack divided by its stack size). A wagon with more than 27 slots multiplies its cargo mass by its slots divided by 27 (2 for the double chest minecart). A wagon with 27 slots or fewer (chest minecart, hopper minecart) has the full `cargoMass`. A wagon that still has a loot table counts as empty: a read of its slots generates the loot.
-  - resistance: for each minecart, its mass multiplied by `friction`, plus `slopeForce` up a slope (minus down a slope). Then minus `poweredRailForce` on a powered rail with power, and plus `brakeForce` on a powered rail with no power.
-- The speed is never less than 0: a train that is too heavy for a slope stops and does not slide back. The speed is never more than the speed cap of the train (see "Speed"). The vanilla slope, powered rails and slowdown do not change the speed of the locomotive. The chains (see "Train") pull the minecarts behind it.
-- A locomotive with a front link is a wagon of the train in front: it does not drive and burns no fuel.
-- The fuel burns for each block that the locomotive moves while it runs. It burns 8 units for each block, thus about 200 blocks for 1 coal. A train that waits does not move, so its fuel does not burn, except when the locomotive loads chunks (see "Loaded area"). The fuel is never more than `fuelCapacity`. A broken locomotive drops its item. Its fuel is lost.
-- **Implemented** (`HeavyLocomotive`): the heavy locomotive is a second type of locomotive, with the same rules and its own stats in the configuration. It has more pulling force and a maximum speed of 0.6 blocks per tick. Recipe: blast furnace, minecart, 2 blocks of iron and 1 piston. Its only fuel is the block of coal (16000 units): 16 units for each block, thus about 1000 blocks for 1 block of coal. It looks like the vanilla minecart with a blast furnace in a steel color. The item has the icon of the furnace minecart in the same color.
-
-### Double chest minecart
-
-- **Implemented** (`DoubleChestMinecart`, `CartItem`): a minecart with 54 slots. Recipe: chest minecart and chest, with no shape. The item and the dispenser place it on a rail as a vanilla minecart. A right click opens a screen of 6 rows. More than one player can open it at the same time, as the vanilla chest minecart.
-- Hoppers and hopper minecarts fill it and empty it, as the vanilla chest minecart. It also gives the item handlers of NeoForge for other mods. On a detector rail, a comparator gives its fill level.
-- A destroyed minecart drops its item and all its stacks one time. A minecart removed with `/kill` drops its stacks but not its item, as the vanilla chest minecart.
-- It has no loot table. It ignores a loot table from a command or from saved data. Thus it never generates loot.
-- It is a wagon of a train as the other minecarts with a container. It carries 2 times the cargo of a chest minecart, so its cargo mass is 2 times larger. A full double chest minecart has a mass of `wagonMass` + 2 × `cargoMass` (see "Locomotive").
-- It looks like the vanilla chest minecart with a second chest on the first chest. The item has the icon of the chest minecart in a darker color.
-
-### Shulker box minecart
-
-- **Implemented** (`ShulkerMinecart`, `ShulkerMinecartItem`, `ShulkerMinecartRecipe`): a minecart with a shulker box: 27 slots and the shulker box screen. It has no color or one of the 16 dye colors. Recipe: minecart and shulker box, with no shape. The result keeps the items and the color of the shulker box. A shulker box with a loot table or a lock does not match: the minecart cannot keep the loot table or the lock. The item and the dispenser place it on a rail as a vanilla minecart, with its items and its color.
-- The minecart keeps its items as a shulker box does. When a player, a creative player, an explosion, lava, a cactus or `/kill` removes it, it drops one item. This item keeps its items, its color and its name. Its stacks never drop one by one. An empty minecart drops its item only when damage destroys it and the game rule `doEntityDrops` is true.
-- The item cannot go into a shulker box, a bundle or a shulker box minecart, as a shulker box. A shulker box cannot go into the minecart. A destroyed item entity (for example in lava) drops its items, as a shulker box item. The tooltip of the item shows the first 5 stacks and the number of the other stacks, as a shulker box item.
-- Hoppers, hopper minecarts and the item handlers of NeoForge fill it and empty it, with the same rule as a shulker box. It has no loot table, as the double chest minecart. It is a wagon of a train with the mass of a chest minecart.
-- It shows the vanilla shulker box in its color on the minecart. The item has the icon of the chest minecart in the color of the shulker box, mixed with white.
-
-### Ender chest minecart
-
-- **Implemented** (`EnderChestMinecart`): a minecart with an ender chest. Recipe: minecart and ender chest, with no shape. The item and the dispenser place it on a rail as a vanilla minecart.
-- A right click opens the ender chest of the player (3 rows), as the ender chest block. Two players see their own ender chests in the same minecart. The menu closes when the minecart is removed or when the player is too far from the minecart. This distance is the same as for the vanilla chest minecart.
-- The minecart holds no items: it is not a container. Hoppers, hopper minecarts, comparators and the item handlers of NeoForge have no access to it. Thus only the player can get the items of his ender chest.
-- A destroyed minecart drops only its item, not obsidian, when the game rule `doEntityDrops` is true. The ender chest of the player keeps its items.
-- It is a wagon of a train with no cargo: its mass is always `wagonMass`.
-- It shows the vanilla ender chest on the minecart. The item has the icon of the chest minecart in a dark green color.
-
-### Speed
-
-- **Implemented** (`TrainSpeed`, a mixin of `AbstractMinecart#getMaxSpeedWithRail`): the vanilla rails move a minecart in one straight step each tick, along the rail under it. The speed cap of the vanilla rails is 0.4 blocks per tick. Above this speed, a minecart can go past a curve or the top of a slope in one step and leave the rails.
-- Each tick, the locomotive gives a speed cap to all the minecarts of its train. The cap is `maxSpeed` of the locomotive (0.6 at most) when the rails are straight and flat in front of each minecart of the train. The check covers `lookAhead` blocks. In this distance, a curve, a slope, a junction in a curve position or the end of the rails sets the cap to `curveSpeed` (0.4). A chunk that is not loaded in this distance also sets this cap. All the minecarts of the train slow down to this speed in one tick, before the train gets there. Thus a train in a curve or on a slope always moves as vanilla minecarts do. The check does not load chunks, and it reads only chunks that are loaded and complete.
-- The cap is half in water, as for the vanilla rails. A minecart keeps the cap of its train for one tick after the last tick of the locomotive.
-- The train cap applies only on the vanilla rails. On a rail of another mod, the cap is the lower value of the cap of the train and the cap of the rail. Only vanilla rails count as straight and flat for the check. On a vanilla rail, a cap that a mod gives to a minecart stays a limit.
-- A vanilla furnace minecart that is a wagon gets the speed cap of its train, in place of its vanilla cap of 0.2.
-- A minecart that is not in a train with a locomotive keeps the vanilla speed cap, also a minecart after its link breaks. A vanilla furnace minecart at the front of a train does not give a cap.
-
-### Loaded area
-
-- A train stops at the edge of the loaded area (see "Train"). This is the default.
-- **Implemented** (`TrainChunks`, option `loadChunks`, off by default): each tick, a locomotive gives a chunk ticket to the chunk of each minecart of its train. The locomotive must run, have fuel and move. It also gives a ticket to the chunks on a straight line in front of it for 32 blocks. The line follows the direction of travel of the locomotive, not the rails. In a curve, some chunks of the line are not on the rails. A vanilla furnace minecart does not load chunks.
-- A ticket has a distance of 2. Its chunk ticks its entities. Around it, a 3 × 3 area of chunks ticks its blocks (random ticks, crops, redstone), but not its entities.
-- The locomotive gives tickets only while it moves: it must move in the last 20 ticks. A train that runs but cannot move (a wall, an unpowered powered rail, a slope that is too steep) does not keep its chunks loaded. Only a real movement counts. A train that waits at the edge of the loaded area goes back to its position each tick. It gets its tickets when its locomotive gives it a speed and moved in the last 200 ticks. Thus a train that moved to the edge continues. A train that cannot move (for example against a wall) with a wagon at the edge does not keep its chunks loaded. A train that waits at the edge for more than 200 ticks (for example after a restart of the server) gets no tickets. It continues when a player comes near it.
-- While a locomotive gives tickets, it burns its fuel in each tick as if it moved at its maximum speed. The fuel of each tick is (the larger value of its movement and `maxSpeed`) × `fuelPerBlock`. This is also true when it does not move. Thus the chunk loading always costs fuel. The furnace locomotive burns the fuel of 0.4 blocks in each tick (1 coal for about 25 seconds). The heavy locomotive burns the fuel of 0.6 blocks (1 block of coal for about 83 seconds). When the fuel ends, the locomotive stops and gives no more tickets.
-- Each ticket has a lifespan of 20 ticks, and the locomotive gives its tickets again each tick. Thus the tickets go away after 1 second when the locomotive stops moving, stops, has no fuel, is removed or unloads. They also go away when the option is off. The game does not save the tickets.
-- Only `maxLoadingTrains` locomotives on the whole server (all the players and all the dimensions) load chunks at the same time, first come first served. Folkhold is first a single-player experience, so there is no limit for each player. A locomotive keeps its place until it gives no tickets for 20 ticks. Then the place is free for another locomotive.
-- The game does not tick the entities of a level that has no player and no forced chunk for 300 ticks. The tickets of the trains do not change this.
-
-### Server cost
-
-- The mod finds each train one time in each tick, from its front minecart. It keeps no cache of the trains.
-- Target: 2 ms for each tick for the code of the trains (the pass of the trains and the ticks of the locomotives).
-- Measured with `System.nanoTime` in the GameTests `TrainCostGameTests` (20 trains of 16 minecarts that move, 40 ticks, a test machine with 2 CPUs and other work). Lowest and highest value of 3 or 4 runs, for each tick:
-
-| Part | `loadChunks` false | `loadChunks` true (20 locomotives give tickets) |
-| --- | --- | --- |
-| Pass of the trains (`Trains`, at the end of the tick of the level, with the other listeners of this event) | 0.31 to 0.85 ms | 0.58 to 1.00 ms |
-| Ticks of the 20 locomotives (vanilla movement, forces, look-ahead, speed cap, chunk tickets) | 0.48 to 1.06 ms | 0.90 to 1.48 ms |
-| Code of the trains (sum of the two lines above) | 0.79 to 1.91 ms | 1.48 to 2.47 ms |
-| Ticks of the 300 wagons (vanilla movement with the speed cap of the train) | 2.05 to 3.86 ms | 2.67 to 3.44 ms |
-
-- With `loadChunks` false (the default), the code of the trains is below the target of 2 ms. With `loadChunks` true, it can be above the target (up to 2.47 ms).
-- The values contain vanilla work (the movement of the locomotives) and the other listeners of the event. Thus they are more than the cost of the code of the mod. The mod keeps no cache of the trains: the pass of the trains is less than 1 ms in all the runs.
-
-### Configuration
-
-File `folkhold_balance-server.toml`, section `rails`:
-
-| Value | Default | Meaning |
-| --- | --- | --- |
-| `bufferGap` | 0.15 | Smallest gap between the ends of two linked minecarts, in blocks |
-| `restGap` | 0.2 | Gap of a slack chain, in blocks |
-| `maxGap` | 1.25 | Largest gap of a stretched chain, in blocks. Also the largest gap for a new link |
-| `breakGap` | 2.75 | A link breaks above this gap, in blocks |
-| `breakTicks` | 40 | Ticks above `breakGap` before a link breaks (2 seconds) |
-| `stiffness` | 0.15 | Speed change for each block of stretch, in blocks per tick |
-| `damping` | 0.3 | Part of the speed difference that the back minecart gets back each tick |
-| `maxCarts` | 16 | Largest number of minecarts in a train |
-| `wagonMass` | 1.0 | Mass of a wagon with no cargo |
-| `cargoMass` | 3.0 | Mass of the cargo of a full wagon |
-| `friction` | 0.001 | Friction force for each unit of mass |
-| `slopeForce` | 0.0078125 | Force of a slope for each unit of mass on it |
-| `poweredRailForce` | 0.06 | Push of a powered rail with power, for each unit of mass on it |
-| `brakeForce` | 0.5 | Brake of a powered rail with no power, for each unit of mass on it |
-| `curveSpeed` | 0.4 | Speed cap of a train with a locomotive in a curve and on a slope, in blocks per tick (0.4 at most) |
-| `lookAhead` | 3 | Number of blocks that each minecart of a train with a locomotive examines in front of it |
-| `loadChunks` | false | A locomotive that runs, has fuel and moves loads the chunks of its train and the chunks 32 blocks in front of it |
-| `maxLoadingTrains` | 8 | Largest number of locomotives on the whole server that load chunks at the same time |
-| `furnaceLocomotive.maxSpeed` | 0.4 | Largest speed on straight and flat rails, in blocks per tick (0.4 at most) |
-| `furnaceLocomotive.pullingForce` | 0.12 | Pulling force at speed 0 |
-| `furnaceLocomotive.mass` | 2.0 | Mass of the locomotive |
-| `furnaceLocomotive.fuelCapacity` | 32000 | Largest quantity of fuel (1 coal = 1600) |
-| `furnaceLocomotive.fuelPerBlock` | 8.0 | Fuel for each block that the locomotive moves |
-| `heavyLocomotive.maxSpeed` | 0.6 | Largest speed on straight and flat rails, in blocks per tick (0.6 at most) |
-| `heavyLocomotive.pullingForce` | 0.4 | Pulling force at speed 0 |
-| `heavyLocomotive.mass` | 4.0 | Mass of the locomotive |
-| `heavyLocomotive.fuelCapacity` | 160000 | Largest quantity of fuel (1 block of coal = 16000) |
-| `heavyLocomotive.fuelPerBlock` | 16.0 | Fuel for each block that the locomotive moves |
-
-With the default values, a furnace locomotive pulls 2 full wagons up a slope of 1 block in 1. With 12 full wagons, it stops on this slope. On flat rails, its top speed is about 0.37 blocks per tick with 8 empty wagons and 0.29 with 8 full wagons. The top speed of a heavy locomotive is about 0.58 blocks per tick with 8 empty wagons and 0.55 with 8 full wagons. These values can change with the balance of version 1.
+- A world can have trains with ids of the namespace `folkhold_balance`. Railhold reads each of these ids as the Railhold id with the same path. This works only when no mod registers the ids `folkhold_balance:<path>`. Thus `folkhold_balance` registers no item, entity, attachment or loot modifier.
 
 ## Maps and journal
 
@@ -2384,8 +2143,8 @@ The project moves forward in milestones. Each milestone gives a playable world. 
 | J6 · Village architecture | Styles for each faction with biome variants, villages of several pieces, coast, mountain and island villages, growth with new buildings, walls and paths, territories on the maps and in the journal | Each faction has its own look, villages fit the terrain and grow with their level |
 | J7 · Maps and journal | Territories on the vanilla maps, map updates at a distance, faction journal | The player plans a trip with the map and the journal |
 | J7.1 · Cartofold maps | All the maps use Cartofold: layers for the territories, the villages and the routes, map frames in the journal and the admin screen, paper maps. Cartofold is the only map mod of the modpack | The minimap, the map of the world and the paper maps of Cartofold show the territories |
-| J8 · Additional mods | Balance mod: farms, trades, anvil. Events mod: earthquakes, collapses and storms | Farms have limits, the anvil has no cap, first earthquakes and storms |
-| J8.1 · Rails | Balance mod: locomotives, faster trains, storage minecarts, chain links | A locomotive pulls a train of linked wagons |
+| J8 · Additional mods | Balance mod: farms. Markethold: trades. Runehold: anvil. Events mod: earthquakes, collapses and storms | Farms have limits, the anvil has no cap, first earthquakes and storms |
+| J8.1 · Rails | Railhold: locomotives, faster trains, storage minecarts, chain links | A locomotive pulls a train of linked wagons |
 | J9 · Release v1 | Balance of the raids, in-game changelog, project site, CI jobs, fixes before the first public version | A large village resists a raid, a small village falls. The player reads the changes of each version |
 | J10 · Village life | A building for each job, market and daily schedule, growth outside the palisade (rings, fields, mills), mountain and cliff villages | Villages work at fixed hours and spread over their land when they grow |
 | J11 · Water and travel | River bridges, ferries and boats at the piers, caravans in ships, natural routes | Caravans and villages use the rivers and the sea |

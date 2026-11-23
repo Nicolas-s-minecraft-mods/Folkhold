@@ -81,7 +81,7 @@ The scripts check that Docker runs. On Windows, if the computer has Docker Deskt
 | `core/` | Mod `folkhold_core`: shared library. Pure-Java simulation code goes in `core/src/main/java/.../core/sim`. |
 | `blocks/` | Mod `folkhold_blocks`: library of the blocks, with the behavior of similar vanilla blocks and no game logic. No dependency. |
 | `world/` | Mod `folkhold_world`: factions, villages, economy, quests. Depends on `core` and `blocks`. |
-| `balance/` | Mod `folkhold_balance`: farms, villagers, chunk loading, trains. No dependency. |
+| `balance/` | Mod `folkhold_balance`: limit of the fast nights of Slumber. Planned: farms, villagers, chunk loading. No dependency. |
 | `events/` | Mod `folkhold_events`: earthquakes, collapses. Depends on `core`. |
 | `dev/` | No code. Loads all mods in one game instance (client, server, GameTest server). |
 | `modpack/` | packwiz modpack. |
