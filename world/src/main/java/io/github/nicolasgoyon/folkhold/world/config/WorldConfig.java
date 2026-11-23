@@ -36,6 +36,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue BUILDERS;
     public static final ModConfigSpec.IntValue HANDYMEN;
     public static final ModConfigSpec.IntValue HEART_SHIFT;
+    public static final ModConfigSpec.IntValue STREET_CUT_FILL;
 
 
     public static final ModConfigSpec.IntValue CAPTAIN_AURA_RADIUS;
@@ -330,6 +331,12 @@ public final class WorldConfig {
                         "generate.")
                 .translation(KEY_PREFIX + "heartShift")
                 .defineInRange("heartShift", 48, 0, 48);
+        STREET_CUT_FILL = builder
+                .comment("Blocks of cut and fill on each side of the streets of a new village. The terrain beside",
+                        "the street goes to the level of the street over this width. 0 changes only the street. The",
+                        "value applies to the villages that the game did not generate.")
+                .translation(KEY_PREFIX + "streetCutFill")
+                .defineInRange("streetCutFill", 1, 0, 3);
         builder.pop();
 
         builder.comment("Garrison of each village. The level table sets the number of units and their equipment",

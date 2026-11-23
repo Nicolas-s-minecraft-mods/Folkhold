@@ -19,13 +19,16 @@ import java.util.OptionalInt;
  *
  * <ol>
  *   <li>The rules of a world with no saved version.</li>
+ *   <li>{@link #STREET_RAMP}: each street of the core has a ramp profile, with a cut and a fill on each side.</li>
  * </ol>
  */
 public final class PlanVersion {
     /** The version of a world with no saved version. */
     public static final int FIRST = 1;
+    /** The version of the ramp profile of the streets (see {@link StreetRamp}). */
+    public static final int STREET_RAMP = 2;
     /** The version of a new world: the version of the last rule. */
-    public static final int LATEST = FIRST;
+    public static final int LATEST = STREET_RAMP;
 
     private PlanVersion() {
     }
