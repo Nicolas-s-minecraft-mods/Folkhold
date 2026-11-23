@@ -148,8 +148,9 @@ public final class QuestBoards {
     }
 
     /**
-     * The player opens the quest screen of a village from the village heart screen. The player must be in the
-     * village radius, and the village must give quests to the player (not hostile).
+     * The player opens the quest screen of a village from the village heart screen, or the open quest screen asks
+     * for a new state during an escort. The player must be in the village radius, and the village must give quests
+     * to the player (not hostile).
      *
      * @param player       the player
      * @param settlementId the id of the village

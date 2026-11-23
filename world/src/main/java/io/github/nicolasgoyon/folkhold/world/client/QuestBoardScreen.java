@@ -18,7 +18,9 @@ import io.github.nicolasgoyon.folkhold.world.network.QuestActionPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Active;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Offer;
+import io.github.nicolasgoyon.folkhold.world.network.QuestBoardRequestPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestDetail;
+import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -50,6 +52,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       button. Abandon needs a confirmation.</li>
  *   <li>The offers can be sorted by reward, time or kind. The board shows pages when the offers do not fit.</li>
  *   <li>The times count down from the moment the payload comes.</li>
+ *   <li>While an escort of the player is active, the screen asks the server for a new payload each second (see
+ *       {@link #refreshDue}). The state of the caravan and the ambush on the rows stay current.</li>
  *   <li>A small panel shows tabs: the offers, or the active quests.</li>
  *   <li>A button sends the action to the server (see {@link QuestActionPayload}) and waits for the answer. The
  *       result shows in the status line.</li>
@@ -79,6 +83,8 @@ public class QuestBoardScreen extends UiScreen {
     private static final int STORY_LINES = 3;
     private static final int ACTIVE_HEIGHT = 46;
     private static final int URGENT_SECONDS = 120;
+    /** The open screen asks the server for a new payload at this interval during an escort, in client ticks. */
+    static final int REFRESH_TICKS = 20;
 
     /** The sort order of the offers. */
     private enum Sort {
@@ -155,6 +161,8 @@ public class QuestBoardScreen extends UiScreen {
 
     private QuestBoardPayload board;
     private long receivedAt;
+    /** The client ticks since the last request for a new payload. */
+    private int ticksSinceRefresh;
     private int compactTab;
     private int offerPage;
     private int activePage;
@@ -198,6 +206,10 @@ public class QuestBoardScreen extends UiScreen {
     }
 
     private void update(QuestBoardPayload payload) {
+        if (payload.status().isEmpty() && actionPending()) {
+            // A refresh does not rebuild the buttons while an action waits for its answer.
+            return;
+        }
         this.board = payload;
         this.receivedAt = gameTime();
         rebuildWidgets();
@@ -206,6 +218,35 @@ public class QuestBoardScreen extends UiScreen {
 
     private void showResult(QuestBoardPayload payload) {
         payload.status().ifPresent(text -> showStatus(text, payload.statusGood() ? UiTone.GOOD : UiTone.BAD));
+    }
+
+    /**
+     * True if the open screen asks the server for a new payload now: an escort of the player is active, and the last
+     * request is {@link #REFRESH_TICKS} client ticks old or more.
+     *
+     * @param log               the last quest log of the player (see {@link ClientQuestLog})
+     * @param ticksSinceRefresh the client ticks since the last request
+     * @return true to send a request
+     */
+    static boolean refreshDue(QuestLogPayload log, int ticksSinceRefresh) {
+        return ticksSinceRefresh >= REFRESH_TICKS && ClientQuestLog.hasEscort(log);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        ticksSinceRefresh++;
+        // Only the visible screen asks: a dialog of the screen, or a pending action, waits.
+        if (minecraft != null && minecraft.screen == this && !actionPending()
+                && refreshDue(ClientQuestLog.get(), ticksSinceRefresh)) {
+            ticksSinceRefresh = 0;
+            PacketDistributor.sendToServer(new QuestBoardRequestPayload(board.settlementId()));
+        }
+    }
+
+    /** True if a button of the screen waits for the answer of the server to its action. */
+    private boolean actionPending() {
+        return children().stream().anyMatch(child -> child instanceof UiButton button && button.isPending());
     }
 
     private ReputationTier tier() {
