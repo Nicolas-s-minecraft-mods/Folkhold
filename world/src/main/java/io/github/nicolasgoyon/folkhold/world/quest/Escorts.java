@@ -20,6 +20,7 @@ import io.github.nicolasgoyon.folkhold.world.economy.ItemIds;
 import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PatrolEncounters;
 import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
@@ -68,6 +69,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *       pillager camp near the origin or the destination give the difficulty of the escort. The difficulty gives the
  *       extra guards of the caravan, the number of ambushes, the pillagers, the vindicators and the ravager of each
  *       ambush, the helmet of the raiders and the factor of the reward.</li>
+ *   <li>An ambush at a point in a pillager territory: the patrol of the camp attacks in place of the ambush, and the
+ *       caravan gets no second attack from this camp (see {@link PatrolEncounters#replacesAmbush}).</li>
  *   <li>Success: the caravan arrives and its merchant is alive. The reward comes from the value of the cargo.</li>
  *   <li>Failure: the merchant dies, the player stays away too long, the player raids the caravan, or the deadline
  *       ends. The time of an escort comes from the length of its route ({@link #escortMinutes}).</li>
@@ -471,8 +474,15 @@ public final class Escorts {
         return MobileGroupData.get(server).groups().byId(quest.target());
     }
 
-    /** The ambushes of a caravan with entities, when it passes their points of the route. */
-    private static void ambushes(ServerLevel level, Quest quest, MobileGroup group) {
+    /**
+     * The ambushes of a caravan with entities, when it passes their points of the route. In a pillager territory, the
+     * patrol of the camp replaces the ambush (see {@link PatrolEncounters#replacesAmbush}).
+     *
+     * @param level the Overworld
+     * @param quest the escort quest
+     * @param group the caravan
+     */
+    public static void ambushes(ServerLevel level, Quest quest, MobileGroup group) {
         if (!GroupMaterializer.isMaterialized(group)) {
             return;
         }
@@ -480,6 +490,9 @@ public final class Escorts {
         EscortDifficulty.Level spec = EscortDifficulties.get().level(quest.difficulty());
         while (!plan.isEmpty() && group.progress() >= plan.peekFirst()) {
             double point = plan.pollFirst();
+            if (PatrolEncounters.replacesAmbush(level, group)) {
+                continue;
+            }
             spawnAmbush(level, group, spec, quest.id().hashCode() ^ Double.doubleToLongBits(point));
         }
     }

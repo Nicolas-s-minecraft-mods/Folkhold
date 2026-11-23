@@ -213,6 +213,10 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue PILLAGER_SWORN_ENEMY_EXTRA;
     public static final ModConfigSpec.IntValue PILLAGER_SPAWN_DISTANCE;
     public static final ModConfigSpec.IntValue PILLAGER_KILL_REPUTATION;
+    public static final ModConfigSpec.BooleanValue PILLAGER_CARAVAN_ENCOUNTERS;
+    public static final ModConfigSpec.DoubleValue PILLAGER_ENCOUNTER_DAMAGE;
+    public static final ModConfigSpec.DoubleValue PILLAGER_ENCOUNTER_CARGO_LOSS;
+    public static final ModConfigSpec.IntValue PILLAGER_ENCOUNTER_COOLDOWN_MINUTES;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -1182,6 +1186,25 @@ public final class WorldConfig {
                         "territory. The reputation with the pillagers never goes up.")
                 .translation(KEY_PREFIX + "pillagerKillReputation")
                 .defineInRange("killReputation", -10, -1000, 0);
+        PILLAGER_CARAVAN_ENCOUNTERS = builder
+                .comment("The patrols of a camp attack the caravans that cross its territory. A caravan with no",
+                        "entities has an abstract fight. A caravan with entities gets a real attack.")
+                .translation(KEY_PREFIX + "pillagerCaravanEncounters")
+                .define("caravanEncounters", true);
+        PILLAGER_ENCOUNTER_DAMAGE = builder
+                .comment("Attack damage of one pillager in an abstract fight with a caravan. The strength of a",
+                        "fighter is its health multiplied by its damage. The guards use unit.guard.attackDamage.")
+                .translation(KEY_PREFIX + "pillagerEncounterDamage")
+                .defineInRange("encounterDamage", 2.5, 0.0, 100.0);
+        PILLAGER_ENCOUNTER_CARGO_LOSS = builder
+                .comment("Share of the cargo and of the payment that a caravan loses when a patrol beats its guards",
+                        "in an abstract fight.")
+                .translation(KEY_PREFIX + "pillagerEncounterCargoLoss")
+                .defineInRange("encounterCargoLoss", 0.5, 0.0, 1.0);
+        PILLAGER_ENCOUNTER_COOLDOWN_MINUTES = builder
+                .comment("Minutes of game time before a caravan can meet a patrol of the same camp again.")
+                .translation(KEY_PREFIX + "pillagerEncounterCooldownMinutes")
+                .defineInRange("encounterCooldownMinutes", 10, 0, 1440);
         builder.pop();
 
         SPEC = builder.build();

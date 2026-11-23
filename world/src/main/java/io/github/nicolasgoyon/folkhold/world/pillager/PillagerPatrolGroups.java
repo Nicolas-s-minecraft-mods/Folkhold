@@ -42,6 +42,8 @@ import net.minecraft.server.MinecraftServer;
  *       {@code pillagers.patrolRespawnMinutes} of game time, with new members (see {@link #regroup}).</li>
  *   <li>When its camp goes away, or when the loop of its camp has no good chunk, the patrol and its entities go
  *       away.</li>
+ *   <li>After the patrols move, the caravans in a territory meet the patrols of the camp (see
+ *       {@link PatrolEncounters}).</li>
  *   <li>The patrols are saved with the camps (see {@link PillagerData}). They are not in the registry of the
  *       caravans: they do not count in {@code groups.maxGroups}, and the code of the caravans and of the escorts
  *       does not see them.</li>
@@ -78,6 +80,7 @@ public final class PillagerPatrolGroups {
             ensure(server, camp);
         }
         if (data.patrols().size() == 0) {
+            PatrolEncounters.checkAbstract(server, tickNumber);
             return;
         }
         GroupSimulation.Report report = GroupSimulation.tick(data.patrols(), tickNumber,
@@ -101,6 +104,7 @@ public final class PillagerPatrolGroups {
         if (report.moved() > 0 || report.lost() > 0) {
             data.setDirty();
         }
+        PatrolEncounters.checkAbstract(server, tickNumber);
     }
 
     /**
