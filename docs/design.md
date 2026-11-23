@@ -1534,6 +1534,7 @@ A quest has a giver, a success condition that the mod checks on the state of the
 - The player gives all the items with the "Deliver" button of the quest screen of the village. The items go into the stock of the village.
 - **Offers**: at each cycle, a village makes new offers. The number of offers comes from its level. An offer expires after a delay.
 - **Reputation**: no quest below the neutral tier. Some quests are only for the friend tier and the ally tier.
+- **Tier of an offer** (`QuestGenerator.minTier`): the base reward of an offer gives its tier. An offer with a base reward of `friendReward` emeralds or more (or `reward.friend_reward` of its definition) is only for the friend tier and the ally tier. The base reward uses the factor of the server config: `deliveryBonus` for the deliveries and the hunts, `escortRewardShare` for the escorts. The factors of the definition, of the special reward and of the escort difficulty change only the reward, not the tier. For example, an escort of difficulty 5 of a caravan with a payment of 20 has a base reward of 10 and a reward of 35: it is open to the neutral tier.
 - **Quest log**: the mod keeps the quests of each player (UUID). A player has a maximum number of active quests.
 
 ### Types of the board

@@ -348,7 +348,8 @@ final class SiteMaterials {
             long reward = Math.max(1, Math.round(count * need.price() * bonus));
             Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.DELIVERY, settlement.id(),
                     settlement.factionId(), item, count, reward, settings.deliveryReputation(),
-                    QuestGenerator.minTier(reward, settings), questTime + settings.offerLifetime(),
+                    QuestGenerator.minTier(count * need.price(), QuestSystem.tierBonus(), settings),
+                    questTime + settings.offerLifetime(),
                     settings.deliveryDuration(), definition.get().id());
             QuestRewards.apply(quest, definition.get(), rule, settlement);
             all.add(quest);

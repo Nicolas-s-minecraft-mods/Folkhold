@@ -72,6 +72,16 @@ public final class QuestSystem {
     }
 
     /**
+     * The bonus of the base reward of the deliveries and the hunts: the bonus of the server config. The base reward
+     * gives the tier of an offer (see {@link QuestGenerator#minTier(double, double, QuestGenerator.Settings)}).
+     *
+     * @return the bonus
+     */
+    public static double tierBonus() {
+        return WorldConfig.QUEST_DELIVERY_BONUS.get();
+    }
+
+    /**
      * The settings of the delivery offers of a definition: the values of the definition, else the values of the server
      * configuration.
      *
@@ -173,7 +183,7 @@ public final class QuestSystem {
         }
         RewardRule rule = QuestRewards.choose(definition.get());
         Quest quest = QuestGenerator.hunt(settlement.id(), settlement.factionId(), settlement.level(), now,
-                QuestRewards.settings(definition.get(), rule), definition.get().id());
+                QuestRewards.settings(definition.get(), rule), definition.get().id(), tierBonus());
         QuestRewards.apply(quest, definition.get(), rule, settlement);
         quests.add(quest);
         QuestData.get(server).setDirty();
@@ -238,7 +248,8 @@ public final class QuestSystem {
         long reward = Math.max(1, Math.round(count * price * settings.deliveryBonus()));
         Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.DELIVERY, settlement.id(),
                 settlement.factionId(), input.item(), count, reward, settings.deliveryReputation(),
-                QuestGenerator.minTier(reward, settings), now + settings.offerLifetime(), settings.deliveryDuration(),
+                QuestGenerator.minTier(count * price, tierBonus(), settings), now + settings.offerLifetime(),
+                settings.deliveryDuration(),
                 definition.get().id());
         quest.setGiver(giver.id(), definition.get().texts().story(giver.id()));
         QuestRewards.apply(quest, definition.get(), rule, settlement, QuestRewards.goods(settlement, List.of(giver)));
@@ -285,7 +296,7 @@ public final class QuestSystem {
                 for (Quest quest : QuestGenerator.deliveries(settlement.id(), settlement.factionId(), needs,
                         item -> Prices.price(catalog.info(item), settlement.economy().stock().count(item),
                                 population, Economies.settings()), offered, 1, now,
-                        QuestRewards.settings(definition, rule), definition.id())) {
+                        QuestRewards.settings(definition, rule), definition.id(), tierBonus())) {
                     QuestRewards.apply(quest, definition, rule, settlement);
                     offered.add(quest.target());
                     created.add(quest);

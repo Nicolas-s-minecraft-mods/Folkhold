@@ -62,7 +62,7 @@ public final class EscortGameTests {
 
     /**
      * The origin village of the test, with a heart, at the level 1: the escorts of its short routes have the lowest
-     * difficulty, so their reward is for the neutral tier.
+     * difficulty.
      */
     private static Settlement village(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
@@ -365,6 +365,37 @@ public final class EscortGameTests {
         helper.assertTrue(hard.difficulty() > 1 && largeGuards == level.guards() && level.guards() > 0
                 && hard.rewardEmeralds() > easy.rewardEmeralds(), "A higher difficulty adds guards and reward: "
                         + hard.difficulty() + ", " + largeGuards + ", " + hard.rewardEmeralds());
+        helper.succeed();
+    }
+
+    /**
+     * The tier of an escort comes from its base reward, before the factor of the difficulty: an escort of the highest
+     * difficulty with a base reward below the threshold of the friends is open to a neutral player.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_tier")
+    public static void hardEscortWithASmallBaseRewardIsOpenToNeutrals(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement origin = village(helper);
+        origin.setProgress(20, 0);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        long base = Math.max(1, Math.round(caravan.payment() * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()));
+        long threshold = WorldConfig.QUEST_FRIEND_REWARD.get();
+
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+
+        int difficulty = quest.difficulty();
+        long reward = quest.rewardEmeralds();
+        ReputationTier tier = quest.minTier();
+        QuestState state = quest.state();
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        origin.setProgress(1, 0);
+        helper.assertTrue(difficulty == EscortDifficulties.get().levels().size() && base < threshold
+                && reward >= threshold, "The test needs the highest difficulty, a base reward below the threshold "
+                        + "and a reward above it: " + difficulty + ", " + base + ", " + reward);
+        helper.assertTrue(tier == ReputationTier.NEUTRAL && state == QuestState.ACCEPTED,
+                "A neutral player must accept the escort: " + tier + ", " + state);
         helper.succeed();
     }
 
