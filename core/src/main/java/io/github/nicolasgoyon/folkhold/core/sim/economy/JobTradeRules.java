@@ -58,6 +58,42 @@ public final class JobTradeRules {
     }
 
     /**
+     * The chance of an enchanted item for a sell trade with {@code enchant}, by reputation and by skill level: one row
+     * for each of Neutral, Friend and Ally, one column for each skill level from Novice to Master.
+     */
+    public static final List<List<Double>> ENCHANT_CHANCES = List.of(
+            List.of(0.0, 0.0, 0.0, 0.05, 0.10),
+            List.of(0.0, 0.0, 0.10, 0.20, 0.30),
+            List.of(0.0, 0.0, 0.20, 0.35, 0.50));
+
+    /**
+     * The chance of an enchanted item for a sell trade with {@code enchant}.
+     *
+     * @param skill      the skill level of the post, 1 to 5
+     * @param reputation the reputation level of the player: 1 Neutral, 2 Friend, 3 Ally. A lower value gives 0.
+     * @param chances    the table of the chances (see {@link #ENCHANT_CHANCES})
+     * @return the chance, 0 to 1
+     */
+    public static double enchantChance(int skill, int reputation, List<List<Double>> chances) {
+        if (reputation < 1 || reputation > chances.size()) {
+            return 0.0;
+        }
+        List<Double> row = chances.get(reputation - 1);
+        int column = Math.max(1, Math.min(row.size(), skill)) - 1;
+        return Math.max(0.0, Math.min(1.0, row.get(column)));
+    }
+
+    /**
+     * The enchantment level of an enchanted item: an enchanting table at {@code 5 × S} levels.
+     *
+     * @param skill the skill level of the post, 1 to 5
+     * @return the level, 5 to 25
+     */
+    public static int enchantLevel(int skill) {
+        return 5 * Math.max(JobSkills.MIN_LEVEL, Math.min(JobSkills.MAX_LEVEL, skill));
+    }
+
+    /**
      * The goods tier of a post.
      *
      * @param wealth the wealth tier of the village, 1 to 5

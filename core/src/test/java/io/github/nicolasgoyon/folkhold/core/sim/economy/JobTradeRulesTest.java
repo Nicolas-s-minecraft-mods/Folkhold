@@ -135,6 +135,22 @@ class JobTradeRulesTest {
         assertEquals(0, JobTradeRules.buyUses(buyIngots, 16, 60, 1000, 40, 1000, 3));
     }
 
+    /** The chance of an enchanted item follows the table of the skill and the reputation. */
+    @Test
+    void enchantChanceFollowsTheTable() {
+        List<List<Double>> table = JobTradeRules.ENCHANT_CHANCES;
+        assertEquals(0.0, JobTradeRules.enchantChance(1, 3, table));
+        assertEquals(0.0, JobTradeRules.enchantChance(2, 3, table));
+        assertEquals(0.0, JobTradeRules.enchantChance(3, 1, table));
+        assertEquals(0.20, JobTradeRules.enchantChance(3, 3, table));
+        assertEquals(0.05, JobTradeRules.enchantChance(4, 1, table));
+        assertEquals(0.30, JobTradeRules.enchantChance(5, 2, table));
+        assertEquals(0.50, JobTradeRules.enchantChance(5, 3, table));
+        assertEquals(0.0, JobTradeRules.enchantChance(5, 0, table), "Below Neutral: no chance");
+        assertEquals(5, JobTradeRules.enchantLevel(1));
+        assertEquals(25, JobTradeRules.enchantLevel(5));
+    }
+
     /** The prices follow the local price: × 1.30 to sell, × 0.70 to buy, the materials × 1.25. */
     @Test
     void pricesFollowTheStock() {

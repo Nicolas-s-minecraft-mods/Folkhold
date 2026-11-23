@@ -1221,7 +1221,7 @@ A surplus lowers the price down to ×0.5. A shortage raises the price up to ×3.
 
 ### Job trades
 
-The job trades of #1006. The code has the trade lists (`JobTrade`, `Job.trades`), the skill of the workers (`JobSkills`, `WorkerSkills`), the rules (`JobTradeRules`) and the trade screen (`JobTradeOffers`). These parts are **planned**: the enchanted items ("Enchantments and the Mending rule", #1065), the open point of "Trade tiers" (#1066), and the reputation `R` (#1066). A sell trade with `enchant` gives an item with no enchantments.
+The job trades of #1006. The code has the trade lists (`JobTrade`, `Job.trades`), the skill of the workers (`JobSkills`, `WorkerSkills`), the rules (`JobTradeRules`) and the trade screen (`JobTradeOffers`). The enchanted items use the reputation `R` (`JobTradeEnchantments`). The open point of "Trade tiers" is **planned** (#1066).
 
 In this section, a **need trade** is an offer of `JobTrades` (see "Trade with the player"). The worker sells the outputs of its job from the stock, and buys the inputs that the village needs. A **job trade** is a new offer from the trade list of the job. The need trades stay. For the player, the two kinds are the same kind of trade, in the same trade screen.
 
@@ -1356,7 +1356,10 @@ Options for the open point (reputation and wealth, with a low skill):
 
 - The balance mod removes Mending from the villager trades (see "Fairer trades"). Its filter wraps the trade listings of the vanilla villagers. The job trades do not come from these listings, so the world mod applies the rule itself.
 - An enchanted item of a job trade gets its enchantments from `#minecraft:tradeable`, with no enchantment of the tag `#folkhold_world:not_in_job_trades` (default: `minecraft:mending`). When the balance mod is present, the list `enchantments` of its section `blockedEnchantments` is also excluded.
-- The job trades sell no enchanted books. The jobs do not produce them (see "Jobs and recipes").
+- The job trades sell no enchanted books. The jobs do not produce them (see "Jobs and recipes"). A book gets no enchantment.
+- Code (`JobTradeEnchantments`, `JobTradeOffers.sellItem`): the draw of a sell trade with `enchant` uses a seed from the week, the post, the trade and the reputation tier. Thus a player gets the same item during the week, and a new start of the trade does not draw again.
+- The chances of the table are options of the server config, section `economy`: `jobTradeEnchantNeutral`, `jobTradeEnchantFriend` and `jobTradeEnchantAlly`. Each option has 5 decimal values, from Novice to Master. A list with an other size uses the start values.
+- The world mod reads the list of the balance mod from the server config of the balance mod, when the balance mod is present. The world mod does not need the balance mod.
 
 #### Saved data and old worlds
 
