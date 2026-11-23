@@ -45,7 +45,8 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
  *   <li>The start level of the village is the top level of the tier: the village has the buildings and the job posts
  *       of this level.</li>
  *   <li>The command looks for a start chunk at {@link #MIN_DISTANCE} to {@link #MAX_DISTANCE} chunks from the source,
- *       the nearest first (see {@link #farFromVillages}). The chunk is far from the settlements, from the vanilla
+ *       in rings that get larger (see {@link #RINGS} and {@link #candidates}): the nearest first (see
+ *       {@link #farFromVillages}). The chunk is far from the settlements, from the vanilla
  *       villages and from the natural faction villages. The check of the site accepts a village there, the biome at
  *       the middle of the plaza is a biome of the structure, and the variant of the site has the given style. The box
  *       of the village does not contain the source.</li>
@@ -63,10 +64,13 @@ public final class VillageCommands {
     private static final String KEY = "commands.folkhold_world.village.generate.";
     /** The nearest start chunk of the village, in chunks from the chunk of the source. */
     static final int MIN_DISTANCE = 16;
-    /** The farthest start chunk of the village, in chunks from the chunk of the source. */
-    static final int MAX_DISTANCE = 48;
-    /** The distance between 2 tried start chunks, in chunks. */
-    private static final int STEP = 2;
+    /**
+     * The rings of the search, the nearest first. A far ring has a larger step: the search of a large area keeps a
+     * short time.
+     */
+    static final List<Ring> RINGS = List.of(new Ring(48, 2), new Ring(96, 3), new Ring(160, 4));
+    /** The farthest start chunk of the village, in chunks from the chunk of the source: the end of the last ring. */
+    static final int MAX_DISTANCE = RINGS.get(RINGS.size() - 1).end();
     /** The exclusion zone of the faction villages around the vanilla villages, in chunks, as in the structure set. */
     static final int VANILLA_EXCLUSION = 12;
     /** The free blocks between the walls of 2 villages. */
@@ -119,6 +123,8 @@ public final class VillageCommands {
         }
         BlockPos origin = BlockPos.containing(source.getPosition());
         boolean started = VillageGeneration.start(level, structure, origin, tier.get().maxLevel(), style,
+                ring -> source.sendSuccess(() -> Component.translatable(KEY + "searching", tierName(tierId),
+                        RINGS.get(ring - 1).end() * 16, RINGS.get(ring).end() * 16), false),
                 percent -> source.sendSuccess(() -> Component.translatable(KEY + "progress", percent), false),
                 (end, village) -> sendEnd(source, tierId, origin, end, village));
         if (!started) {
@@ -142,6 +148,8 @@ public final class VillageCommands {
             }
             case NO_SITE -> source.sendFailure(Component.translatable(KEY + "no_site", tierName(tierId),
                     MAX_DISTANCE * 16));
+            case SEARCH_TIMEOUT -> source.sendFailure(Component.translatable(KEY + "search_timeout",
+                    tierName(tierId), VillageGeneration.SEARCH_TIMEOUT_SECONDS));
             case TIMEOUT -> source.sendFailure(Component.translatable(KEY + "timeout",
                     VillageGeneration.TIMEOUT_SECONDS));
             case FAILED -> source.sendFailure(Component.translatable(KEY + "failed"));
@@ -264,18 +272,55 @@ public final class VillageCommands {
         return set.isPresent() && state.hasStructureChunkInRange(set.get(), chunk.x, chunk.z, range);
     }
 
-    /** The start chunks in the distance, every {@link #STEP} chunks, the nearest first. */
+    /**
+     * A ring of the search: the start chunks after the end of the ring before it (or at {@link #MIN_DISTANCE} chunks
+     * for the first ring), up to its end. The distance is the larger of the distances on the 2 axes.
+     *
+     * @param end  the farthest start chunk of the ring, in chunks from the chunk of the source
+     * @param step the distance between 2 tried start chunks, in chunks
+     */
+    record Ring(int end, int step) {
+    }
+
+    /**
+     * The start chunks of the search, ring after ring (see {@link #RINGS}). In a ring, the start chunks are on a grid
+     * of the step of the ring, the nearest first.
+     */
     static List<ChunkPos> candidates(ChunkPos origin) {
         List<ChunkPos> chunks = new ArrayList<>();
-        for (int dx = -MAX_DISTANCE; dx <= MAX_DISTANCE; dx += STEP) {
-            for (int dz = -MAX_DISTANCE; dz <= MAX_DISTANCE; dz += STEP) {
-                if (Math.max(Math.abs(dx), Math.abs(dz)) >= MIN_DISTANCE) {
-                    chunks.add(new ChunkPos(origin.x + dx, origin.z + dz));
+        int start = MIN_DISTANCE;
+        for (Ring ring : RINGS) {
+            List<ChunkPos> inRing = new ArrayList<>();
+            for (int dx = -ring.end(); dx <= ring.end(); dx += ring.step()) {
+                for (int dz = -ring.end(); dz <= ring.end(); dz += ring.step()) {
+                    int distance = Math.max(Math.abs(dx), Math.abs(dz));
+                    if (distance >= start && distance <= ring.end()) {
+                        inRing.add(new ChunkPos(origin.x + dx, origin.z + dz));
+                    }
                 }
             }
+            inRing.sort(Comparator.comparingLong(chunk -> (long) (chunk.x - origin.x) * (chunk.x - origin.x)
+                    + (long) (chunk.z - origin.z) * (chunk.z - origin.z)));
+            chunks.addAll(inRing);
+            start = ring.end() + 1;
         }
-        chunks.sort(Comparator.comparingLong(chunk -> (long) (chunk.x - origin.x) * (chunk.x - origin.x)
-                + (long) (chunk.z - origin.z) * (chunk.z - origin.z)));
         return chunks;
+    }
+
+    /**
+     * The ring of a start chunk of the search (see {@link #RINGS}).
+     *
+     * @param origin the chunk of the source
+     * @param chunk  a start chunk of the search
+     * @return the index of the ring, from 0
+     */
+    static int ringOf(ChunkPos origin, ChunkPos chunk) {
+        int distance = Math.max(Math.abs(chunk.x - origin.x), Math.abs(chunk.z - origin.z));
+        for (int i = 0; i < RINGS.size(); i++) {
+            if (distance <= RINGS.get(i).end()) {
+                return i;
+            }
+        }
+        return RINGS.size() - 1;
     }
 }
