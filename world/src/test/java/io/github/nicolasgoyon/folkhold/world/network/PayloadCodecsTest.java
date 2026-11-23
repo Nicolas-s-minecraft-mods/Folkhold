@@ -184,7 +184,7 @@ class PayloadCodecsTest {
                 new QuestLogPayload.Entry("q-1", "minecraft:bread", Component.literal("Bring 8 bread"), 8, 600,
                         Optional.empty(), Optional.of(new BlockPos(100, 64, -200)), QuestLogPayload.NO_ENTITY),
                 new QuestLogPayload.Entry("q-2", "minecraft:chest", Component.literal("Escort to Southam"), 0, 1200,
-                        Optional.of(new QuestLogPayload.Escort(120, 500, 18, 20, 12, 48, 30)), Optional.empty(),
+                        Optional.of(new QuestLogPayload.Escort(120, 500, 18, 20, 12, 48, 30, 3)), Optional.empty(),
                         42)));
         assertEquals(payload, roundTrip(QuestLogPayload.STREAM_CODEC, payload));
     }

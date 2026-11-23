@@ -12,6 +12,8 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
+import io.github.nicolasgoyon.folkhold.world.quest.AmbushSpawns;
+import io.github.nicolasgoyon.folkhold.world.quest.Escorts;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -41,8 +43,10 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *       the share {@code 1 - pillagers.encounterCargoLoss} of each item of its cargo and of its payment, and
  *       continues. A caravan with no living guard is lost.</li>
  *   <li>A caravan with entities: each second, the server checks the position of its merchant. The patrol gets all its
- *       living members as entities, {@link #SPAWN_AHEAD} blocks ahead on the route of the caravan, and they attack
- *       the merchant (see {@link PatrolEntities}). The result is the result of the real fight.</li>
+ *       living members as entities near the point {@link #SPAWN_AHEAD} blocks ahead on the route of the caravan, at a
+ *       position with a walk path to the merchant (see {@link AmbushSpawns}). They attack the merchant (see
+ *       {@link PatrolEntities}). The result is the result of the real fight. With no such position, the patrol does
+ *       not come, and the server tries again after {@link #RETRY_TICKS} game ticks.</li>
  *   <li>An escort ambush at a point in a territory (see {@link io.github.nicolasgoyon.folkhold.world.quest.Escorts}):
  *       the patrol of the camp replaces the ambush. When the caravan met the patrols of the camp in the cooldown, the
  *       point has no ambush. When the camp has no free patrol, the ambush of the escort occurs.</li>
@@ -57,6 +61,11 @@ public final class PatrolEncounters {
     /** Distance in blocks ahead of the merchant on the route where the entities of a patrol appear. */
     static final double SPAWN_AHEAD = 24.0;
 
+    /** After a search with no spawn position, the next search of a caravan waits this number of game ticks. */
+    static final long RETRY_TICKS = 100L;
+
+    /** The game time of the next search of a spawn position, by caravan id, after a search with none. Not saved. */
+    private static final Map<String, Long> NO_SPAWN_UNTIL = new HashMap<>();
     /** The progress of each caravan at its last abstract check, by caravan id. Not saved. */
     private static final Map<String, Double> CHECKED = new HashMap<>();
     /** The game time of the last encounter of each caravan with each camp, by caravan id and camp id. Not saved. */
@@ -76,6 +85,7 @@ public final class PatrolEncounters {
         MobileGroupData groups = MobileGroupData.get(server);
         CHECKED.keySet().removeIf(id -> groups.groups().byId(id).isEmpty());
         MET.keySet().removeIf(id -> groups.groups().byId(id).isEmpty());
+        NO_SPAWN_UNTIL.keySet().removeIf(id -> groups.groups().byId(id).isEmpty());
         if (!WorldConfig.PILLAGER_CARAVAN_ENCOUNTERS.get() || PillagerData.get(server).camps().isEmpty()) {
             CHECKED.clear();
             return 0;
@@ -237,13 +247,20 @@ public final class PatrolEncounters {
         if (patrol.isEmpty()) {
             return false;
         }
+        long now = level.getGameTime();
+        if (NO_SPAWN_UNTIL.getOrDefault(caravan.id(), Long.MIN_VALUE) > now) {
+            return false;
+        }
         Route route = caravan.route();
-        Route.Position ahead = route.positionAt(Math.min(route.length(),
-                route.progressNear(merchant.getX(), merchant.getZ()) + SPAWN_AHEAD));
-        BlockPos spawn = PillagerPatrols.surface(level, BlockPos.containing(ahead.x(), merchant.getY(), ahead.z()))
-                .orElse(merchant.blockPosition());
+        double point = Math.min(route.length(), route.progressNear(merchant.getX(), merchant.getZ()) + SPAWN_AHEAD);
+        Optional<BlockPos> spawn = AmbushSpawns.find(level, route, point, merchant.blockPosition(), false);
+        if (spawn.isEmpty()) {
+            NO_SPAWN_UNTIL.put(caravan.id(), now + RETRY_TICKS);
+            return false;
+        }
+        NO_SPAWN_UNTIL.remove(caravan.id());
         int size = (int) patrol.get().members().stream().filter(GroupMember::isAlive).count();
-        List<PatrollingMonster> members = PatrolEntities.materialize(level, patrol.get(), spawn,
+        List<PatrollingMonster> members = PatrolEntities.materialize(level, patrol.get(), spawn.get(),
                 merchant.blockPosition(), size);
         if (members.isEmpty()) {
             return false;
@@ -251,6 +268,7 @@ public final class PatrolEncounters {
         for (PatrollingMonster member : members) {
             member.setTarget(merchant);
         }
+        Escorts.track(level, caravan, members);
         recordMeeting(caravan, camp, level.getGameTime());
         FolkholdWorld.LOGGER.debug("Pillager patrol {} attacks caravan {}", patrol.get().id(), caravan.id());
         return true;
@@ -278,6 +296,7 @@ public final class PatrolEncounters {
     public static void forget(String caravanId) {
         CHECKED.remove(caravanId);
         MET.remove(caravanId);
+        NO_SPAWN_UNTIL.remove(caravanId);
     }
 
     private static void recordMeeting(MobileGroup caravan, PillagerCamp camp, long now) {
@@ -312,5 +331,6 @@ public final class PatrolEncounters {
     public static void onServerStopped(ServerStoppedEvent event) {
         CHECKED.clear();
         MET.clear();
+        NO_SPAWN_UNTIL.clear();
     }
 }

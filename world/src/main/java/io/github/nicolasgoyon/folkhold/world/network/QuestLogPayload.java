@@ -75,9 +75,10 @@ public record QuestLogPayload(int maxActive, List<Entry> quests) implements Cust
      * @param maxDistance  the escort distance: farther, the caravan stops
      * @param awaySeconds  the seconds before the quest fails because the player is too far, or -1 if the player is
      *                     near
+     * @param raiders      the living raiders of the attack on the caravan: the merchant waits while it is above 0
      */
     public record Escort(int progress, int length, int health, int maxHealth, int distance, int maxDistance,
-            int awaySeconds) {
+            int awaySeconds, int raiders) {
 
         public static final StreamCodec<RegistryFriendlyByteBuf, Escort> STREAM_CODEC = StreamCodec.of(
                 (buf, escort) -> {
@@ -88,9 +89,15 @@ public record QuestLogPayload(int maxActive, List<Entry> quests) implements Cust
                     buf.writeVarInt(escort.distance);
                     buf.writeVarInt(escort.maxDistance);
                     buf.writeVarInt(escort.awaySeconds);
+                    buf.writeVarInt(escort.raiders);
                 },
                 buf -> new Escort(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
-                        buf.readVarInt(), buf.readVarInt(), buf.readVarInt()));
+                        buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt()));
+
+        /** True if raiders attack the caravan: the merchant waits. */
+        public boolean attacked() {
+            return raiders > 0;
+        }
 
         /** True if the player is farther than the escort distance. */
         public boolean away() {
