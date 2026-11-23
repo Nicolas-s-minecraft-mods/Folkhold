@@ -152,6 +152,12 @@ public final class AdminActions {
             ModNetwork.send(player, GroupOverview.build(player.server));
             return;
         }
+        if (payload.action().equals("job_trades")) {
+            SettlementData.get(player.server).registry().byId(payload.settlementId()).ifPresentOrElse(
+                    settlement -> ModNetwork.send(player, JobTradeView.build(player.server, settlement)),
+                    () -> sendResult(player, Result.refused("unknown")));
+            return;
+        }
         if (payload.action().equals("map")) {
             AdminMap.open(player);
             return;

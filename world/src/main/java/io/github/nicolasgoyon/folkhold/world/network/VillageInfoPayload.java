@@ -31,13 +31,15 @@ public record VillageInfoPayload(Component title, List<Section> sections) implem
     public static final int METER_BAR = 1;
     /** A bar of segments below the row: one for each unit. */
     public static final int METER_SEGMENTS = 2;
+    /** No meter, and the row is a heading: the title of a group of rows, with no value. */
+    public static final int HEADING = 3;
 
     /**
      * One line of a section: a label and a value, and an optional meter below.
      *
      * @param label     the label
      * @param value     the value
-     * @param meterKind {@link #METER_NONE}, {@link #METER_BAR} or {@link #METER_SEGMENTS}
+     * @param meterKind {@link #METER_NONE}, {@link #METER_BAR}, {@link #METER_SEGMENTS} or {@link #HEADING}
      * @param meter     the value of the bar, or the number of filled segments
      * @param meterMax  the maximum of the bar, or the number of segments
      * @param meterLost the number of lost segments after the filled segments
@@ -47,6 +49,11 @@ public record VillageInfoPayload(Component title, List<Section> sections) implem
         /** A row with no meter. */
         public Row(Component label, Component value) {
             this(label, value, METER_NONE, 0, 0, 0);
+        }
+
+        /** A heading: the title of a group of rows, with no value and no meter. */
+        public static Row heading(Component label) {
+            return new Row(label, Component.empty(), HEADING, 0, 0, 0);
         }
 
         /** A row with a progress bar. */

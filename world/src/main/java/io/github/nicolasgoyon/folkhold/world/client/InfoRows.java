@@ -19,6 +19,9 @@ final class InfoRows {
 
     /** The UI row of a server row, with its meter. */
     static UiRow of(Row row) {
+        if (row.meterKind() == VillageInfoPayload.HEADING) {
+            return UiRow.heading(row.label());
+        }
         UiMeter meter = switch (row.meterKind()) {
             case VillageInfoPayload.METER_BAR -> UiMeter.bar(row.meter(), row.meterMax());
             case VillageInfoPayload.METER_SEGMENTS -> UiMeter.segments(row.meter(), row.meterMax(), row.meterLost(),

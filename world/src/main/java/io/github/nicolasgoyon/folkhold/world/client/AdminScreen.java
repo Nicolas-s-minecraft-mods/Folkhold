@@ -56,7 +56,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       click on a settlement shows its details. The name of a settlement that is not generated (it exists only in
  *       the simulation) is in italics.</li>
  *   <li>Right: the selected settlement. Its badges (level, state, alert), the action menus (village, economy,
- *       garrison, world), the teleport button, and its rows in two columns with the largest stocks.</li>
+ *       garrison, world), the teleport button, and its rows in two columns with the largest stocks. The economy menu
+ *       opens the job trades of the settlement (see
+ *       {@link io.github.nicolasgoyon.folkhold.world.admin.JobTradeView}).</li>
  *   <li>The status line shows the result of each action.</li>
  *   <li>A dangerous action opens a confirmation dialog: to ruin a settlement, the operator types its name.</li>
  * </ul>
@@ -643,6 +645,8 @@ public class AdminScreen extends UiScreen {
     private List<UiMenu.Item> economyItems(AdminDetailsPayload shown) {
         return List.of(
                 UiMenu.Action.of(Component.translatable(KEY + "action.cycle"), () -> sendSelected("cycle", 0)),
+                UiMenu.Action.of(Component.translatable(KEY + "action.job_trades"),
+                        () -> sendSelected("job_trades", 0)),
                 new UiMenu.Separator(),
                 UiMenu.Action.danger(Component.translatable(KEY + "action.economy_reset"),
                         () -> confirmEconomyReset(shown)));
