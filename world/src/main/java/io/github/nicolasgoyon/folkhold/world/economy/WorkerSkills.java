@@ -2,7 +2,10 @@ package io.github.nicolasgoyon.folkhold.world.economy;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeRules;
+import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import java.util.List;
 import java.util.Optional;
@@ -23,8 +26,9 @@ import net.minecraft.world.inventory.MerchantMenu;
  *       or of a village with no scan) has the skill of the first active job slot with no post and with its
  *       profession.</li>
  *   <li>Gains: each active post gets {@code skillCycleExperience} at each cycle (see {@link Economies#runCycle}). The
- *       post of a worker gets {@code skillNeedTradeExperience} for each trade of a player with this worker (see
- *       {@link Merchants#onTrade}).</li>
+ *       post of a worker gets {@code skillNeedTradeExperience} for each need trade of a player with this worker, and
+ *       {@code skillJobTradeExperience} for each job trade (see {@link Merchants#onTrade}). A Friend or an Ally gives
+ *       more experience to a post with a low skill in a rich village (see {@link JobTradeRules#lowSkillFactor}).</li>
  *   <li>A worker gets the skill level of its post as its vanilla villager level, and the experience of its post as
  *       its vanilla experience (see {@link #apply}). Thus the trade screen shows the vanilla name of
  *       the level and the experience bar. The vanilla experience is 1 or more, as for each villager of the village
@@ -152,12 +156,30 @@ public final class WorkerSkills {
      * @return true if the worker has a source
      */
     public static boolean addTrade(Settlement settlement, Villager villager, int amount) {
+        return addTrade(settlement, villager, amount, ReputationTier.NEUTRAL);
+    }
+
+    /**
+     * Adds the gain of a trade of a player to the source of a worker, and gives the new skill to the worker. A Friend
+     * or an Ally gives more experience to a source with a low skill in a rich village (see
+     * {@link JobTradeRules#lowSkillFactor}).
+     *
+     * @param settlement the settlement of the worker
+     * @param villager   the worker
+     * @param amount     the gain
+     * @param tier       the reputation tier of the player
+     * @return true if the worker has a source
+     */
+    public static boolean addTrade(Settlement settlement, Villager villager, int amount, ReputationTier tier) {
         JobPosts.ActiveSlots slots = Economies.activeSlots(settlement);
         Optional<Source> source = sourceOf(slots, villager);
         if (source.isEmpty()) {
             return false;
         }
-        source.get().add(settlement, amount);
+        double factor = JobTradeRules.lowSkillFactor(JobSkills.level(source.get().experience(settlement)),
+                Economies.wealthTier(settlement), JobTradeEnchantments.reputationLevel(tier),
+                WorldConfig.ECONOMY_SKILL_FRIEND_STEP.get(), WorldConfig.ECONOMY_SKILL_ALLY_STEP.get());
+        source.get().add(settlement, JobTradeRules.trainedGain(amount, factor));
         apply(settlement, slots, villager);
         return true;
     }

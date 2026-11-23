@@ -1221,7 +1221,7 @@ A surplus lowers the price down to ×0.5. A shortage raises the price up to ×3.
 
 ### Job trades
 
-The job trades of #1006. The code has the trade lists (`JobTrade`, `Job.trades`), the skill of the workers (`JobSkills`, `WorkerSkills`), the rules (`JobTradeRules`) and the trade screen (`JobTradeOffers`). The enchanted items use the reputation `R` (`JobTradeEnchantments`). The open point of "Trade tiers" is **planned** (#1066).
+The job trades of #1006. The code has the trade lists (`JobTrade`, `Job.trades`), the skill of the workers (`JobSkills`, `WorkerSkills`), the rules (`JobTradeRules`) and the trade screen (`JobTradeOffers`). The enchanted items use the reputation `R` (`JobTradeEnchantments`). A Friend or an Ally trains the workers with a low skill (`JobTradeRules.lowSkillFactor`).
 
 In this section, a **need trade** is an offer of `JobTrades` (see "Trade with the player"). The worker sells the outputs of its job from the stock, and buys the inputs that the village needs. A **job trade** is a new offer from the trade list of the job. The need trades stay. For the player, the two kinds are the same kind of trade, in the same trade screen.
 
@@ -1292,7 +1292,7 @@ Three values select the job trades:
 | --- | --- | --- |
 | Wealth and skill | Trades of a higher tier, and more volume | The goods tier is `G = min(W, S)`. A trade is in the selection when its `level` is `G` or less. The volume of a trade is `volume × (1 + 0.5 × (G - level))`. Thus a Novice in a capital sells only trades of the level 1, and a Master in a hamlet also. |
 | Skill and reputation | Items with a chance of enchantments | A sell trade with `enchant` gives an enchanted item with the chance of the table below. The enchantment levels are those of an enchanting table at `5 × S` levels (5 to 25). |
-| Reputation and wealth, with a low skill | Open point | For a post with `S` of 2 or less. See the options below. |
+| Reputation and wealth, with a low skill | More experience for the post | For a post with `S` of 2 or less. See "Training of a low skill" below. |
 
 Chance of an enchanted item (start values to tune):
 
@@ -1313,11 +1313,13 @@ Examples of the goods tier:
 | 4 | city, Expert | diamond tools | diamond (small volume) | more volume |
 | 5 | capital, Master | diamond armor | diamond | more volume |
 
-Options for the open point (reputation and wealth, with a low skill):
+Training of a low skill (reputation and wealth, with a low skill):
 
-- **Option A, lower prices**: a Friend or an Ally pays less for the job trades of a post with a low skill. The factor is `1 - 0.025 × (W - 1)` for a Friend. It is `1 - 0.05 × (W - 1)` for an Ally, down to 0.8 in a capital. The factor multiplies the discount of the tier (see "Trade with the player"). The rich village pays for the training of its young workers.
-- **Option B, more experience**: a trade of a Friend or an Ally gives more experience to a post with a low skill. The factor is `1 + 0.25 × (W - 1)` for a Friend. It is `1 + 0.5 × (W - 1)` for an Ally, up to 3 in a capital. The player trains the workers, and the village gets its high tiers sooner.
-- Proposal: option B. The prices stay simple, the effect stays in the world, and the player has a goal. A question to the owner selects the option.
+- A trade of a Friend or an Ally gives more experience to a post with a low skill (Novice or Apprentice). The player trains the workers, and the village gets its high tiers sooner.
+- The factor is `1 + 0.25 × (W - 1)` for a Friend, up to 2 in a capital. It is `1 + 0.5 × (W - 1)` for an Ally, up to 3 in a capital. A Neutral player and a post of Journeyman or higher get the factor 1.
+- The factor applies to the gain of the need trades and of the job trades (see "Skill of the workers"). The gain is the base gain × the factor, rounded to the nearest integer. Example: a need trade of a Friend in a village gives 1 × 1.25 = 1. A need trade of an Ally in a village gives 1 × 1.5 = 2.
+- The steps 0.25 and 0.5 are options of the server config, section `economy`: `skillFriendStep` and `skillAllyStep`.
+- The prices of the job trades do not change with the skill. Issue #1066 has the question for the owner: the owner can select lower prices for a Friend or an Ally in place of more experience.
 
 #### Weekly rotation
 

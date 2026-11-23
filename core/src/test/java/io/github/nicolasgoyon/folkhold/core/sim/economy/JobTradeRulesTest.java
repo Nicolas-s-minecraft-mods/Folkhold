@@ -151,6 +151,25 @@ class JobTradeRulesTest {
         assertEquals(25, JobTradeRules.enchantLevel(5));
     }
 
+    /**
+     * A Friend or an Ally gives more experience to a post with a low skill in a rich village: up to 2 for a Friend and
+     * 3 for an Ally in a capital. A Neutral player and a skilled post get the factor 1.
+     */
+    @Test
+    void lowSkillFactorFollowsTheWealth() {
+        assertEquals(1.0, JobTradeRules.lowSkillFactor(1, 5, 1, 0.25, 0.5));
+        assertEquals(1.0, JobTradeRules.lowSkillFactor(3, 5, 3, 0.25, 0.5), "A Journeyman gets no factor");
+        assertEquals(1.0, JobTradeRules.lowSkillFactor(1, 1, 3, 0.25, 0.5), "A hamlet gives no factor");
+        assertEquals(1.25, JobTradeRules.lowSkillFactor(2, 2, 2, 0.25, 0.5));
+        assertEquals(2.0, JobTradeRules.lowSkillFactor(1, 5, 2, 0.25, 0.5));
+        assertEquals(1.5, JobTradeRules.lowSkillFactor(2, 2, 3, 0.25, 0.5));
+        assertEquals(3.0, JobTradeRules.lowSkillFactor(1, 5, 3, 0.25, 0.5));
+        assertEquals(1, JobTradeRules.trainedGain(1, 1.25));
+        assertEquals(2, JobTradeRules.trainedGain(1, 1.5));
+        assertEquals(3, JobTradeRules.trainedGain(2, 1.25));
+        assertEquals(6, JobTradeRules.trainedGain(2, 3.0));
+    }
+
     /** The prices follow the local price: × 1.30 to sell, × 0.70 to buy, the materials × 1.25. */
     @Test
     void pricesFollowTheStock() {

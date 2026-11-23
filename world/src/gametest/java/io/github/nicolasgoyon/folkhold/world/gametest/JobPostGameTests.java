@@ -565,6 +565,53 @@ public final class JobPostGameTests {
     }
 
     /**
+     * In a capital (wealth tier 5), a trade of an Ally gives 3 times the experience to a Novice post, and a trade of a
+     * Friend 2 times. A Neutral player gives the normal experience, and a Journeyman post gets no factor.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 40, batch = "job_posts_training", skyAccess = true)
+    public static void friendsTrainALowSkill(GameTestHelper helper) {
+        startStaff(helper);
+        TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_SKILL_FRIEND_STEP, 0.25);
+        TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_SKILL_ALLY_STEP, 0.5);
+        Village village = village(helper, List.of("job_farmer", "house_cottage"), 20);
+        List<Villager> villagers = new ArrayList<>();
+        TestSupport.atTestEnd(helper, () -> villagers.forEach(Entity::discard));
+        try {
+            ServerLevel level = helper.getLevel();
+            Settlement settlement = village.settlement();
+            helper.assertTrue(Economies.wealthTier(settlement) == 5, "The level 20 must be a capital");
+            VillageFolk.professions(settlement, VillageFolk.inhabitantCount(settlement))
+                    .forEach(profession -> villagers.add(VillageFolk.spawn(level, village.heart().getBlockPos(),
+                            profession)));
+            village.heart().claimHomeBeds();
+            village.heart().updateWorkers();
+            Villager farmer = villagers.stream().filter(villager -> villager.getVillagerData().getProfession()
+                    == VillageFolk.professionOf(FARMER)).findFirst().orElseThrow();
+            JobPosts.Post farm = WorkerSkills.sourceOf(settlement, farmer).orElseThrow().post();
+            helper.assertTrue(farm != null, "The farmer must have its post");
+
+            int[] gains = new int[3];
+            ReputationTier[] tiers = {ReputationTier.ALLY, ReputationTier.FRIEND, ReputationTier.NEUTRAL};
+            for (int i = 0; i < tiers.length; i++) {
+                int before = settlement.jobSkills().experience(farm);
+                WorkerSkills.addTrade(settlement, farmer, 1, tiers[i]);
+                gains[i] = settlement.jobSkills().experience(farm) - before;
+            }
+            helper.assertTrue(gains[0] == 3 && gains[1] == 2 && gains[2] == 1,
+                    "Expected the gains 3, 2 and 1 for an Ally, a Friend and a Neutral player: "
+                            + Arrays.toString(gains));
+            settlement.jobSkills().add(farm, 70 - settlement.jobSkills().experience(farm));
+            WorkerSkills.addTrade(settlement, farmer, 1, ReputationTier.ALLY);
+            helper.assertTrue(settlement.jobSkills().experience(farm) == 71,
+                    "A Journeyman must get the normal gain: " + settlement.jobSkills().experience(farm));
+        } finally {
+            villagers.forEach(Entity::discard);
+            end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /**
      * A legacy village: the household of its post does the job of the post, and its legacy job slots go to the
      * inhabitants of the cottage. With no list of posts, the heart gives no bed: the vanilla rules apply.
      */

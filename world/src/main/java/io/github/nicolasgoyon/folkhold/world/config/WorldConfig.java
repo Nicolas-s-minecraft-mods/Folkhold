@@ -130,6 +130,8 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue ECONOMY_SKILL_JOB_TRADE_EXPERIENCE;
     public static final ModConfigSpec.BooleanValue ECONOMY_JOB_TRADES_ENABLED;
     public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_SELL_MARKUP;
+    public static final ModConfigSpec.DoubleValue ECONOMY_SKILL_FRIEND_STEP;
+    public static final ModConfigSpec.DoubleValue ECONOMY_SKILL_ALLY_STEP;
     public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_NEUTRAL;
     public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_FRIEND;
     public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_ALLY;
@@ -799,6 +801,16 @@ public final class WorldConfig {
                 .comment("Experience that a job post gets for each use of a job trade of the trade list of its job.")
                 .translation(KEY_PREFIX + "economySkillJobTradeExperience")
                 .defineInRange("skillJobTradeExperience", 2, 0, 1000);
+        ECONOMY_SKILL_FRIEND_STEP = builder
+                .comment("For a post Novice or Apprentice: the factor of the experience of a trade of a Friend is",
+                        "1 + this value x (wealth tier - 1). The wealth tier is 1 for a hamlet to 5 for a capital.")
+                .translation(KEY_PREFIX + "economySkillFriendStep")
+                .defineInRange("skillFriendStep", 0.25, 0.0, 10.0);
+        ECONOMY_SKILL_ALLY_STEP = builder
+                .comment("For a post Novice or Apprentice: the factor of the experience of a trade of an Ally is",
+                        "1 + this value x (wealth tier - 1). The wealth tier is 1 for a hamlet to 5 for a capital.")
+                .translation(KEY_PREFIX + "economySkillAllyStep")
+                .defineInRange("skillAllyStep", 0.5, 0.0, 10.0);
         ECONOMY_JOB_TRADES_ENABLED = builder
                 .comment("Turns on the job trades: each worker also shows the trades of the trade list of its job.",
                         "With false, the workers show only the trades of the stock and of the needs of the village.")

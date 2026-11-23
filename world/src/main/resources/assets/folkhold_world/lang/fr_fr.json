@@ -235,6 +235,8 @@
   "folkhold_world.configuration.economySkillCycleExperience": "Expérience d'un poste de métier par cycle",
   "folkhold_world.configuration.economySkillNeedTradeExperience": "Expérience d'un poste de métier par échange",
   "folkhold_world.configuration.economySkillJobTradeExperience": "Expérience d'un poste de métier par échange du métier",
+  "folkhold_world.configuration.economySkillFriendStep": "Formation d'un débutant par un ami",
+  "folkhold_world.configuration.economySkillAllyStep": "Formation d'un débutant par un allié",
   "folkhold_world.configuration.economyJobTradesEnabled": "Échanges du métier",
   "folkhold_world.configuration.economyJobTradeEnchantNeutral": "Échanges du métier enchantés pour un joueur neutre",
   "folkhold_world.configuration.economyJobTradeEnchantFriend": "Échanges du métier enchantés pour un ami",
