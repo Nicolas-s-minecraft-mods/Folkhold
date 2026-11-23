@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
 import io.github.nicolasgoyon.folkhold.core.sim.schedule.DaySchedule;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
@@ -11,6 +12,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageSchedule;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -91,6 +93,46 @@ public final class VillageLife {
             return null;
         }
         return KEY + (offers == 1 ? "market_day.offer" : "market_day.offers");
+    }
+
+    /**
+     * The rows of the skill of the job posts, for the economy section of the heart screen (see
+     * {@link io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills}). A heading, then one row for each post with
+     * a job, in the order of the posts, and one row for each active job slot with no post. Each row gives the skill
+     * level and the experience. Below Master, the value also gives the experience of the next level, and a bar shows
+     * the progress in the level. With no post and no job slot, there are no rows.
+     *
+     * @param settlement the settlement
+     * @return the rows
+     */
+    public static List<Row> skillRows(Settlement settlement) {
+        List<Row> rows = new ArrayList<>();
+        for (JobPosts.Post post : settlement.jobPosts().orElse(List.of())) {
+            if (!post.jobId().isEmpty()) {
+                rows.add(skillRow(jobName(post.jobId()), settlement.jobSkills().experience(post)));
+            }
+        }
+        for (String jobId : new LinkedHashSet<>(Economies.activeSlots(settlement).slotJobs())) {
+            rows.add(skillRow(Component.translatable(KEY + "skill.slot", jobName(jobId)),
+                    settlement.jobSkills().slotExperience(jobId)));
+        }
+        if (!rows.isEmpty()) {
+            rows.add(0, Row.heading(Component.translatable(KEY + "skills")));
+        }
+        return rows;
+    }
+
+    /** The row of the skill of one source: the level and the experience, with a bar below Master. */
+    private static Row skillRow(Component label, int experience) {
+        int level = JobSkills.level(experience);
+        Component name = Component.translatable("merchant.level." + level);
+        if (level >= JobSkills.MAX_LEVEL) {
+            return new Row(label, Component.translatable(KEY + "skill_value.master", name, experience));
+        }
+        int start = JobSkills.threshold(level);
+        int next = JobSkills.threshold(level + 1);
+        return Row.bar(label, Component.translatable(KEY + "skill_value", name, experience, next),
+                experience - start, next - start);
     }
 
     /**
