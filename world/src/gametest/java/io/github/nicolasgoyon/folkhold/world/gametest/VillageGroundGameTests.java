@@ -72,16 +72,16 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class VillageGroundGameTests {
     /** The seed of the playtest world of the owner (issue #799). */
-    private static final long SEED = -6649279558474420555L;
+    static final long SEED = -6649279558474420555L;
     /**
      * The positions of the searches of the villages: the steep village Grimfell of the playtest (2606 893), then
      * positions about 3 km from the center of the world, as the villages of the playtest.
      */
-    private static final List<BlockPos> SEARCHES = List.of(new BlockPos(2606, 185, 893), new BlockPos(3000, 64, 0),
+    static final List<BlockPos> SEARCHES = List.of(new BlockPos(2606, 185, 893), new BlockPos(3000, 64, 0),
             new BlockPos(0, 64, 3000), new BlockPos(-3000, 64, 0), new BlockPos(0, 64, -3000),
             new BlockPos(2100, 64, 2100), new BlockPos(-2100, 64, -2100));
     /** The radius of a search of a village, in chunks. */
-    private static final int SEARCH_RADIUS = 50;
+    static final int SEARCH_RADIUS = 50;
     /** The scan goes this number of blocks around the box of the village. */
     private static final int MARGIN = 8;
     private static final Direction[] SIDES = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};

@@ -23,7 +23,9 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.TerrainAdjustment;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
+import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
 
 /**
  * The stairs of a street piece of the plan of a village on a slope (see {@link StreetSteps}). The street pieces follow
@@ -42,9 +44,11 @@ import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSeriali
  *       stairs.</li>
  * </ul>
  *
- * <p>The structure places this piece after the street pieces and after the paths of the gates.
+ * <p>The structure places this piece after the street pieces and after the paths of the gates. The piece has no terrain
+ * adaptation: it does not change the shape of the terrain. The box of the piece goes {@link #SEARCH} blocks under the
+ * lowest row. A terrain adaptation at the floor of this box makes holes in the rock under the street.
  */
-public final class StreetStepsPiece extends StructurePiece {
+public final class StreetStepsPiece extends StructurePiece implements PieceBeardifierModifier {
     /** The search of the ground goes this number of blocks below the surface of a column. */
     private static final int SEARCH = 16;
     /** The number of blocks of path on each side of the middle of a street. */
@@ -201,6 +205,21 @@ public final class StreetStepsPiece extends StructurePiece {
                 VillagePathPiece.placeStair(level, pos, x, tops[row + 1], z, stairs, facing);
             }
         }
+    }
+
+    @Override
+    public BoundingBox getBeardifierBox() {
+        return boundingBox;
+    }
+
+    @Override
+    public TerrainAdjustment getTerrainAdjustment() {
+        return TerrainAdjustment.NONE;
+    }
+
+    @Override
+    public int getGroundLevelDelta() {
+        return 0;
     }
 
     /**
