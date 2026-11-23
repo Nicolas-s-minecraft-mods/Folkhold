@@ -8,6 +8,7 @@ import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.PlainTextContents;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import org.junit.jupiter.api.Test;
 
 /** The position of the quest panel below the territory panel ({@link QuestHud#top}). */
@@ -35,7 +36,7 @@ class QuestHudTest {
 
     private static QuestLogPayload.Entry entry(String item, int count, boolean escort) {
         return new QuestLogPayload.Entry("q", item, Component.literal("Name"), count, 600,
-                escort ? Optional.of(new QuestLogPayload.Escort(10, 100, 20, 20, 5, 48, -1)) : Optional.empty(),
+                escort ? Optional.of(new QuestLogPayload.Escort(10, 100, 20, 20, 5, 48, -1, 0)) : Optional.empty(),
                 Optional.empty(), QuestLogPayload.NO_ENTITY);
     }
 
@@ -50,5 +51,17 @@ class QuestHudTest {
         assertTrue(hunt.getSiblings().isEmpty(), "A hunt has no progress of items: " + hunt);
         Component escort = QuestHud.rowText(entry("minecraft:chest", 0, true), 0);
         assertEquals("Name", escort.getString());
+    }
+
+    /** An attack on the caravan gives the line of the raiders that stay. With no raider, the escort has no attack. */
+    @Test
+    void attackLineGivesTheRaidersThatStay() {
+        QuestLogPayload.Escort attacked = new QuestLogPayload.Escort(10, 100, 20, 20, 5, 48, -1, 3);
+        Component line = QuestHud.attack(attacked);
+        assertTrue(attacked.attacked());
+        assertTrue(line.getContents() instanceof TranslatableContents contents
+                && contents.getKey().equals("hud.folkhold_world.quests.ambush")
+                && Integer.valueOf(3).equals(contents.getArgs()[0]), "The line gives 3 raiders: " + line);
+        assertTrue(!new QuestLogPayload.Escort(10, 100, 20, 20, 5, 48, -1, 0).attacked());
     }
 }

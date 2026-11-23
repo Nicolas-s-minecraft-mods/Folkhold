@@ -160,6 +160,8 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue QUEST_ESCORT_WAIT_TICKS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_DISTANCE;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_AWAY_SECONDS;
+    public static final ModConfigSpec.IntValue QUEST_ESCORT_AMBUSH_DISTANCE;
+    public static final ModConfigSpec.IntValue QUEST_ESCORT_AMBUSH_SECONDS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_MINUTES;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_BLOCKS_PER_MINUTE;
     public static final ModConfigSpec.DoubleValue QUEST_ESCORT_REWARD_SHARE;
@@ -931,6 +933,16 @@ public final class WorldConfig {
                         "fails and the caravan continues with no escort.")
                 .translation(KEY_PREFIX + "questEscortAwaySeconds")
                 .defineInRange("escortAwaySeconds", 120, 10, 3600);
+        QUEST_ESCORT_AMBUSH_DISTANCE = builder
+                .comment("The merchant of an escort waits while the raiders of an ambush or of a patrol live. It",
+                        "continues when no raider is at this distance in blocks or less for escortAmbushSeconds.")
+                .translation(KEY_PREFIX + "questEscortAmbushDistance")
+                .defineInRange("escortAmbushDistance", 48, 8, 256);
+        QUEST_ESCORT_AMBUSH_SECONDS = builder
+                .comment("Seconds with no raider near the merchant (see escortAmbushDistance) before the merchant",
+                        "continues its travel.")
+                .translation(KEY_PREFIX + "questEscortAmbushSeconds")
+                .defineInRange("escortAmbushSeconds", 30, 1, 600);
         QUEST_ESCORT_MINUTES = builder
                 .comment("Minimum minutes from the acceptance of an escort quest to its deadline.")
                 .translation(KEY_PREFIX + "questEscortMinutes")

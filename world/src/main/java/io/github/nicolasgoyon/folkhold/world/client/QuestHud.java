@@ -87,6 +87,7 @@ public final class QuestHud {
                 int title = ICON + 4 + font.width(entry.name()) + 8 + font.width("00:00");
                 int blocks = font.width(blocks(escort)) + 8 + toward;
                 int merchant = escort.maxHealth() > 0 ? font.width(merchant(escort)) : 0;
+                merchant = Math.max(merchant, escort.attacked() ? font.width(attack(escort)) : 0);
                 width = Math.max(width, Math.max(title, Math.max(blocks, merchant)) + 8 + 2 * PAD);
             } else {
                 width = Math.max(width, ICON + 4 + font.width(rowText(entry, inventory)) + 6 + toward
@@ -269,9 +270,9 @@ public final class QuestHud {
     }
 
     private static int escortHeight(Escort escort) {
-        // Padding, title, gap, bar, gap, blocks line, merchant line, warning line, padding.
+        // Padding, title, gap, bar, gap, blocks line, merchant line, warning line, attack line, padding.
         return 4 + ROW + 2 + 3 + 3 + UiTheme.LINE + (escort.maxHealth() > 0 ? 2 + UiTheme.LINE : 0)
-                + (escort.away() ? 2 + UiTheme.LINE : 0) + 4;
+                + (escort.away() ? 2 + UiTheme.LINE : 0) + (escort.attacked() ? 2 + UiTheme.LINE : 0) + 4;
     }
 
     private static void renderEscort(GuiGraphics graphics, Font font, LocalPlayer player, Entry entry, Escort escort,
@@ -310,6 +311,15 @@ public final class QuestHud {
                     UiText.clock(ClientQuestLog.secondsNow(escort.awaySeconds(), now)));
             UiText.draw(graphics, font, text, inner.x(), y, inner.width(), UiTheme.TEXT_URGENT);
         }
+        if (escort.attacked()) {
+            y += UiTheme.LINE + 2;
+            UiText.draw(graphics, font, attack(escort), inner.x(), y, inner.width(), UiTheme.TEXT_URGENT);
+        }
+    }
+
+    /** The line of an attack on the caravan: the raiders that stay, and the wait of the merchant. */
+    static Component attack(Escort escort) {
+        return Component.translatable(KEY + "ambush", escort.raiders());
     }
 
     /** The hearts of the merchant: full hearts in red, empty hearts in grey. */

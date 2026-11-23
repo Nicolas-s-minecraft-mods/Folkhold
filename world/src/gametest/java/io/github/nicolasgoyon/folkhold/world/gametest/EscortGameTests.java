@@ -22,6 +22,7 @@ import io.github.nicolasgoyon.folkhold.world.group.CaravanInteractions;
 import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
+import io.github.nicolasgoyon.folkhold.world.quest.AmbushSpawns;
 import io.github.nicolasgoyon.folkhold.world.quest.Deliveries;
 import io.github.nicolasgoyon.folkhold.world.quest.EscortDifficulties;
 import io.github.nicolasgoyon.folkhold.world.quest.Escorts;
@@ -29,6 +30,8 @@ import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.RaidSpawns;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +47,8 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -397,6 +402,164 @@ public final class EscortGameTests {
         helper.assertTrue(tier == ReputationTier.NEUTRAL && state == QuestState.ACCEPTED,
                 "A neutral player must accept the escort: " + tier + ", " + state);
         helper.succeed();
+    }
+
+    /** The size of the arena of the tests of the spawn positions, in blocks. */
+    private static final int LARGE = 32;
+
+    /** The relative positions of a box of blocks, from a corner to the opposite corner. */
+    private static List<BlockPos> box(int x0, int y0, int z0, int x1, int y1, int z1) {
+        List<BlockPos> result = new ArrayList<>();
+        BlockPos.betweenClosed(x0, y0, z0, x1, y1, z1).forEach(pos -> result.add(pos.immutable()));
+        return result;
+    }
+
+    /**
+     * An ambush point in a hole of 5 by 5 blocks, 4 blocks deep: the raiders appear out of the hole, on the floor,
+     * with a walk path to the merchant.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_hole",
+            skyAccess = true)
+    public static void ambushInAHoleAppearsWhereTheMerchantCanBeReached(GameTestHelper helper) {
+        BlockPos merchant = helper.absolutePos(new BlockPos(2, 1, 16));
+        BlockPos hole = helper.absolutePos(new BlockPos(18, 1, 16));
+        ServerLevel level = helper.getLevel();
+        boolean holeFirst;
+        BlockPos pos;
+        List<BlockPos> pit = box(16, -3, 14, 20, 0, 18);
+        TestSupport.buildFloor(helper, LARGE);
+        List<BlockState> before = pit.stream().map(rel -> level.getBlockState(helper.absolutePos(rel))).toList();
+        pit.forEach(rel -> helper.setBlock(rel, Blocks.AIR));
+        try {
+            holeFirst = AmbushSpawns.check(level, AmbushSpawns.surface(level, hole.getX(), hole.getZ()), false)
+                    == AmbushSpawns.Check.HOLLOW;
+            Route route = new Route(List.of(new Route.Point(merchant.getX(), merchant.getZ()),
+                    new Route.Point(merchant.getX() + 28, merchant.getZ())));
+            pos = AmbushSpawns.find(level, route, 16.0, merchant, false).orElse(null);
+            helper.assertTrue(pos != null && RaidSpawns.canWalk(level, pos, merchant),
+                    "The ambush must have a position with a path to the merchant: " + pos + ", checks "
+                            + checks(helper));
+        } finally {
+            for (int i = 0; i < pit.size(); i++) {
+                level.setBlockAndUpdate(helper.absolutePos(pit.get(i)), before.get(i));
+            }
+        }
+        BlockPos rel = helper.relativePos(pos);
+        boolean inHole = rel.getX() >= 16 && rel.getX() <= 20 && rel.getZ() >= 14 && rel.getZ() <= 18;
+        helper.assertTrue(holeFirst, "The point of the route must be in the hole");
+        helper.assertTrue(!inHole && rel.getY() == 1, "The position must be on the floor, out of the hole: " + rel);
+        helper.succeed();
+    }
+
+    /**
+     * An ambush point under a roof of 7 by 7 blocks, 5 blocks above the floor: the raiders appear on the floor, not
+     * on the roof, with a walk path to the merchant.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_roof",
+            skyAccess = true)
+    public static void ambushUnderARoofAppearsWhereTheMerchantCanBeReached(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos merchant = helper.absolutePos(new BlockPos(2, 1, 16));
+        List<BlockPos> roof = box(15, 5, 13, 21, 5, 19);
+        boolean roofFirst;
+        TestSupport.buildFloor(helper, LARGE);
+        List<BlockState> before = roof.stream().map(rel -> level.getBlockState(helper.absolutePos(rel))).toList();
+        roof.forEach(rel -> helper.setBlock(rel, Blocks.OAK_PLANKS));
+        BlockPos pos;
+        try {
+            BlockPos point = helper.absolutePos(new BlockPos(18, 1, 16));
+            roofFirst = AmbushSpawns.check(level, AmbushSpawns.surface(level, point.getX(), point.getZ()), false)
+                    == AmbushSpawns.Check.RAISED;
+            Route route = new Route(List.of(new Route.Point(merchant.getX(), merchant.getZ()),
+                    new Route.Point(merchant.getX() + 28, merchant.getZ())));
+            pos = AmbushSpawns.find(level, route, 16.0, merchant, false).orElse(null);
+            helper.assertTrue(pos != null && RaidSpawns.canWalk(level, pos, merchant),
+                    "The ambush must have a position with a path to the merchant: " + pos + ", checks "
+                            + checks(helper));
+        } finally {
+            for (int i = 0; i < roof.size(); i++) {
+                level.setBlockAndUpdate(helper.absolutePos(roof.get(i)), before.get(i));
+            }
+        }
+        BlockPos rel = helper.relativePos(pos);
+        helper.assertTrue(roofFirst, "The point of the route must be on the roof");
+        helper.assertTrue(rel.getY() == 1, "The position must be on the floor, not on the roof: " + rel);
+        helper.succeed();
+    }
+
+    /**
+     * The merchant waits while the raiders of an ambush live near it. It continues when they are dead, or when no
+     * raider is near it for the delay of the config.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_ambush_wait")
+    public static void merchantWaitsForTheAmbushAndContinuesWithNoRaiderNear(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerLevel level = helper.getLevel();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+        BlockPos start = helper.absolutePos(START);
+        player.teleportTo(start.getX(), start.getY(), start.getZ());
+        GroupMaterializer.materialize(level, caravan);
+        Entity merchant = level.getEntity(caravan.merchant().orElseThrow().id());
+        long now = level.getGameTime();
+        long delay = WorldConfig.QUEST_ESCORT_AMBUSH_SECONDS.get() * 20L;
+        double distance = WorldConfig.QUEST_ESCORT_AMBUSH_DISTANCE.get();
+
+        Mob near = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(near));
+        Escorts.update(server, now);
+        GroupState waits = caravan.state();
+        int hud = escortOf(QuestBoards.log(player), quest).raiders();
+        // The raider goes far from the merchant, above it: the merchant waits for the delay, then continues.
+        near.setNoGravity(true);
+        near.teleportTo(merchant.getX(), merchant.getY() + distance + 8, merchant.getZ());
+        Escorts.update(server, now + delay - 20);
+        GroupState inDelay = caravan.state();
+        Escorts.update(server, now + delay);
+        GroupState afterDelay = caravan.state();
+        near.discard();
+
+        Mob dead = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(dead));
+        Escorts.update(server, now + delay + 20);
+        GroupState waitsAgain = caravan.state();
+        dead.kill();
+        Escorts.update(server, now + delay + 40);
+        GroupState afterDeath = caravan.state();
+        dead.discard();
+
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertTrue(waits == GroupState.STOPPED && hud == 1,
+                "The merchant must wait for 1 raider near it: " + waits + ", " + hud);
+        helper.assertTrue(inDelay == GroupState.STOPPED, "The merchant must wait during the delay: " + inDelay);
+        helper.assertTrue(afterDelay == GroupState.TRAVELING,
+                "With no raider near for the delay, the merchant must continue: " + afterDelay);
+        helper.assertTrue(waitsAgain == GroupState.STOPPED && afterDeath == GroupState.TRAVELING,
+                "The merchant must continue when the raiders are dead: " + waitsAgain + ", " + afterDeath);
+        helper.succeed();
+    }
+
+    /** The checks of the columns of the line z = 16 of the large arena, for the message of a failure. */
+    private static String checks(GameTestHelper helper) {
+        StringBuilder text = new StringBuilder();
+        for (int x = 4; x <= 30; x += 2) {
+            BlockPos column = helper.absolutePos(new BlockPos(x, 1, 13));
+            BlockPos pos = AmbushSpawns.surface(helper.getLevel(), column.getX(), column.getZ());
+            text.append(x).append(':').append(helper.relativePos(pos).getY()).append(' ')
+                    .append(AmbushSpawns.check(helper.getLevel(), pos, false)).append(", ");
+        }
+        return text.toString();
+    }
+
+    private static Mob spawnRaider(ServerLevel level, BlockPos pos) {
+        Mob raider = EntityType.PILLAGER.create(level);
+        raider.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, 0.0F, 0.0F);
+        raider.setNoAi(true);
+        level.addFreshEntity(raider);
+        return raider;
     }
 
     private static long guards(MobileGroup group) {
