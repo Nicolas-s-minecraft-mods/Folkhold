@@ -703,6 +703,9 @@ public final class FortifiedVillageStructure extends Structure {
                             .map(VillagePathPiece.class::cast).toList(),
                     streetCutFill(), start.variant().wall().streetStairs());
             StreetRamps.junctions(core.pieces(), ramps);
+            if (VillagePlanVersion.atLeast(PlanVersion.HOUSE_LEVEL)) {
+                StreetRamps.moveHouses(context.structureTemplateManager(), core.pieces(), ramps);
+            }
             streets.addAll(ramps.paths());
         } else {
             // The stairs of the streets on the slopes, after the paths of the gates: a path has its own stairs.
