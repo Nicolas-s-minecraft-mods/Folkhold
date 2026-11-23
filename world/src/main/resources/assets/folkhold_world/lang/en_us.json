@@ -750,6 +750,8 @@
   "commands.folkhold_world.construction.unknown_template": "Unknown structure template: %s",
   "commands.folkhold_world.village.generate.success": "Generated a village: %s (style %s, level %s) at %s %s %s, %s blocks away",
   "commands.folkhold_world.village.generate.no_site": "No place for a village (%s) within %s blocks",
+  "commands.folkhold_world.village.generate.searching": "No place for a village (%s) within %s blocks: the search continues up to %s blocks",
+  "commands.folkhold_world.village.generate.search_timeout": "No place for a village (%s) after %s seconds of search",
   "commands.folkhold_world.village.generate.unknown_tier": "Unknown tier: %s",
   "commands.folkhold_world.village.generate.unknown_style": "Unknown style: %s",
   "commands.folkhold_world.village.generate.started": "Generating a village: %s. The result comes in a later message",

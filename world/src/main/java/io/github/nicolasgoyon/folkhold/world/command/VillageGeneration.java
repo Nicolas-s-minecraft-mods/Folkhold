@@ -40,8 +40,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *
  * <ol>
  *   <li>{@link Phase#SEARCH}: it looks for the next start chunk that is far from the other villages (see
- *       {@link VillageCommands#farFromVillages}), the nearest first, for {@link #TICK_BUDGET_NANOS} at most in a
- *       tick.</li>
+ *       {@link VillageCommands#farFromVillages}), ring after ring (see {@link VillageCommands#RINGS}), the nearest
+ *       first, for {@link #TICK_BUDGET_NANOS} at most in a tick. The source gets a message when the search goes to
+ *       the next ring. The search stops after {@link #SEARCH_TIMEOUT_SECONDS} seconds of real time.</li>
  *   <li>{@link Phase#LAYOUT}: a background thread calculates the layout of the village at this start chunk and the
  *       rings of its tier (see {@link VillageRings#planOfLevel}), as a worker thread of the world generation does.
  *       The layout reads the noise of the terrain and no chunk. With no layout, or with a box that contains the
@@ -69,6 +70,8 @@ public final class VillageGeneration {
     static final long TICK_BUDGET_NANOS = 10_000_000L;
     /** The maximum time of the wait for the chunks of the box, in seconds of real time. */
     static final int TIMEOUT_SECONDS = 300;
+    /** The maximum time of the search of a start chunk, with the layouts, in seconds of real time. */
+    static final int SEARCH_TIMEOUT_SECONDS = 300;
     /** The source gets the progress of the chunks each time this number of ticks passes. */
     static final int PROGRESS_TICKS = 100;
     /** The distance of the ticket: 0 gives the full status to the chunk of the ticket only. */
@@ -112,8 +115,11 @@ public final class VillageGeneration {
         }
     }
 
-    /** The end of a generation: a village, no site, the time limit of the chunks, or an error. */
-    enum End { PLACED, NO_SITE, TIMEOUT, FAILED }
+    /**
+     * The end of a generation: a village, no site, the time limit of the search, the time limit of the chunks, or an
+     * error.
+     */
+    enum End { PLACED, NO_SITE, SEARCH_TIMEOUT, TIMEOUT, FAILED }
 
     private final ServerLevel level;
     private final FortifiedVillageStructure structure;
@@ -123,9 +129,14 @@ public final class VillageGeneration {
     private final BlockPos origin;
     private final int startLevel;
     private final Optional<String> style;
+    private final IntConsumer searching;
     private final IntConsumer progress;
     private final BiConsumer<End, Optional<Generated>> ended;
     private final Iterator<ChunkPos> candidates;
+    /** The ring of the last tried start chunk. */
+    private int ring;
+    /** The end of the search, in milliseconds of real time. */
+    private final long searchDeadline;
     private final boolean structures;
     private Phase phase = Phase.SEARCH;
     private ChunkPos startChunk;
@@ -145,14 +156,17 @@ public final class VillageGeneration {
     private long longestTickNanos;
 
     private VillageGeneration(ServerLevel level, FortifiedVillageStructure structure, BlockPos origin, int startLevel,
-            Optional<String> style, IntConsumer progress, BiConsumer<End, Optional<Generated>> ended) {
+            Optional<String> style, IntConsumer searching, IntConsumer progress,
+            BiConsumer<End, Optional<Generated>> ended) {
         this.level = level;
         this.structure = structure;
         this.origin = origin;
         this.startLevel = startLevel;
         this.style = style;
+        this.searching = searching;
         this.progress = progress;
         this.ended = ended;
+        this.searchDeadline = Util.getMillis() + SEARCH_TIMEOUT_SECONDS * 1000L;
         this.ringStructure = level.registryAccess().registryOrThrow(Registries.STRUCTURE).get(VillageRings.STRUCTURE);
         this.candidates = VillageCommands.candidates(new ChunkPos(origin)).iterator();
         // With no structures in the world settings, the world generation places no pieces: this class does it.
@@ -177,16 +191,18 @@ public final class VillageGeneration {
      * @param origin     the position of the source: the box of the village does not contain it
      * @param startLevel the start level
      * @param style      the name of the style, or empty for the style of the site
+     * @param searching  gets the index of the next ring of the search (from 1) when the search goes to this ring
      * @param progress   gets the share of the ready chunks of the box, in percent, during the wait for the chunks
      * @param ended      gets the end of the generation, and the village if the generation places one
      * @return false if a generation runs already: this generation does not start
      */
     static boolean start(ServerLevel level, FortifiedVillageStructure structure, BlockPos origin, int startLevel,
-            Optional<String> style, IntConsumer progress, BiConsumer<End, Optional<Generated>> ended) {
+            Optional<String> style, IntConsumer searching, IntConsumer progress,
+            BiConsumer<End, Optional<Generated>> ended) {
         if (running != null) {
             return false;
         }
-        running = new VillageGeneration(level, structure, origin, startLevel, style, progress, ended);
+        running = new VillageGeneration(level, structure, origin, startLevel, style, searching, progress, ended);
         return true;
     }
 
@@ -234,8 +250,19 @@ public final class VillageGeneration {
 
     /** Looks for the next start chunk that is far from the other villages, and starts the layout of its village. */
     private void search(long startNanos) {
+        if (Util.getMillis() >= searchDeadline) {
+            FolkholdWorld.LOGGER.info("The search of a site near {} stops after {} seconds, in the ring {}", origin,
+                    SEARCH_TIMEOUT_SECONDS, ring);
+            end(End.SEARCH_TIMEOUT, Optional.empty());
+            return;
+        }
         while (candidates.hasNext()) {
             ChunkPos chunk = candidates.next();
+            int chunkRing = VillageCommands.ringOf(new ChunkPos(origin), chunk);
+            if (chunkRing > ring) {
+                ring = chunkRing;
+                searching.accept(ring);
+            }
             if (VillageCommands.farFromVillages(level, structure, chunk, startLevel)) {
                 startChunk = chunk;
                 Structure.GenerationContext context = new Structure.GenerationContext(level.registryAccess(),
