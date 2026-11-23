@@ -96,8 +96,11 @@ public final class VillageRings {
     /** The layout of each village with rings, by key: the village structure and the ring districts share it. */
     private static final PlanCache<Key, FortifiedVillageStructure.Layout> LAYOUTS = new PlanCache<>(CACHE_SIZE);
 
-    /** The key of a village in the cache: the generator, its random state, the seed and the start chunk. */
-    private record Key(ChunkGenerator generator, RandomState random, long seed, long chunk) {
+    /**
+     * The key of a village in the cache: the generator, its random state, the seed, the start chunk and the plan
+     * version (see {@link VillagePlanVersion}).
+     */
+    private record Key(ChunkGenerator generator, RandomState random, long seed, long chunk, int version) {
     }
 
     private VillageRings() {
@@ -164,7 +167,7 @@ public final class VillageRings {
             return village.layout(context, site, level);
         }
         Key key = new Key(context.chunkGenerator(), context.randomState(), context.seed(),
-                context.chunkPos().toLong());
+                context.chunkPos().toLong(), VillagePlanVersion.current());
         return LAYOUTS.get(key, () -> village.layout(context, site, level));
     }
 
@@ -183,7 +186,8 @@ public final class VillageRings {
         if (VillageSizes.forLevel(level).rings() == 0) {
             return Map.of();
         }
-        Key key = new Key(anchor.chunkGenerator(), anchor.randomState(), anchor.seed(), start.toLong());
+        Key key = new Key(anchor.chunkGenerator(), anchor.randomState(), anchor.seed(), start.toLong(),
+                VillagePlanVersion.current());
         return PLANS.get(key, () -> plan(village, set, anchor, start, level));
     }
 

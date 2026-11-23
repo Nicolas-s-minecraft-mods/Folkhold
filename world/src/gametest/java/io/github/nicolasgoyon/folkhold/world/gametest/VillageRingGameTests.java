@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanVersion;
 import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSite;
 import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
@@ -10,6 +11,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillagePlots;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePlanVersion;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
 import java.util.ArrayList;
@@ -271,6 +273,63 @@ public final class VillageRingGameTests {
             return;
         }
         helper.fail("No village with rings starts in " + CANDIDATES + " regions");
+    }
+
+    /**
+     * The plan version (see {@link VillagePlanVersion}): the GameTest world is new, so it has the last version. The
+     * cache of the layouts keeps one layout of a village with rings for each version: the village structure gets the
+     * layout of its version from the cache, and a village of another version gets its own layout. The test sets the
+     * version back in the same tick.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_plan_version")
+    public static void layoutCacheKeepsThePlanVersion(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.assertTrue(VillagePlanVersion.current() == PlanVersion.LATEST,
+                "A new world must have the last plan version: " + VillagePlanVersion.current());
+        StructureSet villages = level.registryAccess().registryOrThrow(Registries.STRUCTURE_SET).getOrThrow(
+                ResourceKey.create(Registries.STRUCTURE_SET,
+                        ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "villages")));
+        ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForFlat(
+                level.getChunkSource().randomState(), level.getSeed(), level.getChunkSource().getGenerator()
+                        .getBiomeSource(), Stream.empty());
+        int version = VillagePlanVersion.current();
+        try {
+            for (int x = 0; x < CANDIDATES * REGION; x++) {
+                for (int z = 0; z < REGION; z++) {
+                    ChunkPos start = new ChunkPos(x, z);
+                    if (!villages.placement().isStructureChunk(state, x, z) || VillageSizes.forLevel(
+                            Settlements.startLevel(level.getSeed(), start)).rings() == 0) {
+                        continue;
+                    }
+                    VillagePlanVersion.set(PlanVersion.LATEST);
+                    if (!generate(level, villages, start).isValid()) {
+                        continue;
+                    }
+                    int layouts = VillageRings.layoutCalculations();
+                    generate(level, villages, start);
+                    helper.assertTrue(VillageRings.layoutCalculations() == layouts,
+                            "The village of the same version must use the layout of the cache in " + start);
+                    // An earlier version than the last version.
+                    VillagePlanVersion.set(PlanVersion.LATEST - 1);
+                    generate(level, villages, start);
+                    helper.assertTrue(VillageRings.layoutCalculations() == layouts + 1,
+                            "A village of another version must get its own layout in " + start);
+                    helper.succeed();
+                    return;
+                }
+            }
+        } finally {
+            VillagePlanVersion.set(version);
+        }
+        helper.fail("No village with rings starts in " + CANDIDATES + " regions");
+    }
+
+    /** The start of the village structure of a set at a start chunk of the GameTest world. */
+    private static StructureStart generate(ServerLevel level, StructureSet villages, ChunkPos start) {
+        ChunkGenerator generator = level.getChunkSource().getGenerator();
+        return villages.structures().get(0).structure().value().generate(level.registryAccess(), generator,
+                generator.getBiomeSource(), level.getChunkSource().randomState(), level.getStructureManager(),
+                level.getSeed(), start, 0, level, biome -> true);
     }
 
     /**
