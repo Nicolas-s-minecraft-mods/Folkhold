@@ -1,0 +1,8 @@
+name = "Runehold"
+filename = "runehold-0.2.1.jar"
+side = "both"
+
+[download]
+url = "https://github.com/Nicolas-s-minecraft-mods/Runehold/releases/download/v0.2.1/runehold-0.2.1.jar"
+hash-format = "sha256"
+hash = "84e1baae0cab95a35a105dff93f486b11057b337488e6b2f29deab12277b0521"
