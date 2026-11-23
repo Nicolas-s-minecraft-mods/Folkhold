@@ -10,10 +10,17 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.WallZones;
 import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -88,6 +95,17 @@ public final class WallAccessGameTests {
     private static final int WANDER_TICKS = 2400;
     /** The wander test gives a new walk target to a zone at this interval, in ticks. */
     private static final int TARGET_TICKS = 60;
+    /** The time of the walk along the side of the stair, in ticks. */
+    private static final int SIDE_WALK_TICKS = 80;
+    /**
+     * The distance from the stair row to the middle of the villager in the walk along the stair, in blocks. The box of
+     * a villager is 0.6 blocks wide: its side is 0.1 blocks over the stair row.
+     */
+    private static final double SIDE_OFFSET = 0.2;
+    /** The failure message of the wander test gives the states of a villager on this number of ticks. */
+    private static final int TRACK_TICKS = 12;
+    /** The failure message of the wander test gives the track of this number of villagers at most. */
+    private static final int TRACKED_PROBLEMS = 2;
 
     private WallAccessGameTests() {
     }
@@ -202,6 +220,51 @@ public final class WallAccessGameTests {
     }
 
     /**
+     * A villager of the village walks west along the side of the stair of a tower, on the ground, with its box over
+     * the first row of the stair. Its feet stay under the zone of the tower: it does not step up the stairs. The move
+     * control moves the villager, with no brain behavior.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = SIDE_WALK_TICKS + 100, batch = "wall_access_side",
+            skyAccess = true)
+    public static void villagerAtTheSideOfTheStairDoesNotStepUp(GameTestHelper helper) {
+        VillageHeartBlockEntity heart = scene(helper);
+        WallZones zones = heart.wallZones(helper.getLevel());
+        Villager villager = villager(helper, STAIR_FOOT.offset(0, 0, 2), heart);
+        villager.getBrain().removeAllBehaviors();
+        long added = helper.getLevel().getGameTime();
+        Vec3 from = sideOfTheStair(helper, STAIR_FOOT.getX() + 0.5);
+        Vec3 to = sideOfTheStair(helper, EAST_START_X + 0.5);
+        villager.moveTo(from);
+        BlockPos stairTwo = helper.absolutePos(new BlockPos(EAST_START_X + STAIRS - 2, 3, TOWER_ORIGIN.getZ() + 2));
+        helper.assertTrue(zones.contains(stairTwo), "The stair 2 must be in the zone of the tower");
+        List<String> track = new ArrayList<>();
+        double[] highest = {villager.getY()};
+        helper.onEachTick(() -> {
+            villager.getMoveControl().setWantedPosition(to.x, to.y, to.z, 0.6);
+            highest[0] = Math.max(highest[0], villager.getY());
+            if (track.size() < SIDE_WALK_TICKS) {
+                track.add(step(helper, villager, helper.getTick()));
+            }
+        });
+        helper.runAtTickTime(SIDE_WALK_TICKS, () -> {
+            TestSupport.assertTicks(helper, villager, added);
+            BlockPos start = helper.absolutePos(STAIR_FOOT);
+            helper.assertTrue(Math.abs(villager.getX() - start.getX()) >= 2.0
+                    || Math.abs(villager.getZ() - start.getZ()) >= 2.0, "The villager must walk along the stair: "
+                    + state(helper, villager));
+            helper.assertTrue(highest[0] < helper.absolutePos(BlockPos.ZERO).getY() + 2.0, "The feet of the villager"
+                    + " must stay under the zone of the tower: highest Y " + highest[0] + ", track "
+                    + String.join(" | ", track.subList(Math.max(0, track.size() - TRACK_TICKS), track.size())));
+            helper.succeed();
+        });
+    }
+
+    /** A position on the ground at the side of the stair, with the box of a villager over the first stair row. */
+    private static Vec3 sideOfTheStair(GameTestHelper helper, double x) {
+        return helper.absoluteVec(new Vec3(x, 1.0, TOWER_ORIGIN.getZ() + 3 + SIDE_OFFSET));
+    }
+
+    /**
      * Villagers of the village of all the kinds wander near a tower for a long time, and get walk targets on the
      * platform, on the stair and on the tops of the columns. No villager goes on the platform, on a stair above the
      * first stair, or on the top of a column. The first stair stays out of the check: a push of an other villager
@@ -236,6 +299,8 @@ public final class WallAccessGameTests {
         Random random = new Random(919L);
         long start = helper.getLevel().getGameTime();
         List<String> problems = new ArrayList<>();
+        Map<Villager, Deque<String>> tracks = new HashMap<>();
+        Set<Villager> traced = new HashSet<>();
         helper.onEachTick(() -> {
             long time = helper.getLevel().getGameTime() - start;
             if (time % TARGET_TICKS == 0) {
@@ -251,11 +316,20 @@ public final class WallAccessGameTests {
                 }
             }
             for (Villager villager : villagers) {
+                Deque<String> track = tracks.computeIfAbsent(villager, key -> new ArrayDeque<>());
+                track.addLast(step(helper, villager, time));
+                if (track.size() > TRACK_TICKS) {
+                    track.removeFirst();
+                }
                 BlockPos pos = villager.blockPosition();
                 boolean high = towerBox.isInside(pos) && pos.getY() > towerBox.minY();
                 if ((high || zones.onColumn(pos.getX(), pos.getY(), pos.getZ())) && problems.size() < 10) {
-                    problems.add(villager.getVillagerData().getProfession() + " at " + relative(helper, pos)
-                            + " (" + pos + ", tick " + time + ")");
+                    String problem = villager.getVillagerData().getProfession() + " at " + relative(helper, pos)
+                            + " (" + pos + ", tick " + time + ")";
+                    if (traced.size() < TRACKED_PROBLEMS && traced.add(villager)) {
+                        problem += ", last ticks " + String.join(" | ", track);
+                    }
+                    problems.add(problem);
                 }
             }
         });
@@ -390,6 +464,23 @@ public final class WallAccessGameTests {
     private static String describe(GameTestHelper helper, @Nullable Path path) {
         return path == null ? "no path" : "reach " + path.canReach() + ", nodes "
                 + nodes(path).stream().map(pos -> relative(helper, pos)).toList();
+    }
+
+    /**
+     * The state of a villager on one tick, for the track of the wander test: the position and the motion from the
+     * origin of the test (with no rotation), the ground and collision flags, the next node of the path and the walk
+     * target, relative to the test.
+     */
+    private static String step(GameTestHelper helper, Villager villager, long time) {
+        Vec3 offset = villager.position().subtract(Vec3.atLowerCornerOf(helper.absolutePos(BlockPos.ZERO)));
+        Vec3 motion = villager.getDeltaMovement();
+        Path path = villager.getNavigation().getPath();
+        String next = path == null || path.isDone() ? "none" : relative(helper, path.getNextNodePos()).toShortString();
+        String target = villager.getBrain().getMemory(MemoryModuleType.WALK_TARGET)
+                .map(walk -> relative(helper, walk.getTarget().currentBlockPosition()).toShortString()).orElse("none");
+        return String.format(Locale.ROOT, "t%d (%.2f, %.2f, %.2f) v(%.2f, %.2f, %.2f) ground %b hit %b node %s "
+                + "target %s", time, offset.x, offset.y, offset.z, motion.x, motion.y, motion.z, villager.onGround(),
+                villager.horizontalCollision, next, target);
     }
 
     /** The state of a villager for the messages of the tests. */

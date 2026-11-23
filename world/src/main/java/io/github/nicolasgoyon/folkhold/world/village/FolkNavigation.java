@@ -14,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.Brain;
@@ -28,6 +29,8 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.pathfinder.PathFinder;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /**
@@ -47,7 +50,8 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       start with a node of a zone above the feet of the villager (see {@link #skipStepsUp}). A step to the top
  *       of a palisade column starts only on the top of a column: a path from a tower does not end on a column. The
  *       check of the villagers by the heart gives a walk to the heart to a villager in a zone (see
- *       {@link #leaveWall}).</li>
+ *       {@link #leaveWall}). A villager does not jump into a zone (see {@link #allowsJump}), and does not step up
+ *       into a zone (see {@link #allowsStepUp}).</li>
  *   <li>A villager of a faction village keeps away from the drops (see {@link Pits}). The navigation gives no path to
  *       a target in a pit or at the edge of a pit, except for a villager in a pit. The path finder gives no fall of {@value #FALL} blocks or
  *       more into a pit, and a position at the edge of a drop of 2 blocks or more costs {@value #EDGE_COST} blocks of
@@ -77,6 +81,8 @@ public final class FolkNavigation extends GroundPathNavigation {
     static final int MAX_WAY_RANGE = 160;
     /** The search of a way visits this number of nodes at most for each block of its range. */
     static final int WAY_NODES_PER_BLOCK = 32;
+    /** The check of a step up (see {@link #allowsStepUp}) makes the box of the villager smaller by this margin. */
+    private static final double BOX_MARGIN = 1.0E-7;
 
     private FolkNavigation(Villager villager, PathNavigation original) {
         super(villager, villager.level());
@@ -232,6 +238,39 @@ public final class FolkNavigation extends GroundPathNavigation {
         WallZones zones = zonesOf(villager);
         BlockPos feet = villager.blockPosition();
         return zones.isEmpty() || (!zones.contains(feet) && !zones.contains(feet.above()));
+    }
+
+    /**
+     * True if an entity can step up in a move. A villager of a faction village does not step up when its feet after the
+     * step can be in a zone of the wall of its village. The check uses the level of the feet with the full step
+     * height, at each block under the box of the villager after the horizontal move. Thus a villager at the side of
+     * the stair of a tower does not walk up the stairs, with its feet out of the stair row. The villager still steps
+     * onto the low half of the first stair, under the zone of the tower.
+     *
+     * @param entity   the entity
+     * @param movement the move of the entity in this tick
+     * @param step     the step height of the entity, more than 0
+     * @return false for a villager that can step up into a zone of the wall
+     */
+    public static boolean allowsStepUp(Entity entity, Vec3 movement, float step) {
+        if (!(entity instanceof Villager villager) || !(villager.navigation instanceof FolkNavigation)
+                || movement.horizontalDistanceSqr() == 0.0) {
+            return true;
+        }
+        WallZones zones = zonesOf(villager);
+        if (zones.isEmpty()) {
+            return true;
+        }
+        int feet = Mth.floor(villager.getY() + step);
+        AABB box = villager.getBoundingBox().move(movement.x, 0.0, movement.z).deflate(BOX_MARGIN, 0.0, BOX_MARGIN);
+        for (int x = Mth.floor(box.minX); x <= Mth.floor(box.maxX); x++) {
+            for (int z = Mth.floor(box.minZ); z <= Mth.floor(box.maxZ); z++) {
+                if (zones.contains(x, feet, z)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**
