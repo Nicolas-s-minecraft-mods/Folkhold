@@ -63,6 +63,22 @@ public final class EventSchedule extends SavedData {
     }
 
     /**
+     * Moves the time of the next event earlier or later with a frequency factor (see {@link EventMath#clockShift}).
+     * The method has no effect with no time, or when the event is due: a due event keeps its time.
+     *
+     * @param level         the level
+     * @param intervalTicks the time between two examinations of the schedule, in ticks
+     * @param factor        the frequency factor
+     */
+    public void advance(ServerLevel level, int intervalTicks, double factor) {
+        long shift = EventMath.clockShift(intervalTicks, factor);
+        if (shift == 0L || nextTime < 0L || EventMath.isDue(nextTime, level.getGameTime())) {
+            return;
+        }
+        setNextTime(nextTime - shift);
+    }
+
+    /**
      * Records the start of a natural event: the schedule gets the time of the event after it.
      *
      * @param level   the level

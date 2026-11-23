@@ -10,7 +10,13 @@ import io.github.nicolasgoyon.folkhold.events.config.EventsConfig;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.biome.Biome;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 /**
@@ -20,7 +26,10 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  *   <li>Clock: the game time of the level. The time between two natural earthquakes is random, between
  *       {@link EventsConfig#EARTHQUAKE_MIN_DAYS} and {@link EventsConfig#EARTHQUAKE_MAX_DAYS} game days. The level
  *       keeps the time of the next earthquake (see {@link EventSchedule}).</li>
- *   <li>At this time, the earthquake starts near a random player of the level, in a loaded chunk. With no player in
+ *   <li>Terrain: the clock runs faster or slower with the mean frequency factor of the biomes at the players (see
+ *       {@link TerrainFactors} and {@link EventsConfig#EARTHQUAKE_TERRAIN_FACTORS}).</li>
+ *   <li>At this time, the earthquake starts near a random player of the level, in a loaded chunk. The chance to
+ *       select a player is in proportion to the factor of its biome. With no player in
  *       the level, no earthquake occurs, and the next earthquake gets a new time. No chunk loads for an
  *       earthquake.</li>
  *   <li>A new earthquake does not start when its area overlaps the area of an active earthquake, or when the server
@@ -108,6 +117,12 @@ public final class Earthquakes {
         ACTIVE.tick(level, earthquake -> logEnd(level, earthquake));
         int minDays = EventsConfig.EARTHQUAKE_MIN_DAYS.get();
         int maxDays = EventsConfig.EARTHQUAKE_MAX_DAYS.get();
+        if (level.getGameTime() % SCHEDULE_INTERVAL == 0 && hasNaturalEarthquakes(level)) {
+            TerrainFactors factors = terrainFactors();
+            schedule(level).advance(level, SCHEDULE_INTERVAL, TerrainFactors.mean(
+                    EventPlacement.alivePlayers(level).stream().map(player -> factor(level, factors, player))
+                            .toList()));
+        }
         if (level.getGameTime() % SCHEDULE_INTERVAL == 0 && hasNaturalEarthquakes(level)
                 && schedule(level).isDue(level, minDays, maxDays)) {
             if (startNatural(level).isPresent()) {
@@ -127,7 +142,9 @@ public final class Earthquakes {
      *         {@link EventRegions})
      */
     public static Optional<Earthquake> startNatural(ServerLevel level) {
-        return EventPlacement.nearRandomPlayer(level, EventsConfig.EARTHQUAKE_EPICENTER_DISTANCE.get())
+        TerrainFactors factors = terrainFactors();
+        return EventPlacement.nearRandomPlayer(level, EventsConfig.EARTHQUAKE_EPICENTER_DISTANCE.get(),
+                        player -> factor(level, factors, player))
                 .filter(center -> EventRegions.isOpen(level, center)).flatMap(center -> {
                     double strength = EventMath.between(level.getRandom().nextDouble(),
                             EventsConfig.EARTHQUAKE_MIN_STRENGTH.get(), EventsConfig.EARTHQUAKE_MAX_STRENGTH.get());
@@ -136,6 +153,24 @@ public final class Earthquakes {
                     earthquake.ifPresent(started -> EventRegions.pause(level, center));
                     return earthquake;
                 });
+    }
+
+    /** The frequency factors of the config. */
+    public static TerrainFactors terrainFactors() {
+        return TerrainFactors.parse(EventsConfig.EARTHQUAKE_TERRAIN_FACTORS.get());
+    }
+
+    /**
+     * The frequency factor of the biome at a player.
+     *
+     * @param level   the level
+     * @param factors the factors of the config
+     * @param player  the player
+     * @return the factor
+     */
+    public static double factor(ServerLevel level, TerrainFactors factors, ServerPlayer player) {
+        Holder<Biome> biome = level.getBiome(player.blockPosition());
+        return factors.factor(tag -> biome.is(TagKey.create(Registries.BIOME, ResourceLocation.parse(tag))));
     }
 
     private static void logEnd(ServerLevel level, Earthquake earthquake) {

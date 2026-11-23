@@ -61,6 +61,18 @@ public final class EventMath {
     }
 
     /**
+     * The change of the time of the next natural event for one examination of the schedule, with a frequency factor.
+     * The factor sets the speed of the clock of the event: with a factor of 2, the event comes 2 times faster.
+     *
+     * @param intervalTicks the time between two examinations of the schedule, in ticks
+     * @param factor        the frequency factor, 0 or more. 1 gives no change. 0 stops the clock.
+     * @return the number of ticks to remove from the time of the next event. A negative value moves the time later.
+     */
+    public static long clockShift(int intervalTicks, double factor) {
+        return Math.round(intervalTicks * (Math.max(0.0, factor) - 1.0));
+    }
+
+    /**
      * A value between two limits.
      *
      * @param random a random number from 0 (included) to 1 (excluded)

@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.events.config;
 
 import io.github.nicolasgoyon.folkhold.events.common.BlockChanges;
+import io.github.nicolasgoyon.folkhold.events.earthquake.TerrainFactors;
 import java.util.List;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
@@ -14,6 +15,10 @@ public final class EventsConfig {
     public static final int DEFAULT_MIN_DAYS = 15;
     /** The default longest time between two natural events of one type, in game days. */
     public static final int DEFAULT_MAX_DAYS = 30;
+    /** The default shortest pause of a region after a natural event, in game days. */
+    public static final int DEFAULT_REGION_MIN_DAYS = 7;
+    /** The default longest pause of a region after a natural event, in game days. */
+    public static final int DEFAULT_REGION_MAX_DAYS = 15;
 
     public static final ModConfigSpec SPEC;
 
@@ -29,6 +34,7 @@ public final class EventsConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> EARTHQUAKE_DIMENSIONS;
     public static final ModConfigSpec.IntValue EARTHQUAKE_MIN_DAYS;
     public static final ModConfigSpec.IntValue EARTHQUAKE_MAX_DAYS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> EARTHQUAKE_TERRAIN_FACTORS;
     public static final ModConfigSpec.DoubleValue EARTHQUAKE_MIN_STRENGTH;
     public static final ModConfigSpec.DoubleValue EARTHQUAKE_MAX_STRENGTH;
     public static final ModConfigSpec.IntValue EARTHQUAKE_MAX_ACTIVE;
@@ -93,11 +99,11 @@ public final class EventsConfig {
                         "(minDays and maxDays of its section) also applies: an event that is due waits for the end",
                         "of the pause.")
                 .translation(KEY_PREFIX + "regionMinDays")
-                .defineInRange("regionMinDays", 7, 0, 1000);
+                .defineInRange("regionMinDays", DEFAULT_REGION_MIN_DAYS, 0, 1000);
         REGION_MAX_DAYS = builder
                 .comment("Longest pause of a region after a natural event, in game days.")
                 .translation(KEY_PREFIX + "regionMaxDays")
-                .defineInRange("regionMaxDays", 15, 0, 1000);
+                .defineInRange("regionMaxDays", DEFAULT_REGION_MAX_DAYS, 0, 1000);
         builder.pop();
 
         builder.comment("Classes of the blocks for the natural events. The block tags folkhold_events:fragile,",
@@ -140,6 +146,15 @@ public final class EventsConfig {
                         "below minDays counts as minDays.")
                 .translation(KEY_PREFIX + "earthquakeMaxDays")
                 .defineInRange("maxDays", DEFAULT_MAX_DAYS, 1, 1000);
+        EARTHQUAKE_TERRAIN_FACTORS = builder
+                .comment("Frequency factors for each biome tag, in the format <biome tag>=<factor>, from 0 to 10. The",
+                        "clock of the earthquakes runs faster or slower with the mean factor of the biomes at the",
+                        "players. The epicenter is near a player, with a chance in proportion to the factor of its",
+                        "biome. A biome in no tag of the list has the factor 1. A biome in more than one tag gets the",
+                        "largest factor.")
+                .translation(KEY_PREFIX + "earthquakeTerrainFactors")
+                .defineListAllowEmpty("terrainFactors", TerrainFactors.DEFAULTS, () -> "minecraft:is_mountain=2.0",
+                        TerrainFactors::isValid);
         EARTHQUAKE_MIN_STRENGTH = builder
                 .comment("Lowest strength of a natural earthquake. The strength multiplies the chances of damage.")
                 .translation(KEY_PREFIX + "earthquakeMinStrength")
