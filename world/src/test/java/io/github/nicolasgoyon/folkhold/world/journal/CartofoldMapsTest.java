@@ -67,7 +67,7 @@ class CartofoldMapsTest {
         assertEquals(0x40AA5500, area.fillColor());
         assertEquals(0xCCAA5500, area.borderColor());
         assertEquals(1, area.tooltip().size());
-        assertTrue(area.onlyExplored(), "A territory shows only on the explored chunks");
+        assertTrue(area.greyUnexplored(), "A territory shows in grey on the unexplored chunks");
         assertEquals(layer, CartofoldMaps.territories(map, CLAIMANTS), "The same map gives the same layer");
     }
 
@@ -79,6 +79,7 @@ class CartofoldMapsTest {
 
         assertEquals(1, areas.size());
         assertFalse(areas.get(0).onlyExplored());
+        assertFalse(areas.get(0).greyUnexplored());
     }
 
     /** The cache of the chunks keeps only the settlements that claim chunks now. */
@@ -154,6 +155,7 @@ class CartofoldMapsTest {
         assertFalse(area.contains(12, 0), "The chunk (12, 0) is out of the disc");
 
         LayerContent layer = CartofoldMaps.territories(TerritoryMapPayload.EMPTY, CLAIMANTS, areas);
-        assertEquals(List.of(area.withOnlyExplored(true)), layer.areas(), "The pillager territory shows only on the explored chunks");
+        assertEquals(List.of(area.withGreyUnexplored(true)), layer.areas(),
+                "The pillager territory shows in grey on the unexplored chunks");
     }
 }
