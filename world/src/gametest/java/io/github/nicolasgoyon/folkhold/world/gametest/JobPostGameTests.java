@@ -2,13 +2,23 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.blocks.block.JobSignBlockEntity;
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrade;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeRules;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.Prices;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.Recipe;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.Stock;
+import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.core.sim.schedule.DaySchedule;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
+import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
+import io.github.nicolasgoyon.folkhold.world.economy.ItemIds;
+import io.github.nicolasgoyon.folkhold.world.economy.JobTradeOffers;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.economy.WorkerSkills;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload.Row;
@@ -25,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SplittableRandom;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -46,11 +57,13 @@ import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -444,6 +457,106 @@ public final class JobPostGameTests {
                 }
             }
             helper.assertTrue(found, "The save must keep the experience of the farmer post");
+        } finally {
+            villagers.forEach(Entity::discard);
+            end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A mason shows its need trades, then the job trades of its post. The job trade with the item of a need trade does
+     * not show. A job buy trade puts items in the stock and gives 2 experience to the post. Its uses do not refill
+     * before the next week, also with free room in the stock.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 40, batch = "job_posts_job_trades", skyAccess = true)
+    public static void workerShowsItsJobTrades(GameTestHelper helper) {
+        startStaff(helper);
+        TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_SKILL_JOB_TRADE_EXPERIENCE, 2);
+        TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_JOB_TRADES_ENABLED, true);
+        Village village = village(helper, List.of("job_mason", "house_cottage"), 3);
+        List<Villager> villagers = new ArrayList<>();
+        TestSupport.atTestEnd(helper, () -> villagers.forEach(Entity::discard));
+        try {
+            ServerLevel level = helper.getLevel();
+            MinecraftServer server = level.getServer();
+            Settlement settlement = village.settlement();
+            settlement.economy().setInitialized(true);
+            SettlementData.get(server).addTreasury(settlement.factionId(), 10_000);
+            VillageFolk.professions(settlement, VillageFolk.inhabitantCount(settlement))
+                    .forEach(profession -> villagers.add(VillageFolk.spawn(level, village.heart().getBlockPos(),
+                            profession)));
+            village.heart().claimHomeBeds();
+            village.heart().updateWorkers();
+            Villager mason = villagers.stream().filter(villager -> villager.getVillagerData().getProfession()
+                    == VillageFolk.professionOf(MASON)).findFirst().orElseThrow();
+            WorkerSkills.Source source = WorkerSkills.sourceOf(settlement, mason).orElseThrow();
+            helper.assertTrue(source.post() != null && source.jobId().equals(MASON), "The mason must have its post");
+
+            long week = JobTradeOffers.week(level);
+            List<JobTrade> selection = JobTradeOffers.selection(settlement, source, week);
+            JobTrade sold = selection.stream().filter(trade -> trade.direction() == JobTrade.Direction.SELL)
+                    .findFirst().orElseThrow();
+            JobTrade bought = selection.stream().filter(trade -> trade.direction() == JobTrade.Direction.BUY)
+                    .findFirst().orElseThrow();
+            Job job = EconomyData.jobs().get(MASON);
+            int population = settlement.economy().population();
+            Stock stock = settlement.economy().stock();
+            stock.asMap().keySet().stream().toList().forEach(item -> stock.set(item, 0));
+            job.recipe().inputs().forEach(input -> stock.set(input.item(),
+                    Prices.target(EconomyData.catalog().info(input.item()), population)));
+            String other = job.recipe().outputs().stream().map(Recipe.Output::item)
+                    .filter(item -> !item.equals(sold.item())).findFirst().orElseThrow();
+            stock.set(sold.item(), 64);
+            stock.set(other, 64);
+
+            MerchantOffers offers = Merchants.workerOffers(level, settlement, ReputationTier.NEUTRAL, mason, 0);
+            List<MerchantOffer> marked = offers.stream().filter(offer -> JobTradeOffers.mark(offer).isPresent())
+                    .toList();
+            helper.assertTrue(offers.size() > marked.size(), "The mason must show need trades: " + offers.size());
+            helper.assertTrue(offers.indexOf(marked.get(0)) == offers.size() - marked.size(),
+                    "The job trades must come after the need trades");
+            helper.assertTrue(marked.size() == 1 && JobTradeOffers.mark(marked.get(0)).orElseThrow().trade()
+                    .equals(bought), "Only the job buy trade must show: " + marked.size());
+            String soldId = sold.item();
+            helper.assertTrue(offers.stream().filter(offer -> ItemIds.id(offer.getResult().getItem()).equals(soldId))
+                    .count() == 1, "The item of a need trade must show one time");
+
+            Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+            int target = Prices.target(EconomyData.catalog().info(bought.item()), population);
+            int weekly = JobTradeRules.weeklyUses(bought, 1);
+            String key = JobTradeOffers.sourceKey(source);
+            int trades = 0;
+            for (int round = 0; round <= weekly; round++) {
+                stock.set(bought.item(), target);
+                Optional<MerchantOffer> offer = JobTradeOffers.offers(server, settlement, ReputationTier.NEUTRAL,
+                        source, week, Set.of()).stream().filter(found -> JobTradeOffers.mark(found)
+                        .filter(mark -> mark.trade().equals(bought)).isPresent()).findFirst();
+                if (offer.isEmpty()) {
+                    break;
+                }
+                for (int use = 0; use < offer.get().getMaxUses(); use++) {
+                    int before = stock.count(bought.item());
+                    int experience = settlement.jobSkills().experience(source.post());
+                    Merchants.onTrade(new TradeWithVillagerEvent(player, offer.get(), mason));
+                    helper.assertTrue(stock.count(bought.item()) == before + offer.get().getCostA().getCount(),
+                            "The job trade must put the items in the stock");
+                    helper.assertTrue(settlement.jobSkills().experience(source.post()) == experience + 2,
+                            "A job trade must give 2 experience");
+                    trades++;
+                }
+            }
+            helper.assertTrue(trades == weekly && settlement.jobTradeUses().used(key, MASON, week, bought) == weekly,
+                    "Expected " + weekly + " uses in the week: " + trades);
+            stock.set(bought.item(), target);
+            helper.assertTrue(JobTradeOffers.offers(server, settlement, ReputationTier.NEUTRAL, source, week,
+                    Set.of()).stream().noneMatch(offer -> JobTradeOffers.mark(offer)
+                    .filter(mark -> mark.trade().equals(bought)).isPresent()),
+                    "The uses must not refill before the next week");
+            WorkerSkills.Source later = new WorkerSkills.Source(source.post(), MASON);
+            helper.assertTrue(JobTradeOffers.offers(server, settlement, ReputationTier.NEUTRAL, later, week + 1,
+                    Set.of()).stream().anyMatch(offer -> JobTradeOffers.mark(offer).isPresent()),
+                    "The next week must have job trades");
         } finally {
             villagers.forEach(Entity::discard);
             end(helper, village);

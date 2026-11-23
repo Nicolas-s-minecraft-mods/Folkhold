@@ -235,6 +235,7 @@
   "folkhold_world.configuration.economySkillCycleExperience": "Experience of a job post for each cycle",
   "folkhold_world.configuration.economySkillNeedTradeExperience": "Experience of a job post for each trade",
   "folkhold_world.configuration.economySkillJobTradeExperience": "Experience of a job post for each job trade",
+  "folkhold_world.configuration.economyJobTradesEnabled": "Job trades",
   "folkhold_world.configuration.economyJobTradeSellMarkup": "Sell price factor of the job trades",
   "folkhold_world.configuration.economyJobTradeBuyMarkdown": "Buy price factor of the job trades",
   "folkhold_world.configuration.economyJobTradeWorkFactor": "Work factor of the job trades with materials",

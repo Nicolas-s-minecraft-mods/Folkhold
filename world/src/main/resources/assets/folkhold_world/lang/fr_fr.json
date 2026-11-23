@@ -235,6 +235,7 @@
   "folkhold_world.configuration.economySkillCycleExperience": "Expérience d'un poste de métier par cycle",
   "folkhold_world.configuration.economySkillNeedTradeExperience": "Expérience d'un poste de métier par échange",
   "folkhold_world.configuration.economySkillJobTradeExperience": "Expérience d'un poste de métier par échange du métier",
+  "folkhold_world.configuration.economyJobTradesEnabled": "Échanges du métier",
   "folkhold_world.configuration.economyJobTradeSellMarkup": "Facteur du prix de vente des échanges du métier",
   "folkhold_world.configuration.economyJobTradeBuyMarkdown": "Facteur du prix d'achat des échanges du métier",
   "folkhold_world.configuration.economyJobTradeWorkFactor": "Facteur de travail des échanges du métier avec des matériaux",

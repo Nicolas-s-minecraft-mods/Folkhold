@@ -1217,11 +1217,11 @@ A surplus lowers the price down to ×0.5. A shortage raises the price up to ×3.
 - No trade below the neutral tier. Friends and allies get a discount.
 - The player can sell surplus items (ore, crops). This lowers their local price. To get the best price, the player must sell in different places.
 - The currency stays the emerald. The treasury of each faction is finite. Its sales fill it.
-- **Planned**: job trades by level that change each week (see "Job trades (planned)"). The skill of the worker, the wealth of the village and the reputation of the player select them.
+- **Job trades**: each worker also shows the job trades of its post, by level, and they change each week (see "Job trades"). The skill of the worker and the wealth of the village select them.
 
-### Job trades (planned)
+### Job trades
 
-**Planned** (#1006): this section is the target design of the job trades. The code has these parts: "Source of the trades" (the trade lists of the job files, `JobTrade`, `Job.trades`) and "Skill of the workers" (`JobSkills`, `WorkerSkills`). It also has the pure rules of the goods tier, of the weekly selection, of the volumes and of the prices (`JobTradeRules`). No worker shows a job trade. The section "Trade with the player" gives the trades that the workers show.
+The job trades of #1006. The code has the trade lists (`JobTrade`, `Job.trades`), the skill of the workers (`JobSkills`, `WorkerSkills`), the rules (`JobTradeRules`) and the trade screen (`JobTradeOffers`). These parts are **planned**: the enchanted items ("Enchantments and the Mending rule", #1065), the open point of "Trade tiers" (#1066), and the reputation `R` (#1066). A sell trade with `enchant` gives an item with no enchantments.
 
 In this section, a **need trade** is an offer of `JobTrades` (see "Trade with the player"). The worker sells the outputs of its job from the stock, and buys the inputs that the village needs. A **job trade** is a new offer from the trade list of the job. The need trades stay. For the player, the two kinds are the same kind of trade, in the same trade screen.
 
@@ -1346,6 +1346,11 @@ Options for the open point (reputation and wealth, with a low skill):
 - The offer count of the level (see "Trade with the player") limits the need trades only. The job trades come in addition.
 - The market rule and the market hours apply to the job trades. The extra offers of the market day stay need trades.
 - The workers of a profession show the same need trades. Each post shows its own job trades: they follow its skill.
+- Code (`Merchants.workerOffers`, `JobTradeOffers.offers`): the job trades of a worker come from the source of its skill (see "Skill of the workers"). A trade with no use now does not show.
+- A price below 1 emerald gives more items for 1 emerald, as for the need trades. The count of one use is then `1 / price` times the count of the trade, rounded down to sell and up to buy. It is not above the stack size of the item.
+- A sell trade above 64 emeralds puts the rest in the second cost slot, up to 128 emeralds. A buy trade pays 64 emeralds at most.
+- A use of a job trade gives `skillJobTradeExperience` (2) to the source in place of `skillNeedTradeExperience`.
+- A mark links each offer of the trade screen to its job trade (`JobTradeOffers.mark`). The marks are not saved: a worker gets new offers each time that a player starts to trade.
 
 #### Enchantments and the Mending rule
 
@@ -1356,11 +1361,11 @@ Options for the open point (reputation and wealth, with a low skill):
 #### Saved data and old worlds
 
 - The settlement data keeps the skills in the optional key `JobSkills` of each settlement. `Posts` has the position of the job sign, the job id and the experience of each post. `Slots` has the experience of the job slots with no post, by job id. A settlement with no skill has no key.
-- **Planned**: each job post gets the uses of its job trades of the week (week number and uses by trade). A legacy job slot gets the same values by job id. The values are new optional keys of the settlement data.
+- The settlement data keeps the uses of the job trades of the week in the optional key `JobTradeUses` of each settlement (`JobTradeUses`). Each source has a key: the position of the job sign of a post, or the job id of a job slot with no post. Each source keeps its job id, the week and the uses by trade (direction and item). A use of an other week or of an other job starts a new count.
 - The weekly selection is not saved: the seed gives it again.
 - An old world: each post starts at Novice with 0 experience. The first trade of the week selects the job trades. The need trades do not change. The villagers get the vanilla level of their post: in an old world, all the workers show Novice.
 - A data pack job file with no list `trades` gets a list from its recipe (see "Source of the trades").
-- The option `economy.jobTrades.enabled` (default true) turns on the job trades. With false, the trade screen shows the need trades only, and the posts still get experience.
+- The option `jobTradesEnabled` of the section `economy` of the server config (default true) turns on the job trades. With false, the trade screen shows the need trades only, and the posts still get experience.
 
 #### Implementation issues
 

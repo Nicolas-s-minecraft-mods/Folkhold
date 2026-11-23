@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.construction.GhostPlacement;
+import io.github.nicolasgoyon.folkhold.world.economy.JobTradeOffers;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
@@ -345,8 +346,8 @@ public final class MarketTradeGameTests {
     }
 
     /**
-     * On the market day of the village, the miner has the extra offers of the schedule. The next day, it has the
-     * offers of its share again.
+     * On the market day of the village, the miner has the extra need trades of the schedule. The next day, it has the
+     * need trades of its share again. The job trades come in addition (see {@link #needOffers}).
      */
     @GameTest(template = "arena_large", timeoutTicks = 20, batch = "market_trade_day")
     public static void marketDayGivesExtraOffers(GameTestHelper helper) {
@@ -368,12 +369,12 @@ public final class MarketTradeGameTests {
             TestSupport.setDayTimeForTest(helper, day * DaySchedule.DAY_TICKS + MARKET_TIME);
             marketDayExtra = VillageSchedule.extraOffers(level, settlement);
             helper.assertTrue(interact(player, miner), "The miner must trade at the plaza on the market day");
-            marketDayOffers = miner.getOffers().size();
+            marketDayOffers = needOffers(miner);
 
             TestSupport.setDayTimeForTest(helper, (day + 1) * DaySchedule.DAY_TICKS + MARKET_TIME);
             nextDayExtra = VillageSchedule.extraOffers(level, settlement);
             helper.assertTrue(interact(player, miner), "The miner must trade at the plaza the next day");
-            nextDayOffers = miner.getOffers().size();
+            nextDayOffers = needOffers(miner);
         } finally {
             TestSupport.setDayTimeForTest(helper, oldTime);
         }
@@ -384,6 +385,14 @@ public final class MarketTradeGameTests {
         helper.assertTrue(nextDayOffers == share,
                 "The miner must have " + share + " offers after the market day, found " + nextDayOffers);
         helper.succeed();
+    }
+
+    /**
+     * The need trades of a worker: its offers with no job trade (see {@link JobTradeOffers}). The offer count of the
+     * level and the extra offers of the market day apply to the need trades only.
+     */
+    private static int needOffers(Villager worker) {
+        return (int) worker.getOffers().stream().filter(offer -> JobTradeOffers.mark(offer).isEmpty()).count();
     }
 
     /**
@@ -409,7 +418,7 @@ public final class MarketTradeGameTests {
             extra = VillageSchedule.extraOffers(level, settlement);
             count = Merchants.offerCount(settlement, VillagerProfession.TOOLSMITH, extra);
             helper.assertTrue(interact(player, miner), "The miner must trade on the market day");
-            offers = miner.getOffers().size();
+            offers = needOffers(miner);
         } finally {
             TestSupport.setDayTimeForTest(helper, oldTime);
         }

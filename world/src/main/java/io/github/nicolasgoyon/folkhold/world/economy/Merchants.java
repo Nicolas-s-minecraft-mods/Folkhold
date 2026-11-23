@@ -3,6 +3,8 @@ package io.github.nicolasgoyon.folkhold.world.economy;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomySettings;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemInfo;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrade;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeUses;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrades;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Prices;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Stock;
@@ -23,10 +25,12 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import io.github.nicolasgoyon.folkhold.world.village.VillageMarket;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageSchedule;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.ToIntFunction;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -73,6 +77,8 @@ import net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent;
  *       {@link VillageMarket}). Out of the trade place or out of the market hours, the worker refuses, and the player
  *       gets the place and the market hours.</li>
  *   <li>On the market day of the village, each trader has extra offers (see {@link JobTrades#offers}).</li>
+ *   <li>After these need trades, each worker shows the job trades of its post (see {@link #workerOffers} and
+ *       {@link JobTradeOffers}).</li>
  * </ul>
  *
  * <p>The caravan merchants have their own rule: they trade at all the hours during their stay (see
@@ -233,8 +239,8 @@ public final class Merchants {
             return;
         }
         ReputationTier tier = Reputations.tier(level.getServer(), player, heart);
-        villager.setOffers(offers(level.getServer(), settlement, tier, villager.getVillagerData().getProfession(),
-                VillageSchedule.extraOffers(level, settlement)));
+        villager.setOffers(workerOffers(level, settlement, tier, villager, VillageSchedule.extraOffers(level,
+                settlement)));
     }
 
     /**
@@ -324,8 +330,14 @@ public final class Merchants {
         }
         MinecraftServer server = level.getServer();
         Settlements.of(server, heart).ifPresent(settlement -> {
-            if (applyTrade(server, settlement, event.getMerchantOffer())) {
-                WorkerSkills.addTrade(settlement, worker, WorldConfig.ECONOMY_SKILL_NEED_TRADE_EXPERIENCE.get());
+            Optional<JobTradeOffers.Mark> mark = JobTradeOffers.mark(event.getMerchantOffer());
+            boolean paid = mark.isPresent()
+                    ? JobTradeOffers.apply(server, settlement, event.getMerchantOffer(), mark.get())
+                    : applyTrade(server, settlement, event.getMerchantOffer());
+            if (paid) {
+                WorkerSkills.addTrade(settlement, worker, mark.isPresent()
+                        ? WorldConfig.ECONOMY_SKILL_JOB_TRADE_EXPERIENCE.get()
+                        : WorldConfig.ECONOMY_SKILL_NEED_TRADE_EXPERIENCE.get());
             } else if (event.getEntity() instanceof ServerPlayer player) {
                 cancel(player, event.getMerchantOffer());
             }
@@ -436,6 +448,42 @@ public final class Merchants {
                 bought++;
             }
         }
+        return offers;
+    }
+
+    /**
+     * The offers of a worker when a player starts to trade: the need trades of its profession (see {@link #offers}),
+     * then the job trades of its post (see {@link JobTradeOffers}). A job trade with the item and the direction of a
+     * need trade does not show. The offer count of the level limits the need trades only. With the option
+     * {@code jobTradesEnabled} at false, the worker shows only the need trades.
+     *
+     * @param level      the level of the worker
+     * @param settlement the settlement of the worker
+     * @param tier       the reputation tier of the player
+     * @param villager   the worker
+     * @param extra      the extra need trades of the market day
+     * @return the offers
+     */
+    public static MerchantOffers workerOffers(ServerLevel level, Settlement settlement, ReputationTier tier,
+            Villager villager, int extra) {
+        MerchantOffers offers = offers(level.getServer(), settlement, tier, villager.getVillagerData().getProfession(),
+                extra);
+        if (!JobTradeOffers.enabled()) {
+            return offers;
+        }
+        Optional<WorkerSkills.Source> source = WorkerSkills.sourceOf(settlement, villager);
+        if (source.isEmpty()) {
+            return offers;
+        }
+        Set<String> hidden = new HashSet<>();
+        for (MerchantOffer offer : offers) {
+            boolean buy = offer.getResult().is(Items.EMERALD);
+            ItemStack stack = buy ? offer.getCostA() : offer.getResult();
+            hidden.add(JobTradeUses.tradeKey(new JobTrade(buy ? JobTrade.Direction.BUY : JobTrade.Direction.SELL,
+                    ItemIds.id(stack.getItem()), 1, 1, 1, List.of(), false, 1)));
+        }
+        offers.addAll(JobTradeOffers.offers(level.getServer(), settlement, tier, source.get(),
+                JobTradeOffers.week(level), hidden));
         return offers;
     }
 
@@ -573,13 +621,20 @@ public final class Merchants {
         for (int index = 0; index < offers.size(); index++) {
             MerchantOffer offer = offers.get(index);
             ItemStack result = offer.getResult();
-            long payable = result.is(Items.EMERALD) ? treasury / result.getCount()
-                    : available.applyAsInt(ItemIds.id(result.getItem())) / result.getCount();
+            Optional<JobTradeOffers.Mark> mark = JobTradeOffers.mark(offer);
+            long payable;
+            if (mark.isPresent()) {
+                payable = JobTradeOffers.payable(mark.get(), available, treasury, result.getCount());
+            } else {
+                payable = result.is(Items.EMERALD) ? treasury / result.getCount()
+                        : available.applyAsInt(ItemIds.id(result.getItem())) / result.getCount();
+            }
             int maxUses = (int) Math.min(offer.getMaxUses(), offer.getUses() + payable);
             if (maxUses != offer.getMaxUses()) {
                 MerchantOffer limited = new MerchantOffer(offer.getItemCostA(), offer.getItemCostB(), result,
                         offer.getUses(), maxUses, offer.getXp(), offer.getPriceMultiplier(), offer.getDemand());
                 limited.setSpecialPriceDiff(offer.getSpecialPriceDiff());
+                JobTradeOffers.copyMark(offer, limited);
                 offers.set(index, limited);
                 changed = true;
             }

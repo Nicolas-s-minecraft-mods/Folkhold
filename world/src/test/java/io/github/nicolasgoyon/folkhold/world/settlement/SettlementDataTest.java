@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrade;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import java.util.List;
 import java.util.Optional;
@@ -130,6 +131,24 @@ class SettlementDataTest {
         assertEquals(scanned.jobSkills().posts(), again.jobSkills().posts());
         assertTrue(loaded.registry().byId("old").orElseThrow().jobSkills().isEmpty(),
                 "An old settlement must start at Novice");
+    }
+
+    /** The uses of the job trades of the week survive the save. */
+    @Test
+    void jobTradeUsesSurviveSaveAndLoad() {
+        SettlementData data = new SettlementData();
+        Settlement scanned = settlement("scanned");
+        JobTrade cobble = new JobTrade(JobTrade.Direction.BUY, "minecraft:cobblestone", 16, 1, 7, List.of(), false,
+                1);
+        scanned.jobTradeUses().use("1,64,2", "folkhold_world:mason", 12, cobble);
+        scanned.jobTradeUses().use("1,64,2", "folkhold_world:mason", 12, cobble);
+        data.registry().add(scanned);
+
+        SettlementData loaded = SettlementData.load(data.save(new CompoundTag(), null), null);
+
+        Settlement again = loaded.registry().byId("scanned").orElseThrow();
+        assertEquals(2, again.jobTradeUses().used("1,64,2", "folkhold_world:mason", 12, cobble));
+        assertEquals(scanned.jobTradeUses().sources(), again.jobTradeUses().sources());
     }
 
     private static Settlement settlement(String id) {
