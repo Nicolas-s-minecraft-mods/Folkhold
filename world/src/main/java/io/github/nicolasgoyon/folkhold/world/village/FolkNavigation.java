@@ -43,7 +43,8 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       target or a work target on the wall, and the villagers do not stop in a group at the foot of a stair. The
  *       units of the garrison are not villagers: they walk on the towers.</li>
  *   <li>A villager in a zone walks out of it. In a zone, the path finder gives a step to a position of a zone only
- *       on the same level or down: the villager walks down the stair of a tower, and does not go up. A step to the top
+ *       on the same level or down: the villager walks down the stair of a tower, and does not go up. A path does not
+ *       start with a node of a zone above the feet of the villager (see {@link #skipStepsUp}). A step to the top
  *       of a palisade column starts only on the top of a column: a path from a tower does not end on a column. The
  *       check of the villagers by the heart gives a walk to the heart to a villager in a zone (see
  *       {@link #leaveWall}).</li>
@@ -98,8 +99,35 @@ public final class FolkNavigation extends GroundPathNavigation {
                 && !Pits.isPit(level, mob.blockPosition())) {
             allowed = allowed.stream().filter(target -> !isNearPit(target)).collect(Collectors.toUnmodifiableSet());
         }
-        return allowed.isEmpty() ? null
-                : super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
+        if (allowed.isEmpty()) {
+            return null;
+        }
+        Path path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
+        if (path != null && !zones.isEmpty()) {
+            skipStepsUp(path, zones, mob.blockPosition().getY());
+        }
+        return path;
+    }
+
+    /**
+     * Skips the first nodes of a path that are in a zone and above the block of the feet of the villager. The path
+     * finder starts a path at the node above the block of the feet when the villager stands on the low half of a
+     * stair. On a stair of a tower, this node is in a zone and above the villager: the villager walks up to it, and
+     * the vanilla move control jumps on a stair. The path then starts at the next node, on the same level or down
+     * (see {@link Evaluator}). The last node stays.
+     *
+     * @param path  the path
+     * @param zones the zones of the wall of the village of the villager
+     * @param feetY the Y of the block of the feet of the villager
+     */
+    static void skipStepsUp(Path path, WallZones zones, int feetY) {
+        while (path.getNextNodeIndex() < path.getNodeCount() - 1) {
+            Node node = path.getNextNode();
+            if (node.y <= feetY || !zones.contains(node.asBlockPos())) {
+                return;
+            }
+            path.advance();
+        }
     }
 
     /** True if a target is in a pit or at the edge of a pit (see {@link Pits}). */
@@ -186,6 +214,24 @@ public final class FolkNavigation extends GroundPathNavigation {
         PathFinder finder = new PathFinder(evaluator, range * WAY_NODES_PER_BLOCK);
         Path path = finder.findPath(region, mob, Set.of(target), range, closeEnough, 1.0F);
         return path != null && path.canReach();
+    }
+
+    /**
+     * True if the move control of a mob can jump. A villager of a faction village does not jump when its feet or the
+     * block above its feet are in a zone of the wall of its village. On the low half of a stair, the vanilla move
+     * control jumps at each step. On the first stair of a tower, this jump lifts the villager onto the next stairs.
+     * The villager still steps up a stair with no jump, and a path in a zone goes only on the same level or down.
+     *
+     * @param mob the mob
+     * @return false for a villager that jumps into a zone of the wall
+     */
+    public static boolean allowsJump(Mob mob) {
+        if (!(mob instanceof Villager villager) || !(villager.navigation instanceof FolkNavigation)) {
+            return true;
+        }
+        WallZones zones = zonesOf(villager);
+        BlockPos feet = villager.blockPosition();
+        return zones.isEmpty() || (!zones.contains(feet) && !zones.contains(feet.above()));
     }
 
     /**
