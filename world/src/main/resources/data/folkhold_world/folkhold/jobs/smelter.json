@@ -14,5 +14,19 @@
   "min_level": 3,
   "weight": 10,
   "profession": "minecraft:armorer",
-  "cultures": {"valeholm": 3}
+  "cultures": {"valeholm": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:iron_ingot", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:copper_ingot", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:glass", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:charcoal", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:raw_iron", "count": 6}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:raw_copper", "count": 4}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:sand", "count": 6}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:coal", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:glass_pane", "count": 16}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:glass", "count": 6}]},
+    {"sell": {"item": "minecraft:iron_block", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:iron_ingot", "count": 9}]},
+    {"sell": {"item": "minecraft:copper_block", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:copper_ingot", "count": 9}]},
+    {"sell": {"item": "minecraft:blast_furnace", "count": 1}, "level": 4, "volume": 1, "materials": [{"item": "minecraft:iron_ingot", "count": 5}, {"item": "minecraft:smooth_stone", "count": 3}, {"item": "minecraft:cobblestone", "count": 8}]}
+  ]
 }

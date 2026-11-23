@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemCatalog;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrade;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrade.Direction;
@@ -20,9 +21,16 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Stream;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.Test;
 
 /** The list {@code trades} of the job files: the parser, the checks and the list from the recipe. */
@@ -135,5 +143,81 @@ class JobTradeFilesTest {
                 assertTrue(trade.level() >= JobTrade.MIN_LEVEL && trade.level() <= JobTrade.MAX_LEVEL, id);
             }
         }
+    }
+
+    /**
+     * The lists of the job files of the mod:
+     *
+     * <ul>
+     *   <li>Each file has a list, with no trade that is not valid.</li>
+     *   <li>Each job has sell trades of the level 1, and buy trades of the level 1 when its recipe has inputs.</li>
+     *   <li>Each job has a trade of the level 2 or more.</li>
+     *   <li>A sell trade with no materials sells an output of the recipe: the stock gets it from the job.</li>
+     *   <li>Each material is an output of a job file and has values in {@code folkhold/items.json}.</li>
+     *   <li>A trade with {@code enchant} sells an item that can have enchantments.</li>
+     * </ul>
+     */
+    @Test
+    void jobFilesHaveFullTradeLists() throws IOException, URISyntaxException {
+        Map<String, JsonObject> files = jobFiles();
+        Map<String, Job> jobs = new TreeMap<>();
+        Set<String> produced = new HashSet<>();
+        for (Map.Entry<String, JsonObject> file : files.entrySet()) {
+            String id = file.getKey();
+            assertTrue(file.getValue().has("trades"), id + ": no list");
+            Job job = EconomyData.parseJob(id, file.getValue());
+            assertEquals(file.getValue().getAsJsonArray("trades").size(), job.trades().size(), id);
+            jobs.put(id, job);
+            job.recipe().outputs().forEach(output -> produced.add(output.item()));
+        }
+        ItemCatalog catalog;
+        try (InputStream input = Objects.requireNonNull(
+                JobTradeFilesTest.class.getResourceAsStream("/data/folkhold_world/folkhold/items.json"));
+                Reader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
+            catalog = EconomyData.parseCatalog(JsonParser.parseReader(reader).getAsJsonObject());
+        }
+        for (Job job : jobs.values()) {
+            String id = job.id();
+            assertTrue(job.trades().stream().anyMatch(trade -> trade.direction() == Direction.SELL
+                    && trade.level() == JobTrade.MIN_LEVEL), id + ": no sell trade of the level 1");
+            if (!job.recipe().inputs().isEmpty()) {
+                assertTrue(job.trades().stream().anyMatch(trade -> trade.direction() == Direction.BUY
+                        && trade.level() == JobTrade.MIN_LEVEL), id + ": no buy trade of the level 1");
+            }
+            assertTrue(job.trades().stream().anyMatch(trade -> trade.level() > JobTrade.MIN_LEVEL),
+                    id + ": no trade of a high tier");
+            Set<String> outputs = new HashSet<>();
+            job.recipe().outputs().forEach(output -> outputs.add(output.item()));
+            for (JobTrade trade : job.trades()) {
+                if (trade.direction() == Direction.SELL && trade.materials().isEmpty()) {
+                    assertTrue(outputs.contains(trade.item()), id + ": no materials for " + trade.item());
+                }
+                for (Material material : trade.materials()) {
+                    assertTrue(produced.contains(material.item()), id + ": no job makes " + material.item());
+                    assertTrue(catalog.contains(material.item()), id + ": no values for " + material.item());
+                }
+                if (trade.enchant()) {
+                    ItemStack stack = new ItemStack(
+                            BuiltInRegistries.ITEM.get(ResourceLocation.parse(trade.item())));
+                    assertTrue(stack.isEnchantable(), id + ": no enchantments for " + trade.item());
+                }
+            }
+        }
+    }
+
+    private static Map<String, JsonObject> jobFiles() throws IOException, URISyntaxException {
+        URL url = Objects.requireNonNull(JobTradeFilesTest.class.getResource(JOBS), JOBS);
+        Map<String, JsonObject> files = new TreeMap<>();
+        try (Stream<Path> stream = Files.list(Path.of(url.toURI()))) {
+            for (Path file : stream.filter(path -> path.toString().endsWith(".json")).toList()) {
+                try (InputStream input = Files.newInputStream(file);
+                        Reader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
+                    files.put(file.getFileName().toString().replace(".json", ""),
+                            JsonParser.parseReader(reader).getAsJsonObject());
+                }
+            }
+        }
+        assertFalse(files.isEmpty(), "No job files");
+        return files;
     }
 }

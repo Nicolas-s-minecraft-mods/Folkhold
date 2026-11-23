@@ -9,5 +9,12 @@
   "min_level": 1,
   "weight": 8,
   "profession": "minecraft:shepherd",
-  "cultures": {"valeholm": 3}
+  "cultures": {"valeholm": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:white_wool", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:mutton", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:wheat", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:painting", "count": 1}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:stick", "count": 8}, {"item": "minecraft:white_wool", "count": 1}]},
+    {"sell": {"item": "minecraft:loom", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:oak_planks", "count": 2}, {"item": "minecraft:string", "count": 2}]}
+  ]
 }

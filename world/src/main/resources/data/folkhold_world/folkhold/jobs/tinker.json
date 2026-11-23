@@ -17,5 +17,24 @@
   ],
   "min_level": 5,
   "weight": 6,
-  "profession": "minecraft:toolsmith"
+  "profession": "minecraft:toolsmith",
+  "trades": [
+    {"sell": {"item": "minecraft:bucket", "count": 1}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:shears", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:rail", "count": 16}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:minecart", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:lantern", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:lightning_rod", "count": 1}, "level": 1, "volume": 4},
+    {"buy": {"item": "minecraft:iron_ingot", "count": 8}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:copper_ingot", "count": 3}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:redstone", "count": 1}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:stick", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:coal", "count": 1}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:powered_rail", "count": 2}, "level": 2, "volume": 2},
+    {"sell": {"item": "minecraft:detector_rail", "count": 6}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:iron_ingot", "count": 6}, {"item": "minecraft:redstone", "count": 1}, {"item": "minecraft:cobblestone", "count": 2}]},
+    {"sell": {"item": "minecraft:activator_rail", "count": 6}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:iron_ingot", "count": 6}, {"item": "minecraft:stick", "count": 2}, {"item": "minecraft:redstone", "count": 1}]},
+    {"sell": {"item": "minecraft:compass", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:iron_ingot", "count": 4}, {"item": "minecraft:redstone", "count": 1}]},
+    {"sell": {"item": "minecraft:hopper", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:iron_ingot", "count": 5}, {"item": "minecraft:oak_planks", "count": 8}]},
+    {"sell": {"item": "minecraft:anvil", "count": 1}, "level": 4, "volume": 1, "materials": [{"item": "minecraft:iron_ingot", "count": 31}]}
+  ]
 }

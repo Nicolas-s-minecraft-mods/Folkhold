@@ -10,5 +10,13 @@
   "min_level": 5,
   "weight": 4,
   "profession": "minecraft:librarian",
-  "cultures": {"sunreach": 3}
+  "cultures": {"sunreach": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:paper", "count": 9}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:book", "count": 1}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:sugar_cane", "count": 9}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:leather", "count": 1}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:writable_book", "count": 1}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:book", "count": 1}, {"item": "minecraft:ink_sac", "count": 1}, {"item": "minecraft:feather", "count": 1}]},
+    {"sell": {"item": "minecraft:map", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:paper", "count": 8}, {"item": "minecraft:iron_ingot", "count": 4}, {"item": "minecraft:redstone", "count": 1}]}
+  ]
 }

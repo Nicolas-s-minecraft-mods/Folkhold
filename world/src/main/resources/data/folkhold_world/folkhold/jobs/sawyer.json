@@ -7,5 +7,11 @@
   ],
   "min_level": 1,
   "weight": 6,
-  "profession": "folkhold_world:lumberjack"
+  "profession": "folkhold_world:lumberjack",
+  "trades": [
+    {"sell": {"item": "minecraft:oak_planks", "count": 16}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:oak_log", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:oak_slab", "count": 6}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:oak_planks", "count": 3}]},
+    {"sell": {"item": "minecraft:oak_stairs", "count": 4}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:oak_planks", "count": 6}]}
+  ]
 }

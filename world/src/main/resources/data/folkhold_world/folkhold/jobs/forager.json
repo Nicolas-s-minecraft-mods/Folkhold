@@ -13,5 +13,19 @@
   ],
   "min_level": 1,
   "weight": 8,
-  "profession": "minecraft:farmer"
+  "profession": "minecraft:farmer",
+  "trades": [
+    {"sell": {"item": "minecraft:brown_mushroom", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:red_mushroom", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:dandelion", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:poppy", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:cornflower", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:vine", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:kelp", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:bamboo", "count": 4}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:cactus", "count": 3}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:string", "count": 2}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:mushroom_stew", "count": 1}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:brown_mushroom", "count": 1}, {"item": "minecraft:red_mushroom", "count": 1}, {"item": "minecraft:oak_planks", "count": 1}]},
+    {"sell": {"item": "minecraft:suspicious_stew", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:brown_mushroom", "count": 1}, {"item": "minecraft:red_mushroom", "count": 1}, {"item": "minecraft:oak_planks", "count": 1}, {"item": "minecraft:dandelion", "count": 1}]}
+  ]
 }

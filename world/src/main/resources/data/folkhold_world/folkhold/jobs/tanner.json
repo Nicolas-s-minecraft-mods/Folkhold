@@ -14,5 +14,16 @@
   "min_level": 3,
   "weight": 5,
   "profession": "minecraft:leatherworker",
-  "cultures": {"valeholm": 3}
+  "cultures": {"valeholm": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:leather_helmet", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:leather_chestplate", "count": 1}, "level": 1, "volume": 2},
+    {"sell": {"item": "minecraft:leather_leggings", "count": 1}, "level": 1, "volume": 2},
+    {"sell": {"item": "minecraft:leather_boots", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:bundle", "count": 1}, "level": 1, "volume": 2},
+    {"buy": {"item": "minecraft:leather", "count": 4}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:string", "count": 1}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:saddle", "count": 1}, "level": 2, "volume": 1},
+    {"sell": {"item": "minecraft:item_frame", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:leather", "count": 1}, {"item": "minecraft:stick", "count": 8}]}
+  ]
 }

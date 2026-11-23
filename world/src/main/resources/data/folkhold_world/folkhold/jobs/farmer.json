@@ -10,5 +10,15 @@
   "min_level": 1,
   "weight": 20,
   "profession": "minecraft:farmer",
-  "cultures": {"ashmark": 3}
+  "cultures": {"ashmark": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:wheat", "count": 12}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:carrot", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:potato", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:beetroot", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:wheat_seeds", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:beetroot_seeds", "count": 2}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:hay_block", "count": 1}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:wheat", "count": 9}]},
+    {"sell": {"item": "minecraft:golden_carrot", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:carrot", "count": 1}, {"item": "minecraft:gold_ingot", "count": 1}]}
+  ]
 }

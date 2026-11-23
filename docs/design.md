@@ -1245,7 +1245,7 @@ In this section, a **need trade** is an offer of `JobTrades` (see "Trade with th
   - Its `level` is out of 1 to 5.
   - Its `count`, its `volume`, its `weight` or the count of a material is below 1.
   - It is a buy trade with `materials` or with `enchant`.
-- A job file with no list `trades` gets a list from its recipe (`JobTrade.fromRecipe`). Each output is a sell trade, and each input is a buy trade, with the count of the recipe. An output with a chance of 0.3 or more has the level 1. An output with a lower chance has the level 2. Each input has the level 1. The volume is the use of the recipe in one week: 7 × the chance, rounded, 1 or more. The weight is 1. Thus each job of the job files has job trades with no change of its file.
+- A job file with no list `trades` gets a list from its recipe (`JobTrade.fromRecipe`). Each output is a sell trade, and each input is a buy trade, with the count of the recipe. An output with a chance of 0.3 or more has the level 1. An output with a lower chance has the level 2. Each input has the level 1. The volume is the use of the recipe in one week: 7 × the chance, rounded, 1 or more. The weight is 1. Thus a job file of a data pack has job trades with no list `trades`.
 - A job file with an empty list `trades` has no job trades. The list of the file replaces the list of the recipe: the recipe adds no trade to it.
 - A sell trade with `materials` gives an item that the recipe of the job does not make. The worker makes it to order from the stock. Example: the blacksmith sells a diamond sword at the level 4 with the materials 2 diamonds and 1 stick. The diamonds come from the stock (the miner, the caravans, the player). There is no magic restock.
 - Example of a list for the blacksmith (start values to tune):
@@ -1263,6 +1263,56 @@ In this section, a **need trade** is an offer of `JobTrades` (see "Trade with th
   ]
   ```
 
+#### Trade lists of the jobs
+
+- Each job file of the mod has a list `trades`. The list starts with the trades from the recipe (`JobTrade.fromRecipe`), with the same levels, counts and volumes. The file adds the trades of the levels 2 to 5.
+- The blacksmith and the miner follow the table "Examples of the goods tier":
+  - Blacksmith: the iron armor has the level 2. The buy trades of the iron ingots and of the coal come from the example above.
+  - Miner: raw iron and redstone have the level 2. Raw gold and lapis lazuli have the level 3. The diamond has the level 4, with a volume of 1.
+- A sell trade of the level 2 or more gets `enchant` when its item can have enchantments. The trades of the level 1 have no `enchant`, as the iron sword of the example.
+- A trade of an item that the recipe does not make has `materials`. Each material is an output of a job, and has values in `folkhold/items.json`. The materials are start values to tune. They follow the vanilla crafting recipes. An item with no recipe gets a near value (chainmail armor, bell, horse armor).
+- A job with no trade of a level has more volume at this level (see "Prices and volumes").
+- JUnit (`JobTradeFilesTest`) checks these rules for each job file of the mod.
+
+The trades of each job (start values to tune). The column of the level 1 gives the items of the recipe. **(E)**: the trade has `enchant`. **from**: the materials of one trade.
+
+| Job | Level 1 | Level 2 | Level 3 | Level 4 | Level 5 |
+| --- | --- | --- | --- | --- | --- |
+| `baker` | Sell: 4 bread<br>Buy: wheat | 8 cookie from 2 wheat, 1 cocoa beans | cake from 3 wheat, 2 sugar cane, 1 egg | — | — |
+| `beekeeper` | Sell: 2 honey bottle, 3 honeycomb<br>Buy: glass | honey block from 4 honey bottle | candle from 1 honeycomb, 1 string | beehive from 6 oak planks, 3 honeycomb | — |
+| `blacksmith` | Sell: iron sword, iron axe, iron pickaxe, iron shovel, shield<br>Buy: iron ingot, coal, stick, oak planks | iron helmet (E)<br>iron chestplate (E)<br>iron leggings (E)<br>iron boots (E) | chainmail helmet (E) from 5 iron ingot<br>chainmail chestplate (E) from 8 iron ingot<br>chainmail leggings (E) from 7 iron ingot<br>chainmail boots (E) from 4 iron ingot<br>bell from 4 gold ingot | diamond sword (E) from 2 diamond, 1 stick<br>diamond pickaxe (E) from 3 diamond, 2 stick<br>diamond axe (E) from 3 diamond, 2 stick<br>diamond shovel (E) from 1 diamond, 2 stick | diamond helmet (E) from 5 diamond<br>diamond chestplate (E) from 8 diamond<br>diamond leggings (E) from 7 diamond<br>diamond boots (E) from 4 diamond |
+| `butcher` | Sell: 3 cooked beef, 3 cooked porkchop, 3 cooked chicken<br>Buy: beef, porkchop, chicken, coal | 3 cooked mutton from 3 mutton, 1 coal | rabbit stew from 1 rabbit, 1 carrot, 1 potato, 1 brown mushroom, 1 oak planks | — | — |
+| `carpenter` | Sell: 2 chest, 2 barrel, 2 oak door, 4 oak fence, oak boat, crafting table<br>Buy: oak planks, stick | bookshelf from 6 oak planks, 3 book | lectern from 8 oak planks, 3 book | jukebox from 8 oak planks, 1 diamond | — |
+| `digger` | Sell: 12 sand, 8 gravel, 8 clay ball, 8 dirt<br>Buy: stone shovel | 2 clay from 8 clay ball | 4 coarse dirt from 2 dirt, 2 gravel | — | — |
+| `dyer` | Sell: 2 yellow dye, 2 red dye, 2 blue dye, black dye, 2 red wool, 2 blue wool<br>Buy: dandelion, poppy, cornflower, ink sac, white wool | 2 green dye from 2 cactus, 1 coal<br>2 orange dye from 1 red dye, 1 yellow dye | 2 purple dye from 1 red dye, 1 blue dye<br>2 black wool from 2 white wool, 1 black dye | — | — |
+| `farmer` | Sell: 12 wheat, 6 carrot, 6 potato, 4 beetroot, 4 wheat seeds, 2 beetroot seeds | hay block from 9 wheat | golden carrot from 1 carrot, 1 gold ingot | — | — |
+| `fisher` | Sell: 6 cod, 3 salmon, ink sac | 6 cooked cod from 6 cod, 1 coal<br>3 cooked salmon from 3 salmon, 1 coal | fishing rod (E) from 3 stick, 2 string | — | — |
+| `fletcher` | Sell: 16 arrow, bow<br>Buy: stick, flint, feather, string | crossbow (E) | target from 4 redstone, 9 wheat | — | — |
+| `forager` | Sell: 3 brown mushroom, 3 red mushroom, 3 dandelion, 3 poppy, 2 cornflower, 4 vine, 4 kelp, 4 bamboo, 3 cactus, 2 string | mushroom stew from 1 brown mushroom, 1 red mushroom, 1 oak planks | suspicious stew from 1 brown mushroom, 1 red mushroom, 1 oak planks, 1 dandelion | — | — |
+| `gardener` | Sell: 3 pumpkin, 8 melon slice, 6 sugar cane, 6 sweet berries | melon from 9 melon slice | glistering melon slice from 1 melon slice, 1 gold ingot | — | — |
+| `gardener_jungle` | Sell: 6 melon slice, 6 cocoa beans, 4 sugar cane | melon from 9 melon slice | glistering melon slice from 1 melon slice, 1 gold ingot | — | — |
+| `gold_smelter` | Sell: 2 gold ingot<br>Buy: raw gold, coal | clock from 4 gold ingot, 1 redstone | golden apple from 1 apple, 8 gold ingot | — | — |
+| `lumberjack` | Sell: 12 oak log, 8 stick, 2 oak sapling, 2 apple<br>Buy: stone axe | 8 stripped oak log from 8 oak log | campfire from 3 stick, 1 coal, 3 oak log | — | — |
+| `lumberjack_acacia` | Sell: 12 acacia log, 8 stick, 2 acacia sapling<br>Buy: stone axe | 8 stripped acacia log from 8 acacia log | campfire from 3 stick, 1 coal, 3 acacia log | — | — |
+| `lumberjack_birch` | Sell: 12 birch log, 8 stick, 2 birch sapling<br>Buy: stone axe | 8 stripped birch log from 8 birch log | campfire from 3 stick, 1 coal, 3 birch log | — | — |
+| `lumberjack_cherry` | Sell: 12 cherry log, 8 stick, 2 cherry sapling<br>Buy: stone axe | 8 stripped cherry log from 8 cherry log | campfire from 3 stick, 1 coal, 3 cherry log | — | — |
+| `lumberjack_dark_oak` | Sell: 12 dark oak log, 8 stick, 2 dark oak sapling, 2 apple<br>Buy: stone axe | 8 stripped dark oak log from 8 dark oak log | campfire from 3 stick, 1 coal, 3 dark oak log | — | — |
+| `lumberjack_jungle` | Sell: 12 jungle log, 8 stick, 2 jungle sapling<br>Buy: stone axe | 8 stripped jungle log from 8 jungle log | campfire from 3 stick, 1 coal, 3 jungle log | — | — |
+| `lumberjack_mangrove` | Sell: 12 mangrove log, 8 stick, 2 mangrove propagule<br>Buy: stone axe | 8 stripped mangrove log from 8 mangrove log | campfire from 3 stick, 1 coal, 3 mangrove log | — | — |
+| `lumberjack_spruce` | Sell: 12 spruce log, 8 stick, 2 spruce sapling<br>Buy: stone axe | 8 stripped spruce log from 8 spruce log | campfire from 3 stick, 1 coal, 3 spruce log | — | — |
+| `mason` | Sell: 8 stone, 8 stone bricks, 8 bricks, 4 terracotta, 4 sandstone, 4 smooth stone, stone pickaxe, stone axe, stone shovel<br>Buy: cobblestone, clay ball, sand, coal, stick | 4 chiseled stone bricks from 4 stone bricks<br>4 cut sandstone from 4 sandstone | 4 smooth sandstone from 4 sandstone, 1 coal | — | — |
+| `miner` | Sell: 16 cobblestone, 4 raw copper, 6 coal, 2 flint<br>Buy: stone pickaxe | 6 raw iron<br>3 redstone | 3 lapis lazuli<br>raw gold | diamond | — |
+| `papermaker` | Sell: 9 paper, book<br>Buy: sugar cane, leather | writable book from 1 book, 1 ink sac, 1 feather | map from 8 paper, 4 iron ingot, 1 redstone | — | — |
+| `pastry_cook` | Sell: 2 pumpkin pie<br>Buy: pumpkin, sugar cane, egg | 8 cookie from 2 wheat, 1 cocoa beans | cake from 3 wheat, 2 sugar cane, 1 egg | — | — |
+| `rancher` | Sell: 6 egg, 4 feather, 3 beef, 3 porkchop, 3 chicken, 2 leather, rabbit, rabbit hide<br>Buy: wheat, wheat seeds | leather horse armor from 7 leather | iron horse armor from 7 iron ingot, 1 leather | golden horse armor from 7 gold ingot, 1 leather | diamond horse armor from 7 diamond, 1 leather |
+| `sawyer` | Sell: 16 oak planks<br>Buy: oak log | 6 oak slab from 3 oak planks | 4 oak stairs from 6 oak planks | — | — |
+| `sawyer_spruce` | Sell: 16 spruce planks<br>Buy: spruce log | 6 spruce slab from 3 spruce planks | 4 spruce stairs from 6 spruce planks | — | — |
+| `shepherd` | Sell: 6 white wool, 2 mutton<br>Buy: wheat | painting from 8 stick, 1 white wool | loom from 2 oak planks, 2 string | — | — |
+| `smelter` | Sell: 6 iron ingot, 4 copper ingot, 6 glass, 2 charcoal<br>Buy: raw iron, raw copper, sand, coal | 16 glass pane from 6 glass | iron block from 9 iron ingot<br>copper block from 9 copper ingot | blast furnace from 5 iron ingot, 3 smooth stone, 8 cobblestone | — |
+| `tanner` | Sell: leather helmet, leather chestplate, leather leggings, leather boots, bundle<br>Buy: leather, string | saddle | item frame from 1 leather, 8 stick | — | — |
+| `tinker` | Sell: bucket, shears, 16 rail, minecart, 2 lantern, lightning rod<br>Buy: iron ingot, copper ingot, redstone, stick, coal | 2 powered rail<br>6 detector rail from 6 iron ingot, 1 redstone, 2 cobblestone<br>6 activator rail from 6 iron ingot, 2 stick, 1 redstone | compass from 4 iron ingot, 1 redstone<br>hopper from 5 iron ingot, 8 oak planks | anvil from 31 iron ingot | — |
+| `weaver` | Sell: white bed, 6 white carpet, white banner<br>Buy: white wool, oak planks, stick | blue bed from 3 blue wool, 3 oak planks | red banner from 6 red wool, 1 stick | — | — |
+
 #### Skill of the workers
 
 - Each job post has an experience in its job (`JobSkills`). The skill level comes from the experience, with the thresholds of the vanilla villagers: Novice (0), Apprentice (10), Journeyman (70), Expert (150), Master (250).
@@ -1273,7 +1323,7 @@ In this section, a **need trade** is an offer of `JobTrades` (see "Trade with th
   | --- | --- | --- |
   | `skillCycleExperience` | 2 | For each active post at each cycle (`Economies.runCycle`). |
   | `skillNeedTradeExperience` | 1 | For the post of the worker, at each trade that the village pays (`Merchants.onTrade`). A trade that the stock or the treasury cannot pay gives no experience. |
-  | `skillJobTradeExperience` | 2 | For each use of a job trade. No worker shows a job trade (see #1064). |
+  | `skillJobTradeExperience` | 2 | For each use of a job trade (see "Trade screen"). |
 
 - A job slot with no post has the skill of its job id. Examples: a legacy job slot (see "Job posts"), or a job slot of a village with no scan. All the slots of a job id share one experience. Each job id gets the gain of a cycle one time, also with 2 slots of the job.
 - The skill of a worker (`WorkerSkills.sourceOf`) is the skill of the post of its job sign (memory `JOB_SITE`). The job of this post must have the profession of the worker. A worker with no such post has the skill of the first active job slot with no post and with its profession. The builders, the handymen and the inhabitants with no job have no skill.

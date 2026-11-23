@@ -13,5 +13,15 @@
   "min_level": 3,
   "weight": 6,
   "profession": "minecraft:fletcher",
-  "cultures": {"ashmark": 3}
+  "cultures": {"ashmark": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:arrow", "count": 16}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:bow", "count": 1}, "level": 1, "volume": 4},
+    {"buy": {"item": "minecraft:stick", "count": 6}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:flint", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:feather", "count": 4}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:string", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:crossbow", "count": 1}, "level": 2, "volume": 2, "enchant": true},
+    {"sell": {"item": "minecraft:target", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:redstone", "count": 4}, {"item": "minecraft:wheat", "count": 9}]}
+  ]
 }

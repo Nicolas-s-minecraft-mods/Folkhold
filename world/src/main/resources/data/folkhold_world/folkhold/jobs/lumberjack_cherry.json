@@ -10,5 +10,13 @@
   "min_level": 1,
   "weight": 25,
   "biomes": ["minecraft:cherry_grove"],
-  "profession": "folkhold_world:lumberjack"
+  "profession": "folkhold_world:lumberjack",
+  "trades": [
+    {"sell": {"item": "minecraft:cherry_log", "count": 12}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:stick", "count": 8}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:cherry_sapling", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:stone_axe", "count": 1}, "level": 1, "volume": 1},
+    {"sell": {"item": "minecraft:stripped_cherry_log", "count": 8}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:cherry_log", "count": 8}]},
+    {"sell": {"item": "minecraft:campfire", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:stick", "count": 3}, {"item": "minecraft:coal", "count": 1}, {"item": "minecraft:cherry_log", "count": 3}]}
+  ]
 }

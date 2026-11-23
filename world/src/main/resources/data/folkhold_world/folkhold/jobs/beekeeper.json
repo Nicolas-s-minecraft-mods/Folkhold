@@ -9,5 +9,13 @@
   "min_level": 3,
   "weight": 4,
   "profession": "minecraft:farmer",
-  "cultures": {"sunreach": 3}
+  "cultures": {"sunreach": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:honey_bottle", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:honeycomb", "count": 3}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:glass", "count": 1}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:honey_block", "count": 1}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:honey_bottle", "count": 4}]},
+    {"sell": {"item": "minecraft:candle", "count": 1}, "level": 3, "volume": 3, "materials": [{"item": "minecraft:honeycomb", "count": 1}, {"item": "minecraft:string", "count": 1}]},
+    {"sell": {"item": "minecraft:beehive", "count": 1}, "level": 4, "volume": 1, "materials": [{"item": "minecraft:oak_planks", "count": 6}, {"item": "minecraft:honeycomb", "count": 3}]}
+  ]
 }

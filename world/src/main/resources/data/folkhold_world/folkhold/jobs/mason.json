@@ -20,5 +20,24 @@
   "min_level": 1,
   "weight": 10,
   "profession": "minecraft:mason",
-  "cultures": {"ashmark": 3}
+  "cultures": {"ashmark": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:stone", "count": 8}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:stone_bricks", "count": 8}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:bricks", "count": 8}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:terracotta", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:sandstone", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:smooth_stone", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:stone_pickaxe", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:stone_axe", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:stone_shovel", "count": 1}, "level": 1, "volume": 4},
+    {"buy": {"item": "minecraft:cobblestone", "count": 16}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:clay_ball", "count": 8}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:sand", "count": 4}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:coal", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:stick", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:chiseled_stone_bricks", "count": 4}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:stone_bricks", "count": 4}]},
+    {"sell": {"item": "minecraft:cut_sandstone", "count": 4}, "level": 2, "volume": 3, "materials": [{"item": "minecraft:sandstone", "count": 4}]},
+    {"sell": {"item": "minecraft:smooth_sandstone", "count": 4}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:sandstone", "count": 4}, {"item": "minecraft:coal", "count": 1}]}
+  ]
 }
