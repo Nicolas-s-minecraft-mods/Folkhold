@@ -97,9 +97,10 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
      * @param action      {@link #ACTION_DELIVER} if the player can give the items here, else {@link #ACTION_NONE}
      * @param blocked     the reason why the player cannot deliver now (missing items, other village), or empty
      * @param ready       true if the quest is ready to complete here: the player has all the items
+     * @param failureReputation the reputation that the player loses at an abandon, 0 or more
      */
     public record Active(String questId, String itemId, Component name, Component info, int secondsLeft,
-            int action, Optional<Component> blocked, boolean ready) {
+            int action, Optional<Component> blocked, boolean ready, int failureReputation) {
 
         public static final StreamCodec<RegistryFriendlyByteBuf, Active> STREAM_CODEC = StreamCodec.of(
                 (buf, active) -> {
@@ -111,12 +112,14 @@ public record QuestBoardPayload(Component title, String settlementId, String tie
                     buf.writeVarInt(active.action);
                     ComponentSerialization.TRUSTED_OPTIONAL_STREAM_CODEC.encode(buf, active.blocked);
                     buf.writeBoolean(active.ready);
+                    buf.writeVarInt(active.failureReputation);
                 },
                 buf -> new Active(buf.readUtf(), buf.readUtf(),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                         ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf),
                         buf.readVarInt(), buf.readVarInt(),
-                        ComponentSerialization.TRUSTED_OPTIONAL_STREAM_CODEC.decode(buf), buf.readBoolean()));
+                        ComponentSerialization.TRUSTED_OPTIONAL_STREAM_CODEC.decode(buf), buf.readBoolean(),
+                        buf.readVarInt()));
     }
 
     public static final StreamCodec<RegistryFriendlyByteBuf, QuestBoardPayload> STREAM_CODEC = StreamCodec.of(

@@ -67,9 +67,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       ({@link ClientJournalMap}). A click on a village selects it. A button opens the map of the world of Cartofold
  *       at the selected village. The tab "Villages" shows a village on the map.</li>
  *   <li>Tab "Quests": the active quests of the player, then the offers of the villages that the player visited,
- *       read-only (see {@link io.github.nicolasgoyon.folkhold.world.quest.QuestBoards#journal}). A click shows the
+ *       (see {@link io.github.nicolasgoyon.folkhold.world.quest.QuestBoards#journal}). A click shows the
  *       village, the progress or the offer, the time, the reward and the loss of a failure, with a button that shows
- *       the village on the map. The player accepts and abandons the quests at the board of the village.</li>
+ *       the village on the map. The player accepts the quests at the board of the village. The button "Abandon"
+ *       of an active quest abandons it at any distance, after the confirmation of the quest board.</li>
  *   <li>The frames keep their views between two openings. The arrow keys move a focused frame, and the keys + and -
  *       zoom ({@link JournalMapViews}).</li>
  * </ul>
@@ -670,12 +671,24 @@ public class JournalScreen extends UiScreen {
                     Component.translatable(KEY + "quest.accept_at", quest.get().village())));
         }
         addRows(new UiRect(area.x(), area.y(), area.width(), Math.max(0, row.y() - UiTheme.GAP - area.y())), rows);
+        UiRect mapRow = row;
+        if (quest.get().active()) {
+            // An active quest: the abandon button is at the right, with the confirmation of the quest board.
+            Component label = Component.translatable(KEY + "quest.abandon");
+            int width = Math.min(font.width(label) + 16, row.width());
+            JournalPayload.Quest active = quest.get();
+            addRenderableWidget(UiButton.danger(row.rightPart(width), label,
+                    b -> QuestBoardScreen.confirmAbandon(this, active.name(), active.failureReputation(),
+                            active.questId(), "")).setDetails(Component.translatable(KEY + "quest.abandon_hint")));
+            mapRow = row.beforeRight(width, UiTheme.GAP);
+        }
+        UiRect buttons = mapRow;
         Optional<Village> village = journal.villages().stream()
                 .filter(found -> found.id().equals(quest.get().villageId())).findFirst();
         village.ifPresent(found -> {
-            int x = mapButton(row, row.x(), Component.translatable(KEY + "map.show"),
+            int x = mapButton(buttons, buttons.x(), Component.translatable(KEY + "map.show"),
                     Component.translatable(KEY + "map.show_hint"), () -> showOnMap(found));
-            worldMapButton(row, x, found);
+            worldMapButton(buttons, x, found);
         });
     }
 

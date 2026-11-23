@@ -16,6 +16,7 @@ import io.github.nicolasgoyon.folkhold.world.entity.CaptainEntity;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionVisuals;
 import io.github.nicolasgoyon.folkhold.world.faction.Reputations;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
+import io.github.nicolasgoyon.folkhold.world.journal.Journals;
 import io.github.nicolasgoyon.folkhold.world.network.JournalPayload;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.network.QuestActionPayload;
@@ -218,13 +219,18 @@ public final class QuestBoards {
 
     /**
      * A button of the quest screen. The action happens only when the player is in the village of the screen and
-     * the village is not hostile (see {@link #canAct}). Then the screen shows the result.
+     * the village is not hostile (see {@link #canAct}). Then the screen shows the result. A payload with no village
+     * comes from the journal: only the abandon has an effect, at any distance.
      *
      * @param player  the player
      * @param payload the action
      */
     public static void handle(ServerPlayer player, QuestActionPayload payload) {
         MinecraftServer server = player.server;
+        if (payload.settlementId().isEmpty()) {
+            abandonFromJournal(player, payload);
+            return;
+        }
         Optional<Settlement> village = SettlementData.get(server).registry().byId(payload.settlementId())
                 .filter(Settlement::isActive);
         Optional<Outcome> outcome;
@@ -249,6 +255,22 @@ public final class QuestBoards {
         if (!shown) {
             outcome.ifPresent(result -> player.displayClientMessage(result.message(), false));
         }
+        sendLog(player);
+    }
+
+    /**
+     * A button of the tab "Quests" of the journal: the player abandons an active quest at any distance from its
+     * village. The rules are the rules of the abandon at the board. The player gets the result in the chat and the
+     * journal again.
+     */
+    private static void abandonFromJournal(ServerPlayer player, QuestActionPayload payload) {
+        if (payload.action() != QuestBoardPayload.ACTION_ABANDON) {
+            return;
+        }
+        Outcome outcome = abandon(player, payload.questId());
+        QuestData.get(player.server).setDirty();
+        player.displayClientMessage(outcome.message(), false);
+        Journals.request(player);
         sendLog(player);
     }
 
@@ -577,7 +599,8 @@ public final class QuestBoards {
             Active active = active(server, player, quest, now, village.get());
             result.add(new JournalPayload.Quest(quest.id(), true, quest.settlementId(), village.get().name(),
                     active.itemId(), active.name(), active.info(), QuestRewards.describe(quest),
-                    joined(QuestRewards.risks(quest)), active.secondsLeft(), Component.empty(), List.of()));
+                    joined(QuestRewards.risks(quest)), active.secondsLeft(), Component.empty(), List.of(),
+                    quest.failureReputation()));
         }
         for (String villageId : visited) {
             Optional<Settlement> village = settlements.registry().byId(villageId).filter(Settlement::isActive);
@@ -591,7 +614,8 @@ public final class QuestBoards {
                 int seconds = (int) Math.max(0, (quest.offerEnd() - now) / SharedConstants.TICKS_PER_SECOND);
                 result.add(new JournalPayload.Quest(quest.id(), false, villageId, village.get().name(),
                         offer.itemId(), offer.name(), Component.empty(), QuestRewards.describe(quest),
-                        joined(QuestRewards.risks(quest)), seconds, offer.story(), offer.details()));
+                        joined(QuestRewards.risks(quest)), seconds, offer.story(), offer.details(),
+                        quest.failureReputation()));
             }
         }
         return result;
@@ -672,19 +696,20 @@ public final class QuestBoards {
             return new Active(quest.id(), quest.target(), quest.giverJob().isEmpty()
                     ? Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
                             itemName(quest.target())) : name(server, quest),
-                    info, secondsLeft, action, blocked, ready);
+                    info, secondsLeft, action, blocked, ready, quest.failureReputation());
         }
         if (quest.kind() == QuestKind.HUNT) {
             info.append(UiStrings.separator()).append(Component.translatable("quest.folkhold_world.active.progress",
                     Math.min(quest.progress(), quest.count()), quest.count()).withColor(0xA89F8C));
-            return new Active(quest.id(), HUNT_ICON, name(server, quest), info, secondsLeft, action, blocked, false);
+            return new Active(quest.id(), HUNT_ICON, name(server, quest), info, secondsLeft, action, blocked, false,
+                    quest.failureReputation());
         }
         Optional<MobileGroup> caravan = Escorts.caravan(server, quest);
         caravan.map(QuestBoards::caravanState).ifPresent(state -> info.append(UiStrings.separator()).append(state));
         String destination = caravan.map(MobileGroup::destinationId).orElse("");
         return new Active(quest.id(), ESCORT_ICON,
                 Component.translatable("quest.folkhold_world.active.escort", villageName(server, destination)),
-                info, secondsLeft, action, blocked, false);
+                info, secondsLeft, action, blocked, false, quest.failureReputation());
     }
 
     /** The state of the caravan of an escort, for the screen. */

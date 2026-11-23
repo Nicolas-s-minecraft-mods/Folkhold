@@ -17,6 +17,7 @@ import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
+import io.github.nicolasgoyon.folkhold.world.network.QuestActionPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestDetail;
 import io.github.nicolasgoyon.folkhold.world.quest.Deliveries;
@@ -115,6 +116,48 @@ public final class QuestFailureGameTests {
             }
         }
         return null;
+    }
+
+    /**
+     * The journal abandons an active quest at any distance from the village. The quest fails, and the player loses
+     * the reputation that the board and the journal show. The board still needs the player in the village.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_failure_journal")
+    public static void journalAbandonsAQuestFarFromTheVillage(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement village = village(server, 0);
+        ServerPlayer player = friend(helper, village);
+        Quest quest = offer(server, village, helper.getLevel().getGameTime(), QuestRisk.CONFIG);
+        try {
+            Object boardLoss = shownLoss(QuestBoards.board(player, village).offers().stream()
+                    .filter(offer -> offer.questId().equals(quest.id())).findFirst().orElseThrow().details());
+            helper.assertTrue(QuestBoards.accept(player, quest.id()) == Quests.AcceptResult.ACCEPTED,
+                    "The player must accept the quest");
+            int journalLoss = QuestBoards.journal(player, List.of()).stream()
+                    .filter(entry -> entry.active() && entry.questId().equals(quest.id())).findFirst().orElseThrow()
+                    .failureReputation();
+            int before = factionReputation(player, village);
+
+            QuestBoards.handle(player, new QuestActionPayload(QuestBoardPayload.ACTION_ABANDON, quest.id(),
+                    village.id()));
+            QuestState afterBoard = quest.state();
+            QuestBoards.handle(player, new QuestActionPayload(QuestBoardPayload.ACTION_ABANDON, quest.id(), ""));
+            int after = factionReputation(player, village);
+
+            double distance = Math.hypot(player.getX() - village.x(), player.getZ() - village.z());
+            helper.assertTrue(distance > 1_000_000, "The player must be far from the village: " + distance);
+            helper.assertTrue(afterBoard == QuestState.ACCEPTED,
+                    "The board must not abandon a quest far from the village: " + afterBoard);
+            helper.assertTrue(quest.state() == QuestState.FAILED, "The journal must abandon the quest: "
+                    + quest.state());
+            helper.assertTrue(journalLoss > 0 && Integer.valueOf(journalLoss).equals(boardLoss),
+                    "The journal must show the loss of the board: " + journalLoss + ", " + boardLoss);
+            helper.assertTrue(before - after == journalLoss,
+                    "The abandon must remove " + journalLoss + " reputation: " + before + " -> " + after);
+        } finally {
+            clear(server, village);
+        }
+        helper.succeed();
     }
 
     /**
