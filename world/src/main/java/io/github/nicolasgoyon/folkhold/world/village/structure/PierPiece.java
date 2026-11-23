@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.village.structure;
 
 import io.github.nicolasgoyon.folkhold.world.registry.ModStructures;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.RandomSource;
@@ -32,6 +33,8 @@ import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
  *       deck down to the lowest step, one block under the top block of the water. A person in the water climbs onto
  *       the deck there. The flight ends at the last row of a pier, and it is in the middle of a bridge. The rail is open
  *       next to the top step. A pier of an earlier save has no steps.</li>
+ *   <li>A pier with steps has a moored boat on the water next to the row before the top step, on the side of the
+ *       steps (see {@link MooredBoats}). A bridge has no boat.</li>
  *   <li>The pier does not change the terrain before the generation of the chunks.</li>
  * </ul>
  */
@@ -179,6 +182,25 @@ public final class PierPiece extends StructurePiece implements PieceBeardifierMo
             Decks.flight(level, box, startX + stepX * topStep + acrossX * (HALF_WIDTH + 1),
                     startZ + stepZ * topStep + acrossZ * (HALF_WIDTH + 1), deckY, steps, stepX, stepZ,
                     blocks.stairs());
+            if (!openEnd) {
+                moorBoat(level, box, topStep, acrossX, acrossZ);
+            }
+        }
+    }
+
+    /**
+     * The moored boat of a pier: on the water next to the row before the top step, on the side of the steps. When this
+     * row has no open water (a shore), the boat goes to the row before it, and so on to the second row. A bridge has
+     * no boat.
+     */
+    private void moorBoat(WorldGenLevel level, BoundingBox box, int topStep, int acrossX, int acrossZ) {
+        for (int row = topStep - 1; row > 0; row--) {
+            int x = startX + stepX * row + acrossX * (HALF_WIDTH + 1);
+            int z = startZ + stepZ * row + acrossZ * (HALF_WIDTH + 1);
+            if (MooredBoats.waterTop(level, x, deckY, z).isPresent()) {
+                MooredBoats.moor(level, box, x, deckY, z, Direction.fromDelta(stepX, 0, stepZ), blocks.deck());
+                return;
+            }
         }
     }
 

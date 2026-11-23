@@ -19,6 +19,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.animal.Pig;
+import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -126,6 +127,8 @@ public final class PierGameTests {
         helper.assertBlockPresent(Blocks.SPRUCE_STAIRS, new BlockPos(startX + 2, WATER_TOP - 1, lastRow));
         helper.assertBlockPresent(Blocks.SPRUCE_STAIRS, new BlockPos(startX + 2, DECK_Y, lastRow - STEPS + 1));
         helper.assertBlockNotPresent(Blocks.SPRUCE_FENCE, new BlockPos(startX + 1, DECK_Y + 1, lastRow - STEPS + 1));
+        // The moored boat floats next to the row before the top step, on the side of the steps.
+        assertBoat(helper, new BlockPos(startX + 2, WATER_TOP + 1, lastRow - STEPS));
         Pig pig = helper.spawn(EntityType.PIG, new BlockPos(startX + 4, WATER_TOP, lastRow + 2));
         pig.goalSelector.getAvailableGoals().removeIf(wrapped -> !(wrapped.getGoal() instanceof FloatGoal));
         BlockPos target = helper.absolutePos(new BlockPos(startX, DECK_Y + 1, startZ + 2));
@@ -227,7 +230,10 @@ public final class PierGameTests {
             helper.assertBlockPresent(Blocks.SPRUCE_LOG, new BlockPos(x + 1, DECK_Y + 1, end));
             helper.assertBlockPresent(Blocks.SPRUCE_STAIRS, new BlockPos(x + 2, DECK_Y, end - STEPS + 1));
             helper.assertBlockPresent(Blocks.SPRUCE_STAIRS, new BlockPos(x + 2, WATER_TOP - 1, end));
+            assertBoat(helper, new BlockPos(x - PortPiece.BOAT_SIDE, WATER_TOP + 1, end));
         }
+        helper.assertTrue(boats(helper).size() == PortPiece.JETTIES, "The port must have " + PortPiece.JETTIES
+                + " boats: " + boats(helper).size());
         helper.succeed();
     }
 
@@ -246,6 +252,21 @@ public final class PierGameTests {
                 }
             }
         }
+    }
+
+    /** The boats in the area of the test. */
+    private static List<Boat> boats(GameTestHelper helper) {
+        return helper.getLevel().getEntitiesOfClass(Boat.class, helper.getBounds());
+    }
+
+    /** A spruce boat floats on the water at a position of the test, and the test removes it at its end. */
+    private static void assertBoat(GameTestHelper helper, BlockPos pos) {
+        BlockPos absolute = helper.absolutePos(pos);
+        List<Boat> boats = boats(helper);
+        TestSupport.atTestEnd(helper, () -> boats.forEach(Boat::discard));
+        helper.assertTrue(boats.stream().anyMatch(boat -> boat.blockPosition().equals(absolute)
+                && boat.getVariant() == Boat.Type.SPRUCE), "A spruce boat must float at " + pos.toShortString()
+                + ": " + boats.stream().map(boat -> boat.blockPosition().toShortString()).toList());
     }
 
     /** Places a piece in the level, in its own box. */
