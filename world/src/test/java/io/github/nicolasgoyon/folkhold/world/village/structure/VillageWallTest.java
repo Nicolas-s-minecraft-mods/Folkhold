@@ -281,6 +281,32 @@ class VillageWallTest {
         assertEquals(layout.outline().maxZ() + 1, arm.z(arm.length()), "The last row is on the outline");
     }
 
+    /**
+     * An arm off the axis of its street goes along the plots of the street. With the width of a street, a house at the
+     * edge of the arm stops it: the arm does not go on the house. With the middle only, the arm goes on the house.
+     */
+    @Test
+    void armOffTheAxisStopsAtAHouseAtItsEdge() {
+        WallLayout layout = layout();
+        Gate north = layout.gates().stream().filter(gate -> gate.side() == Side.NORTH).findFirst().orElseThrow();
+        int line = layout.outline().minZ();
+        // A house next to the middle of the arm: its west column is the east edge of the arm.
+        VillageWall.Stop house = new VillageWall.Stop(new Box(VillageWall.STREET_HALF_WIDTH, line + 8,
+                VillageWall.STREET_HALF_WIDTH + 8, line + 16), BASE + 1);
+        VillageWall.Stop plaza = new VillageWall.Stop(new Box(-5, -5, 5, 5), BASE + 3);
+
+        VillageWall.Arm wide = VillageWall.arm(layout, north, List.of(house, plaza), VillageWall.STREET_HALF_WIDTH)
+                .orElseThrow();
+        VillageWall.Arm middle = VillageWall.arm(layout, north, List.of(house, plaza)).orElseThrow();
+
+        assertEquals(line + 8, wide.z(wide.length()), "The arm stops at the first row of the house");
+        assertEquals(BASE + 1, wide.end().orElseThrow(), "The arm ends at the level of the house");
+        for (int row = 0; row < wide.length(); row++) {
+            assertTrue(wide.z(row) < line + 8, "No row of the arm is on the house: row " + row);
+        }
+        assertEquals(-5, middle.z(middle.length()), "With the middle only, the arm goes on the house to the plaza");
+    }
+
     /** The row of a plot: the distance from the gate along the arm, in the width of a street only. */
     @Test
     void rowOfAPositionIsItsDistanceAlongTheArm() {

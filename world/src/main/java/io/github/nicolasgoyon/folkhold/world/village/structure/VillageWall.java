@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.CliffSide;
 import io.github.nicolasgoyon.folkhold.core.sim.village.HeightGrid;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.core.sim.village.PathRamp;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanVersion;
 import io.github.nicolasgoyon.folkhold.core.sim.village.RingDistricts;
 import io.github.nicolasgoyon.folkhold.core.sim.village.SeaWall;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
@@ -72,7 +73,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>Each segment of palisade is a {@link PalisadePiece}. A {@link VillagePathPiece} with the width of a street goes
  *       from each gate to the plaza, through the streets on the axis: an arm (see {@link Arm}). The arm is a ramp from
  *       the level of the gate to the level of the plaza (see {@link PathRamp}). The houses on the plots of an arm move
- *       up or down to the level of the arm at their plot.</li>
+ *       up or down to the level of the arm at their plot. A gate off the axis of its street gives an arm off this
+ *       axis. From the plan version {@link PlanVersion#ARM_WIDTH}, the arm stops at the first row with a piece that is
+ *       not a street in its width: thus it does not go on the plots along the street.</li>
  *   <li>{@link TerrainPiece}s make the terrain flat near the wall: along the palisade, in sections of
  *       {@link #SECTION} columns at their highest base, and in front of the gates, at the level of the gate. The flat
  *       terrain of a gate also clears its space: no terrain above the level of the gate.</li>
@@ -232,8 +235,9 @@ public final class VillageWall {
         // The bases of the columns come from the ring only: the gates do not change them.
         int[] bases = bases(planned, terrain);
         List<Stop> stops = stops(village);
+        int armWidth = armHalfWidth();
         WallLayout gated = withGates(planned, CliffSide.gates(planned,
-                gateDrop(planned, bases, terrain, gate -> arm(planned, gate, stops)), keep));
+                gateDrop(planned, bases, terrain, gate -> arm(planned, gate, stops, armWidth)), keep));
         WallLayout layout = towers.isPresent()
                 ? gated.withTowers(towers.getAsInt(), corner -> cornerView(gated, corner.edge(), bases, terrain),
                         tower -> kept(keep, gated.ringIndices(gated.towerBox(tower))))
@@ -254,7 +258,7 @@ public final class VillageWall {
         }
         Map<Gate, Arm> arms = new HashMap<>();
         for (Gate gate : layout.gates()) {
-            Optional<Arm> arm = arm(layout, gate, stops);
+            Optional<Arm> arm = arm(layout, gate, stops, armWidth);
             arm.ifPresent(value -> arms.put(gate, value));
             List<Integer> indices = layout.ringIndices(gate);
             int level = reachable(flatten(bases, indices), arm);
@@ -1062,13 +1066,29 @@ public final class VillageWall {
     }
 
     /**
-     * The arm of a gate. Empty if the gate is next to a piece that is not a street.
-     *
-     * @param layout the layout of the wall
-     * @param gate   the gate
-     * @param stops  the pieces of the pools that are not streets
+     * The half width of the rows of an arm where a piece that is not a street stops the arm (see {@link #arm}). From
+     * the plan version {@link PlanVersion#ARM_WIDTH}, it is the half width of a street. Else it is 0: the middle only.
      */
+    static int armHalfWidth() {
+        return VillagePlanVersion.atLeast(PlanVersion.ARM_WIDTH) ? STREET_HALF_WIDTH : 0;
+    }
+
+    /** The arm of a gate that stops at a piece on its middle (see {@link #arm(WallLayout, Gate, List, int)}). */
     static Optional<Arm> arm(WallLayout layout, Gate gate, List<Stop> stops) {
+        return arm(layout, gate, stops, 0);
+    }
+
+    /**
+     * The arm of a gate. It stops at the first row with a piece that is not a street, in the half width on each side
+     * of its middle. Empty if the gate is next to such a piece.
+     *
+     * @param layout    the layout of the wall
+     * @param gate      the gate
+     * @param stops     the pieces of the pools that are not streets
+     * @param halfWidth the blocks on each side of the middle of a row where a piece stops the arm: 0 for the middle
+     *                  only, or {@link #STREET_HALF_WIDTH} for the path and its edges
+     */
+    static Optional<Arm> arm(WallLayout layout, Gate gate, List<Stop> stops, int halfWidth) {
         Side side = gate.side();
         Cell middle = layout.cell(gate.edge(), layout.along(gate));
         int startX = middle.x() + 2 * side.insideX();
@@ -1081,7 +1101,8 @@ public final class VillageWall {
             if (!layout.contains(x, z)) {
                 break;
             }
-            Optional<Stop> stop = stops.stream().filter(candidate -> candidate.box().contains(x, z)).findFirst();
+            Optional<Stop> stop = stops.stream().filter(candidate -> crosses(candidate.box(), x, z, side, halfWidth))
+                    .findFirst();
             if (stop.isPresent()) {
                 end = OptionalInt.of(stop.get().level());
                 break;
@@ -1092,6 +1113,18 @@ public final class VillageWall {
             return Optional.empty();
         }
         return Optional.of(new Arm(startX, startZ, side.insideX(), side.insideZ(), length, end));
+    }
+
+    /** True if a box holds a block of the row of an arm at a position, in the half width on each side of it. */
+    private static boolean crosses(Box box, int x, int z, Side side, int halfWidth) {
+        int acrossX = Math.abs(side.insideZ());
+        int acrossZ = Math.abs(side.insideX());
+        for (int offset = -halfWidth; offset <= halfWidth; offset++) {
+            if (box.contains(x + acrossX * offset, z + acrossZ * offset)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
