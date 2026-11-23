@@ -2088,6 +2088,41 @@ The milestone J8 · Additional mods contains the earthquake with local collapses
   - A block with a block entity: it keeps data (the items of a container, the text of a sign) that a fall can lose. Examples: the chests, the barrels, the shulker boxes, the spawners, the vaults, the beds, the bells, the signs, the beacons and the command blocks.
   - A block that a player cannot break: bedrock, barrier, the portals and the end portal frames.
 
+### Block resistance and anchor
+
+**Planned** (#1025). This section is a design for review. The code does not use these rules.
+
+Goal: a storm or an earthquake moves a block as a function of its resistance and of its anchor. In the same event, a low stone house loses fewer blocks than a tall house of wood.
+
+- **Resistance**: the class of the block gives the resistance (see "Block classes"). The tags and the blast resistance give the class. The chances of the classes stay the base of the chance of damage.
+- **Anchor**: three values of the position of the block.
+  - Height `h`: the number of blocks between the block and the natural ground below it. The natural ground is the first block of the tags `crack_surface` or `crackable` in the column. The value is 16 at most.
+  - Support: the block below. A block with a free position below it has no support, and it falls as in the current rules.
+  - Neighbors `n`: the number of horizontal neighbors that are not free, from 0 to 4. A block in a wall has 2. A pillar has 0.
+- **Anchor factor**: `A = (1 + heightGain × h) × (1.5 − 0.25 × n)`.
+  - With `heightGain` = 0.1, a block 10 blocks above the ground has 2 times the chance of a block on the ground.
+  - A block with 4 neighbors has 1/3 of the chance of a block with no neighbor.
+- **Force** of the event at the position: the intensity × the strength, as in the current rules.
+- **Chance** of damage: `min(1, chance of the class × force × A)`. The factor applies to the earthquakes and to the storms. A low house has a small `h`, and a stone house has a small chance of the class.
+- **Cost**: most blocks fail the roll before any read of a neighbor. The anchor must not change this order.
+  - The scan of a column finds the natural ground first: 24 reads at most, one time for each column.
+  - The first roll uses the largest anchor factor. Only a block that passes this roll reads its 4 neighbors. A second roll then gives the real chance. The result is the same as one roll with the real chance.
+  - Thus the cost for each column stays near the current cost: 24 more reads at most, and 4 reads for each rolled block.
+- **Tests**:
+  - JUnit: the anchor factor for a block on the ground, a block high in a wall and a pillar.
+  - GameTest: a low stone house is 5 × 5 blocks and 3 blocks high. A tall wood house is 5 × 5 blocks and 9 blocks high. The two houses are at the same distance from the center of the same event. The stone house loses fewer blocks.
+  - GameTest: two wood houses of the same material, one low and one tall. The tall house loses a larger part of its blocks.
+- **Parts of the work**: this design, the resistance model with JUnit, the anchor calculation, the GameTest that measures the result.
+
+**Questions for the owner**:
+
+1. Resistance: keep the 3 classes of the tags, or use a continuous value from the blast resistance? The design keeps the 3 classes.
+2. Height: from the natural ground, or from the first block below with a different material? A house on a stone platform gets a different height with each rule.
+3. Neighbors: can a block with 4 neighbors take no damage at all? The design gives it 1/3 of the chance.
+4. Values: are `heightGain` = 0.1 and a neighbor factor from 0.5 to 1.5 correct? The design puts them in the config.
+5. Wind: does the wind of a storm become stronger with the height, in addition to the anchor factor? The design uses only the anchor factor.
+6. Stabilizer: does a stabilizer give a better anchor to the blocks near it, or full protection? The design keeps full protection.
+
 ### Earthquakes
 
 **Implemented**: the natural earthquakes, the announce, the damage from the material of the blocks, the collapses, the cracks and the command of the operators.
