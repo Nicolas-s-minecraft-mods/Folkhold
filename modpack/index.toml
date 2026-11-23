@@ -105,6 +105,11 @@ hash = "0294264654da6777cfbbbd24ffa6dd1d082768fa7ae28b36b76f78261f53fce9"
 metafile = true
 
 [[files]]
+file = "mods/markethold.pw.toml"
+hash = "fdcd18db311f7dfcf69220c6453ccf04e1d02e1b49227a326eb8a568b98971f2"
+metafile = true
+
+[[files]]
 file = "mods/mezzconfig.pw.toml"
 hash = "cf5d87f046590b99d92096a79f6ea2f456290ba5d423c256f06674d2d10a1592"
 metafile = true
@@ -122,6 +127,16 @@ metafile = true
 [[files]]
 file = "mods/noisiumforked.pw.toml"
 hash = "11835b8555c23090b12d6ca9be871a6b5bfcec5ff7f48e77ef09c784af40b69e"
+metafile = true
+
+[[files]]
+file = "mods/railhold.pw.toml"
+hash = "1844ebde56474b558a6e9d69590cb7726ea3acfa4373a715357b98408a8fe9ad"
+metafile = true
+
+[[files]]
+file = "mods/runehold.pw.toml"
+hash = "fff80a61167449ded9fdd28d692861d61b5361db0ba34a48747c0d43f24e0ef1"
 metafile = true
 
 [[files]]

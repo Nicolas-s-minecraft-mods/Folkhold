@@ -1,0 +1,8 @@
+name = "Markethold"
+filename = "markethold-0.2.1.jar"
+side = "both"
+
+[download]
+url = "https://github.com/Nicolas-s-minecraft-mods/Markethold/releases/download/v0.2.1/markethold-0.2.1.jar"
+hash-format = "sha256"
+hash = "6e8d49286312bc53cab014d25153de7d56fa54c2a4c2c04e9cf10adb01fb11b5"

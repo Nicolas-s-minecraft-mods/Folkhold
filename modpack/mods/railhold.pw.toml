@@ -1,0 +1,8 @@
+name = "Railhold"
+filename = "railhold-0.2.1.jar"
+side = "both"
+
+[download]
+url = "https://github.com/Nicolas-s-minecraft-mods/Railhold/releases/download/v0.2.1/railhold-0.2.1.jar"
+hash-format = "sha256"
+hash = "e144eb95e2da6e2b206a6cb0028f56e76abcfd849143821b16ace45d1e9f8ad8"

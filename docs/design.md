@@ -50,6 +50,9 @@ The pinned versions are in `modpack/mods/*.pw.toml`.
 | Terrain | Tectonic | `tectonic` | 3.0.28 | Large continents, deep oceans, mountain ranges. Requires Lithostitched |
 | Light | LambDynamicLights | `lambdynamiclights` | 4.8.11 | Client only |
 | Time | Slumber | `slumbermod` | 1.0.0 | Pinned. MIT license. While all the players sleep, the server runs extra ticks of the levels in place of the night skip. Server side: the pack installs it on both sides, so that a single player world (integrated server) also has it. See "Sleep" below |
+| Gameplay | Markethold | `markethold` | 0.2.1 | Balance of the trades of the villagers. The jar of its GitHub Release |
+| Gameplay | Runehold | `runehold` | 0.2.1 | Balance of the enchantments and of the anvil. The jar of its GitHub Release |
+| Gameplay | Railhold | `railhold` | 0.2.1 | Trains of linked minecarts, locomotives and storage minecarts. The jar of its GitHub Release |
 | Library | GeckoLib | `geckolib` | 4.9.3 | Required by `folkhold_world` |
 | Library | Confee | `confee` | 0.2.0 | Beta, pinned. Client only. Required by `folkhold_world` and `folkhold_events` on the client: the config screens of the client options. The jar of its GitHub Release |
 | Comfort | JEI, Jade | `jei`, `jade` | 19.57.0.451, 15.10.6 | For development |
