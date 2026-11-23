@@ -65,7 +65,8 @@ import net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent;
  *       worker sells the outputs of its jobs in stock (price {@code P × 1.15}) and buys the inputs of its jobs that
  *       the village needs (price {@code P × 0.85}). The treasury of the faction limits the purchases. The offer
  *       count of the level divides between the traders of the village, with 2 offers or more for each trader.</li>
- *   <li>Each trade changes the stock and the treasury.</li>
+ *   <li>Each trade changes the stock and the treasury, and gives experience to the post of the worker (see
+ *       {@link WorkerSkills}).</li>
  *   <li>A worker does not trade with a player below the neutral tier. Friends and allies get a discount.</li>
  *   <li>A worker trades only at the trade place of its village during the market hours (see
  *       {@link #marketRefusal}). The trade place is the market, or the plaza for a village with no market (see
@@ -307,7 +308,8 @@ public final class Merchants {
 
     /**
      * A trade with a worker changes the stock and the treasury. A trade that the stock or the treasury cannot pay is
-     * canceled. After the trade, the open screens of the workers of the village show what the stock and the treasury
+     * canceled. A trade that the village pays gives experience to the post of the worker (see
+     * {@link WorkerSkills#addTrade}). After the trade, the open screens of the workers of the village show what the stock and the treasury
      * can pay now.
      */
     public static void onTrade(TradeWithVillagerEvent event) {
@@ -322,8 +324,9 @@ public final class Merchants {
         }
         MinecraftServer server = level.getServer();
         Settlements.of(server, heart).ifPresent(settlement -> {
-            if (!applyTrade(server, settlement, event.getMerchantOffer())
-                    && event.getEntity() instanceof ServerPlayer player) {
+            if (applyTrade(server, settlement, event.getMerchantOffer())) {
+                WorkerSkills.addTrade(settlement, worker, WorldConfig.ECONOMY_SKILL_NEED_TRADE_EXPERIENCE.get());
+            } else if (event.getEntity() instanceof ServerPlayer player) {
                 cancel(player, event.getMerchantOffer());
             }
             Stock stock = settlement.economy().stock();

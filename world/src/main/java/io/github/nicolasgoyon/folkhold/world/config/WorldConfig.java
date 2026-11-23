@@ -124,6 +124,9 @@ public final class WorldConfig {
     public static final ModConfigSpec.DoubleValue ECONOMY_ELASTICITY;
     public static final ModConfigSpec.IntValue ECONOMY_START_TREASURY;
     public static final ModConfigSpec.IntValue ECONOMY_TREASURY_MINIMUM;
+    public static final ModConfigSpec.IntValue ECONOMY_SKILL_CYCLE_EXPERIENCE;
+    public static final ModConfigSpec.IntValue ECONOMY_SKILL_NEED_TRADE_EXPERIENCE;
+    public static final ModConfigSpec.IntValue ECONOMY_SKILL_JOB_TRADE_EXPERIENCE;
 
     public static final ModConfigSpec.IntValue GROUP_BLOCKS_PER_TICK;
     public static final ModConfigSpec.IntValue GROUP_MAX_GROUPS;
@@ -775,6 +778,19 @@ public final class WorldConfig {
                 .comment("A faction with fewer emeralds in its treasury gives less prosperity to its settlements.")
                 .translation(KEY_PREFIX + "economyTreasuryMinimum")
                 .defineInRange("treasuryMinimum", 100, 0, 1_000_000);
+        ECONOMY_SKILL_CYCLE_EXPERIENCE = builder
+                .comment("Experience that each active job post gets in its job at each cycle.",
+                        "The skill levels: Novice 0, Apprentice 10, Journeyman 70, Expert 150, Master 250.")
+                .translation(KEY_PREFIX + "economySkillCycleExperience")
+                .defineInRange("skillCycleExperience", 2, 0, 1000);
+        ECONOMY_SKILL_NEED_TRADE_EXPERIENCE = builder
+                .comment("Experience that a job post gets for each trade of a player with a worker of the post.")
+                .translation(KEY_PREFIX + "economySkillNeedTradeExperience")
+                .defineInRange("skillNeedTradeExperience", 1, 0, 1000);
+        ECONOMY_SKILL_JOB_TRADE_EXPERIENCE = builder
+                .comment("Experience that a job post gets for each use of a job trade of the trade list of its job.")
+                .translation(KEY_PREFIX + "economySkillJobTradeExperience")
+                .defineInRange("skillJobTradeExperience", 2, 0, 1000);
         builder.pop();
 
         builder.comment("Mobile groups: caravans and traveling merchants.")

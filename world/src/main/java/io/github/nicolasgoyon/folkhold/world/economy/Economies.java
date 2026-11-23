@@ -46,6 +46,7 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  *   <li>At each cycle: the job slots follow the level (more slots, new jobs), then the settlement runs one
  *       economic cycle (see {@link Economy}). Only the active jobs work: the jobs of the active job posts of a scanned
  *       village, and the job slots of a village with no scan (see {@link #activeJobIds}).</li>
+ *   <li>At each cycle, each active job post gets experience in its job (see {@link WorkerSkills}).</li>
  *   <li>The prosperity of a settlement comes from its jobs and the treasury of its faction.</li>
  * </ul>
  */
@@ -115,6 +116,7 @@ public final class Economies {
         LevelTraits traits = LevelTables.get().traits(settlement.level());
         CycleReport report = Economy.runCycle(settlement.economy(), activeJobs(settlement), traits.maxPopulation(),
                 traits.stockCapacity(), settings(), random);
+        settlement.jobSkills().addCycle(activeSlots(settlement), WorldConfig.ECONOMY_SKILL_CYCLE_EXPERIENCE.get());
         SettlementData.get(server).setDirty();
         return report;
     }
@@ -212,9 +214,20 @@ public final class Economies {
      * @return the job ids
      */
     public static List<String> activeJobIds(Settlement settlement) {
+        return activeSlots(settlement).jobs();
+    }
+
+    /**
+     * The active job slots of a settlement: its active posts, and its active job slots with no post (see
+     * {@link JobPosts#activeSlots} and {@link #activeJobIds}).
+     *
+     * @param settlement the settlement
+     * @return the active job slots
+     */
+    public static JobPosts.ActiveSlots activeSlots(Settlement settlement) {
         int slots = LevelTables.get().traits(settlement.level()).jobSlots();
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        return JobPosts.jobs(settlement.jobPosts(), settlement.legacyJobs(), settlement.economy().jobs(), slots,
+        return JobPosts.activeSlots(settlement.jobPosts(), settlement.legacyJobs(), settlement.economy().jobs(), slots,
                 job -> isValidJob(server, settlement, job), homeInhabitants(settlement));
     }
 

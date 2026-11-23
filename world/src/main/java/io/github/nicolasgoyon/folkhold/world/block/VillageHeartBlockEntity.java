@@ -15,6 +15,7 @@ import io.github.nicolasgoyon.folkhold.world.construction.VillageRescues;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import io.github.nicolasgoyon.folkhold.world.economy.WorkerSkills;
 import io.github.nicolasgoyon.folkhold.world.entity.ArcherEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.CaptainEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionGolemEntity;
@@ -934,7 +935,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
      * Creates the missing villagers of the village: the inhabitants ({@link VillageFolk#inhabitantCount}) with the
      * professions of the settlement ({@link VillageFolk#professions}). When the jobs change, the inhabitants get the
      * new professions at once ({@link VillageFolk#assign}). Then the inhabitants get their beds ({@link VillageHomes})
-     * and the workers get the places of their daily schedule ({@link VillageWorkers}).
+     * and the workers get the places of their daily schedule ({@link VillageWorkers}) and the skill level of their posts
+     * ({@link WorkerSkills}).
      *
      * <ul>
      *   <li>The villagers appear in groups of {@link #VILLAGER_GROUP} at most, one group at each call. A large
@@ -962,6 +964,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         VillageHomes.claim(serverLevel, worldPosition, inhabitants, seats, beds);
         VillageHomes.lieDown(serverLevel, inhabitants);
         workers.update(serverLevel, this, inhabitants, seats, beds, settlement.get().jobPosts().orElse(List.of()));
+        WorkerSkills.applyAll(settlement.get(), inhabitants);
         FolkNavigation.leaveWall(worldPosition, wallZones(serverLevel), inhabitants);
         List<PathfinderMob> mobs = new ArrayList<>(inhabitants);
         mobs.addAll(getUnits());

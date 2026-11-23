@@ -150,7 +150,64 @@ public final class JobPosts {
     }
 
     /**
-     * The jobs of a village: one job for each active job slot.
+     * The active job slots of a village: the active posts, and the job slots with no post.
+     *
+     * @param posts    the active posts, in their order
+     * @param slotJobs the jobs of the active job slots with no post: the legacy job slots of a legacy village, or the
+     *                 job slots of a village with no list of posts
+     */
+    public record ActiveSlots(List<Post> posts, List<String> slotJobs) {
+        public ActiveSlots {
+            posts = List.copyOf(posts);
+            slotJobs = List.copyOf(slotJobs);
+        }
+
+        /** The jobs of the active job slots: the jobs of the posts, then the jobs of the slots with no post. */
+        public List<String> jobs() {
+            List<String> jobs = new ArrayList<>(posts.size() + slotJobs.size());
+            posts.forEach(post -> jobs.add(post.jobId()));
+            jobs.addAll(slotJobs);
+            return List.copyOf(jobs);
+        }
+    }
+
+    /**
+     * The active job slots of a village.
+     *
+     * @param posts       the posts, or empty when the heart did not scan the village
+     * @param legacy      true for a legacy village
+     * @param slotJobs    the jobs of the job slots of the level (see {@link JobAssignment}), in their order
+     * @param jobSlots    the job slots of the level
+     * @param valid       true for a valid job id
+     * @param inhabitants the inhabitants of the homes
+     * @return with no posts, the job slots {@code slotJobs}. Else the active posts, and for a legacy village the first
+     *         {@link #legacySlots} jobs of {@code slotJobs}.
+     */
+    public static ActiveSlots activeSlots(Optional<List<Post>> posts, boolean legacy, List<String> slotJobs,
+            int jobSlots, Predicate<String> valid, int inhabitants) {
+        if (posts.isEmpty()) {
+            return new ActiveSlots(List.of(), slotJobs);
+        }
+        List<Post> active = new ArrayList<>();
+        int before = 0;
+        for (Post post : posts.get()) {
+            if (!valid.test(post.jobId())) {
+                continue;
+            }
+            if (before < inhabitants) {
+                active.add(post);
+            }
+            before += Math.max(1, post.homeBeds());
+        }
+        List<String> legacyJobs = List.of();
+        if (legacy) {
+            legacyJobs = slotJobs.subList(0, Math.min(slotJobs.size(), legacySlots(jobSlots, active.size())));
+        }
+        return new ActiveSlots(active, legacyJobs);
+    }
+
+    /**
+     * The jobs of a village: one job for each active job slot (see {@link #activeSlots}).
      *
      * @param posts       the posts, or empty when the heart did not scan the village
      * @param legacy      true for a legacy village
@@ -163,14 +220,6 @@ public final class JobPosts {
      */
     public static List<String> jobs(Optional<List<Post>> posts, boolean legacy, List<String> slotJobs, int jobSlots,
             Predicate<String> valid, int inhabitants) {
-        if (posts.isEmpty()) {
-            return List.copyOf(slotJobs);
-        }
-        List<String> jobs = new ArrayList<>(activeJobs(posts.get(), valid, inhabitants));
-        if (legacy) {
-            int legacySlots = Math.min(slotJobs.size(), legacySlots(jobSlots, jobs.size()));
-            jobs.addAll(slotJobs.subList(0, legacySlots));
-        }
-        return List.copyOf(jobs);
+        return activeSlots(posts, legacy, slotJobs, jobSlots, valid, inhabitants).jobs();
     }
 }

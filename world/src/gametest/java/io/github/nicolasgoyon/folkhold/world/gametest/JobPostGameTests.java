@@ -10,9 +10,11 @@ import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import io.github.nicolasgoyon.folkhold.world.economy.WorkerSkills;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload.Row;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
+import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHomes;
@@ -23,14 +25,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.SplittableRandom;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -40,7 +47,11 @@ import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.trading.ItemCost;
+import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Rotation;
@@ -49,6 +60,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.JigsawReplace
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -351,6 +363,87 @@ public final class JobPostGameTests {
             helper.assertTrue(VillageHomes.home(level, newcomer).filter(free::equals).isPresent(),
                     "The new farmer must take the free bed " + free + ", not " + kept + ": "
                             + VillageHomes.home(level, newcomer));
+        } finally {
+            villagers.forEach(Entity::discard);
+            end(helper, village);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The farmer post gets the experience of a production cycle and of a trade of a player with a farmer. The save
+     * keeps the experience. The farmers show the skill level of the post as their vanilla level: Novice, then
+     * Apprentice at 10 experience. The inhabitants with no post keep the level 1.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 40, batch = "job_posts_skill", skyAccess = true)
+    public static void postGetsExperienceFromCyclesAndTrades(GameTestHelper helper) {
+        startStaff(helper);
+        TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_SKILL_CYCLE_EXPERIENCE, 2);
+        TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_SKILL_NEED_TRADE_EXPERIENCE, 1);
+        Village village = village(helper, List.of("job_farmer", "house_cottage"), 3);
+        List<Villager> villagers = new ArrayList<>();
+        TestSupport.atTestEnd(helper, () -> villagers.forEach(Entity::discard));
+        try {
+            ServerLevel level = helper.getLevel();
+            MinecraftServer server = level.getServer();
+            Settlement settlement = village.settlement();
+            settlement.economy().setInitialized(true);
+            JobPosts.Post farm = settlement.jobPosts().orElseThrow().get(0);
+            helper.assertTrue(farm.jobId().equals(FARMER), "The first post must be the farmer: " + farm);
+            VillageFolk.professions(settlement, VillageFolk.inhabitantCount(settlement))
+                    .forEach(profession -> villagers.add(VillageFolk.spawn(level, village.heart().getBlockPos(),
+                            profession)));
+            village.heart().claimHomeBeds();
+            village.heart().updateWorkers();
+            VillagerProfession farmerProfession = VillageFolk.professionOf(FARMER);
+            List<Villager> farmers = villagers.stream()
+                    .filter(villager -> villager.getVillagerData().getProfession() == farmerProfession).toList();
+            helper.assertTrue(farmers.size() == 2, "Expected 2 farmers: " + farmers.size());
+            helper.assertTrue(farmers.stream().allMatch(farmer -> WorkerSkills.sourceOf(settlement, farmer)
+                    .map(WorkerSkills.Source::post).filter(farm::equals).isPresent()),
+                    "The farmers must have the skill of the farmer post");
+
+            Economies.runCycle(server, settlement, new SplittableRandom(1));
+            helper.assertTrue(settlement.jobSkills().experience(farm) == 2,
+                    "Expected 2 experience after a cycle: " + settlement.jobSkills().experience(farm));
+
+            Villager trader = farmers.get(0);
+            settlement.economy().stock().set("minecraft:wheat", 64);
+            MerchantOffer wheat = new MerchantOffer(new ItemCost(Items.EMERALD, 1), Optional.empty(),
+                    new ItemStack(Items.WHEAT, 4), 16, 0, Merchants.PRICE_MULTIPLIER);
+            Merchants.onTrade(new TradeWithVillagerEvent(helper.makeMockPlayer(GameType.SURVIVAL), wheat, trader));
+            helper.assertTrue(settlement.jobSkills().experience(farm) == 3,
+                    "Expected 3 experience after a trade: " + settlement.jobSkills().experience(farm));
+            helper.assertTrue(trader.getVillagerData().getLevel() == 1 && trader.getVillagerXp() == 3,
+                    "The trader must be a Novice with 3 experience: " + trader.getVillagerData().getLevel() + ", "
+                            + trader.getVillagerXp());
+
+            settlement.jobSkills().add(farm, 7);
+            helper.assertTrue(WorkerSkills.applyAll(settlement, villagers) == 2,
+                    "The 2 farmers must get the new level");
+            helper.assertTrue(farmers.stream().allMatch(farmer -> farmer.getVillagerData().getLevel() == 2
+                    && farmer.getVillagerXp() == 10), "The farmers must be Apprentices with 10 experience");
+            helper.assertTrue(villagers.stream().filter(villager -> !farmers.contains(villager))
+                    .allMatch(villager -> villager.getVillagerData().getLevel() == 1),
+                    "The other inhabitants must keep the level 1");
+            helper.assertTrue(WorkerSkills.applyAll(settlement, villagers) == 0, "A second update must change nothing");
+
+            CompoundTag saved = SettlementData.get(server).save(new CompoundTag(), server.registryAccess());
+            ListTag settlements = saved.getList("Settlements", Tag.TAG_COMPOUND);
+            boolean found = false;
+            for (int i = 0; i < settlements.size(); i++) {
+                CompoundTag entry = settlements.getCompound(i);
+                if (!entry.getString("Id").equals(settlement.id())) {
+                    continue;
+                }
+                ListTag posts = entry.getCompound("JobSkills").getList("Posts", Tag.TAG_COMPOUND);
+                for (int j = 0; j < posts.size(); j++) {
+                    CompoundTag post = posts.getCompound(j);
+                    found |= post.getString("Job").equals(FARMER) && post.getInt("Experience") == 10
+                            && Arrays.equals(post.getIntArray("Sign"), new int[] {farm.x(), farm.y(), farm.z()});
+                }
+            }
+            helper.assertTrue(found, "The save must keep the experience of the farmer post");
         } finally {
             villagers.forEach(Entity::discard);
             end(helper, village);

@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.settlement;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementRegistry;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementState;
@@ -233,6 +234,9 @@ public final class SettlementData extends SavedData {
             if (settlement.legacyJobs()) {
                 entry.putBoolean("LegacyJobs", true);
             }
+            if (!settlement.jobSkills().isEmpty()) {
+                entry.put("JobSkills", saveSkills(settlement.jobSkills()));
+            }
             if (settlement.lastFallPenalty() != Settlement.NO_FALL_PENALTY) {
                 entry.putLong("LastFallPenalty", settlement.lastFallPenalty());
             }
@@ -294,6 +298,7 @@ public final class SettlementData extends SavedData {
             if (hasPosts) {
                 settlement.setJobPosts(Optional.of(loadPosts(entry.getList("JobPosts", Tag.TAG_COMPOUND))));
             }
+            loadSkills(settlement.jobSkills(), entry.getCompound("JobSkills"));
             settlement.setLastFallPenalty(entry.contains("LastFallPenalty") ? entry.getLong("LastFallPenalty")
                     : Settlement.NO_FALL_PENALTY);
             loadEconomy(settlement.economy(), entry.getCompound("Economy"));
@@ -328,6 +333,45 @@ public final class SettlementData extends SavedData {
         tag.putDouble("JobsWorking", economy.jobsWorking());
         tag.putInt("Cycles", economy.cycles());
         return tag;
+    }
+
+    /**
+     * Writes the skill of the job posts: {@code Posts} (a list of {@code Sign}, {@code Job} and {@code Experience})
+     * and {@code Slots} (the experience of the job slots with no post, by job id).
+     */
+    private static CompoundTag saveSkills(JobSkills skills) {
+        ListTag posts = new ListTag();
+        skills.posts().forEach((place, skill) -> {
+            CompoundTag postTag = new CompoundTag();
+            postTag.putIntArray("Sign", new int[] {place.x(), place.y(), place.z()});
+            postTag.putString("Job", skill.jobId());
+            postTag.putInt("Experience", skill.experience());
+            posts.add(postTag);
+        });
+        CompoundTag slots = new CompoundTag();
+        skills.slots().forEach(slots::putInt);
+        CompoundTag tag = new CompoundTag();
+        tag.put("Posts", posts);
+        tag.put("Slots", slots);
+        return tag;
+    }
+
+    /**
+     * Reads the skill of the job posts. A settlement with no key {@code JobSkills} (a save of an older version) has
+     * no skill: each post starts at Novice.
+     */
+    private static void loadSkills(JobSkills skills, CompoundTag tag) {
+        ListTag posts = tag.getList("Posts", Tag.TAG_COMPOUND);
+        for (int i = 0; i < posts.size(); i++) {
+            CompoundTag postTag = posts.getCompound(i);
+            int[] sign = postTag.getIntArray("Sign");
+            String job = postTag.getString("Job");
+            if (sign.length == 3 && !job.isEmpty()) {
+                skills.set(new JobSkills.Place(sign[0], sign[1], sign[2]), job, postTag.getInt("Experience"));
+            }
+        }
+        CompoundTag slots = tag.getCompound("Slots");
+        slots.getAllKeys().forEach(job -> skills.setSlot(job, slots.getInt(job)));
     }
 
     /** Reads the job posts of a settlement. A post with no sign position or no job is skipped. */

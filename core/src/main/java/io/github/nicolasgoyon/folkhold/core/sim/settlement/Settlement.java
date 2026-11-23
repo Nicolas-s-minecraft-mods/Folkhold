@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.core.sim.settlement;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ public final class Settlement {
     private int experience;
     private String biome = "";
     private final EconomyState economy = new EconomyState();
+    private final JobSkills jobSkills = new JobSkills();
     private List<Gate> gates = List.of();
     private int beds = VillagePlaces.UNKNOWN;
     private List<JobPosts.Post> jobPosts;
@@ -205,6 +207,11 @@ public final class Settlement {
         return economy;
     }
 
+    /** The skill of the job posts and of the job slots with no post (see {@link JobSkills}). */
+    public JobSkills jobSkills() {
+        return jobSkills;
+    }
+
     /** The gates of the palisade, as the heart saw them the last time. Empty if the heart did not see them. */
     public List<Gate> gates() {
         return gates;
@@ -257,7 +264,8 @@ public final class Settlement {
     }
 
     /**
-     * Sets the job posts of the village.
+     * Sets the job posts of the village. A post with a new job at a known position starts at 0 experience (see
+     * {@link JobSkills#update}).
      *
      * @param posts the posts in their order, or empty if the posts are unknown
      * @return true if the posts changed
@@ -268,6 +276,9 @@ public final class Settlement {
             return false;
         }
         jobPosts = value;
+        if (value != null) {
+            jobSkills.update(value);
+        }
         return true;
     }
 
