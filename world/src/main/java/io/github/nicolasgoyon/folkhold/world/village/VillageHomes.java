@@ -46,6 +46,7 @@ import net.minecraft.world.phys.Vec3;
  *   <li>The memory {@code HOME} stays in the save of the villager: it is the persistent home of the villager.</li>
  *   <li>At night, a villager near its free bed lies down in it (see {@link #lieDown}).</li>
  *   <li>A villager in its bed is not pushable (see {@link #staysInBed}).</li>
+ *   <li>A villager in the bed of an other villager wakes up when it loses this bed.</li>
  * </ul>
  */
 public final class VillageHomes {
@@ -126,11 +127,17 @@ public final class VillageHomes {
                         .ifPresent(villager -> owners.put(bed, villager));
             }
         }
-        // The holder of the bed of an other villager loses its memory only. The claim of the owner releases the
-        // ticket of the bed before it takes it.
+        // The holder of the bed of an other villager loses its memory HOME. The claim of the owner releases the ticket
+        // of the bed before it takes it. A holder in the bed wakes up first: the owner then finds a free bed, and the
+        // holder does not sleep with no home.
         for (Villager villager : level.getEntitiesOfClass(Villager.class, VillageHearts.area(level, heart))) {
             home(level, villager).filter(owners::containsKey).filter(bed -> owners.get(bed) != villager)
-                    .ifPresent(bed -> villager.getBrain().eraseMemory(MemoryModuleType.HOME));
+                    .ifPresent(bed -> {
+                        if (villager.isSleeping()) {
+                            villager.stopSleeping();
+                        }
+                        villager.getBrain().eraseMemory(MemoryModuleType.HOME);
+                    });
         }
         int claimed = 0;
         for (Map.Entry<BlockPos, Villager> entry : owners.entrySet()) {

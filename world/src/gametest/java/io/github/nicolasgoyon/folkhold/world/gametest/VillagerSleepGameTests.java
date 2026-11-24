@@ -36,6 +36,7 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.BedBlock;
@@ -269,6 +270,49 @@ public final class VillagerSleepGameTests {
                                     + bed.toShortString() + ": " + describe(level, villager));
                 })
                 .thenSucceed();
+    }
+
+    /**
+     * A sleeping villager of a faction village in the bed of an other villager wakes up when the heart gives the bed
+     * to its owner (see {@link VillageHomes#claim}). The holder has no place with this bed: its profession is not the
+     * profession of the place. Without the wake up, the holder sleeps with no memory {@code HOME}.
+     */
+    @GameTest(template = "arena", timeoutTicks = 100, batch = "villager_sleep_holder")
+    public static void sleeperInTheBedOfAnOtherVillagerWakesUp(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        TestSupport.setDayTimeForTest(helper, NIGHT);
+        ServerLevel level = helper.getLevel();
+        BlockPos head = new BlockPos(5, 1, 5);
+        placeBed(helper, head);
+        BlockPos bed = helper.absolutePos(head);
+        BlockPos heartPos = helper.absolutePos(new BlockPos(1, 1, 1));
+        Villager holder = helper.spawn(EntityType.VILLAGER, head.west(2));
+        Villager owner = helper.spawn(EntityType.VILLAGER, new BlockPos(10, 1, 10));
+        TestSupport.atTestEnd(helper, () -> {
+            holder.discard();
+            owner.discard();
+        });
+        owner.setVillagerData(owner.getVillagerData().setProfession(VillagerProfession.FARMER));
+        for (Villager villager : List.of(holder, owner)) {
+            villager.getPersistentData().putLong(Merchants.VILLAGE_TAG, heartPos.asLong());
+        }
+        claimBed(level, holder, bed);
+        holder.startSleeping(bed);
+        int claimed = VillageHomes.claim(level, heartPos, List.of(holder, owner),
+                List.of(new VillageFolk.Seat(VillagerProfession.FARMER, 0)), List.of(bed));
+        helper.assertTrue(claimed == 1, "The owner must get the bed: " + claimed);
+        helper.assertTrue(bed(level, owner).filter(bed::equals).isPresent(), "The owner must have the bed as its home");
+        helper.assertTrue(bed(level, holder).isEmpty(), "The holder must lose the bed");
+        helper.assertFalse(holder.isSleeping(), "The holder must wake up when it loses the bed");
+        helper.succeed();
+    }
+
+    /** Places a bed along the X axis with its head at a position, to the east. */
+    private static void placeBed(GameTestHelper helper, BlockPos head) {
+        helper.setBlock(head.west(), Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
+                .setValue(BedBlock.PART, BedPart.FOOT));
+        helper.setBlock(head, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
+                .setValue(BedBlock.PART, BedPart.HEAD));
     }
 
     /**
