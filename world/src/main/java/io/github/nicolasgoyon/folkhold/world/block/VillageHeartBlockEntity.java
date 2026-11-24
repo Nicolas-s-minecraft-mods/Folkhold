@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.faction.VillageNames;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.GarrisonTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.PostAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.construction.VillageRescues;
@@ -57,6 +58,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillagePens;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
+import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.WallZones;
 import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
@@ -187,6 +189,12 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final int STATION_DROP = 16;
     /** Two stations are this number of blocks apart or more (horizontal distance). */
     private static final int STATION_SPACING = 4;
+    /** A guard on a round goes to the next station at this horizontal distance from its station or less, in blocks. */
+    private static final int ROUND_ARRIVED = 3;
+    /** The stations of the rounds, in the order of their angle around the heart. Not saved. */
+    private List<BlockPos> roundRoute = List.of();
+    /** The guards on a round. Not saved: the heart gives the rounds again at each check of the garrison. */
+    private Set<UUID> roundGuards = Set.of();
     /** True after the heart closed the gates and lit the braziers for the night. */
     private boolean nightMode;
     /** The period of the day of the last check of the braziers, or null before the first check. Not saved. */
@@ -1499,10 +1507,18 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
-     * Gives a day station to each loaded guard with no post (not the captain), see {@link #guardStations()}. The
-     * guards share the stations in turn, in the order of their UUIDs: each station gets a guard before a station gets a
-     * second guard. With the option {@code guardStations} off, or with no station, the guards have no station and stay
-     * near their home.
+     * Gives a day station to each loaded guard with no post (not the captain), see {@link #guardStations()}.
+     *
+     * <ul>
+     *   <li>Rounds: in a village with rings, {@code roundGuardsPerRing} guards for each ring walk rounds. Their
+     *       route is the list of the stations in the order of their angle around the heart (see
+     *       {@link #advanceRounds()}). At least one guard keeps a station, and a route has 3 stations or more. A guard
+     *       on a round keeps its station of the route, else it starts at its own part of the route.</li>
+     *   <li>The other guards share the stations in turn, in the order of their UUIDs: each station gets a guard before
+     *       a station gets a second guard.</li>
+     *   <li>With the option {@code guardStations} off, or with no station, the guards have no station and stay near
+     *       their home.</li>
+     * </ul>
      */
     private void assignStations() {
         List<BlockPos> stations = WorldConfig.GUARD_STATIONS.get() ? guardStations() : List.of();
@@ -1511,9 +1527,74 @@ public class VillageHeartBlockEntity extends BlockEntity {
                         && unit.getPostPos() == null)
                 .sorted(Comparator.comparing(FactionUnit::getUUID))
                 .toList();
-        for (int i = 0; i < guards.size(); i++) {
-            guards.get(i).setStationPos(stations.isEmpty() ? null : stations.get(i % stations.size()));
+        int rounds = stations.size() >= 3
+                ? Math.max(0, Math.min(rings() * WorldConfig.ROUND_GUARDS_PER_RING.get(), guards.size() - 1)) : 0;
+        roundRoute = rounds > 0 ? byAngle(stations) : List.of();
+        Set<UUID> onRounds = new HashSet<>();
+        for (int i = 0; i < rounds; i++) {
+            FactionUnit guard = guards.get(i);
+            if (!roundRoute.contains(guard.getStationPos())) {
+                guard.setStationPos(roundRoute.get(i * roundRoute.size() / rounds));
+            }
+            onRounds.add(guard.getUUID());
         }
+        roundGuards = Set.copyOf(onRounds);
+        for (int i = rounds; i < guards.size(); i++) {
+            int index = i - rounds;
+            guards.get(i).setStationPos(stations.isEmpty() ? null : stations.get(index % stations.size()));
+        }
+    }
+
+    /**
+     * Moves each loaded guard on a round to the next station of the route when it is near its station. The heart
+     * calls this method at each check, by day, while the village is calm.
+     */
+    private void advanceRounds() {
+        if (!(level instanceof ServerLevel serverLevel) || roundRoute.isEmpty()) {
+            return;
+        }
+        for (UUID id : roundGuards) {
+            if (serverLevel.getEntity(id) instanceof FactionUnit guard && guard.getTarget() == null) {
+                BlockPos station = guard.getStationPos();
+                int index = station == null ? -1 : roundRoute.indexOf(station);
+                if (index < 0) {
+                    continue;
+                }
+                double dx = guard.getX() - (station.getX() + 0.5);
+                double dz = guard.getZ() - (station.getZ() + 0.5);
+                if (dx * dx + dz * dz <= ROUND_ARRIVED * ROUND_ARRIVED) {
+                    guard.setStationPos(roundRoute.get((index + 1) % roundRoute.size()));
+                }
+            }
+        }
+    }
+
+    /** The guards on a round, see {@link #assignStations()}. For the tests. */
+    public Set<UUID> roundGuards() {
+        return roundGuards;
+    }
+
+    /** The stations of the rounds in the order of their angle around the heart. For the tests. */
+    public List<BlockPos> roundRoute() {
+        return roundRoute;
+    }
+
+    /** The stations in the order of their angle around the heart. */
+    private List<BlockPos> byAngle(List<BlockPos> stations) {
+        return stations.stream()
+                .sorted(Comparator.comparingDouble(station -> Math.atan2(station.getZ() - worldPosition.getZ(),
+                        station.getX() - worldPosition.getX())))
+                .toList();
+    }
+
+    /** The number of rings of the tier of the settlement of the heart (0 for a hamlet and a village). */
+    private int rings() {
+        if (level == null || level.getServer() == null) {
+            return 0;
+        }
+        int settlementLevel = Settlements.of(level.getServer(), this).map(Settlement::level).orElse(1);
+        String tier = LevelTables.get().tier(settlementLevel).id();
+        return VillageSizes.get().size(tier).map(VillageSize::rings).orElse(0);
     }
 
     /**
@@ -1746,6 +1827,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (heart.layout.isScanned() && level.isNight() != heart.nightMode) {
             heart.applyDayNight(level.isNight());
+        }
+        if (heart.layout.isScanned() && !level.isNight() && heart.alertState == AlertState.CALM) {
+            heart.advanceRounds();
         }
         if (heart.layout.isScanned() && level instanceof ServerLevel serverLevel) {
             heart.updateBraziers(serverLevel);

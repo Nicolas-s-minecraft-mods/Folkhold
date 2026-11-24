@@ -9,8 +9,11 @@ import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
@@ -32,6 +35,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class GuardStationGameTests {
     /** The level of the village of the tests: the first level of a city. */
     private static final int CITY_LEVEL = 13;
+    /** A level of the tier village: no rings. */
+    private static final int VILLAGE_LEVEL = 5;
+    /** The test waits this number of ticks at most for the rounds of the guards. */
+    private static final int ROUND_TICKS = 3600;
     /** A station is at this horizontal distance from the heart or more, in blocks: out of the plaza. */
     private static final int MIN_HEART_DISTANCE = 8;
     /** A station is at this horizontal distance from its gate block or its tower post or less, in blocks. */
@@ -51,6 +58,8 @@ public final class GuardStationGameTests {
      */
     @GameTest(template = "village/center", timeoutTicks = WALK_TICKS + 100, batch = "guard_stations")
     public static void guardsKeepStationsAtTheGatesAndTowers(GameTestHelper helper) {
+        // No rounds: each guard keeps one station (see guardsWalkRoundsFromStationToStation).
+        TestSupport.setConfigForTest(helper, WorldConfig.ROUND_GUARDS_PER_RING, 0);
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
         TestSupport.setLevel(helper, heart, CITY_LEVEL);
         heart.ensureGarrison(helper.getLevel().getGameTime());
@@ -109,6 +118,56 @@ public final class GuardStationGameTests {
             FolkholdWorld.LOGGER.info("Guard stations: distances of the guards to the heart, spawn {}, stations {}, "
                     + "now {}", spawn, distances(heartPos, guards, GuardEntity::getStationPos),
                     distances(heartPos, guards, Entity::blockPosition));
+            heart.getUnits().forEach(Entity::discard);
+        }));
+    }
+
+    /**
+     * By day, in a city (2 rings), 2 guards walk rounds from station to station, and the other guards keep their
+     * stations. The route is the list of the stations in the order of their angle around the heart. Each guard on a
+     * round visits 3 stations or more. A village (no rings) has no rounds.
+     */
+    @GameTest(template = "village/center", timeoutTicks = ROUND_TICKS + 100, batch = "guard_rounds")
+    public static void guardsWalkRoundsFromStationToStation(GameTestHelper helper) {
+        VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
+        BlockPos heartPos = heart.getBlockPos();
+        TestSupport.setLevel(helper, heart, VILLAGE_LEVEL);
+        heart.ensureGarrison(helper.getLevel().getGameTime());
+        heart.applyDayNight(false);
+        boolean noRoundsInAVillage = heart.roundGuards().isEmpty() && heart.roundRoute().isEmpty();
+        TestSupport.setLevel(helper, heart, CITY_LEVEL);
+        heart.ensureGarrison(helper.getLevel().getGameTime());
+        long added = helper.getLevel().getGameTime();
+        VillageFolk.inhabitants(helper.getLevel(), heartPos).forEach(Entity::discard);
+        heart.getCats().forEach(Entity::discard);
+        heart.applyDayNight(false);
+        List<GuardEntity> guards = guards(heart);
+        List<GuardEntity> onRounds = guards.stream().filter(guard -> heart.roundGuards().contains(guard.getUUID()))
+                .toList();
+        List<BlockPos> route = heart.roundRoute();
+        boolean othersStationed = guards.stream().filter(guard -> !onRounds.contains(guard))
+                .allMatch(guard -> guard.getStationPos() != null);
+        boolean onRoute = onRounds.stream().allMatch(guard -> route.contains(guard.getStationPos()));
+        long starts = onRounds.stream().map(GuardEntity::getStationPos).distinct().count();
+
+        helper.assertTrue(noRoundsInAVillage, "A village with no rings must have no rounds");
+        helper.assertTrue(onRounds.size() == 2, "A city must have 2 guards on rounds: " + onRounds.size());
+        helper.assertTrue(route.size() == heart.guardStations().size(), "The route must have all the stations");
+        helper.assertTrue(onRoute && starts == onRounds.size(), "Each guard on a round must start at its own station "
+                + "of the route: " + onRounds.stream().map(GuardEntity::getStationPos).toList());
+        helper.assertTrue(othersStationed, "The other guards must keep their stations");
+
+        Map<GuardEntity, Set<BlockPos>> visited = new HashMap<>();
+        onRounds.forEach(guard -> visited.put(guard, new HashSet<>(List.of(guard.getStationPos()))));
+        helper.onEachTick(() -> onRounds.forEach(guard -> visited.get(guard).add(guard.getStationPos())));
+        helper.runAfterDelay(1, () -> helper.succeedWhen(() -> {
+            for (GuardEntity guard : onRounds) {
+                TestSupport.assertTicks(helper, guard, added);
+                helper.assertTrue(visited.get(guard).size() >= 3,
+                        "Each guard on a round must visit 3 stations or more: " + visited.get(guard));
+            }
+            FolkholdWorld.LOGGER.info("Guard rounds: route {}, visited {}", route.size(),
+                    onRounds.stream().map(guard -> visited.get(guard).size()).toList());
             heart.getUnits().forEach(Entity::discard);
         }));
     }
