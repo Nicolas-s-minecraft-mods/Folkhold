@@ -2,9 +2,12 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import com.mojang.datafixers.util.Pair;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
 import io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece;
 import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,6 +26,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -31,6 +35,7 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.TerrainAdjustment;
+import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -80,6 +85,18 @@ public final class VillageGroundGameTests {
     static final List<BlockPos> SEARCHES = List.of(new BlockPos(2606, 185, 893), new BlockPos(3000, 64, 0),
             new BlockPos(0, 64, 3000), new BlockPos(-3000, 64, 0), new BlockPos(0, 64, -3000),
             new BlockPos(2100, 64, 2100), new BlockPos(-2100, 64, -2100));
+    /** The seed of the world of the playtest with the holes near the streets (issue #799). */
+    static final long HOLES_SEED = 2313585753942443114L;
+    /** The start chunk of the capital of the playtest with the holes near the streets. */
+    static final ChunkPos HOLES_START = new ChunkPos(956, -11);
+    /**
+     * The places of the holes near the streets of the capital: a shaft under a street of a ring band, a crevasse next
+     * to the path of the east gate of the outer ring, and small holes next to this path (Y is not used).
+     */
+    static final Map<String, BoundingBox> HOLES = Map.of(
+            "shaft under a band street", new BoundingBox(15385, 0, -177, 15390, 0, -172),
+            "crevasse next to a gate path", new BoundingBox(15436, 0, -188, 15444, 0, -176),
+            "small holes next to a gate path", new BoundingBox(15427, 0, -188, 15433, 0, -184));
     /** The radius of a search of a village, in chunks. */
     static final int SEARCH_RADIUS = 50;
     /** The scan goes this number of blocks around the box of the village. */
@@ -118,6 +135,90 @@ public final class VillageGroundGameTests {
             }
             FolkholdWorld.LOGGER.info("Village ground measure | {} villages | {} |", found.size(), all);
             helper.assertTrue(!found.isEmpty(), "No village found");
+        } finally {
+            NoiseLevels.close(level);
+            NoiseLevels.options(helper.getLevel().getServer(), options);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The measure of the holes near the streets of a capital (issue #799): the capital of style {@code base} at the
+     * start chunk {@link #HOLES_START} of the world {@link #HOLES_SEED}, with all its rings, as the command
+     * {@code /folkhold village generate capital base} places it. The test sets the structure starts in their chunks,
+     * then generates the chunks of the places of {@link #HOLES} up to the features. The log has a line
+     * {@code Village holes measure:} for each place, with the top of each column (see {@link #top}). The terrain is the
+     * terrain of the noise of the run: the playtest world of the issue has Tectonic and Lithostitched. The test runs only
+     * with the environment variable {@link PlotTerrainGameTests#MEASURE_VARIABLE}.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_holes_measure", required = false)
+    public static void measureHolesNearTheStreets(GameTestHelper helper) throws ReflectiveOperationException {
+        if (System.getenv(PlotTerrainGameTests.MEASURE_VARIABLE) == null) {
+            helper.succeed();
+            return;
+        }
+        WorldOptions options = NoiseLevels.options(helper.getLevel().getServer(), HOLES_SEED, true);
+        ServerLevel level = NoiseLevels.create(helper.getLevel().getServer());
+        try {
+            FortifiedVillageStructure structure = (FortifiedVillageStructure) level.registryAccess()
+                    .registryOrThrow(Registries.STRUCTURE).getOrThrow(Settlements.VILLAGE_STRUCTURE);
+            Structure ringStructure = level.registryAccess().registryOrThrow(Registries.STRUCTURE)
+                    .getOrThrow(VillageRings.STRUCTURE);
+            ChunkGenerator generator = level.getChunkSource().getGenerator();
+            Structure.GenerationContext context = new Structure.GenerationContext(level.registryAccess(), generator,
+                    generator.getBiomeSource(), level.getChunkSource().randomState(), level.getStructureManager(),
+                    level.getSeed(), HOLES_START, level, structure.biomes()::contains);
+            int capital = LevelTables.get().tiers().stream().filter(tier -> tier.id().equals("capital"))
+                    .findFirst().orElseThrow().maxLevel();
+            VillageRings.Planned planned = VillageRings.planOfLevel(structure, context, capital,
+                    variant -> !variant.cave() && FortifiedVillageStructure.styleOf(variant).name().equals("base"))
+                    .orElseThrow();
+            List<Pair<Structure, StructureStart>> starts = new ArrayList<>();
+            starts.add(Pair.of(structure, new StructureStart(structure, HOLES_START, 0,
+                    new PiecesContainer(planned.layout().pieces()))));
+            planned.districts().forEach((district, pieces) -> {
+                if (!pieces.isEmpty()) {
+                    starts.add(Pair.of(ringStructure, new StructureStart(ringStructure, new ChunkPos(
+                            district.anchorX(HOLES_START.x), district.anchorZ(HOLES_START.z)), 0,
+                            new PiecesContainer(pieces))));
+                }
+            });
+            for (Pair<Structure, StructureStart> start : starts) {
+                NoiseLevels.starts(level, start.getSecond().getChunkPos()).setStartForStructure(start.getFirst(),
+                        start.getSecond());
+            }
+            FolkholdWorld.LOGGER.info("Village holes measure: plaza {}, {} structure starts", planned.layout().center(),
+                    starts.size());
+            for (Map.Entry<String, BoundingBox> place : HOLES.entrySet()) {
+                BoundingBox box = place.getValue();
+                Map<Long, ChunkAccess> chunks = new HashMap<>();
+                for (int cx = (box.minX() >> 4) - 1; cx <= (box.maxX() >> 4) + 1; cx++) {
+                    for (int cz = (box.minZ() >> 4) - 1; cz <= (box.maxZ() >> 4) + 1; cz++) {
+                        chunks.put(ChunkPos.asLong(cx, cz), NoiseLevels.features(level, new ChunkPos(cx, cz)));
+                    }
+                }
+                StringBuilder grid = new StringBuilder();
+                for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                    grid.append(" | z ").append(z).append(':');
+                    for (int x = box.minX(); x <= box.maxX(); x++) {
+                        int top = top(chunks, level, x, z);
+                        grid.append(' ').append(top).append(block(chunks, x, top, z).is(Blocks.DIRT_PATH) ? "p" : "");
+                    }
+                }
+                List<String> near = new ArrayList<>();
+                for (Pair<Structure, StructureStart> start : starts) {
+                    for (StructurePiece piece : start.getSecond().getPieces()) {
+                        BoundingBox other = piece.getBoundingBox();
+                        if (other.intersects(box.minX(), box.minZ(), box.maxX(), box.maxZ())) {
+                            near.add((piece instanceof PoolElementStructurePiece pool ? pool.getElement().toString()
+                                    : piece.getClass().getSimpleName()) + " x " + other.minX() + " to "
+                                    + other.maxX() + " z " + other.minZ() + " to " + other.maxZ());
+                        }
+                    }
+                }
+                FolkholdWorld.LOGGER.info("Village holes measure: {} x {} to {}{} | pieces {}", place.getKey(),
+                        box.minX(), box.maxX(), grid, near);
+            }
         } finally {
             NoiseLevels.close(level);
             NoiseLevels.options(helper.getLevel().getServer(), options);

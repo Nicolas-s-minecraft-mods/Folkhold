@@ -15,7 +15,8 @@ import java.util.function.IntBinaryOperator;
  * <ul>
  *   <li>The pieces come in the order of the plan: a piece comes after the piece before it.</li>
  *   <li>The level before the first row of a piece is the level of the street at the block before the piece. The block
- *       before the first piece of an axis street is in the plaza: the level of the plaza.</li>
+ *       before the first piece of an axis street is in the plaza: the level of the plaza. A plan with no plaza (the plan
+ *       of a ring band) uses the height of the terrain at the block before its first pieces.</li>
  *   <li>A fixed row keeps its level: for example a row of a path from a gate. The rows between 2 fixed rows, or after
  *       a fixed row, make a ramp (see {@link PathRamp}). 2 rows side by side have a difference of
  *       {@link PathRamp#MAX_STEP} block or less. A ramp that ends before a fixed row ends at the level of this row,
@@ -53,6 +54,21 @@ public final class StreetRamp {
      * @return the level of each row of each piece, in the order of the pieces
      */
     public static List<int[]> levels(List<Piece> pieces, int plaza, IntBinaryOperator height, Fixed fixed) {
+        return levels(pieces, OptionalInt.of(plaza), height, fixed);
+    }
+
+    /**
+     * The levels of the rows of the street pieces of a plan, with or without a plaza.
+     *
+     * @param pieces the pieces of the plan, in the order of the plan
+     * @param plaza  the level of the plaza, or empty for a plan with no plaza: the level before a first piece is then
+     *               the height of the terrain at its block
+     * @param height the height of the terrain at a position of the plan: the Y of its top block
+     * @param fixed  the fixed rows
+     * @return the level of each row of each piece, in the order of the pieces
+     */
+    public static List<int[]> levels(List<Piece> pieces, OptionalInt plaza, IntBinaryOperator height,
+            Fixed fixed) {
         List<int[]> all = new ArrayList<>();
         Map<Long, Integer> street = new HashMap<>();
         for (Piece piece : pieces) {
@@ -63,7 +79,8 @@ public final class StreetRamp {
                 if (known != null) {
                     return known;
                 }
-                return piece.parent() < 0 ? plaza : height.applyAsInt(beforeX, beforeZ);
+                return piece.parent() < 0 && plaza.isPresent() ? plaza.getAsInt()
+                        : height.applyAsInt(beforeX, beforeZ);
             });
             int[] levels = new int[piece.length()];
             int row = 0;

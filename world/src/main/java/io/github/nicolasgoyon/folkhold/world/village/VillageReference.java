@@ -417,7 +417,7 @@ public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Opt
             } else if (piece instanceof VillagePathPiece path) {
                 paths.add(path.getBoundingBox());
             } else if (piece instanceof TerrainPiece terrain && terrain.clears()) {
-                gateFronts.add(terrain.getBoundingBox());
+                gateFronts.add(terrain.area());
             }
         }
         if (templates.isEmpty()) {

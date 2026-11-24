@@ -50,6 +50,19 @@ import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
  * (see {@link StreetRamps}). These blocks follow the rules of an edge. The path of a street keeps the lights of its
  * street that stand on a row: a light post with its lowest block 1 block above the level of the row.
  *
+ * <p>A path with sides fills the open holes next to it: a cave or a crevasse at the side of the path. On each side,
+ * out of the edges and the margin, each block of the sides of a row follows these rules:
+ *
+ * <ul>
+ *   <li>The column has nothing at the level of the row or above it ({@code WORLD_SURFACE}): a roof or a building
+ *       stops the fill.</li>
+ *   <li>The block 1 block under the level of the row is air or a plant. Under it, the column has a floor of terrain
+ *       {@link #SIDE_DEPTH} blocks under the row or less. A floor of water, of a street or of another piece stops the
+ *       fill.</li>
+ *   <li>The column gets dirt from its floor up to 1 block under the row. The top block of the fill is the outer block
+ *       of the row when it is grass, dirt or sand. Else it is dirt.</li>
+ * </ul>
+ *
  * <p>A path with a stair block puts a stair where 2 rows side by side have a difference of 1 block (see
  * {@link StreetSteps}): on the 3 blocks of path of the lower row, facing the higher row. A path of an earlier save has
  * no stair block, and it gets no stairs.
@@ -67,6 +80,10 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     private static final int HALF_WIDTH = 1;
     /** The number of blocks on each side of the middle of a path with edges: the half width of a street. */
     private static final int EDGE_HALF_WIDTH = 2;
+    /** The number of blocks of the sides of a path that fill the open holes, on each side (see the rules above). */
+    public static final int SIDES = 2;
+    /** A block of the sides of a path fills a hole with a floor at this number of blocks under the row, or less. */
+    public static final int SIDE_DEPTH = 10;
 
     private final int startX;
     private final int startZ;
@@ -82,6 +99,8 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     private final int margin;
     /** True for the path of a street: it keeps the lights that stand on its rows. */
     private final boolean street;
+    /** The number of blocks on each side, out of the edges and the margin, that fill the open holes. */
+    private final int sides;
 
     /**
      * Makes a path with no edges.
@@ -141,8 +160,28 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
      */
     public VillagePathPiece(int startX, int startZ, int stepX, int stepZ, int[] levels, boolean edges,
             Optional<BlockState> stairs, int margin, boolean street) {
+        this(startX, startZ, stepX, stepZ, levels, edges, stairs, margin, street, 0);
+    }
+
+    /**
+     * Makes a path with stairs, a margin and sides.
+     *
+     * @param startX the X of the middle of the first row
+     * @param startZ the Z of the middle of the first row
+     * @param stepX  the X step from a row to the next one: -1, 0 or 1
+     * @param stepZ  the Z step from a row to the next one: -1, 0 or 1
+     * @param levels the level of each row: the Y of its top block, at least one row
+     * @param edges  true for a path with an edge of terrain on each side: the width of a street
+     * @param stairs the stair of the level changes, or empty for no stairs
+     * @param margin the number of blocks of terrain on each side, out of the edges: 0 or more
+     * @param street true for the path of a street: it keeps the lights that stand on its rows
+     * @param sides  the number of blocks on each side, out of the edges and the margin, that fill the open holes: 0
+     *               or more
+     */
+    public VillagePathPiece(int startX, int startZ, int stepX, int stepZ, int[] levels, boolean edges,
+            Optional<BlockState> stairs, int margin, boolean street, int sides) {
         super(ModStructures.VILLAGE_PATH.get(), 0, boundingBox(startX, startZ, stepX, stepZ, levels,
-                halfWidth(edges, margin)));
+                halfWidth(edges, margin) + sides));
         this.startX = startX;
         this.startZ = startZ;
         this.stepX = stepX;
@@ -153,6 +192,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         this.stairs = stairs;
         this.margin = margin;
         this.street = street;
+        this.sides = sides;
     }
 
     /** Loads a path. */
@@ -169,6 +209,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
                 .asLookup(), tag.getCompound("Stairs"))) : Optional.empty();
         this.margin = tag.getInt("Margin");
         this.street = tag.getBoolean("Street");
+        this.sides = tag.getInt("Sides");
     }
 
     /** The stair of the level changes, or empty for no stairs. */
@@ -189,6 +230,11 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     /** The number of blocks of terrain on each side, out of the edges. */
     public int margin() {
         return margin;
+    }
+
+    /** The number of blocks on each side, out of the edges and the margin, that fill the open holes. */
+    public int sides() {
+        return sides;
     }
 
     /**
@@ -244,6 +290,9 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         }
         if (street) {
             tag.putBoolean("Street", true);
+        }
+        if (sides > 0) {
+            tag.putInt("Sides", sides);
         }
     }
 
@@ -316,7 +365,8 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
     }
 
     /**
-     * Places the blocks of the path with levels in a box: the rows, then the stairs (see the rules of the class).
+     * Places the blocks of the path with levels in a box: the rows, the sides, then the stairs (see the rules of the
+     * class).
      *
      * @param blocks the blocks to read and to change
      * @param box    the box: the blocks out of it do not change
@@ -325,6 +375,7 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         forEachBlock(box, (x, z, edge, row) -> placeRow(blocks, pos, x, z, levels[row], edge,
                 street && isStreetLight(blocks.get(pos.set(x, levels[row] + 1, z)))));
+        placeSides(blocks, pos, box);
         if (stairs.isEmpty()) {
             return;
         }
@@ -343,6 +394,66 @@ public final class VillagePathPiece extends StructurePiece implements PieceBeard
                     placeStair(blocks, pos, x, levels[row], z, stairs.get(), facing);
                 }
             }
+        }
+    }
+
+    /** Fills the open holes on the 2 sides of each row in a box (see the rules of the class). */
+    private void placeSides(PathBlocks blocks, BlockPos.MutableBlockPos pos, BoundingBox box) {
+        int acrossX = stepZ != 0 ? 1 : 0;
+        int acrossZ = stepX != 0 ? 1 : 0;
+        int half = halfWidth(edges, margin);
+        for (int row = 0; row < length; row++) {
+            int middleX = startX + stepX * row;
+            int middleZ = startZ + stepZ * row;
+            for (int sign = -1; sign <= 1; sign += 2) {
+                BlockState outer = blocks.get(pos.set(middleX + acrossX * sign * half, levels[row],
+                        middleZ + acrossZ * sign * half));
+                BlockState top = (outer.is(BlockTags.DIRT) || outer.is(BlockTags.SAND)) && !isStreet(outer) ? outer
+                        : Blocks.DIRT.defaultBlockState();
+                for (int side = half + 1; side <= half + sides; side++) {
+                    int x = middleX + acrossX * sign * side;
+                    int z = middleZ + acrossZ * sign * side;
+                    if (x >= box.minX() && x <= box.maxX() && z >= box.minZ() && z <= box.maxZ()) {
+                        fillOpenHole(blocks, pos, x, z, levels[row], top);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Fills an open hole at a column next to a path or a flat terrain: dirt from the floor of the hole up to 1 block
+     * under a level, with a top block (see the rules of the class).
+     *
+     * @param blocks the blocks to read and to change
+     * @param pos    a position to use for the reads
+     * @param x      the X of the column
+     * @param z      the Z of the column
+     * @param level  the level next to the column: the Y of the top block of the row or of the flat terrain
+     * @param top    the top block of the fill
+     */
+    static void fillOpenHole(PathBlocks blocks, BlockPos.MutableBlockPos pos, int x, int z, int level,
+            BlockState top) {
+        if (blocks.surface(x, z) > level) {
+            return;
+        }
+        int floor = level - 1;
+        while (floor >= level - SIDE_DEPTH) {
+            BlockState state = blocks.get(pos.set(x, floor, z));
+            if (!(state.isAir() || TerrainPiece.isPlant(state))) {
+                break;
+            }
+            floor--;
+        }
+        if (floor == level - 1 || floor < level - SIDE_DEPTH) {
+            return;
+        }
+        BlockState ground = blocks.get(pos.set(x, floor, z));
+        if (!TerrainPiece.isTerrain(ground) || isStreet(ground) || !ground.getFluidState().isEmpty()) {
+            return;
+        }
+        for (int y = floor + 1; y < level; y++) {
+            blocks.set(new BlockPos(x, y, z), y == level - 1 ? top : Blocks.DIRT.defaultBlockState());
         }
     }
 

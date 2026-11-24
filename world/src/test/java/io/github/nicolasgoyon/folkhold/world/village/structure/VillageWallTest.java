@@ -66,7 +66,7 @@ class VillageWallTest {
 
         assertEquals(dry.size() - 1, wet.size(), "The first section is on water: no terrain piece");
         Box outline = layout.outline();
-        BoundingBox gate = wet.stream().map(TerrainPiece::getBoundingBox)
+        BoundingBox gate = wet.stream().map(TerrainPiece::area)
                 .filter(box -> box.minX() == -2 && box.maxX() == 2 && box.maxZ() < 0).findFirst().orElseThrow();
         assertEquals(outline.minZ(), gate.minZ(), "A water gate has no flat terrain outside the line");
         assertEquals(outline.minZ() + VillageWall.ENTRANCE, gate.maxZ(), "It has the flat terrain inside");
@@ -238,12 +238,16 @@ class VillageWallTest {
         assertEquals(outline.minZ() - 2, box.minZ());
         assertEquals(outline.minZ() + 2, box.maxZ());
         TerrainPiece north = pieces.get(sections);
-        BoundingBox gate = north.getBoundingBox();
+        BoundingBox gate = north.area();
         assertEquals(BASE - 2, north.ground(), "The terrain of a gate is at the level of the gate");
         assertEquals(new BoundingBox(-2, BASE - 2, outline.minZ() - 6, 2, gate.maxY(), outline.minZ() + 3), gate);
+        // The sides of the flat terrain of a gate fill the open holes around its area.
+        assertEquals(gate.inflatedBy(VillagePathPiece.SIDES, 0, VillagePathPiece.SIDES), north.getBoundingBox());
         for (int i = 0; i < pieces.size(); i++) {
             TerrainPiece piece = pieces.get(i);
-            assertTrue(piece.getBeardifierBox().equals(piece.getBoundingBox()), "The terrain changes near the box");
+            assertTrue(piece.getBeardifierBox().equals(piece.area()), "The terrain changes near the area");
+            assertEquals(i >= sections, !piece.area().equals(piece.getBoundingBox()),
+                    "Only the terrain of a gate has sides: piece " + i);
             assertEquals(i >= sections, piece.clears(), "Only the terrain of a gate clears its space: piece " + i);
         }
     }

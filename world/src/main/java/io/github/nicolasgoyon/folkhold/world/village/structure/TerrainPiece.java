@@ -28,6 +28,11 @@ import net.neoforged.neoforge.common.world.PieceBeardifierModifier;
  * <p>On a slope, the terrain adaptation does not remove all the terrain above the ground. A piece that clears its
  * space (the flat terrain of a gate) removes the blocks of the terrain and the plants in the {@link #CLEARANCE} blocks
  * above its ground, and fills a hole at its ground with dirt. It does not change the blocks of the other pieces.
+ *
+ * <p>A piece that clears its space can also have sides: a band of blocks around its area. On its sides, the piece
+ * fills the open holes up to 1 block under its ground, as the sides of a path (see {@link VillagePathPiece}). The
+ * sides are a part of the box of the piece, but not a part of its area: the terrain adaptation and the cleared space
+ * use the area only.
  */
 public final class TerrainPiece extends StructurePiece implements PieceBeardifierModifier {
     /** The first layer above the ground is 1 block above the lowest layer of the box. */
@@ -38,6 +43,8 @@ public final class TerrainPiece extends StructurePiece implements PieceBeardifie
     public static final int CLEARANCE = 3;
 
     private final boolean clear;
+    /** The number of blocks around the area that fill the open holes. */
+    private final int sides;
 
     /**
      * Makes a piece that does not clear its space.
@@ -63,19 +70,46 @@ public final class TerrainPiece extends StructurePiece implements PieceBeardifie
      * @param clear  true if the piece clears the space above its ground
      */
     public TerrainPiece(int minX, int minZ, int maxX, int maxZ, int ground, boolean clear) {
-        super(ModStructures.TERRAIN.get(), 0, new BoundingBox(minX, ground, minZ, maxX, ground + HEIGHT, maxZ));
+        this(minX, minZ, maxX, maxZ, ground, clear, 0);
+    }
+
+    /**
+     * Makes a piece with sides.
+     *
+     * @param minX   the lowest X of the area
+     * @param minZ   the lowest Z of the area
+     * @param maxX   the highest X of the area
+     * @param maxZ   the highest Z of the area
+     * @param ground the Y of the top block of the terrain in the area
+     * @param clear  true if the piece clears the space above its ground
+     * @param sides  the number of blocks around the area that fill the open holes: 0 or more, and 0 for a piece that
+     *               does not clear its space
+     */
+    public TerrainPiece(int minX, int minZ, int maxX, int maxZ, int ground, boolean clear, int sides) {
+        super(ModStructures.TERRAIN.get(), 0, new BoundingBox(minX - sides, ground, minZ - sides, maxX + sides,
+                ground + HEIGHT, maxZ + sides));
         this.clear = clear;
+        this.sides = clear ? sides : 0;
     }
 
     /** Loads a piece. */
     public TerrainPiece(CompoundTag tag) {
         super(ModStructures.TERRAIN.get(), tag);
         this.clear = tag.getBoolean("Clear");
+        this.sides = tag.getInt("Sides");
     }
 
     @Override
     protected void addAdditionalSaveData(StructurePieceSerializationContext context, CompoundTag tag) {
         tag.putBoolean("Clear", clear);
+        if (sides > 0) {
+            tag.putInt("Sides", sides);
+        }
+    }
+
+    /** The area of the piece: its box with no sides. */
+    public BoundingBox area() {
+        return boundingBox.inflatedBy(-sides, 0, -sides);
     }
 
     @Override
@@ -86,10 +120,28 @@ public final class TerrainPiece extends StructurePiece implements PieceBeardifie
         }
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int ground = ground();
+        BoundingBox area = area();
+        for (int x = Math.max(box.minX(), area.minX()); x <= Math.min(box.maxX(), area.maxX()); x++) {
+            for (int z = Math.max(box.minZ(), area.minZ()); z <= Math.min(box.maxZ(), area.maxZ()); z++) {
+                clearColumn(level, pos, x, z, ground);
+            }
+        }
+        if (sides == 0) {
+            return;
+        }
+        VillagePathPiece.PathBlocks blocks = VillagePathPiece.of(level);
         for (int x = Math.max(box.minX(), boundingBox.minX()); x <= Math.min(box.maxX(), boundingBox.maxX()); x++) {
             for (int z = Math.max(box.minZ(), boundingBox.minZ()); z <= Math.min(box.maxZ(), boundingBox.maxZ());
                     z++) {
-                clearColumn(level, pos, x, z, ground);
+                if (area.isInside(x, ground, z)) {
+                    continue;
+                }
+                // The top block of the fill: the block of the nearest column of the area.
+                BlockState near = level.getBlockState(pos.set(Math.max(area.minX(), Math.min(area.maxX(), x)), ground,
+                        Math.max(area.minZ(), Math.min(area.maxZ(), z))));
+                BlockState top = near.is(BlockTags.DIRT) || near.is(BlockTags.SAND) ? near
+                        : Blocks.DIRT.defaultBlockState();
+                VillagePathPiece.fillOpenHole(blocks, pos, x, z, ground, top);
             }
         }
     }
@@ -143,7 +195,7 @@ public final class TerrainPiece extends StructurePiece implements PieceBeardifie
 
     @Override
     public BoundingBox getBeardifierBox() {
-        return boundingBox;
+        return area();
     }
 
     @Override

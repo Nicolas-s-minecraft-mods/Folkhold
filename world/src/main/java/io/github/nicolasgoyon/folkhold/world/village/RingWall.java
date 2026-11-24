@@ -322,7 +322,7 @@ public final class RingWall {
                 palisades.add(VillageReference.Palisade.of(palisade));
                 boxes.add(palisade.getBoundingBox());
             } else if (piece instanceof TerrainPiece flat && flat.clears()) {
-                fronts.add(flat.getBoundingBox());
+                fronts.add(flat.area());
             }
         }
         return new VillageReference(templates, palisades, BoundingBox.encapsulatingBoxes(boxes),
