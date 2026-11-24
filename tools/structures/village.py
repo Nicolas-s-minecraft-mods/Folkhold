@@ -243,7 +243,9 @@ def collision(name, props):
         return (box(0, 0, 6, 16, 24, 10) if props["facing"] in ("north", "south") else box(6, 0, 0, 10, 24, 16),)
     if name in PARTIAL:
         return PARTIAL[name]
-    if name in NO_COLLISION or name.endswith(NO_COLLISION_SUFFIXES) or name.startswith("minecraft:potted_"):
+    if name.startswith("minecraft:potted_"):
+        return PARTIAL["minecraft:flower_pot"]
+    if name in NO_COLLISION or name.endswith(NO_COLLISION_SUFFIXES):
         return ()
     return FULL
 
@@ -2732,6 +2734,88 @@ def check_bed_heads(t, name):
         raise SystemExit(f"{name}: no free position next to the head of the beds {missing}")
 
 
+def full_block(t, pos):
+    """True for a block of a wall at a position: a block with a full collision box, or a block higher than 1 block (a
+    fence). A bed is not a wall."""
+    name, props = state_at(t, *pos)
+    if name.endswith("_bed"):
+        return False
+    boxes = collision(name, props)
+    return walk((name, props)) == "blocked" or any(
+        b[0] <= 0 and b[1] <= 0 and b[2] <= 0 and b[3] >= 16 and b[4] >= 16 and b[5] >= 16 for b in boxes)
+
+
+def against_wall(t, head, facing):
+    """True if a bed stands against a wall: a wall block touches its head on the side of the facing, or wall blocks
+    touch its foot and its head on the same long side."""
+    dx, dz = SIDES[facing]
+    x, y, z = head
+    if full_block(t, (x + dx, y, z + dz)):
+        return True
+    return any(full_block(t, (x + sx, y, z + sz)) and full_block(t, (x - dx + sx, y, z - dz + sz))
+               for sx, sz in ((dz, dx), (-dz, -dx)))
+
+
+def bed_heads(t):
+    """The position and the facing of the head of each bed of a template, in the order of the positions."""
+    return sorted((pos, dict(props)["facing"]) for pos, ((block, props), _) in t.blocks.items()
+                  if is_bed_head(block, props))
+
+
+def roofed(t, x, y, z):
+    """True if a block of the template is above the position: the position is in a building."""
+    return any(state_at(t, x, top, z)[0] != "minecraft:air" for top in range(y + 2, t.size[1]))
+
+
+def bed_cell_free(t, x, y, z):
+    """True if a bed can stand at a position: air with air above it, a floor under it, in the building."""
+    return (0 < x < t.size[0] - 1 and 0 < z < t.size[2] - 1 and state_at(t, x, y, z)[0] == "minecraft:air"
+            and state_at(t, x, y + 1, z)[0] == "minecraft:air" and walk(state_at(t, x, y - 1, z)) == "on"
+            and roofed(t, x, y, z))
+
+
+def wall_beds(t):
+    """Moves each bed that does not stand against a wall (see against_wall) to the nearest free position against a
+    wall on its layer. The walk from the front row must reach each bed head and each work block after the move (see
+    unreachable). A bed with no such position stays: check_bed_walls then stops the script. Returns the template."""
+    for head, facing in bed_heads(t):
+        if against_wall(t, head, facing):
+            continue
+        dx, dz = SIDES[facing]
+        x, y, z = head
+        foot = (x - dx, y, z - dz)
+        old = {pos: t.blocks[pos] for pos in (foot, head)}
+        for pos in old:
+            t.set(*pos, "minecraft:air")
+        options = []
+        for nz in range(1, t.size[2] - 1):
+            for nx in range(1, t.size[0] - 1):
+                for side, sdx, sdz in STEP_SIDES:
+                    new_head = (nx + sdx, y, nz + sdz)
+                    if bed_cell_free(t, nx, y, nz) and bed_cell_free(t, *new_head) and against_wall(t, new_head,
+                                                                                                    side):
+                        distance = abs(nx - foot[0]) + abs(nz - foot[2])
+                        options.append((distance, nz, nx, side, new_head))
+        for _, nz, nx, side, new_head in sorted(options):
+            t.set(nx, y, nz, *old[foot][0][0:1], dict(old[foot][0][1], facing=side))
+            t.set(*new_head, *old[head][0][0:1], dict(old[head][0][1], facing=side))
+            if not unreachable(t):
+                break
+            t.set(nx, y, nz, "minecraft:air")
+            t.set(*new_head, "minecraft:air")
+        else:
+            t.blocks.update(old)
+    return t
+
+
+def check_bed_walls(t, name):
+    """Each bed of a piece stands against a wall (see against_wall): a villager does not sleep in the middle of a
+    room."""
+    missing = [pos for pos, facing in bed_heads(t) if not against_wall(t, pos, facing)]
+    if missing:
+        raise SystemExit(f"{name}: the beds {missing} do not stand against a wall")
+
+
 def reach(t):
     """The positions of a template that a walk from the front row reaches. A step goes 1 block to a side, at the same
     level or 1 block higher or lower. A step 1 block higher needs a free block 2 blocks above the start."""
@@ -2922,7 +3006,8 @@ def row_block(t, x, y, z, width, depth):
 
 def place_beds(t, base, depth, taken):
     """Places HOME_BEDS beds on the floor at the layer base, at the first positions where the walk from the porch
-    reaches each bed head and each work block. Returns the template, or None when no position fits."""
+    reaches each bed head and each work block. The positions against a wall come first (see against_wall). Returns
+    the template, or None when no position fits."""
     y = base + 1
     width = t.size[0]
     cells = [(x, z) for z in range(depth - 2, 1, -1) for x in range(1, width - 1)]
@@ -2930,32 +3015,32 @@ def place_beds(t, base, depth, taken):
         placed = False
         trials = 0
         reached = reach(t)
-        for foot in cells:
+        # The positions against a wall come first (see against_wall).
+        tries = [(foot, side) for wall in (True, False) for foot in cells for side in STEP_SIDES
+                 if against_wall(t, (foot[0] + side[1], y, foot[1] + side[2]), side[0]) == wall]
+        for foot, (facing, dx, dz) in tries:
             if trials >= BED_TRIALS:
                 break
-            for facing, dx, dz in STEP_SIDES:
-                head = (foot[0] + dx, foot[1] + dz)
-                if head not in cells or foot in taken or head in taken:
-                    continue
-                if any(state_at(t, c[0], y, c[1])[0] != "minecraft:air"
-                       or state_at(t, c[0], y + 1, c[1])[0] != "minecraft:air"
-                       or walk(state_at(t, c[0], base, c[1])) != "on" for c in (foot, head)):
-                    continue
-                if not near_head(reached, head[0], y, head[1], facing):
-                    continue
-                t.set(foot[0], y, foot[1], f"minecraft:{HOME_BED_COLOR}_bed",
-                      {"facing": facing, "part": "foot", "occupied": "false"})
-                t.set(head[0], y, head[1], f"minecraft:{HOME_BED_COLOR}_bed",
-                      {"facing": facing, "part": "head", "occupied": "false"})
-                trials += 1
-                if not unreachable(t):
-                    taken |= {foot, head}
-                    placed = True
-                    break
-                t.set(foot[0], y, foot[1], "minecraft:air")
-                t.set(head[0], y, head[1], "minecraft:air")
-            if placed:
+            head = (foot[0] + dx, foot[1] + dz)
+            if head not in cells or foot in taken or head in taken:
+                continue
+            if any(state_at(t, c[0], y, c[1])[0] != "minecraft:air"
+                   or state_at(t, c[0], y + 1, c[1])[0] != "minecraft:air"
+                   or walk(state_at(t, c[0], base, c[1])) != "on" for c in (foot, head)):
+                continue
+            if not near_head(reached, head[0], y, head[1], facing):
+                continue
+            t.set(foot[0], y, foot[1], f"minecraft:{HOME_BED_COLOR}_bed",
+                  {"facing": facing, "part": "foot", "occupied": "false"})
+            t.set(head[0], y, head[1], f"minecraft:{HOME_BED_COLOR}_bed",
+                  {"facing": facing, "part": "head", "occupied": "false"})
+            trials += 1
+            if not unreachable(t):
+                taken |= {foot, head}
+                placed = True
                 break
+            t.set(foot[0], y, foot[1], "minecraft:air")
+            t.set(head[0], y, head[1], "minecraft:air")
         if not placed:
             return None
     return t
@@ -2978,7 +3063,7 @@ def home_step(culture, job, step):
     None when the home of the job does not grow in place: no stair and no beds fit in it."""
     jobs, style = STEP_STYLES[culture]
     if step == 1:
-        return jobs[job]()
+        return wall_beds(jobs[job]())
     before = home_step(culture, job, step - 1)
     if before is None:
         return None
@@ -4642,6 +4727,10 @@ STEP_PIECES = {culture: {f"job_{job}_step{step}": functools.partial(home_step, c
                for culture, jobs in HOME_STEP_JOBS.items()}
 
 
+# The names of the pieces of the steps of the homes: their beds come from home_step.
+STEP_NAMES = {name for pieces in STEP_PIECES.values() for name in pieces}
+
+
 def check_home_steps():
     for culture, jobs in HOME_STEP_JOBS.items():
         for step in HOME_STEPS:
@@ -5939,8 +6028,10 @@ def main():
         for name, build in v.pieces.items():
             path = os.path.join(folder, *(name + ".nbt").split("/"))
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            t = v.apply(cave_lit(build(), name) if v.cave else build())
+            raw = build() if name in STEP_NAMES else wall_beds(build())
+            t = v.apply(cave_lit(raw, name) if v.cave else raw)
             check_bed_heads(t, v.path(name))
+            check_bed_walls(t, v.path(name))
             t.write(path)
             print("wrote", os.path.normpath(path))
         for name, data in pools(v).items():
