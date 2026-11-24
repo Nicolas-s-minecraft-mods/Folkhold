@@ -1,11 +1,20 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
+import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
+import io.github.nicolasgoyon.folkhold.core.sim.garrison.GarrisonTraits;
+import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.CaptainEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
 import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
+import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
+import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerFaction;
+import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
+import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import java.util.ArrayList;
@@ -14,11 +23,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -28,11 +40,13 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * In-game tests for the day stations of the guards (see {@code VillageHeartBlockEntity#assignStations}): by day, the
  * guards stay near the gates and the towers, not on the plaza. The template is the center piece of the village
  * ({@code folkhold_world:village/center}), with its gates and its 4 towers. The tests set the level 13: a city has 6
- * guards.
+ * guards. A culture can give extra guards (see {@code culture_garrison} in the level table).
  */
 @GameTestHolder(FolkholdWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class GuardStationGameTests {
+    /** The number of the guards with no post in a city of the level {@link #CITY_LEVEL} with no extra guards. */
+    private static final int CITY_GUARDS = 6;
     /** The level of the village of the tests: the first level of a city. */
     private static final int CITY_LEVEL = 13;
     /** A level of the tier village: no rings. */
@@ -128,7 +142,8 @@ public final class GuardStationGameTests {
      * By day, in a city (2 rings) with a share of {@link #ROUND_SHARE}, 2 of the 6 guards walk rounds from station to
      * station, and the other guards keep their stations. With the default share, 1 guard walks rounds. The route is
      * the list of the stations in the order of their angle around the heart. Each guard on a round visits 3 stations or
-     * more. A village (no rings) has no rounds.
+     * more. A village (no rings) has no rounds. The village gets a faction of a culture with no extra guards (see
+     * {@link #useCultureWithNoExtraGuards}).
      */
     @GameTest(template = "village/center", timeoutTicks = ROUND_TICKS + 100, batch = "guard_rounds")
     public static void guardsWalkRoundsFromStationToStation(GameTestHelper helper) {
@@ -136,6 +151,7 @@ public final class GuardStationGameTests {
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
         BlockPos heartPos = heart.getBlockPos();
         TestSupport.setLevel(helper, heart, VILLAGE_LEVEL);
+        useCultureWithNoExtraGuards(helper, heart);
         heart.ensureGarrison(helper.getLevel().getGameTime());
         heart.applyDayNight(false);
         boolean noRoundsInAVillage = heart.roundGuards().isEmpty() && heart.roundRoute().isEmpty();
@@ -155,6 +171,8 @@ public final class GuardStationGameTests {
         long starts = onRounds.stream().map(GuardEntity::getStationPos).distinct().count();
 
         helper.assertTrue(noRoundsInAVillage, "A village with no rings must have no rounds");
+        helper.assertTrue(guards.size() == CITY_GUARDS, "A city of the faction " + heart.getFactionId() + " must have "
+                + CITY_GUARDS + " guards with no post: " + guards.size());
         helper.assertTrue(onRounds.size() == 2, "A city must have 2 guards on rounds: " + onRounds.size());
         helper.assertTrue(route.size() == heart.guardStations().size(), "The route must have all the stations");
         helper.assertTrue(onRoute && starts == onRounds.size(), "Each guard on a round must start at its own station "
@@ -198,6 +216,26 @@ public final class GuardStationGameTests {
 
         helper.assertTrue(noStation, "With the option off, the guards must have no station");
         helper.succeed();
+    }
+
+    /**
+     * Gives the settlement of the heart a faction of a culture with no extra guards at the level {@link #CITY_LEVEL}.
+     * The faction of a new settlement is the owner of its position (see {@code FactionData#ownerAt}), and the
+     * position of a test changes with the other tests of its shard. A culture with extra guards changes the number
+     * of the guards, and thus the number of the guards on rounds.
+     */
+    private static void useCultureWithNoExtraGuards(GameTestHelper helper, VillageHeartBlockEntity heart) {
+        MinecraftServer server = helper.getLevel().getServer();
+        GarrisonTraits garrison = LevelTables.get().traits(CITY_LEVEL).garrison();
+        FactionSpec faction = FactionData.get(server).factions().stream()
+                .filter(spec -> !PillagerFaction.ID.equals(spec.id()) && Cultures.byId(spec.cultureId()).isPresent()
+                        && GarrisonRole.GUARD.count(garrison.forCulture(spec.cultureId()))
+                                == GarrisonRole.GUARD.count(garrison))
+                .findFirst()
+                .orElseThrow(() -> new GameTestAssertException("No faction of a culture with no extra guards"));
+        Settlement settlement = Settlements.of(server, heart).orElseThrow();
+        settlement.setFactionId(faction.id());
+        heart.adoptSettlement(UUID.fromString(settlement.id()), faction.id(), settlement.name());
     }
 
     /** The loaded guards of the heart with no post, not the captain. */
