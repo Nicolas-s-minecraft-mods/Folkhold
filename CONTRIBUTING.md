@@ -151,6 +151,10 @@ changes, in English and in French. The CI and the release use `scripts/changelog
 - To test a release build with no publication, use "Run workflow" on the workflow **Build** with the input
   `release`. The run makes the jars, the `.mrpack` file and the Maven files (artifact `folkhold-maven`) with the
   version of the release.
+- `release_type` in `gradle.properties` gives the release type: `alpha`, `beta` or `release`. An alpha or a beta is
+  a pre-release on GitHub, and CurseForge gets the same release type. The value is `beta`. It stays for each release
+  until a pull request to `develop` changes it. The check **Release preview** gives the release type. The downloads
+  of the site and the version badge show the latest release, and a pre-release is never the latest release on GitHub.
 - All mods share one version. `mod_version` in `gradle.properties` is the version of a local build.
 - The workflow **Build** gives each build a version: the version of the commit with `-dev.<commit>` for `develop`,
   and the version after the merge with `-pr.<number>.<commit>` for a pull request.

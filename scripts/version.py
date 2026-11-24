@@ -18,12 +18,17 @@ keep the version. A commit of Dependabot with no marker counts as [patch].
 --title adds the commit of a pull request after REV. For a pull request in a stack, give --title for each open pull
 request of the stack, from the bottom pull request to this pull request.
 
+release-type prints the release type of the next release: the value of release_type in gradle.properties ("alpha",
+"beta" or "release"). An alpha or a beta is a pre-release on GitHub. CurseForge gets the same release type.
+
 Usage:
     scripts/version.py version [--rev REV] [--title TITLE]... [--author LOGIN] [--repo OWNER/NAME] [--notes FILE]
                                [--github-output FILE]
     scripts/version.py check-title TITLE
+    scripts/version.py release-type
 """
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -37,6 +42,8 @@ MARKER = re.compile(r"\s\[(patch|minor|major)\](?:\s+\(#\d+\))?\s*$")
 TITLE = re.compile(
     r"^(?P<type>" + "|".join(TYPES) + r")(?:\((?P<scope>[a-z0-9][a-z0-9,/-]*)\))?!?: \S.*\S \[(?P<bump>patch|minor|major)\]$")
 DEPENDABOT = "dependabot[bot]"
+PROPERTIES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "gradle.properties")
+RELEASE_TYPES = ("alpha", "beta", "release")
 
 
 @dataclass(frozen=True)
@@ -165,6 +172,20 @@ def release_notes(base, start, commits, version, repo):
     return "\n".join(lines) + "\n"
 
 
+def release_type(path=PROPERTIES):
+    """The release type of the next release: the value of release_type in the properties file at `path`."""
+    with open(path, encoding="utf-8") as file:
+        values = [line.split("=", 1)[1].strip() for line in file if line.split("=", 1)[0].strip() == "release_type"]
+    if len(values) != 1 or values[0] not in RELEASE_TYPES:
+        raise ValueError(f"{path} must have one line release_type=<{'|'.join(RELEASE_TYPES)}>, not {values}")
+    return values[0]
+
+
+def run_release_type(args):
+    print(release_type())
+    return 0
+
+
 def run_version(args):
     base, start, commits = history(args.rev)
     for title in args.title or ():
@@ -210,6 +231,8 @@ def main(argv=None):
     title = commands.add_parser("check-title", help="check the title of a pull request")
     title.add_argument("title")
     title.set_defaults(run=run_check_title)
+    kind = commands.add_parser("release-type", help="print the release type of the next release")
+    kind.set_defaults(run=run_release_type)
     args = parser.parse_args(argv)
     return args.run(args)
 

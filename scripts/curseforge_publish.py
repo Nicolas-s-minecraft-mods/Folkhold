@@ -6,9 +6,9 @@ CurseForge jars are the jars of the GitHub Release.
 
 For each module, the script sends <module>/build/libs/folkhold_<module>-<version>.jar with its metadata: the display
 name, the changelog, the release type, the game versions and the required projects. The game versions are the ids of
-"1.21.1", "NeoForge", "Java 21", "Client" and "Server" in the list of CurseForge. The release type is "beta" while
-the major version is 0, and "release" after that. The modules go in the order of the file, so a required Folkhold
-project gets its file first.
+"1.21.1", "NeoForge", "Java 21", "Client" and "Server" in the list of CurseForge. The release type is the value of
+release_type in gradle.properties: "alpha", "beta" or "release" (see scripts/version.py). The modules go in the order
+of the file, so a required Folkhold project gets its file first.
 
 Usage: python3 scripts/curseforge_publish.py <version> <changelog file (Markdown)> [--dry-run] [--only <module>]
 The environment variable CURSEFORGE_TOKEN gives the API token. With --dry-run, the script reads no token, sends
@@ -21,6 +21,8 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
+
+from version import release_type
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 PROJECTS = os.path.join(ROOT, "docs", "curseforge", "projects.json")
@@ -45,11 +47,6 @@ def game_version_ids(versions, types):
     return ids
 
 
-def release_type(version):
-    """Returns the release type of a version: "beta" while the major version is 0."""
-    return "beta" if version.split(".")[0] == "0" else "release"
-
-
 def metadata(project, version, changelog, version_ids):
     """Returns the metadata of the file of a project."""
     data = {
@@ -57,7 +54,7 @@ def metadata(project, version, changelog, version_ids):
         "changelogType": "markdown",
         "displayName": f"{project['name']} {version}",
         "gameVersions": version_ids,
-        "releaseType": release_type(version),
+        "releaseType": release_type(),
     }
     if project["requires"]:
         data["relations"] = {"projects": [{"slug": slug, "type": "requiredDependency"}

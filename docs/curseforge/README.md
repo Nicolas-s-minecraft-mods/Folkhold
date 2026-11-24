@@ -61,7 +61,7 @@ requires. A test compares these requirements with `neoforge.mods.toml`.
   the workflow uploads nothing.
 - Each file has the game versions 1.21.1, NeoForge, Java 21, Client and Server, and the notes of the release as its
   changelog.
-- The release type is beta while the major version is 0.
+- The release type is the value of `release_type` in `gradle.properties`: `alpha`, `beta` or `release`.
 - To see the metadata of the files and send nothing:
   `python3 scripts/curseforge_publish.py <version> <notes file> --dry-run`.
 

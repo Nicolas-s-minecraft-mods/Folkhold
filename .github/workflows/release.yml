@@ -6,10 +6,12 @@ name: Release
 # Release with the jars and the modpack (.mrpack) of the build, then publishes the Maven files of the build to GitHub
 # Packages. The release comes first: a Maven version is immutable, so a failed release step can run again only when
 # the publication did not happen.
+# The value of release_type in gradle.properties gives the release type: alpha, beta or release. An alpha or a beta is
+# a pre-release on GitHub, and CurseForge gets the same release type (scripts/version.py release-type).
 # When the tag of the version exists, the workflow does not build and makes no release. To run it again after a failure, use
 # "Run workflow" on main.
 # After the release, the job CurseForge uploads the jars of the release to the CurseForge project of each mod
-# (scripts/curseforge_publish.py, docs/curseforge/). It needs the repository secret CURSEFORGE_TOKEN: with no secret,
+# (scripts/curseforge_publish.py, docs/curseforge/). It needs the secret CURSEFORGE_TOKEN: with no secret,
 # the job uploads nothing. A failure of this job does not change the release: run the job again from the run page.
 # After the release, the workflow starts the workflow Pages on develop. Pages publishes the site of the project with
 # the downloads and the notes of the releases, and version.json for the version badge of the README.
@@ -111,7 +113,13 @@ jobs:
             echo "No jar to release for the version ${VERSION}." >&2
             exit 1
           fi
-          gh release create "$TAG" "${files[@]}" \
+          type=$(python3 scripts/version.py release-type)
+          flags=()
+          if [ "$type" != release ]; then
+            flags+=(--prerelease)
+          fi
+          echo "Release type: ${type}."
+          gh release create "$TAG" "${files[@]}" "${flags[@]}" \
             --target "$COMMIT" \
             --title "Folkhold ${VERSION}" \
             --notes-file "$NOTES"
