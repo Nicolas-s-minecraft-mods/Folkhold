@@ -37,6 +37,8 @@ public final class GuardStationGameTests {
     private static final int CITY_LEVEL = 13;
     /** A level of the tier village: no rings. */
     private static final int VILLAGE_LEVEL = 5;
+    /** The share of the guards on rounds in the test of the rounds: 2 of the 6 guards of a city. */
+    private static final double ROUND_SHARE = 0.34;
     /** The test waits this number of ticks at most for the rounds of the guards. */
     private static final int ROUND_TICKS = 3600;
     /** A station is at this horizontal distance from the heart or more, in blocks: out of the plaza. */
@@ -59,7 +61,7 @@ public final class GuardStationGameTests {
     @GameTest(template = "village/center", timeoutTicks = WALK_TICKS + 100, batch = "guard_stations")
     public static void guardsKeepStationsAtTheGatesAndTowers(GameTestHelper helper) {
         // No rounds: each guard keeps one station (see guardsWalkRoundsFromStationToStation).
-        TestSupport.setConfigForTest(helper, WorldConfig.ROUND_GUARDS_PER_RING, 0);
+        TestSupport.setConfigForTest(helper, WorldConfig.ROUND_GUARD_SHARE, 0.0);
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
         TestSupport.setLevel(helper, heart, CITY_LEVEL);
         heart.ensureGarrison(helper.getLevel().getGameTime());
@@ -123,12 +125,14 @@ public final class GuardStationGameTests {
     }
 
     /**
-     * By day, in a city (2 rings), 2 guards walk rounds from station to station, and the other guards keep their
-     * stations. The route is the list of the stations in the order of their angle around the heart. Each guard on a
-     * round visits 3 stations or more. A village (no rings) has no rounds.
+     * By day, in a city (2 rings) with a share of {@link #ROUND_SHARE}, 2 of the 6 guards walk rounds from station to
+     * station, and the other guards keep their stations. With the default share, 1 guard walks rounds. The route is
+     * the list of the stations in the order of their angle around the heart. Each guard on a round visits 3 stations or
+     * more. A village (no rings) has no rounds.
      */
     @GameTest(template = "village/center", timeoutTicks = ROUND_TICKS + 100, batch = "guard_rounds")
     public static void guardsWalkRoundsFromStationToStation(GameTestHelper helper) {
+        TestSupport.setConfigForTest(helper, WorldConfig.ROUND_GUARD_SHARE, ROUND_SHARE);
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
         BlockPos heartPos = heart.getBlockPos();
         TestSupport.setLevel(helper, heart, VILLAGE_LEVEL);
@@ -168,6 +172,11 @@ public final class GuardStationGameTests {
             }
             FolkholdWorld.LOGGER.info("Guard rounds: route {}, visited {}", route.size(),
                     onRounds.stream().map(guard -> visited.get(guard).size()).toList());
+            TestSupport.setConfigForTest(helper, WorldConfig.ROUND_GUARD_SHARE,
+                    WorldConfig.ROUND_GUARD_SHARE.getDefault());
+            heart.applyDayNight(false);
+            helper.assertTrue(heart.roundGuards().size() == 1, "With the default share, a city must have 1 guard on "
+                    + "rounds: " + heart.roundGuards().size());
             heart.getUnits().forEach(Entity::discard);
         }));
     }

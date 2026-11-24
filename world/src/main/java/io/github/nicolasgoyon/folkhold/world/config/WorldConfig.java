@@ -24,7 +24,7 @@ public final class WorldConfig {
 
     public static final ModConfigSpec.IntValue PATROL_RADIUS;
     public static final ModConfigSpec.BooleanValue GUARD_STATIONS;
-    public static final ModConfigSpec.IntValue ROUND_GUARDS_PER_RING;
+    public static final ModConfigSpec.DoubleValue ROUND_GUARD_SHARE;
     public static final ModConfigSpec.IntValue CHASE_RADIUS;
     public static final ModConfigSpec.IntValue ALERT_RADIUS;
     public static final ModConfigSpec.IntValue MONSTER_ALERT_DISTANCE;
@@ -266,13 +266,13 @@ public final class WorldConfig {
                         "near the heart.")
                 .translation(KEY_PREFIX + "guardStations")
                 .define("guardStations", true);
-        ROUND_GUARDS_PER_RING = builder
-                .comment("By day, the number of guards for each ring of a town, a city or a capital that walk rounds",
-                        "from station to station, around the heart. At least one guard keeps a station. A hamlet and",
-                        "a village have no rings, thus no rounds. 0 turns the rounds off. The rounds need the guard",
-                        "stations (guardStations).")
-                .translation(KEY_PREFIX + "roundGuardsPerRing")
-                .defineInRange("roundGuardsPerRing", 1, 0, 8);
+        ROUND_GUARD_SHARE = builder
+                .comment("By day, the share of the guards of a town, a city or a capital that walk rounds from station",
+                        "to station, around the heart (0 to 1). A village with rings sends 1 guard at least. At least",
+                        "one guard keeps a station. A hamlet and a village have no rings, thus no rounds. 0 turns the",
+                        "rounds off. The rounds need the guard stations (guardStations).")
+                .translation(KEY_PREFIX + "roundGuardShare")
+                .defineInRange("roundGuardShare", 0.2, 0.0, 1.0);
         CHASE_RADIUS = builder
                 .comment("Radius in blocks of the chase area around the village heart (around the home position for a",
                         "unit without a village). A unit chases a target only in this area, and not in the territory of",
