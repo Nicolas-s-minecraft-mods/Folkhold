@@ -19,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.AABB;
@@ -290,13 +291,19 @@ public final class ArcherTowerGameTests {
                 archer)).getType() == HitResult.Type.MISS;
     }
 
-    /** Places the tower in the arena. Returns the absolute position of its post. */
+    /**
+     * Places the tower in the arena. Returns the absolute position of its post. The tower is higher than the arena, and
+     * the framework removes only the blocks of the arena. Thus the test removes the blocks of the tower when it ends.
+     */
     private static BlockPos placeTower(GameTestHelper helper) {
         TestSupport.buildFloor(helper, ARENA);
         ServerLevel level = helper.getLevel();
         StructureTemplate tower = level.getStructureManager()
                 .get(ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "village/tower")).orElseThrow();
         BlockPos origin = helper.absolutePos(ORIGIN);
+        BlockPos corner = origin.offset(tower.getSize()).offset(-1, -1, -1);
+        TestSupport.atTestEnd(helper, () -> BlockPos.betweenClosed(origin, corner).forEach(pos ->
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS)));
         tower.placeInWorld(level, origin, origin, new StructurePlaceSettings(), level.getRandom(), Block.UPDATE_CLIENTS);
         helper.assertBlockPresent(ModBlocks.WATCH_POST.get(), POST.below());
         return helper.absolutePos(POST);
