@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Random;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -23,6 +24,7 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -79,6 +81,35 @@ public final class DropGameTests {
                     Path vanillaPath = vanilla.getNavigation().createPath(inside, 0);
                     helper.assertTrue(vanillaPath != null && vanillaPath.canReach(), "A vanilla villager must find a "
                             + "path into the pit");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A column of ladders on a wall of the pit does not change the pit: the bottom of the column is in the pit, and a
+     * villager of the village on the ground finds no path to it. The path finder of the villagers does not climb a
+     * ladder.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 200, batch = "drops_ladder", skyAccess = true)
+    public static void villagerFindsNoPathIntoAPitWithALadder(GameTestHelper helper) {
+        VillageHeartBlockEntity heart = scene(helper);
+        ServerLevel level = helper.getLevel();
+        BlockPos base = PIT.offset(0, 0, 1);
+        for (int y = 0; y < DEPTH; y++) {
+            helper.setBlock(base.above(y), Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING,
+                    Direction.EAST));
+        }
+        BlockPos bottom = helper.absolutePos(base);
+        helper.assertTrue(Pits.isPit(level, bottom), "The bottom of the ladders must be in the pit");
+        helper.assertTrue(Pits.isPit(level, helper.absolutePos(PIT.offset(1, 0, 1))),
+                "The middle of the pit must be a pit");
+        Villager folk = villager(helper, heart, new BlockPos(8, GROUND, 15), ModProfessions.INHABITANT.get());
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(folk.onGround(), "The villager must land"))
+                .thenExecute(() -> {
+                    Path path = folk.getNavigation().createPath(bottom, 0);
+                    helper.assertTrue(path == null || !path.canReach(), "A villager of the village must find no "
+                            + "path to the bottom of the ladders: " + path);
                 })
                 .thenSucceed();
     }
