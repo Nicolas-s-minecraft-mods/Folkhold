@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="$language_code">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>$page_title</title>
+<meta name="description" content="$site_tagline">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M7 3h2.5v26H7z' fill='%237a5a3a'/%3E%3Cpath d='M9.5 5H27l-5 6 5 6H9.5z' fill='%232f6b3f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="$url_stylesheet">
+$part_alternates
+</head>
+<body>
+<a class="skip" href="#content">$page_skip</a>
+<header class="hero">
+  <div class="wrap">
+    <div class="topbar">
+      <nav class="sections" aria-label="$nav_label">
+        <a href="#features">$nav_features</a>
+        <a href="#download">$nav_download</a>
+        <a href="#release-notes">$nav_releases</a>
+        <a href="$url_repository">$nav_repository</a>
+      </nav>
+      <nav class="languages" aria-label="$language_label">$part_languages</nav>
+    </div>
+    <div class="hero-body">
+    <div class="hero-text">
+    <h1>
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <path class="mark-pole" d="M7 3h2.5v26H7z"/>
+        <path class="mark-flag" d="M9.5 5H27l-5 6 5 6H9.5z"/>
+      </svg>
+      $site_name
+    </h1>
+    <p class="tagline">$site_tagline</p>
+    <p class="intro">$site_description</p>
+    <p class="actions">
+      $part_download_button
+      <a class="button button-secondary" href="#features">$nav_discover</a>
+    </p>
+    </div>
+    <figure class="hero-shot">$part_image_hero</figure>
+    </div>
+  </div>
+</header>
+<main id="content" class="wrap">
+  <section id="features" aria-labelledby="features-title">
+    <h2 id="features-title">$features_title</h2>
+    <p class="lead">$features_text</p>
+    <div class="features">
+      <article class="feature">
+        <figure class="shot">$part_image_factions<svg class="shot-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 21V3M5 4h13l-3 4 3 4H5"/></svg></figure>
+        <h3>$feature_factions_title</h3>
+        <p>$feature_factions_text</p>
+      </article>
+      <article class="feature">
+        <figure class="shot">$part_image_villages<svg class="shot-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 21V7h3v2h2V7h3v14M13 21V7h3v2h2V7h3v14M2 21h20M9 21v-4a3 3 0 0 1 6 0v4"/></svg></figure>
+        <h3>$feature_villages_title</h3>
+        <p>$feature_villages_text</p>
+      </article>
+      <article class="feature">
+        <figure class="shot">$part_image_caravans<svg class="shot-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 7h13v8H3zM16 10h3l2 3v2h-5"/><circle cx="7" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/></svg></figure>
+        <h3>$feature_caravans_title</h3>
+        <p>$feature_caravans_text</p>
+      </article>
+      <article class="feature">
+        <figure class="shot">$part_image_quests<svg class="shot-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v12H4zM7 16v5M17 16v5M7 8h6M7 12h10"/><circle cx="16" cy="8" r="1"/></svg></figure>
+        <h3>$feature_quests_title</h3>
+        <p>$feature_quests_text</p>
+      </article>
+    </div>
+    <h3 class="also-title">$features_also_title</h3>
+    <ul class="also">
+      <li>$features_also_economy</li>
+      <li>$features_also_rails</li>
+      <li>$features_also_maps</li>
+      <li>$features_also_languages</li>
+    </ul>
+  </section>
+  <section id="download" aria-labelledby="download-title">
+    <h2 id="download-title">$download_title</h2>
+    $part_downloads
+  </section>
+  <section id="release-notes" aria-labelledby="release-notes-title">
+    <h2 id="release-notes-title">$releases_title</h2>
+    $part_releases
+  </section>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <ul class="footer-links">
+      <li><a href="$url_repository">$footer_repository</a></li>
+      <li><a href="$url_issues">$footer_issues</a></li>
+      <li><a href="$url_contributing">$footer_contributing</a></li>
+    </ul>
+    <p>$part_license</p>
+  </div>
+</footer>
+</body>
+</html>

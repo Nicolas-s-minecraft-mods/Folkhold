@@ -1,13 +1,17 @@
 package io.github.nicolasgoyon.folkhold.world.admin;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
+import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
+import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.tick.TickScheduler.TickInfo;
+import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionVisuals;
+import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
 import io.github.nicolasgoyon.folkhold.world.network.AdminActionPayload;
 import io.github.nicolasgoyon.folkhold.world.network.AdminDetailsPayload;
@@ -41,7 +45,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * The server side of the admin screen. An operator (permission level 2) sees all settlements of the world, also
@@ -51,7 +54,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * <ul>
  *   <li>{@code refresh}: sends the list again.</li>
  *   <li>{@code details}: sends the details of the settlement.</li>
- *   <li>{@code teleport}: moves the player to the village heart.</li>
+ *   <li>{@code teleport}: moves the player to a safe position near the village heart ({@link #teleportTarget}). The
+ *       server does not wait for the chunks of the target (see {@link AdminTeleports}).</li>
  *   <li>{@code level_set}: sets the level to the value, with 0 experience.</li>
  *   <li>{@code experience_add}: adds the value to the experience. The level changes if necessary.</li>
  *   <li>{@code cycle}: runs one economic cycle of the settlement now.</li>
@@ -59,7 +63,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
  *   <li>{@code ruin}: destroys the settlement as in the game ({@link Settlements#ruin}), with no player as
  *       cause.</li>
  *   <li>{@code restore}: makes the settlement active again, with its heart and its bank
- *       ({@link Settlements#restore}).</li>
+ *       ({@link Settlements#restore}). The server does not wait for the chunks of the heart (see
+ *       {@link AreaWaits}).</li>
  *   <li>{@code alert}: sets the alert state of the village heart to the {@link AlertState} with the ordinal of the
  *       value. The heart must be loaded.</li>
  *   <li>{@code bells}: rings the bells of the village. The heart must be loaded.</li>
@@ -69,9 +74,14 @@ import net.minecraft.world.level.levelgen.Heightmap;
  *       direction around the player (see {@link SettlementDiscovery#discoverAround}).</li>
  *   <li>{@code groups}: sends the caravans, the traveling merchants and the quests (see {@link GroupOverview}).
  *       The client shows them in a tabbed screen.</li>
+ *   <li>{@code map}: sends the layer of the admin map, and opens the map (see {@link AdminMap}).</li>
+ *   <li>{@code map_close}: removes the layer of the admin map. A player who is not an operator can also send it.</li>
+ *   <li>{@code teleport_group}: teleports the player to the surface at the position of a caravan or a traveling
+ *       merchant. The settlement id is the id of the group. The server does not wait for the chunk of the target
+ *       (see {@link AdminTeleports}).</li>
  * </ul>
  * After an action, the server sends the result ({@link AdminResultPayload}), the list and the details of the
- * settlement again.
+ * settlement again. A teleport or a restore that waits for its chunks sends only its result later, after the action.
  */
 public final class AdminActions {
     /** The permission level of the admin screen, its actions and the operator commands. */
@@ -82,6 +92,7 @@ public final class AdminActions {
     private static final int DETAIL_STOCKS = 5;
     /** The maximum distance from the heart to the target of the teleport action, in blocks. */
     private static final int TELEPORT_RADIUS = 8;
+    private static final AreaWaits RESTORES = AreaWaits.RESTORES;
 
     private AdminActions() {
     }
@@ -129,6 +140,10 @@ public final class AdminActions {
      * @param payload the action
      */
     public static void handle(ServerPlayer player, AdminActionPayload payload) {
+        if (payload.action().equals("map_close")) {
+            AdminMap.close(player);
+            return;
+        }
         if (!isAllowed(player)) {
             player.sendSystemMessage(Component.translatable(KEY + "denied"));
             return;
@@ -137,16 +152,39 @@ public final class AdminActions {
             ModNetwork.send(player, GroupOverview.build(player.server));
             return;
         }
-        perform(player.server, player, payload).ifPresent(result -> {
-            if (!ModNetwork.send(player, new AdminResultPayload(result.message(), result.success()))) {
-                player.sendSystemMessage(result.message());
-            }
-        });
+        if (payload.action().equals("job_trades")) {
+            SettlementData.get(player.server).registry().byId(payload.settlementId()).ifPresentOrElse(
+                    settlement -> ModNetwork.send(player, JobTradeView.build(player.server, settlement)),
+                    () -> sendResult(player, Result.refused("unknown")));
+            return;
+        }
+        if (payload.action().equals("map")) {
+            AdminMap.open(player);
+            return;
+        }
+        if (payload.action().equals("teleport_group")) {
+            sendResult(player, teleportToGroup(player, payload.settlementId()));
+            return;
+        }
+        perform(player.server, player, payload).ifPresent(result -> sendResult(player, result));
         if (!DETAILS_ONLY_ACTIONS.contains(payload.action())) {
             sendList(player);
         }
         if (!payload.settlementId().isEmpty()) {
             details(player.server, payload.settlementId()).ifPresent(details -> ModNetwork.send(player, details));
+        }
+    }
+
+    /**
+     * Sends a result to the player: to the admin screen if the client has the mod, else to the chat. The client shows
+     * a result in the chat when the admin screen is not open.
+     *
+     * @param player the player
+     * @param result the result
+     */
+    public static void sendResult(ServerPlayer player, Result result) {
+        if (!ModNetwork.send(player, new AdminResultPayload(result.message(), result.success()))) {
+            player.sendSystemMessage(result.message());
         }
     }
 
@@ -198,11 +236,11 @@ public final class AdminActions {
                 if (player == null) {
                     yield Optional.empty();
                 }
-                ServerLevel level = server.overworld();
-                BlockPos target = teleportTarget(level, settlement);
-                player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5, player.getYRot(),
-                        player.getXRot());
-                yield Optional.of(Result.done("teleport", name));
+                String id = settlement.id();
+                yield Optional.of(AdminTeleports.request(player, server.overworld(), teleportArea(settlement),
+                        level -> SettlementData.get(level.getServer()).registry().byId(id)
+                                .map(current -> teleportTarget(level, current)),
+                        Result.done("teleport", name).message()));
             }
             case "level_set" -> {
                 int level = LevelTables.get().clamp(payload.value());
@@ -238,8 +276,7 @@ public final class AdminActions {
                 if (settlement.isActive()) {
                     yield Optional.of(Result.refused("already_active", name));
                 }
-                Settlements.restore(server.overworld(), settlement);
-                yield Optional.of(Result.done("restore", name));
+                yield Optional.of(restore(server, player, settlement));
             }
             case "alert", "bells" -> {
                 Optional<VillageHeartBlockEntity> heart = loadedHeart(server, settlement);
@@ -273,7 +310,9 @@ public final class AdminActions {
                         SettlementLevels.tierName(settlement.level()), settlement.isActive(), settlement.x(),
                         settlement.z(), settlement.economy().population(),
                         (int) Math.round(Math.sqrt((double) settlement.distanceSquared(pos.getX(), pos.getZ()))),
-                        settlement.hasHeart()))
+                        settlement.hasHeart(), settlement.factionId(),
+                        FactionVisuals.faction(server, settlement.factionId()).map(FactionSpec::color).orElse(0x808080),
+                        FactionVisuals.faction(server, settlement.factionId()).map(FactionSpec::cultureId).orElse("")))
                 .toList();
         return new AdminListPayload(summaries);
     }
@@ -309,8 +348,6 @@ public final class AdminActions {
             Map<String, Integer> jobs = new TreeMap<>();
             economy.jobs().forEach(job -> jobs.merge(job, 1, Integer::sum));
             List<Row> economyRows = new ArrayList<>();
-            int food = (int) Math.round(economy.foodCovered() * 100);
-            economyRows.add(Row.bar(label("food"), Component.translatable(KEY + "percent", food), food, 100));
             economyRows.add(new Row(label("jobs_working"), Component.translatable(KEY + "jobs_value",
                     Math.round(economy.jobsWorking() * 100), jobs.size())));
             economyRows.add(new Row(label("treasury"),
@@ -346,6 +383,63 @@ public final class AdminActions {
         });
     }
 
+    /**
+     * Makes a settlement in ruins active again when the chunks of {@link #restoreArea} are ready. With a
+     * player, the request waits for the chunk with no wait on the server thread (see {@link AreaWaits}). With no
+     * player, the chunk must be ready now.
+     */
+    private static Result restore(MinecraftServer server, @Nullable ServerPlayer player, Settlement settlement) {
+        String id = settlement.id();
+        AdminTeleports.Area area = restoreArea(settlement);
+        if (player == null) {
+            return area.isReady(server.overworld()) ? restoreNow(server, id)
+                    : Result.refused("heart_not_loaded", Component.literal(settlement.name()));
+        }
+        return RESTORES.request(player, server.overworld(), area, AreaWaits.TIMEOUT_SECONDS,
+                current -> restoreNow(server, id));
+    }
+
+    /** Finds the settlement again by its id and restores it. The chunks of {@link #restoreArea} must be ready. */
+    private static Result restoreNow(MinecraftServer server, String id) {
+        Optional<Settlement> found = SettlementData.get(server).registry().byId(id);
+        if (found.isEmpty()) {
+            return Result.refused("unknown");
+        }
+        Settlement settlement = found.get();
+        Component name = Component.literal(settlement.name());
+        if (settlement.isActive()) {
+            return Result.refused("already_active", name);
+        }
+        try {
+            Settlements.restore(server.overworld(), settlement);
+            return Result.done("restore", name);
+        } catch (RuntimeException e) {
+            FolkholdWorld.LOGGER.error("The admin restore of {} failed", settlement, e);
+            return Result.refused("restore.error");
+        }
+    }
+
+    /**
+     * The area that {@link Settlements#restore} reads and changes: the column of the heart and the columns next to it.
+     * The new heart updates its neighbors, and on the edge of a chunk a neighbor is in another chunk.
+     *
+     * @param settlement the settlement
+     * @return the area
+     */
+    public static AdminTeleports.Area restoreArea(Settlement settlement) {
+        return AdminTeleports.Area.around(settlement.x(), settlement.z(), 1);
+    }
+
+    /**
+     * True if the player has a restore request that waits for its chunks.
+     *
+     * @param player the player
+     * @return true if a restore request of the player waits
+     */
+    public static boolean isRestorePending(ServerPlayer player) {
+        return RESTORES.isPending(player);
+    }
+
     /** The village heart of the settlement, if its chunk is ready (see {@link ReadyChunks}). */
     private static Optional<VillageHeartBlockEntity> loadedHeart(MinecraftServer server, Settlement settlement) {
         if (!settlement.hasHeart()) {
@@ -360,12 +454,34 @@ public final class AdminActions {
                 ? Optional.of(heart) : Optional.empty();
     }
 
+    /** Teleports a player to the surface at the position of a caravan or a traveling merchant of the admin map. */
+    public static Result teleportToGroup(ServerPlayer player, String id) {
+        Optional<MobileGroup> group = MobileGroupData.get(player.server).groups().byId(id);
+        if (group.isEmpty()) {
+            return Result.refused("group_unknown");
+        }
+        int x = (int) Math.floor(group.get().position().x());
+        int z = (int) Math.floor(group.get().position().z());
+        return AdminTeleports.request(player, player.server.overworld(), new AdminTeleports.Area(x, z, x, z),
+                level -> Optional.of(AdminTeleports.surface(level, x, z)), Result.done("teleport_group", x, z).message());
+    }
+
+    /**
+     * The area that {@link #teleportTarget} reads: the blocks at most {@link #TELEPORT_RADIUS} blocks from the heart.
+     *
+     * @param settlement the settlement
+     * @return the area
+     */
+    public static AdminTeleports.Area teleportArea(Settlement settlement) {
+        return AdminTeleports.Area.around(settlement.x(), settlement.z(), TELEPORT_RADIUS);
+    }
+
     /**
      * A safe position near the village heart, for the teleport action.
      *
+     * <p>The chunks of {@link #teleportArea} must be ready (see {@link ReadyChunks}). The method does not load them.
+     *
      * <ul>
-     *   <li>The method loads the chunks first. The height of a chunk that is not loaded is the bottom of the
-     *       world.</li>
      *   <li>If the heart position is known, the method finds the nearest free position at the level of the heart:
      *       a solid floor and two free blocks above it, at most {@link #TELEPORT_RADIUS} blocks from the heart.</li>
      *   <li>If there is no such position, the target is the top of the terrain, 2 blocks from the heart.</li>
@@ -378,21 +494,13 @@ public final class AdminActions {
     public static BlockPos teleportTarget(ServerLevel level, Settlement settlement) {
         int x = settlement.x();
         int z = settlement.z();
-        for (int chunkX = (x - TELEPORT_RADIUS) >> 4; chunkX <= (x + TELEPORT_RADIUS) >> 4; chunkX++) {
-            for (int chunkZ = (z - TELEPORT_RADIUS) >> 4; chunkZ <= (z + TELEPORT_RADIUS) >> 4; chunkZ++) {
-                level.getChunk(chunkX, chunkZ);
-            }
-        }
         if (settlement.hasHeart()) {
             Optional<BlockPos> free = freePositionNear(level, new BlockPos(x, settlement.heartY(), z));
             if (free.isPresent()) {
                 return free.get();
             }
         }
-        int targetX = x + 2;
-        int targetZ = z + 2;
-        return new BlockPos(targetX, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, targetX, targetZ),
-                targetZ);
+        return AdminTeleports.surface(level, x + 2, z + 2);
     }
 
     /** The nearest free position around the heart, by rings of growing distance. */

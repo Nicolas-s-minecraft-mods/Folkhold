@@ -15,5 +15,18 @@
   ],
   "min_level": 1,
   "weight": 15,
-  "profession": "minecraft:toolsmith"
+  "profession": "minecraft:toolsmith",
+  "cultures": {"valeholm": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:cobblestone", "count": 16}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:raw_copper", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:coal", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:flint", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:stone_pickaxe", "count": 1}, "level": 1, "volume": 1},
+    {"sell": {"item": "minecraft:raw_iron", "count": 6}, "level": 2, "volume": 7},
+    {"sell": {"item": "minecraft:redstone", "count": 3}, "level": 2, "volume": 4},
+    {"sell": {"item": "minecraft:lapis_lazuli", "count": 3}, "level": 3, "volume": 2},
+    {"sell": {"item": "minecraft:raw_gold", "count": 1}, "level": 3, "volume": 2},
+    {"sell": {"item": "minecraft:diamond", "count": 1}, "level": 4, "volume": 1}
+  ]
 }

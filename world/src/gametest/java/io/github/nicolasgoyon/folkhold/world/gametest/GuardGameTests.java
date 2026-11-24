@@ -5,31 +5,40 @@ import io.github.nicolasgoyon.folkhold.blocks.block.BuildingSignKind;
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.entity.FactionGolemEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.AnchorStrollGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.MonsterTargeting;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitNavigation;
+import io.github.nicolasgoyon.folkhold.world.registry.ModEntities;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
+import java.util.List;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.Pig;
 import net.minecraft.world.entity.monster.Husk;
+import net.minecraft.world.entity.monster.Vindicator;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -53,14 +62,17 @@ public final class GuardGameTests {
     public static void guardSpawnsWithEquipmentAndConfiguredHealth(GameTestHelper helper) {
         GuardEntity guard = TestSupport.spawnGuard(helper, new BlockPos(0, 1, 0));
 
-        // A heart of an earlier test can be near: the guard then has the equipment set of its level.
-        GarrisonEquipment.Piece sword = GarrisonEquipment.get().pieces(guard.getEquipmentSet(), GarrisonRole.GUARD)
-                .get(EquipmentSlot.MAINHAND);
+        // A heart of an earlier test can be near: the guard then has the equipment set of its level. The culture of
+        // the faction of the guard can change its weapon.
+        java.util.Map<EquipmentSlot, GarrisonEquipment.Piece> pieces = GarrisonEquipment.get().pieces(
+                GarrisonEquipment.culture(guard), guard.getEquipmentSet(), GarrisonRole.GUARD, guard.getUUID());
+        GarrisonEquipment.Piece weapon = pieces.get(EquipmentSlot.MAINHAND);
         helper.assertTrue(guard.getItemBySlot(EquipmentSlot.MAINHAND)
-                        .is(BuiltInRegistries.ITEM.get(ResourceLocation.parse(sword.item()))),
-                "The guard must hold the sword of its equipment set " + guard.getEquipmentSet());
-        helper.assertTrue(guard.getItemBySlot(EquipmentSlot.OFFHAND).is(Items.SHIELD),
-                "The guard must hold a shield");
+                        .is(BuiltInRegistries.ITEM.get(ResourceLocation.parse(weapon.item()))),
+                "The guard must hold the weapon of its equipment set " + guard.getEquipmentSet());
+        helper.assertTrue(guard.getItemBySlot(EquipmentSlot.OFFHAND).is(Items.SHIELD)
+                        == pieces.containsKey(EquipmentSlot.OFFHAND),
+                "The guard must hold the shield of its equipment set");
 
         double expectedHealth = WorldConfig.GUARD.health();
         helper.assertTrue(Math.abs(guard.getMaxHealth() - expectedHealth) < 0.001,
@@ -151,6 +163,30 @@ public final class GuardGameTests {
             helper.assertTrue(targeted, "The husk must target the guard. Husk target: " + husk.getTarget()
                     + ", husk alive: " + husk.isAlive());
         }, guard, husk);
+    }
+
+    /**
+     * A hostile monster at the edge of a city targets a guard. The heart of the test is farther from the arena than
+     * {@link MonsterTargeting#gateRadius()}, and the arena is in its structure area.
+     */
+    @GameTest(template = "arena", timeoutTicks = 200, batch = "monster_targets_guard_at_city_edge")
+    public static void monsterAtTheEdgeOfACityTargetsAGuard(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ServerLevel level = helper.getLevel();
+        BlockPos corner = helper.absolutePos(new BlockPos(0, 1, 0));
+        int distance = (int) MonsterTargeting.gateRadius() + 100;
+        BlockPos heart = corner.west(distance);
+        VillageHearts.register(level, heart, Optional.of(new BoundingBox(heart.getX() - 8, heart.getY() - 8,
+                corner.getZ(), corner.getX() + 16, heart.getY() + 8, corner.getZ() + 16)));
+        TestSupport.atTestEnd(helper, () -> VillageHearts.unregister(level, heart));
+        GuardEntity guard = TestSupport.spawnGuard(helper, new BlockPos(3, 1, 3));
+        // The guard has no AI in this test: only the husk can start the fight.
+        guard.setNoAi(true);
+        Husk husk = helper.spawn(EntityType.HUSK, new BlockPos(10, 1, 10));
+
+        TestSupport.succeedWhenAndRemove(helper, () -> helper.assertTrue(husk.getTarget() == guard,
+                "The husk at the edge of the city must target the guard. Husk target: " + husk.getTarget()
+                        + ", husk alive: " + husk.isAlive()), guard, husk);
     }
 
     /** A hostile monster far from every village heart does not look for a guard. */
@@ -320,15 +356,15 @@ public final class GuardGameTests {
         boolean[] night = new boolean[2];
         // The level updates the sky darkness on its next tick: the checks come one tick after the time change.
         helper.startSequence()
-                .thenExecute(() -> helper.getLevel().setDayTime(18_000L))
+                .thenExecute(() -> TestSupport.setDayTimeForTest(helper, 18_000L))
                 .thenExecuteAfter(2, () -> {
                     night[0] = AnchorStrollGoal.accepts(guard, inside);
                     night[1] = AnchorStrollGoal.accepts(guard, outside);
-                    helper.getLevel().setDayTime(6_000L);
+                    TestSupport.setDayTimeForTest(helper, 6_000L);
                 })
                 .thenExecuteAfter(2, () -> {
                     boolean dayNear = AnchorStrollGoal.accepts(guard, Vec3.atBottomCenterOf(heart.north(3)));
-                    helper.getLevel().setDayTime(dayTime);
+                    TestSupport.setDayTimeForTest(helper, dayTime);
                     guard.discard();
                     helper.assertTrue(night[0], "At night, the guard strolls on the heart side of the watch position");
                     helper.assertTrue(!night[1], "At night, the guard does not stroll beyond the gate");
@@ -368,6 +404,41 @@ public final class GuardGameTests {
                             "The guard must go through the gap of the signs. Guard at " + guard.blockPosition());
                 })
                 .thenExecute(guard::discard)
+                .thenSucceed();
+    }
+
+    /**
+     * A melee hit of a unit does not hurt a villager: a guard and a golem hit a villager, and the villager keeps its
+     * full health. Control: a hit of a vindicator hurts a villager.
+     */
+    @GameTest(template = "arena", timeoutTicks = 100, batch = "guard_villager")
+    public static void unitHitDoesNotHurtAVillager(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        GuardEntity guard = TestSupport.spawnGuard(helper, new BlockPos(2, 1, 2));
+        FactionGolemEntity golem = TestSupport.spawnUnit(helper, ModEntities.FACTION_GOLEM.get(), new BlockPos(2, 1, 8));
+        Vindicator vindicator = helper.spawn(EntityType.VINDICATOR, new BlockPos(2, 1, 14));
+        Villager guarded = helper.spawn(EntityType.VILLAGER, new BlockPos(3, 1, 2));
+        Villager near = helper.spawn(EntityType.VILLAGER, new BlockPos(4, 1, 8));
+        Villager victim = helper.spawn(EntityType.VILLAGER, new BlockPos(3, 1, 14));
+        for (var mob : List.of(guard, golem, vindicator, guarded, near, victim)) {
+            mob.setNoAi(true);
+        }
+
+        helper.startSequence()
+                .thenExecuteAfter(1, () -> {
+                    guard.doHurtTarget(guarded);
+                    golem.doHurtTarget(near);
+                    vindicator.doHurtTarget(victim);
+                })
+                .thenExecuteAfter(5, () -> {
+                    helper.assertTrue(guarded.getHealth() == guarded.getMaxHealth(),
+                            "A hit of a guard must not hurt a villager, health: " + guarded.getHealth());
+                    helper.assertTrue(near.getHealth() == near.getMaxHealth(),
+                            "A hit of a golem must not hurt a villager, health: " + near.getHealth());
+                    helper.assertTrue(victim.getHealth() < victim.getMaxHealth(),
+                            "A hit of a vindicator must hurt a villager");
+                })
+                .thenExecute(() -> List.of(guard, golem, vindicator, guarded, near, victim).forEach(Entity::discard))
                 .thenSucceed();
     }
 }

@@ -1,14 +1,15 @@
 modLoader = "javafml"
 loaderVersion = "${loader_version_range}"
 license = "${mod_license}"
-issueTrackerURL = "https://github.com/nicolas-goyon/Folkhold/issues"
+issueTrackerURL = "https://github.com/Nicolas-s-minecraft-mods/Folkhold/issues"
 
 [[mods]]
 modId = "${mod_id}"
 version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
-displayURL = "https://github.com/nicolas-goyon/Folkhold"
+displayURL = "https://github.com/Nicolas-s-minecraft-mods/Folkhold"
+logoFile = "${mod_id}_logo.png"
 # The mod list shows the translated description (key: fml.menu.mods.info.description.<mod_id>) when it exists.
 description = '''${mod_description}'''
 
@@ -32,3 +33,11 @@ type = "required"
 versionRange = "[${mod_version},)"
 ordering = "AFTER"
 side = "BOTH"
+
+# Confee: the config screen of the client options. Only the client uses it.
+[[dependencies.${mod_id}]]
+modId = "confee"
+type = "required"
+versionRange = "[${confee_version},)"
+ordering = "AFTER"
+side = "CLIENT"

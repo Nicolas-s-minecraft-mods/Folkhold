@@ -12,5 +12,17 @@
   ],
   "min_level": 3,
   "weight": 8,
-  "profession": "minecraft:butcher"
+  "profession": "minecraft:butcher",
+  "cultures": {"valeholm": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:cooked_beef", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:cooked_porkchop", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:cooked_chicken", "count": 3}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:beef", "count": 3}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:porkchop", "count": 3}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:chicken", "count": 3}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:coal", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:cooked_mutton", "count": 3}, "level": 2, "volume": 4, "materials": [{"item": "minecraft:mutton", "count": 3}, {"item": "minecraft:coal", "count": 1}]},
+    {"sell": {"item": "minecraft:rabbit_stew", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:rabbit", "count": 1}, {"item": "minecraft:carrot", "count": 1}, {"item": "minecraft:potato", "count": 1}, {"item": "minecraft:brown_mushroom", "count": 1}, {"item": "minecraft:oak_planks", "count": 1}]}
+  ]
 }

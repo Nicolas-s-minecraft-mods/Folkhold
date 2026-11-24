@@ -1,6 +1,11 @@
-# Checks the scripts. The tests of scripts/version.py run, and the generated files are up to date: the structures,
+# Checks the scripts. The tests of scripts/ run, and the generated files are up to date: the structures,
 # the block models and the textures come from the scripts of tools/. A change to a script or to a generated file must
 # come with the output of the scripts.
+# The generators of .nbt files do not write a file when its uncompressed content does not change (nbt.write_nbt).
+# The texture generators of tools/textures do not write a PNG file when its decoded pixels do not change, and they
+# write with pixvox.png.save_png, which gives the same bytes on all machines. See png_file.write_png.
+# Thus the byte comparison below does not depend on the zlib or the Pillow of the machine, and it fails when the
+# content of a template or the pixels of a texture change.
 name: Generated files
 
 on:
@@ -22,15 +27,15 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
 
-      - name: Tests of the version script
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
-
       - name: Install Pillow and PixVox
         run: pip install pillow -r tools/pixvox/requirements.txt
+
+      - name: Tests of the scripts
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
       - name: Run the generators
         run: |
@@ -39,6 +44,8 @@ jobs:
           python3 tools/pixvox/quest_board.py
           python3 tools/textures/villager_professions.py
           python3 tools/textures/golem_armband.py
+          python3 tools/textures/map_decorations.py
+          python3 tools/textures/mod_logos.py
           python3 tools/pixvox/export.py
           python3 tools/make_test_structure.py world/src/gametest/resources/data/folkhold_world/structure/empty.nbt
           python3 tools/make_test_structure.py world/src/gametest/resources/data/folkhold_world/structure/arena.nbt --size 16 4 16
@@ -49,4 +56,32 @@ jobs:
         run: |
           git add --all
           git status --short
-          git diff --cached --exit-code --stat
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git diff --cached --stat
+          # For each changed .nbt file, tell if the uncompressed content changes or only the gzip bytes.
+          git diff --cached --name-only --diff-filter=M -- '*.nbt' | while read -r f; do
+            if cmp -s <(git show "HEAD:$f" | gzip -dc) <(gzip -dc "$f"); then
+              echo "::error file=$f::Same content, other gzip bytes. Write this file with nbt.write_nbt."
+            else
+              echo "::error file=$f::The content changes. Run the generators and commit their output."
+            fi
+          done
+          # For each changed .png file, tell if the pixels change or only the PNG bytes. The scripts of tools/textures
+          # write the files of textures/entity and textures/map.
+          git diff --cached --name-only --diff-filter=M -- '*.png' | while read -r f; do
+            if git show "HEAD:$f" | python3 -c 'import io, sys; from PIL import Image
+          a = Image.open(io.BytesIO(sys.stdin.buffer.read())); b = Image.open(sys.argv[1])
+          sys.exit(0 if (a.mode, a.size, a.tobytes()) == (b.mode, b.size, b.tobytes()) else 1)' "$f"; then
+              case "$f" in
+                */textures/entity/*|*/textures/map/*)
+                  echo "::error file=$f::Same pixels, other PNG bytes. Write this file with png_file.write_png (tools/textures)." ;;
+                *)
+                  echo "::error file=$f::Same pixels, other PNG bytes. Run the generators with the PixVox version of tools/pixvox/requirements.txt and commit their output." ;;
+              esac
+            else
+              echo "::error file=$f::The pixels change. Run the generators and commit their output."
+            fi
+          done
+          exit 1

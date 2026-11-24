@@ -1,0 +1,1201 @@
+package io.github.nicolasgoyon.folkhold.world.gametest;
+
+import io.github.nicolasgoyon.folkhold.core.sim.level.Tier;
+import io.github.nicolasgoyon.folkhold.core.sim.village.CliffSide;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlanGround;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlotTerrain;
+import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillageBuildings;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSite;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallOutline;
+import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.faction.CultureMap;
+import io.github.nicolasgoyon.folkhold.world.level.TerrainCache;
+import io.github.nicolasgoyon.folkhold.world.level.TerrainColumns;
+import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
+import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
+import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
+import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
+import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
+import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.HeartSearch;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PlotTerrains;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageWall;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.function.IntBinaryOperator;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.QuartPos;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BiomeTags;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
+import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructureSet;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+
+/**
+ * In-game measure of the terrain of the plots (see {@link PlotTerrain}) on the vanilla Overworld terrain. The GameTest
+ * server has a flat world: the tests make a noise chunk generator of the Overworld with a fixed seed, and the layouts
+ * of the villages read its heights. The tests place no block and generate no chunk.
+ *
+ * <p>Each measured village has all its plots and homes, and no problem of its layout (a missing piece, home beds under
+ * the maximum population). The measure reads the box of each building on a grid of {@link #FINE_STEP} blocks, finer
+ * than the grid of the check of the plots. A building of a plot with no role over lava or deep water on this grid is
+ * in the log: the grid of the check does not see it. The buildings of the bank and of the first jobs keep their plot
+ * on bad terrain, and the log counts them. A cliff house stands against a rock face (see {@link PlanGround#cliff}): a
+ * steep slope under its box is the face, and it is not a problem. The rule of the cliff plots checks the lava and the
+ * deep water of its plot.
+ */
+@GameTestHolder(FolkholdWorld.MOD_ID)
+@PrefixGameTestTemplate(false)
+public final class PlotTerrainGameTests {
+    /** The seed of the measured world. */
+    private static final long SEED = 783L;
+    /** The number of measured villages on land, for each style. */
+    private static final int LAND_VILLAGES = 2;
+    /** The number of measured maritime villages. */
+    private static final int MARITIME_VILLAGES = 2;
+    /** The largest number of start chunks that a search tries. */
+    private static final int TRIES = 4000;
+    /** The distance between 2 start chunks on land, in chunks. */
+    private static final int LAND_STEP = 37;
+    /** The distance between 2 start chunks of the search of the coasts, in chunks. */
+    private static final int COAST_STEP = 6;
+    /** The number of start chunks on each row of a search. */
+    private static final int ROW = 60;
+    /** The distance between 2 points of the grid of the measure, in blocks. */
+    private static final int FINE_STEP = 2;
+    /** The highest start level of a hamlet. */
+    private static final int HAMLET_LEVEL = 4;
+    /** The highest start level of a town. */
+    private static final int TOWN_LEVEL = 12;
+    /** The environment variable that adds the village, city and capital tiers to the measure of the tiers. */
+    static final String MEASURE_VARIABLE = "FOLKHOLD_VILLAGE_MEASURE";
+    /** The number of villages of the measure of the rings. */
+    private static final int RING_VILLAGES = 40;
+    /** The measure of the rings looks for its villages in a square of this number of chunks. */
+    private static final int RING_SEARCH = 2000;
+    /** The tiers of the measure with no environment variable {@link #MEASURE_VARIABLE}. */
+    private static final List<String> DEFAULT_TIERS = List.of("hamlet", "town");
+    /** The maritime measure also has the capital with no environment variable: the coast plots are the hard case. */
+    private static final List<String> DEFAULT_MARITIME_TIERS = List.of("hamlet", "town", "capital");
+    /** The smallest and the largest share of the spare plots, from the plots that the village needs. */
+    private static final double MIN_SPARE_SHARE = 0.10;
+    private static final double MAX_SPARE_SHARE = 0.20;
+    /** The number of mountain sites of the test of the cliff side. */
+    private static final int MOUNTAIN_SITES = 6;
+    /** The number of mountain sites of the measure of the plans and of the first walls. */
+    private static final int MEASURE_MOUNTAIN_SITES = 20;
+    /** The highest start level of a village. */
+    private static final int VILLAGE_LEVEL = 8;
+
+    private PlotTerrainGameTests() {
+    }
+
+    /** The villages of the base style: see {@link PlotTerrainGameTests}. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_base")
+    public static void baseVillagesHaveTheirHomes(GameTestHelper helper) {
+        landVillages(helper, StreetStyle.BASE);
+    }
+
+    /** The villages of the Sunreach style: see {@link PlotTerrainGameTests}. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_sunreach")
+    public static void sunreachVillagesHaveTheirHomes(GameTestHelper helper) {
+        landVillages(helper, StreetStyle.SUNREACH);
+    }
+
+    /** The villages of the Valeholm style: see {@link PlotTerrainGameTests}. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_valeholm")
+    public static void valeholmVillagesHaveTheirHomes(GameTestHelper helper) {
+        landVillages(helper, StreetStyle.VALEHOLM);
+    }
+
+    /**
+     * The first villages of a style on land, in the start chunks of the search. The culture of the region and the
+     * biome select the style before the layout: the search makes the layout of the sites of the style only.
+     */
+    private static void landVillages(GameTestHelper helper, StreetStyle style) {
+        Measure measure = new Measure(helper.getLevel());
+        List<String> problems = new ArrayList<>();
+        int found = 0;
+        for (int i = 0; i < TRIES && found < LAND_VILLAGES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.styleAt(context).equals(style.name())) {
+                continue;
+            }
+            Optional<FortifiedVillageStructure.Layout> layout = measure.structure.layout(context);
+            if (layout.isPresent() && layout.get().style().name().equals(style.name())) {
+                found++;
+                measure.check(context, layout.get(), "", problems);
+            }
+        }
+        measure.end(helper, found, LAND_VILLAGES, problems);
+    }
+
+    /** The maritime villages: the sites on a beach that the check of the site accepts as maritime. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_maritime")
+    public static void maritimeVillagesHaveTheirHomes(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        List<String> problems = new ArrayList<>();
+        int found = 0;
+        for (int i = 0; i < TRIES && found < MARITIME_VILLAGES; i++) {
+            Structure.GenerationContext context = measure.maritimeSite(i).orElse(null);
+            if (context != null) {
+                Optional<FortifiedVillageStructure.Layout> layout = measure.structure.layout(context);
+                if (layout.isPresent() && layout.get().style().name().equals(StreetStyle.MARITIME.name())) {
+                    found++;
+                    measure.check(context, layout.get(), "", problems);
+                }
+            }
+        }
+        measure.end(helper, found, MARITIME_VILLAGES, problems);
+    }
+
+    /** The measure of the tiers of the base style: see {@link #measureTiers}. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_base", required = false)
+    public static void measureBaseTiers(GameTestHelper helper) {
+        measureTiers(helper, StreetStyle.BASE);
+    }
+
+    /** The measure of the tiers of the Sunreach style: see {@link #measureTiers}. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_sunreach", required = false)
+    public static void measureSunreachTiers(GameTestHelper helper) {
+        measureTiers(helper, StreetStyle.SUNREACH);
+    }
+
+    /** The measure of the tiers of the Valeholm style: see {@link #measureTiers}. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_valeholm", required = false)
+    public static void measureValeholmTiers(GameTestHelper helper) {
+        measureTiers(helper, StreetStyle.VALEHOLM);
+    }
+
+    /** The measure of the tiers of the maritime style: see {@link #measureTiers}. */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_maritime")
+    public static void measureMaritimeTiers(GameTestHelper helper) {
+        measureTiers(helper, StreetStyle.MARITIME);
+    }
+
+    /**
+     * The measure of the tiers of a style: at the first site of the style (a site on a beach for the maritime style),
+     * the village of the top level of each tier. The tests of the land styles are optional: a capital takes the most
+     * time. With no environment variable {@link #MEASURE_VARIABLE}, the tests measure the hamlet and the town only.
+     * The maritime test is required, and it also measures the capital: the coast plots over deep water are the hard
+     * case (the missing homes take these plots on their foundation, see {@link VillagePlan}).
+     *
+     * <ul>
+     *   <li>A village has all its plots and homes, no layout problem, no home on bad terrain except a home on its
+     *       foundation over deep water (see {@link Measure#check}), the buildings, the job posts and the home beds of
+     *       its level (see {@link VillagePlanGameTests#checkLevel}), and 10 to 20 % spare plots. The free market plot
+     *       below level 5 is not a spare plot.</li>
+     *   <li>The log has a line {@code Village measure |} for each village: a row of the table of the measure.</li>
+     * </ul>
+     */
+    private static void measureTiers(GameTestHelper helper, StreetStyle style) {
+        Measure measure = new Measure(helper.getLevel());
+        ServerLevel level = helper.getLevel();
+        FortifiedVillageStructure structure = measure.structure;
+        boolean maritime = style.name().equals(StreetStyle.MARITIME.name());
+        Optional<Structure.GenerationContext> site = maritime
+                ? IntStream.range(0, TRIES).mapToObj(measure::maritimeSite).flatMap(Optional::stream).findFirst()
+                : IntStream.range(0, TRIES)
+                        .mapToObj(i -> measure.context(new ChunkPos((i % ROW) * LAND_STEP, (i / ROW) * LAND_STEP)))
+                        .filter(context -> measure.styleAt(context).equals(style.name())
+                                && structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED)))
+                        .findFirst();
+        helper.assertTrue(site.isPresent(), "No site of the style " + style.name());
+        Structure.GenerationContext context = site.get();
+        FortifiedVillageStructure.Variant variant = measure.variant(context, maritime);
+        List<String> problems = new ArrayList<>();
+        List<Tier> tiers = LevelTables.get().tiers();
+        if (System.getenv(MEASURE_VARIABLE) == null) {
+            List<String> defaults = maritime ? DEFAULT_MARITIME_TIERS : DEFAULT_TIERS;
+            tiers = tiers.stream().filter(tier -> defaults.contains(tier.id())).toList();
+        }
+        for (Tier tier : tiers) {
+            long time = System.nanoTime();
+            FortifiedVillageStructure.Layout layout = structure.layout(context, variant, maritime, tier.maxLevel())
+                    .orElseThrow();
+            time = (System.nanoTime() - time) / 1_000_000;
+            String name = "chunk " + context.chunkPos() + " level " + tier.maxLevel() + " " + tier.id() + " "
+                    + style.name();
+            measure.check(context, layout, " forced", problems);
+            VillagePlanGameTests.checkLevel(level, measure.generator, layout, name, problems);
+            List<VillagePlan.Plot> plots = layout.plots();
+            long spare = plots.stream().filter(VillagePlan.Plot::spare).count();
+            double share = (double) spare / (plots.size() - spare);
+            if (share < MIN_SPARE_SHARE || share > MAX_SPARE_SHARE) {
+                problems.add(name + ": " + spare + " spare plots for " + plots.size() + " plots");
+            }
+            Map<String, Integer> signs = VillagePlanGameTests.signs(level, layout);
+            FolkholdWorld.LOGGER.info("Village measure | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} / {} / {} "
+                    + "| {} | {} | {} | {} | {} |", tier.id(), style.name(), tier.maxLevel(), plots.size(),
+                    layout.plans().stream().map(part -> String.valueOf(part.plots().size()))
+                            .collect(Collectors.joining(" + ")),
+                    layout.free(), spare, signs.getOrDefault(VillagePlanGameTests.HOME, 0) - layout.posts().size(),
+                    VillagePlanGameTests.homeBeds(level, layout),
+                    LevelTables.get().traits(tier.maxLevel()).maxPopulation() - VillageBeds.staff(),
+                    layout.built(), signs.getOrDefault("storehouse", 0), signs.getOrDefault("barracks", 0),
+                    signs.getOrDefault(VillageBuildings.MARKET, 0), layout.posts().size(), layout.problems().size(),
+                    plots.stream().filter(plot -> plot.spare() && !plot.good()).count(), time, rules(layout));
+        }
+        measure.end(helper, tiers.size(), tiers.size(), problems);
+    }
+
+    /** The rules of the ground of the plans of a layout: the core, then each band (see {@link VillagePlan.Rules}). */
+    static String rules(FortifiedVillageStructure.Layout layout) {
+        return layout.plans().stream().map(plan -> plan.rules().name().toLowerCase(Locale.ROOT))
+                .collect(Collectors.joining(" + "));
+    }
+
+    /**
+     * The measure of the rings of the natural villages: the first {@link #RING_VILLAGES} towns, cities and capitals of
+     * the placement of the faction villages, from the chunk (0, 0), with the start level of their chunk. For each
+     * village, the measure counts the rings of its tier, the rings that it keeps near the other villages, and the
+     * cause of the lost rings (see {@link VillageRings#count}). The test runs only with the environment variable
+     * {@link #MEASURE_VARIABLE}: a layout on noise terrain takes seconds.
+     *
+     * <p>The log has a line {@code Village ring measure |} for each tier: the villages, the villages with all their
+     * rings, the villages that lose a ring to a faction village, and the villages that lose a ring to a possible
+     * vanilla village. A village can lose rings to the two causes.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_measure_rings", required = false)
+    public static void measureRings(GameTestHelper helper) {
+        if (System.getenv(MEASURE_VARIABLE) == null) {
+            helper.succeed();
+            return;
+        }
+        Measure measure = new Measure(helper.getLevel());
+        Holder<StructureSet> set = measure.registries.registryOrThrow(Registries.STRUCTURE_SET)
+                .getHolderOrThrow(SettlementDiscovery.VILLAGE_SET);
+        ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForFlat(measure.random, SEED,
+                measure.generator.getBiomeSource(), Stream.of(set));
+        Structure.GenerationContext anchor = measure.context(ChunkPos.ZERO);
+        // For each tier: the villages, the villages with all their rings, the losses to factions and to vanilla.
+        Map<String, int[]> counts = new TreeMap<>();
+        int villages = 0;
+        for (int x = 0; x < RING_SEARCH && villages < RING_VILLAGES; x++) {
+            for (int z = 0; z < RING_SEARCH && villages < RING_VILLAGES; z++) {
+                if (!set.value().placement().isStructureChunk(state, x, z)) {
+                    continue;
+                }
+                ChunkPos start = new ChunkPos(x, z);
+                Optional<VillageRings.RingCount> count = VillageRings.count(measure.structure, set, anchor, start);
+                if (count.isEmpty()) {
+                    continue;
+                }
+                villages++;
+                VillageRings.RingCount rings = count.get();
+                String tier = VillageSizes.forLevel(Settlements.startLevel(SEED, start)).tier();
+                int[] row = counts.computeIfAbsent(tier, key -> new int[4]);
+                row[0]++;
+                row[1] += rings.kept() == rings.rings() ? 1 : 0;
+                row[2] += rings.keptFactions() < rings.rings() ? 1 : 0;
+                row[3] += rings.keptVanilla() < rings.rings() ? 1 : 0;
+                FolkholdWorld.LOGGER.info("Village ring measure: chunk {} {} keeps {} of {} rings (faction villages:"
+                        + " {}, vanilla villages: {})", start, tier, rings.kept(), rings.rings(),
+                        rings.keptFactions(), rings.keptVanilla());
+            }
+        }
+        int total = villages;
+        counts.forEach((tier, row) -> FolkholdWorld.LOGGER.info("Village ring measure | {} | {} | {} | {} | {} |",
+                tier, row[0], row[1], row[2], row[3]));
+        helper.assertTrue(total > 0, "The measure must find a village with rings");
+        helper.succeed();
+    }
+
+    /**
+     * The layouts with one noise object for each chunk are the layouts with one read of the chunk generator for each
+     * column (see {@link TerrainCache#direct}): the same plan and the same pieces, for a hamlet and a town on land and
+     * for a maritime hamlet. The test logs the time of the two layouts.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_cache")
+    public static void layoutsAreTheSameWithTheTerrainCache(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        FortifiedVillageStructure.Variant land = new FortifiedVillageStructure.Variant(HolderSet.direct(),
+                structure.startPool(), structure.wall(), structure.homes(), Optional.empty());
+        FortifiedVillageStructure.Variant maritime = structure.variants().stream()
+                .filter(FortifiedVillageStructure.Variant::maritime).filter(variant -> variant.biomes().size() == 0)
+                .findFirst().orElseThrow();
+        Structure.GenerationContext site = IntStream.range(0, TRIES)
+                .mapToObj(i -> measure.context(new ChunkPos((i % ROW) * LAND_STEP, (i / ROW) * LAND_STEP)))
+                .filter(context -> structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED)))
+                .findFirst().orElseThrow();
+        Structure.GenerationContext coast = IntStream.range(0, TRIES).mapToObj(measure::maritimeSite)
+                .flatMap(Optional::stream).findFirst().orElseThrow();
+        List<String> problems = new ArrayList<>();
+        measure.compare(site, land, false, HAMLET_LEVEL, problems);
+        measure.compare(site, land, false, TOWN_LEVEL, problems);
+        measure.compare(coast, maritime, true, HAMLET_LEVEL, problems);
+        helper.assertTrue(problems.isEmpty(), "Layouts with differences: " + problems);
+        helper.succeed();
+    }
+
+    /**
+     * The cliff side of the walls at the first mountain sites: a biome of the tags {@code is_mountain} or
+     * {@code is_hill} at the middle of the start chunk, and a site that the check accepts. Each site gets a town: its
+     * first wall and its ring. The test reads the heights of the terrain as the wall reads them (see
+     * {@link VillageWall#heights}), and the drops from the level of each gate (see {@link CliffSide}).
+     *
+     * <ul>
+     *   <li>Each wall keeps one gate or more.</li>
+     *   <li>No gate opens on a drop: no block of a gate is a cliff block, and the terrain in front of each block of a
+     *       gate is never {@link CliffSide#DROP} blocks or more under the level of the gate.</li>
+     *   <li>Each gate is reachable from the inside: a path starts behind it, 2 blocks inside the line (the arm of a
+     *       gate of the first wall, the path across the band of a gate of a ring). A water gate, and a gate of a ring
+     *       in front of a water gate of the inner wall, need no path.</li>
+     *   <li>Each column of the palisade on a cliff block has the low palisade, and each other column the full
+     *       palisade.</li>
+     *   <li>One wall at least has cliff blocks: the test sees the cliff side.</li>
+     * </ul>
+     *
+     * <p>The test places no block: a walk on the blocks of the generated village is not possible on the flat world of
+     * the GameTest server.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_cliff")
+    public static void mountainWallsHaveNoGateOnACliff(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        List<String> problems = new ArrayList<>();
+        int sites = 0;
+        int cliffWalls = 0;
+        for (int i = 0; i < TRIES && sites < MOUNTAIN_SITES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.isMountain(context)
+                    || !structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            sites++;
+            FortifiedVillageStructure.Variant variant = measure.variant(context, false);
+            FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, TOWN_LEVEL)
+                    .orElseThrow();
+            TerrainCache terrain = TerrainCache.of(context);
+            List<VillageWall.Wall> walls = new ArrayList<>(List.of(layout.firstWall()));
+            walls.addAll(layout.rings());
+            for (int w = 0; w < walls.size(); w++) {
+                String name = "chunk " + context.chunkPos() + " wall " + w;
+                Optional<VillageWall.Wall> inner = w == 0 ? Optional.empty() : Optional.of(walls.get(w - 1));
+                if (checkCliffSide(name, walls.get(w), inner, VillageWall.heights(terrain), problems)) {
+                    cliffWalls++;
+                }
+            }
+        }
+        FolkholdWorld.LOGGER.info("Cliff side: {} mountain sites, {} walls with cliff blocks, problems {}", sites,
+                cliffWalls, problems);
+        helper.assertTrue(sites == MOUNTAIN_SITES, "Only " + sites + " mountain sites of " + MOUNTAIN_SITES);
+        helper.assertTrue(cliffWalls > 0, "No wall of the mountain sites has cliff blocks");
+        helper.assertTrue(problems.isEmpty(), "Problems of the cliff side: " + problems);
+        helper.succeed();
+    }
+
+    /**
+     * The plans of the towns at the first mountain sites (see {@link #mountainWallsHaveNoGateOnACliff}) follow the
+     * ground of the site (see {@link PlanGround}). The test reads the terrain from a new terrain cache.
+     *
+     * <ul>
+     *   <li>Each town has its plaza with the heart, one home and one job post at least. A town on small ground is
+     *       narrower: the greedy growth of the plan leaves the plots that the ground does not hold.</li>
+     *   <li>For a plan with the level rule, each grid point of each plot with a building is
+     *       {@link PlanGround#MAX_PLOT_RISE} blocks or less above or below the surface at its connector. The plots of
+     *       the first pieces of the axis streets (the bank and the first jobs) do not obey this rule. A cliff plot obeys
+     *       the rule of the cliff plots in place of this rule: its front is at the level of the street, and it has a rock
+     *       face behind it (see {@link PlanGround#cliff}).</li>
+     *   <li>Each cliff plot of a plan has no setback and no shift. The core of the layout has a cliff house (a piece
+     *       {@code cliff_house_<n>}) for each cliff plot of the core with a home.</li>
+     *   <li>For a core plan with the outline rule, the line of the first wall (its free outline, see
+     *       {@link WallLayout#free}) climbs no more than the line of the rectangle around the plaza and the first pieces
+     *       of the axis streets (see {@link PlanGround#climb}).</li>
+     *   <li>Each ring has no more blocks of its line on high ground than the rectangle around the wall inside it,
+     *       larger by the band (see {@link WallLayout#ring} and {@link WallLayout#highBlocks}). One ring at least has
+     *       fewer: it goes around the high ground of its band.</li>
+     *   <li>One site at least has a steep side: a grid point in the radius of the core is not in the region of the
+     *       ground with the small rise.</li>
+     * </ul>
+     *
+     * <p>The log has a line {@code Ground of the plan} for each town, with the rules of its plans, its cliff plots and
+     * its cliff houses.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_ground")
+    public static void mountainPlansFollowTheGround(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        List<String> problems = new ArrayList<>();
+        Map<String, Integer> rules = new TreeMap<>();
+        int sites = 0;
+        int steep = 0;
+        int cutRings = 0;
+        int lowerRings = 0;
+        int allCliffPlots = 0;
+        int allCliffHouses = 0;
+        for (int i = 0; i < TRIES && sites < MOUNTAIN_SITES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.isMountain(context)
+                    || !structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            sites++;
+            FortifiedVillageStructure.Variant variant = measure.variant(context, false);
+            FortifiedVillageStructure.Layout layout = structure.layout(context, variant, false, TOWN_LEVEL)
+                    .orElseThrow();
+            String name = "chunk " + context.chunkPos() + " town " + layout.style().name();
+            // A plan on small ground is narrower: it can miss plots and homes (decision of the owner on #969).
+            measure.check(context, layout, " ground", problems, true);
+            TerrainCache terrain = TerrainCache.of(context);
+            PlotTerrains plots = new PlotTerrains(terrain);
+            BlockPos center = layout.center();
+            Rotation rotation = layout.village().get(0).getRotation();
+            int radius = Math.min(FortifiedVillageStructure.firstRadius(layout.size()),
+                    structure.maxDistanceFromCenter());
+            PlanGround core = plots.core(center, rotation, radius, variant.wall().margin());
+            PlanGround band = plots.band(center, rotation);
+            int cliffPlots = 0;
+            int cliffHomes = 0;
+            for (int p = 0; p < layout.plans().size(); p++) {
+                VillagePlan plan = layout.plans().get(p);
+                rules.merge(plan.rules().name(), 1, Integer::sum);
+                if (plan.rules() == VillagePlan.Rules.NONE) {
+                    continue;
+                }
+                PlanGround ground = p == 0 ? core : band;
+                for (VillagePlan.Plot plot : plan.plots()) {
+                    boolean first = p == 0 && plan.pieces().get(plot.piece()).parent() < 0;
+                    if (plot.onCliff()) {
+                        cliffPlots++;
+                        cliffHomes += p == 0 && !plot.spare() ? 1 : 0;
+                        if (ground.cliff(plot.area(), plot.x(), plot.z(), plan.rules().rise()) != plot.cliff()
+                                || plot.setback() != 0 || plot.shift() != 0) {
+                            problems.add(name + ": the cliff plot at " + plot.x() + " " + plot.z() + " of the plan "
+                                    + p + " is not against a rock face");
+                        }
+                    } else if (plan.rules().level() && !first && !plot.spare()
+                            && !ground.level(plot.area(), plot.x(), plot.z())) {
+                        problems.add(name + ": the plot at " + plot.x() + " " + plot.z() + " of the plan " + p
+                                + " is far above or below its street");
+                    }
+                }
+            }
+            VillagePlan plan = layout.plan();
+            if (plan.rules().outline()) {
+                int half = layout.village().get(0).getBoundingBox().getXSpan() / 2;
+                VillagePlan.Box start = new VillagePlan.Box(-half, -half, half, half);
+                VillagePlan.Box all = start;
+                for (VillagePlan.Piece piece : plan.pieces()) {
+                    all = union(all, piece.box());
+                    if (piece.parent() < 0) {
+                        // The first piece and the street end after it: the bounds of the plan at its start.
+                        start = union(start, piece.box());
+                        start = union(start, new VillagePlan.Box(piece.box().minX() + Math.min(0, piece.dir().dx())
+                                * StreetStyle.END, piece.box().minZ() + Math.min(0, piece.dir().dz()) * StreetStyle.END,
+                                piece.box().maxX() + Math.max(0, piece.dir().dx()) * StreetStyle.END,
+                                piece.box().maxZ() + Math.max(0, piece.dir().dz()) * StreetStyle.END));
+                    }
+                }
+                for (VillagePlan.Plot plot : plan.plots()) {
+                    all = union(all, plot.area());
+                    if (plan.pieces().get(plot.piece()).parent() < 0) {
+                        start = union(start, plot.area());
+                    }
+                }
+                // The line of the first wall: the free outline around the plan (see WallLayout#free).
+                long climb = core.climb(line(layout.firstWall().layout()), plan.rules().rise());
+                long first = core.climb(start, plan.rules().rise());
+                if (climb > first) {
+                    problems.add(name + ": the line of the first wall climbs " + climb + " blocks, more than the "
+                            + first + " blocks of the first pieces");
+                }
+            }
+            // Each ring has no more blocks of its line on high ground than the rectangle around the wall inside it,
+            // larger by the band.
+            int rise = FortifiedVillageStructure.outlineRise(plan.rules());
+            WallOutline.Ground high = (x, z) -> core.high(x, z, rise);
+            WallLayout inside = layout.firstWall().layout();
+            for (int r = 0; r < layout.rings().size(); r++) {
+                WallLayout ring = layout.rings().get(r).layout();
+                WallLayout.Box box = inside.outline().grow(FortifiedVillageStructure.bandOf(layout.size(), variant));
+                int highBlocks = ring.highBlocks(high);
+                int rectangleBlocks = rectangle(box).highBlocks(high);
+                if (highBlocks > rectangleBlocks) {
+                    problems.add(name + ": the ring " + r + " has " + highBlocks + " blocks on high ground, more than"
+                            + " the " + rectangleBlocks + " blocks of the rectangle");
+                }
+                cutRings += ring.outline().equals(box) && ring.isRectangle() ? 0 : 1;
+                lowerRings += highBlocks < rectangleBlocks ? 1 : 0;
+                FolkholdWorld.LOGGER.info("Ground of the ring {} {}: {} edges, box {} of {}, {} blocks on high ground,"
+                        + " {} for the rectangle, climb {}, climb of the rectangle {}", name, r, ring.edges(),
+                        ring.outline(), box, highBlocks, rectangleBlocks, core.climb(line(ring), rise),
+                        core.climb(line(rectangle(box)), rise));
+                inside = ring;
+            }
+            boolean cut = false;
+            for (int dx = -radius; dx <= radius && !cut; dx += PlanGround.STEP) {
+                for (int dz = -radius; dz <= radius && !cut; dz += PlanGround.STEP) {
+                    cut = dx * dx + dz * dz <= radius * radius
+                            && !core.inRegion(center.getX() + dx, center.getZ() + dz, PlanGround.MAX_RISE);
+                }
+            }
+            steep += cut ? 1 : 0;
+            // The pieces of the core: the ring districts place the pieces of the bands.
+            long cliffHouses = layout.village().stream()
+                    .map(piece -> VillageReference.templateOf(helper.getLevel(), piece.getElement())
+                            .map(ResourceLocation::getPath).orElse(""))
+                    .filter(path -> path.substring(path.lastIndexOf('/') + 1).startsWith("cliff_house_")).count();
+            if (cliffHouses != cliffHomes) {
+                problems.add(name + ": " + cliffHouses + " cliff houses for " + cliffHomes
+                        + " cliff plots of the core with a home");
+            }
+            allCliffPlots += cliffPlots;
+            allCliffHouses += (int) cliffHouses;
+            FolkholdWorld.LOGGER.info("Ground of the plan {}: rules {}, steep side {}, cliff plots {}, cliff houses {}",
+                    name, rules(layout), cut, cliffPlots, cliffHouses);
+        }
+        FolkholdWorld.LOGGER.info("Ground of the plan: {} mountain sites, {} with a steep side, rules {}, {} rings"
+                + " cut, {} rings with less high ground than the rectangle, cliff plots {}, cliff houses {}, problems {}",
+                sites, steep, rules, cutRings, lowerRings, allCliffPlots, allCliffHouses, problems);
+        helper.assertTrue(sites == MOUNTAIN_SITES, "Only " + sites + " mountain sites of " + MOUNTAIN_SITES);
+        helper.assertTrue(steep > 0, "No mountain site has a steep side");
+        helper.assertTrue(lowerRings > 0, "No ring of the mountain sites goes around the high ground of its band");
+        helper.assertTrue(problems.isEmpty(), "Problems of the ground: " + problems);
+        helper.succeed();
+    }
+
+    /**
+     * The measure of the plans and of the first walls at the first {@link #MEASURE_MOUNTAIN_SITES} mountain sites (see
+     * {@link #mountainWallsHaveNoGateOnACliff}): a hamlet, a village and a town of the top level of their tier at each
+     * site. The test runs only with the environment variable {@link #MEASURE_VARIABLE}.
+     *
+     * <p>The log has a line {@code Mountain measure:} for each plan: the rule set of the core plan, the free outline
+     * (true when the first wall is not a rectangle), the climb of the line of the first wall, and the climb of the line
+     * of the rectangle around the same pieces. A climb counts the blocks of the grid points near the line more than
+     * {@link PlanGround#HIGH_RISE} blocks above the plaza (see {@link PlanGround#climb}). The last line {@code Mountain
+     * measure |} gives the plans of each rule set, the free outlines, and the walls with a climb of the free line and of
+     * the rectangle.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_mountains", required = false)
+    public static void measureMountainPlans(GameTestHelper helper) {
+        if (System.getenv(MEASURE_VARIABLE) == null) {
+            helper.succeed();
+            return;
+        }
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        Map<String, Integer> rules = new TreeMap<>();
+        int sites = 0;
+        int plans = 0;
+        int free = 0;
+        int climbing = 0;
+        int climbingRectangles = 0;
+        int ringCount = 0;
+        int cutRings = 0;
+        int climbingRings = 0;
+        int climbingBoxes = 0;
+        int missingBand = 0;
+        int highRings = 0;
+        int highBoxes = 0;
+        int missingPlots = 0;
+        int missingHomes = 0;
+        int homeBeds = 0;
+        int posts = 0;
+        for (int i = 0; i < TRIES && sites < MEASURE_MOUNTAIN_SITES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.isMountain(context)
+                    || !structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            sites++;
+            FortifiedVillageStructure.Variant variant = measure.variant(context, false);
+            for (int level : new int[] {HAMLET_LEVEL, VILLAGE_LEVEL, TOWN_LEVEL}) {
+                // The layout of the generation: the plaza goes to the heart of the search (see HeartSearch).
+                FortifiedVillageStructure.Layout layout = structure.layout(context, level,
+                        candidate -> candidate == variant).orElseThrow();
+                PlanGround core = new PlotTerrains(TerrainCache.of(context)).core(layout.center(),
+                        layout.village().get(0).getRotation(), Math.min(FortifiedVillageStructure.firstRadius(
+                                layout.size()), structure.maxDistanceFromCenter()), variant.wall().margin());
+                WallLayout wall = layout.firstWall().layout();
+                List<WallLayout.Box> boxes = new ArrayList<>(layout.village().stream()
+                        .map(piece -> box(piece.getBoundingBox())).toList());
+                // The spaces of the core only: the spaces of the bands are out of the first wall.
+                layout.reserved().stream().map(PlotTerrainGameTests::box).filter(space -> wall.outline()
+                        .contains(space.minX(), space.minZ()) && wall.outline().contains(space.maxX(), space.maxZ()))
+                        .forEach(boxes::add);
+                WallLayout rectangle = WallLayout.plan(boxes, variant.wall().margin(), variant.wall().towerSpacing(),
+                        List.of());
+                long climb = core.climb(line(wall), PlanGround.HIGH_RISE);
+                long rectangleClimb = core.climb(line(rectangle), PlanGround.HIGH_RISE);
+                plans++;
+                int beds = VillagePlanGameTests.homeBeds(helper.getLevel(), layout);
+                missingPlots += layout.plan().missingPlots();
+                missingHomes += layout.plan().missingHomes();
+                homeBeds += beds;
+                posts += layout.posts().size();
+                rules.merge(layout.plan().rules().name(), 1, Integer::sum);
+                free += wall.isRectangle() ? 0 : 1;
+                climbing += climb > 0 ? 1 : 0;
+                climbingRectangles += rectangleClimb > 0 ? 1 : 0;
+                FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {}: rules {}, free outline {} ({} edges),"
+                        + " climb {}, climb of the rectangle {}, {} plots of {}, {} missing plots, {} missing homes,"
+                        + " {} home beds, {} job posts, heart {}", context.chunkPos(), layout.style().name(), level,
+                        layout.plan().rules(), !wall.isRectangle(), wall.edges(), climb, rectangleClimb,
+                        layout.plan().plots().size(), layout.plan().target(), layout.plan().missingPlots(),
+                        layout.plan().missingHomes(), beds, layout.posts().size(), layout.center());
+                int rise = FortifiedVillageStructure.outlineRise(layout.plan().rules());
+                WallLayout inside = wall;
+                for (int r = 0; r < layout.rings().size() && r + 1 < layout.plans().size(); r++) {
+                    WallLayout ring = layout.rings().get(r).layout();
+                    WallLayout.Box box = inside.outline().grow(FortifiedVillageStructure.bandOf(layout.size(),
+                            variant));
+                    long ringClimb = core.climb(line(ring), rise);
+                    long boxClimb = core.climb(line(rectangle(box)), rise);
+                    WallOutline.Ground high = (x, z) -> core.high(x, z, rise);
+                    highRings += ring.highBlocks(high) > 0 ? 1 : 0;
+                    highBoxes += rectangle(box).highBlocks(high) > 0 ? 1 : 0;
+                    VillagePlan band = layout.plans().get(r + 1);
+                    ringCount++;
+                    cutRings += ring.outline().equals(box) && ring.isRectangle() ? 0 : 1;
+                    climbingRings += ringClimb > 0 ? 1 : 0;
+                    climbingBoxes += boxClimb > 0 ? 1 : 0;
+                    missingBand += band.missingPlots() + band.missingHomes() > 0 ? 1 : 0;
+                    FolkholdWorld.LOGGER.info("Mountain measure: chunk {} {} level {} ring {}: {} edges, {} blocks on"
+                            + " high ground ({} for the rectangle), climb {}, climb of the rectangle {}, band rules {}, {}"
+                            + " plots of {}, {} missing homes", context.chunkPos(), layout.style().name(), level, r,
+                            ring.edges(), ring.highBlocks(high), rectangle(box).highBlocks(high), ringClimb, boxClimb,
+                            band.rules(), band.plots().size(), band.target(), band.missingHomes());
+                    inside = ring;
+                }
+            }
+        }
+        FolkholdWorld.LOGGER.info("Mountain measure | {} sites | {} plans | rules {} | {} free outlines | {} walls"
+                + " climb | {} rectangles climb | {} missing plots | {} missing homes | {} home beds | {} job posts |",
+                sites, plans, rules, free, climbing, climbingRectangles, missingPlots, missingHomes, homeBeds, posts);
+        FolkholdWorld.LOGGER.info("Mountain ring measure | {} rings | {} cut | {} rings climb | {} rectangles climb |"
+                + " {} rings on high ground | {} rectangles on high ground | {} bands miss plots or homes |", ringCount,
+                cutRings, climbingRings, climbingBoxes, highRings, highBoxes, missingBand);
+        helper.assertTrue(sites == MEASURE_MOUNTAIN_SITES, "Only " + sites + " mountain sites");
+        helper.succeed();
+    }
+
+    /** A steep start of the measured world, with flatter ground 32 blocks to the west. */
+    private static final ChunkPos STEEP_START = new ChunkPos(1739, 74);
+
+    /**
+     * At a steep start, the heart of the village moves to flatter ground (see {@link HeartSearch}):
+     *
+     * <ul>
+     *   <li>The flood region of the core with the strict rules is larger at the heart than at the start.</li>
+     *   <li>The offset is at the largest shift or nearer, and the plan of the tier stays in the range of the
+     *       structure on each axis.</li>
+     *   <li>The layout of the generation has its plaza at the heart, and all its pieces are in the range of 8 chunks
+     *       around the start chunk.</li>
+     *   <li>In a world with no search (a world of an earlier version), the layout has its plaza at the start.</li>
+     * </ul>
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_heart_shift")
+    public static void heartMovesToFlatterGroundAtASteepStart(GameTestHelper helper) {
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        Structure.GenerationContext context = measure.context(STEEP_START);
+        boolean search = HeartSearch.enabled();
+        FortifiedVillageStructure.Start origin;
+        FortifiedVillageStructure.Start heart;
+        FortifiedVillageStructure.Layout before;
+        FortifiedVillageStructure.Layout after;
+        try {
+            HeartSearch.setEnabled(false);
+            origin = structure.generatedStart(context).orElseThrow();
+            before = structure.layout(context).orElseThrow();
+            HeartSearch.setEnabled(true);
+            heart = structure.generatedStart(context).orElseThrow();
+            after = structure.layout(context).orElseThrow();
+        } finally {
+            HeartSearch.setEnabled(search);
+        }
+        int dx = heart.center().getX() - origin.center().getX();
+        int dz = heart.center().getZ() - origin.center().getZ();
+        helper.assertTrue(dx != 0 || dz != 0, "The heart must move from the steep start " + origin.center());
+        helper.assertTrue(dx * dx + dz * dz <= HeartSearch.MAX_SHIFT * HeartSearch.MAX_SHIFT,
+                "The heart must be at the largest shift or nearer: " + dx + " " + dz);
+        int radius = Math.min(FortifiedVillageStructure.firstRadius(FortifiedVillageStructure.sizeAt(SEED,
+                STEEP_START)), structure.maxDistanceFromCenter());
+        helper.assertTrue(Math.max(Math.abs(dx), Math.abs(dz)) <= structure.maxDistanceFromCenter() - radius,
+                "The plan of the tier must stay in the range of the structure: " + dx + " " + dz);
+        PlotTerrains plots = new PlotTerrains(TerrainCache.of(context));
+        Rotation rotation = origin.plaza().getRotation();
+        int margin = origin.variant().wall().margin();
+        int startRegion = FortifiedVillageStructure.regionSize(plots.core(origin.center(), rotation, radius, margin),
+                origin.center(), radius);
+        int heartRegion = FortifiedVillageStructure.regionSize(plots.core(heart.center(), rotation, radius, margin),
+                heart.center(), radius);
+        helper.assertTrue(heartRegion > startRegion, "The region at the heart (" + heartRegion
+                + ") must be larger than the region at the start (" + startRegion + ")");
+        helper.assertTrue(before.center().equals(origin.center()),
+                "With no search, the plaza must stay at the start: " + before.center());
+        helper.assertTrue(after.center().equals(heart.center()),
+                "The plaza of the layout must be at the heart: " + after.center());
+        int range = 8;
+        for (StructurePiece piece : after.pieces()) {
+            BoundingBox box = piece.getBoundingBox();
+            helper.assertTrue((box.minX() >> 4) >= STEEP_START.x - range && (box.maxX() >> 4) <= STEEP_START.x + range
+                    && (box.minZ() >> 4) >= STEEP_START.z - range && (box.maxZ() >> 4) <= STEEP_START.z + range,
+                    "The piece " + box + " must be in the range of the start chunk " + STEEP_START);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The measure of the search of the heart (see {@link HeartSearch}) at the first {@link #MEASURE_MOUNTAIN_SITES}
+     * mountain sites, with the start level of each chunk. For each site, the log has a line {@code Heart measure:}:
+     * the time of the check of the start (the calculation of the structure check and of the {@code /locate} command),
+     * the time of the start with the search, the offset of the heart, and the size of the flood region of the core with
+     * the strict rules at the start and at the heart (see {@link FortifiedVillageStructure#regionSize}). The line
+     * {@code Heart measure |} gives the means. In a world with no search (see {@link HeartSearch#setEnabled}), the
+     * heart stays at the start. The test runs only with the environment variable {@link #MEASURE_VARIABLE}.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "plot_terrain_heart", required = false)
+    public static void measureHeartShift(GameTestHelper helper) {
+        if (System.getenv(MEASURE_VARIABLE) == null) {
+            helper.succeed();
+            return;
+        }
+        Measure measure = new Measure(helper.getLevel());
+        FortifiedVillageStructure structure = measure.structure;
+        boolean search = HeartSearch.enabled();
+        int sites = 0;
+        int moved = 0;
+        long checkNanos = 0;
+        long startNanos = 0;
+        long slowest = 0;
+        long sumBefore = 0;
+        long sumAfter = 0;
+        for (int i = 0; i < TRIES && sites < MEASURE_MOUNTAIN_SITES; i++) {
+            Structure.GenerationContext context = measure.context(new ChunkPos((i % ROW) * LAND_STEP,
+                    (i / ROW) * LAND_STEP));
+            if (!measure.isMountain(context)
+                    || !structure.site(context).equals(Optional.of(VillageSite.Result.ACCEPTED))) {
+                continue;
+            }
+            sites++;
+            HeartSearch.clear();
+            long time = System.nanoTime();
+            boolean starts = structure.findValidGenerationPoint(context).isPresent();
+            long check = System.nanoTime() - time;
+            time = System.nanoTime();
+            FortifiedVillageStructure.Start heart = structure.generatedStart(context).orElseThrow();
+            long start = System.nanoTime() - time;
+            HeartSearch.setEnabled(false);
+            FortifiedVillageStructure.Start origin = structure.generatedStart(context).orElseThrow();
+            HeartSearch.setEnabled(search);
+            int radius = Math.min(FortifiedVillageStructure.firstRadius(FortifiedVillageStructure.sizeAt(SEED,
+                    context.chunkPos())), structure.maxDistanceFromCenter());
+            PlotTerrains plots = new PlotTerrains(TerrainCache.of(context));
+            Rotation rotation = origin.plaza().getRotation();
+            int margin = origin.variant().wall().margin();
+            int before = FortifiedVillageStructure.regionSize(plots.core(origin.center(), rotation, radius, margin),
+                    origin.center(), radius);
+            int after = FortifiedVillageStructure.regionSize(plots.core(heart.center(), rotation, radius, margin),
+                    heart.center(), radius);
+            checkNanos += check;
+            startNanos += start;
+            slowest = Math.max(slowest, start);
+            sumBefore += before;
+            sumAfter += after;
+            moved += heart.center().equals(origin.center()) ? 0 : 1;
+            FolkholdWorld.LOGGER.info("Heart measure: chunk {} level {}: check {} ms (starts {}), start with the search"
+                    + " {} ms, offset {} {} ({} blocks up or down), region {} at the start, {} at the heart",
+                    context.chunkPos(), Settlements.startLevel(SEED, context.chunkPos()), check / 1_000_000, starts,
+                    start / 1_000_000, heart.center().getX() - origin.center().getX(),
+                    heart.center().getZ() - origin.center().getZ(), heart.center().getY() - origin.center().getY(),
+                    before, after);
+        }
+        FolkholdWorld.LOGGER.info("Heart measure | search {} | {} sites | {} moved | mean check {} ms | mean start {} ms"
+                + " | slowest start {} ms | mean region {} at the start, {} at the heart |", search, sites, moved,
+                sites == 0 ? 0 : checkNanos / sites / 1_000_000, sites == 0 ? 0 : startNanos / sites / 1_000_000,
+                slowest / 1_000_000, sites == 0 ? 0 : sumBefore / sites, sites == 0 ? 0 : sumAfter / sites);
+        helper.assertTrue(sites == MEASURE_MOUNTAIN_SITES, "Only " + sites + " mountain sites");
+        helper.succeed();
+    }
+
+    /** The outline of a rectangle. */
+    private static WallLayout rectangle(WallLayout.Box box) {
+        return WallLayout.outline(List.of(new WallLayout.Cell(box.minX(), box.minZ()),
+                new WallLayout.Cell(box.maxX(), box.minZ()), new WallLayout.Cell(box.maxX(), box.maxZ()),
+                new WallLayout.Cell(box.minX(), box.maxZ())));
+    }
+
+    /** The blocks of the line of a wall, as pairs (X, Z). */
+    private static List<int[]> line(WallLayout wall) {
+        List<int[]> line = new ArrayList<>();
+        for (int i = 0; i < wall.ringSize(); i++) {
+            WallLayout.Cell cell = wall.ringCell(i);
+            line.add(new int[] {cell.x(), cell.z()});
+        }
+        return line;
+    }
+
+    /** The box of a structure piece on the horizontal plane. */
+    private static WallLayout.Box box(BoundingBox box) {
+        return new WallLayout.Box(box.minX(), box.minZ(), box.maxX(), box.maxZ());
+    }
+
+    /** The box around 2 boxes of a plan. */
+    private static VillagePlan.Box union(VillagePlan.Box first, VillagePlan.Box second) {
+        return new VillagePlan.Box(Math.min(first.minX(), second.minX()), Math.min(first.minZ(), second.minZ()),
+                Math.max(first.maxX(), second.maxX()), Math.max(first.maxZ(), second.maxZ()));
+    }
+
+    /**
+     * Checks the cliff side of a wall (see {@link #mountainWallsHaveNoGateOnACliff}), adds its problems, and logs the
+     * gates and the cliff blocks.
+     *
+     * @return true if the wall has cliff blocks
+     */
+    private static boolean checkCliffSide(String name, VillageWall.Wall wall, Optional<VillageWall.Wall> inner,
+            IntBinaryOperator height, List<String> problems) {
+        WallLayout layout = wall.layout();
+        int[] drops = CliffSide.drops(layout, height);
+        // The bases of the columns are the levels of the drops of the wall: the drops of the pieces.
+        Map<Long, Integer> bases = new HashMap<>();
+        for (StructurePiece piece : wall.pieces()) {
+            if (piece instanceof PalisadePiece palisade) {
+                int[] columns = palisade.bases();
+                for (int i = 0; i < columns.length; i++) {
+                    bases.put(ChunkPos.asLong(palisade.startX() + palisade.stepX() * i,
+                            palisade.startZ() + palisade.stepZ() * i), columns[i]);
+                }
+            }
+        }
+        int[] levels = new int[layout.ringSize()];
+        for (int i = 0; i < levels.length; i++) {
+            WallLayout.Cell cell = layout.ringCell(i);
+            levels[i] = bases.getOrDefault(ChunkPos.asLong(cell.x(), cell.z()), height.applyAsInt(cell.x(), cell.z()));
+        }
+        int[] baseDrops = CliffSide.drops(layout, levels, height);
+        Map<Long, Boolean> cliffs = new HashMap<>();
+        int count = 0;
+        for (int i = 0; i < baseDrops.length; i++) {
+            WallLayout.Cell cell = layout.ringCell(i);
+            cliffs.put(ChunkPos.asLong(cell.x(), cell.z()), CliffSide.isCliff(baseDrops[i]));
+            count += CliffSide.isCliff(baseDrops[i]) ? 1 : 0;
+        }
+        if (wall.gateLevels().isEmpty()) {
+            problems.add(name + ": no gate");
+        }
+        for (Map.Entry<WallLayout.Gate, Integer> entry : wall.gateLevels().entrySet()) {
+            WallLayout.Gate gate = entry.getKey();
+            WallLayout.Side side = gate.side();
+            int middle = layout.along(gate);
+            int lowest = CliffSide.lowestInFront(layout, gate.edge(), middle, height);
+            if (CliffSide.isCliff(entry.getValue() - lowest)) {
+                problems.add(name + ": the gate " + gate + " at the level " + entry.getValue()
+                        + " opens on a drop to " + lowest);
+            }
+            WallLayout.Cell cell = layout.cell(gate.edge(), middle);
+            int x = cell.x() + 2 * side.insideX();
+            int z = cell.z() + 2 * side.insideZ();
+            boolean path = wall.pieces().stream().anyMatch(piece -> piece instanceof VillagePathPiece
+                    && piece.getBoundingBox().minX() <= x && piece.getBoundingBox().maxX() >= x
+                    && piece.getBoundingBox().minZ() <= z && piece.getBoundingBox().maxZ() >= z);
+            // An inner gate on water gives no path across the band (see VillageWall#bandArm).
+            boolean water = wall.waterGates().contains(gate) || inner.stream().flatMap(value -> value.waterGates()
+                    .stream()).anyMatch(innerGate -> innerGate.side() == side);
+            if (!path && !water) {
+                problems.add(name + ": the gate " + gate + " has no path behind it");
+            }
+        }
+        for (StructurePiece piece : wall.pieces()) {
+            if (piece instanceof PalisadePiece palisade) {
+                for (int i = 0; i < palisade.bases().length; i++) {
+                    long column = ChunkPos.asLong(palisade.startX() + palisade.stepX() * i,
+                            palisade.startZ() + palisade.stepZ() * i);
+                    boolean cliff = cliffs.getOrDefault(column, false);
+                    if (palisade.logs() != CliffSide.logs(cliff)) {
+                        problems.add(name + ": the column " + ChunkPos.getX(column) + " " + ChunkPos.getZ(column)
+                                + " has " + palisade.logs() + " logs, cliff " + cliff);
+                    }
+                }
+            }
+        }
+        FolkholdWorld.LOGGER.info("Cliff side {}: {} cliff blocks of {} (from the terrain of the line: {}), gates {}",
+                name, count, levels.length, Arrays.stream(drops).filter(CliffSide::isCliff).count(),
+                wall.gateLevels());
+        return count > 0;
+    }
+
+    /** The noise terrain of the measure, and the counts of the villages. */
+    private static final class Measure {
+        private final ServerLevel level;
+        private final RegistryAccess registries;
+        private final FortifiedVillageStructure structure;
+        private final NoiseBasedChunkGenerator generator;
+        private final RandomState random;
+        private final CultureMap cultures;
+        private int badPlots;
+        private final Map<PlotTerrain.Result, Integer> roleBuildings = new EnumMap<>(PlotTerrain.Result.class);
+        private final Map<PlotTerrain.Result, Integer> missed = new EnumMap<>(PlotTerrain.Result.class);
+
+        Measure(ServerLevel level) {
+            this.level = level;
+            this.registries = level.registryAccess();
+            this.structure = (FortifiedVillageStructure) registries.registryOrThrow(Registries.STRUCTURE)
+                    .getOrThrow(Settlements.VILLAGE_STRUCTURE);
+            Holder<NoiseGeneratorSettings> settings = registries.registryOrThrow(Registries.NOISE_SETTINGS)
+                    .getHolderOrThrow(NoiseGeneratorSettings.OVERWORLD);
+            this.generator = new NoiseBasedChunkGenerator(MultiNoiseBiomeSource.createFromPreset(
+                    registries.registryOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST)
+                            .getHolderOrThrow(MultiNoiseBiomeSourceParameterLists.OVERWORLD)), settings);
+            this.random = RandomState.create(settings.value(), registries.lookupOrThrow(Registries.NOISE), SEED);
+            this.cultures = new CultureMap(SEED, generator.getBiomeSource(), random.sampler());
+        }
+
+        /**
+         * The style of the variant of the land village at the start chunk of a context, from the culture of the
+         * region and the biome at the middle of the chunk. The plaza of the generation has its middle near this point.
+         */
+        String styleAt(Structure.GenerationContext context) {
+            return FortifiedVillageStructure.styleOf(variant(context, false)).name();
+        }
+
+        /**
+         * The variant of the village at the start chunk of a context, from the culture of the region and the biome at
+         * the middle of the chunk. The plaza of the generation has its middle near this point.
+         */
+        FortifiedVillageStructure.Variant variant(Structure.GenerationContext context, boolean maritime) {
+            BlockPos middle = context.chunkPos().getMiddleBlockPosition(generator.getSeaLevel());
+            String culture = cultures.cultureAt(middle.getX(), middle.getZ());
+            Holder<Biome> biome = generator.getBiomeSource().getNoiseBiome(QuartPos.fromBlock(middle.getX()),
+                    QuartPos.fromBlock(middle.getY()), QuartPos.fromBlock(middle.getZ()), random.sampler());
+            return structure.variantAt(culture, biome, maritime);
+        }
+
+        /** True if the biome at the middle of the start chunk of a context is a mountain or a hill. */
+        boolean isMountain(Structure.GenerationContext context) {
+            BlockPos middle = context.chunkPos().getMiddleBlockPosition(generator.getSeaLevel());
+            Holder<Biome> biome = generator.getBiomeSource().getNoiseBiome(QuartPos.fromBlock(middle.getX()),
+                    QuartPos.fromBlock(middle.getY()), QuartPos.fromBlock(middle.getZ()), random.sampler());
+            return biome.is(BiomeTags.IS_MOUNTAIN) || biome.is(BiomeTags.IS_HILL);
+        }
+
+        Structure.GenerationContext context(ChunkPos chunk) {
+            return new Structure.GenerationContext(registries, generator, generator.getBiomeSource(), random,
+                    level.getStructureManager(), SEED, chunk, level, biome -> true);
+        }
+
+        /**
+         * The context of a start chunk of the search of the coasts, if the chunk is on a beach and the check of its
+         * site gives a maritime village. The biome is cheap to read: the check of the site reads the heights.
+         */
+        Optional<Structure.GenerationContext> maritimeSite(int index) {
+            ChunkPos chunk = new ChunkPos((index % ROW) * COAST_STEP, (index / ROW) * COAST_STEP);
+            BlockPos middle = chunk.getMiddleBlockPosition(generator.getSeaLevel());
+            boolean beach = generator.getBiomeSource().getNoiseBiome(QuartPos.fromBlock(middle.getX()),
+                    QuartPos.fromBlock(middle.getY()), QuartPos.fromBlock(middle.getZ()), random.sampler())
+                    .is(BiomeTags.IS_BEACH);
+            if (!beach) {
+                return Optional.empty();
+            }
+            Structure.GenerationContext context = context(chunk);
+            return structure.site(context).filter(site -> site == VillageSite.Result.MARITIME).map(site -> context);
+        }
+
+        /** Measures a village and adds its problems. */
+        void check(Structure.GenerationContext context, FortifiedVillageStructure.Layout layout, String forced,
+                List<String> problems) {
+            check(context, layout, forced, problems, false);
+        }
+
+        /**
+         * As {@link #check(Structure.GenerationContext, FortifiedVillageStructure.Layout, String, List)}. A narrow
+         * village (a plan on small ground, see {@link VillagePlan#plan}) can miss plots and homes: it has its plaza
+         * with the heart, one home and one job post at least.
+         */
+        void check(Structure.GenerationContext context, FortifiedVillageStructure.Layout layout, String forced,
+                List<String> problems, boolean narrow) {
+            PoolElementStructurePiece plaza = layout.village().get(0);
+            String name = "chunk " + context.chunkPos() + " level " + layout.level() + forced + " "
+                    + layout.size().tier() + " " + layout.style().name();
+            int missingPlots = layout.plans().stream().mapToInt(VillagePlan::missingPlots).sum();
+            int missingHomes = layout.plans().stream().mapToInt(VillagePlan::missingHomes).sum();
+            if (narrow) {
+                boolean home = layout.plots().stream()
+                        .anyMatch(plot -> !plot.spare() && plot.role() == VillagePlan.PlotRole.HOME);
+                if (layout.village().isEmpty() || !home || layout.posts().isEmpty()) {
+                    problems.add(name + ": a narrow village needs its heart, a home and a job post");
+                }
+            } else if (missingHomes > 0 || missingPlots > 0) {
+                problems.add(name + ": " + missingPlots + " missing plots, " + missingHomes + " missing homes");
+            }
+            layout.problems().forEach(problem -> problems.add(name + ": " + problem));
+            PlotTerrains terrain = new PlotTerrains(TerrainCache.of(context));
+            Map<PlotTerrain.Result, Integer> bad = new EnumMap<>(PlotTerrain.Result.class);
+            Map<PlotTerrain.Result, Integer> fineBad = new EnumMap<>(PlotTerrain.Result.class);
+            for (PoolElementStructurePiece building : layout.buildings().stream().skip(1)
+                    .filter(piece -> piece.getElement().getProjection() == StructureTemplatePool.Projection.RIGID)
+                    .toList()) {
+                BoundingBox box = building.getBoundingBox();
+                Optional<VillagePlan.Plot> plot = plotOf(layout.plots(), layout.center(), plaza.getRotation(), box);
+                boolean role = plot.map(value -> value.role() != VillagePlan.PlotRole.HOME).orElse(false);
+                PlotTerrain.Result result = terrain.check(box);
+                if (role) {
+                    if (result != PlotTerrain.Result.GOOD) {
+                        roleBuildings.merge(result, 1, Integer::sum);
+                    }
+                    continue;
+                }
+                // A cliff house stands against a rock face (see PlanGround#cliff): the steep slope is the face.
+                boolean cliff = plot.map(VillagePlan.Plot::onCliff).orElse(false);
+                if (cliff && result == PlotTerrain.Result.STEEP) {
+                    continue;
+                }
+                if (result != PlotTerrain.Result.GOOD) {
+                    bad.merge(result, 1, Integer::sum);
+                    // A home on a plot over deep water, when the good plots are short, stands on its foundation: the
+                    // same test as the plan (no lava, no steep slope, no water deeper than the stilts).
+                    boolean foundation = result == PlotTerrain.Result.DEEP_WATER
+                            && plot.filter(value -> !value.good()).isPresent() && terrain.onFoundation(box);
+                    if (!foundation) {
+                        problems.add(name + ": a building at " + box + " on bad terrain: " + result);
+                    }
+                }
+                PlotTerrain.Result fine = fine(context, box);
+                if (fine != PlotTerrain.Result.GOOD) {
+                    fineBad.merge(fine, 1, Integer::sum);
+                    missed.merge(fine, 1, Integer::sum);
+                    FolkholdWorld.LOGGER.info("Plot terrain {}: the grid of {} blocks sees {} under the building {}",
+                            name, FINE_STEP, fine, box);
+                }
+            }
+            long spareBad = layout.plots().stream().filter(plot -> plot.spare() && !plot.good()).count();
+            badPlots += (int) spareBad;
+            FolkholdWorld.LOGGER.info("Plot terrain {}: {} plots, {} spare plots with bad terrain, {} missing plots, "
+                    + "{} missing homes, {} buildings, buildings on bad terrain {}, buildings on bad terrain on the "
+                    + "grid of {} blocks {}, {} problems", name, layout.plots().size(), spareBad, missingPlots,
+                    missingHomes, layout.built(), bad, FINE_STEP, fineBad, layout.problems().size());
+        }
+
+        /**
+         * Makes the layout of a village with the two modes of the terrain cache, and adds a problem if the plans or the
+         * saved pieces are not the same.
+         */
+        void compare(Structure.GenerationContext context, FortifiedVillageStructure.Variant variant, boolean maritime,
+                int startLevel, List<String> problems) {
+            TerrainCache chunks = TerrainCache.of(context);
+            TerrainCache columns = TerrainCache.direct(generator, random, context.heightAccessor());
+            long start = System.nanoTime();
+            FortifiedVillageStructure.Layout fast = structure.layout(context, variant, maritime, startLevel,
+                    Optional.empty(), chunks).orElseThrow();
+            long middle = System.nanoTime();
+            FortifiedVillageStructure.Layout slow = structure.layout(context, variant, maritime, startLevel,
+                    Optional.empty(), columns).orElseThrow();
+            long end = System.nanoTime();
+            String name = "chunk " + context.chunkPos() + " level " + startLevel + (maritime ? " maritime" : "");
+            FolkholdWorld.LOGGER.info("Terrain cache {}: {} ms with {} noise objects of chunks, {} ms with one read "
+                    + "for each column", name, (middle - start) / 1_000_000, chunks.chunks(), (end - middle) / 1_000_000);
+            if (chunks.chunks() == 0) {
+                problems.add(name + ": no noise object of a chunk");
+            }
+            if (!fast.plans().equals(slow.plans())) {
+                problems.add(name + ": the plans are not the same");
+            }
+            if (!saved(fast).equals(saved(slow)) || !fast.problems().equals(slow.problems())) {
+                problems.add(name + ": the pieces are not the same");
+            }
+        }
+
+        /** The saved data of the pieces of a layout. */
+        private List<CompoundTag> saved(FortifiedVillageStructure.Layout layout) {
+            StructurePieceSerializationContext saveContext = StructurePieceSerializationContext.fromLevel(level);
+            return layout.allPieces().stream().map(piece -> piece.createTag(saveContext)).toList();
+        }
+
+        /** Logs the totals, and ends the test. */
+        void end(GameTestHelper helper, int found, int wanted, List<String> problems) {
+            FolkholdWorld.LOGGER.info("Plot terrain: {} villages, {} spare plots with bad terrain, buildings of the "
+                    + "bank and of the first jobs on bad terrain {}, buildings on bad terrain on the grid of {} blocks "
+                    + "only {}", found, badPlots, roleBuildings, FINE_STEP, missed);
+            helper.assertTrue(found == wanted, "Only " + found + " villages of " + wanted);
+            helper.assertTrue(problems.isEmpty(), "Problems of the villages: " + problems);
+            helper.succeed();
+        }
+
+        /** The terrain of a box on the grid of {@link #FINE_STEP} blocks, with no cache. */
+        private PlotTerrain.Result fine(Structure.GenerationContext context, BoundingBox box) {
+            int minY = context.heightAccessor().getMinBuildHeight();
+            int maxY = context.heightAccessor().getMaxBuildHeight();
+            List<PlotTerrain.Column> columns = new ArrayList<>();
+            for (int x : fineAxis(box.minX(), box.maxX())) {
+                for (int z : fineAxis(box.minZ(), box.maxZ())) {
+                    columns.add(TerrainColumns.column(generator.getBaseColumn(x, z, context.heightAccessor(),
+                            random), minY, maxY));
+                }
+            }
+            return PlotTerrain.check(columns);
+        }
+
+        /** The points from a minimum to a maximum, every {@link #FINE_STEP} blocks, with the maximum. */
+        private static List<Integer> fineAxis(int min, int max) {
+            List<Integer> points = new ArrayList<>();
+            for (int value = min; value < max; value += FINE_STEP) {
+                points.add(value);
+            }
+            points.add(max);
+            return points;
+        }
+    }
+
+    /** The plot of the plan with the middle of a box in its area. */
+    private static Optional<VillagePlan.Plot> plotOf(List<VillagePlan.Plot> plots, BlockPos center,
+            Rotation rotation, BoundingBox box) {
+        BlockPos middle = box.getCenter();
+        Predicate<VillagePlan.Plot> holds = plot -> {
+            BlockPos first = center.atY(0).offset(new BlockPos(plot.area().minX(), 0, plot.area().minZ())
+                    .rotate(rotation));
+            BlockPos second = center.atY(0).offset(new BlockPos(plot.area().maxX(), 0, plot.area().maxZ())
+                    .rotate(rotation));
+            BoundingBox area = BoundingBox.fromCorners(first, second);
+            return middle.getX() >= area.minX() && middle.getX() <= area.maxX() && middle.getZ() >= area.minZ()
+                    && middle.getZ() <= area.maxZ();
+        };
+        return plots.stream().filter(holds).findFirst();
+    }
+}

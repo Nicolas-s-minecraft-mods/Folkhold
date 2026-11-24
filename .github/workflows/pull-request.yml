@@ -1,7 +1,8 @@
 # Checks the pull requests (see scripts/version.py and CONTRIBUTING.md).
-# - To develop, and in a stack on develop: the title has a bump marker, and the summary gives the version after the
-#   merge.
-# - To main: the source branch is develop, and the summary gives the version and the notes of the release.
+# - To develop, and in a stack on develop: the title has a bump marker, the changelog entries are valid (see
+#   scripts/changelog.py), and the summary gives the version after the merge.
+# - To main: the source branch is develop, and the summary gives the version and the notes of the release, with the
+#   player-facing changes of the version first.
 name: Pull request
 
 on:
@@ -39,6 +40,14 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: python3 scripts/version.py check-title "$TITLE"
+
+      # A pull request with no player-facing change has no entry file: the check passes. HEAD is the merge commit of
+      # the pull request, and its first parent is the base branch: the check refuses a rename of an entry file. A
+      # [minor] title with no new entry file gives a warning only.
+      - name: Check the changelog entries
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/changelog.py check --base HEAD^1 --title "$TITLE"
 
       # In a stack, the open pull requests below this pull request go into develop before it: their titles come
       # before its title.
@@ -107,23 +116,35 @@ jobs:
           # The history and the tags, for the version.
           fetch-depth: 0
 
+      - name: Calculate the version of the release
+        id: version
+        uses: ./.github/actions/version
+        with:
+          release: 'true'
+          rev: ${{ github.event.pull_request.head.sha }}
+          notes: ${{ runner.temp }}/release-notes.md
+
       - name: Show the release
         env:
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+          EXISTS: ${{ steps.version.outputs.exists }}
+          NOTES: ${{ runner.temp }}/release-notes.md
         run: |
-          mkdir -p build
-          python3 scripts/version.py version --rev "$HEAD" --repo "$GITHUB_REPOSITORY" \
-            --notes build/release-notes.md --github-output build/version.txt
-          version=$(sed -n 's/^version=//p' build/version.txt)
-          exists=$(sed -n 's/^exists=//p' build/version.txt)
           {
             echo "### Release"
             echo
-            if [ "$exists" = true ]; then
-              echo "The tag \`v${version}\` exists: the merge makes no release."
+            if [ "$EXISTS" = true ]; then
+              echo "The tag \`v${VERSION}\` exists: the merge makes no release."
             else
-              echo "The merge makes the release **v${version}**."
+              echo "The merge makes the release **v${VERSION}**."
+              type=$(python3 scripts/version.py release-type)
+              if [ "$type" = release ]; then
+                echo "Release type: **release** (\`release_type\` in \`gradle.properties\`)."
+              else
+                echo "Release type: **${type}** (\`release_type\` in \`gradle.properties\`)." \
+                  "The GitHub Release is a pre-release."
+              fi
             fi
             echo
-            cat build/release-notes.md
+            cat "$NOTES"
           } >> "$GITHUB_STEP_SUMMARY"

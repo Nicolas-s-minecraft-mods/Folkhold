@@ -12,6 +12,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationSettings;
 import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.trade.TradeMatcher;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Economies;
@@ -48,22 +49,25 @@ import net.minecraft.world.item.Item;
  *
  * <p>The player part comes first:
  * <ul>
- *   <li>the welcome line, for the reputation tier of the player;</li>
- *   <li>the reputation: tier, effective value, village value and faction value with their weights;</li>
- *   <li>what the player can do here: quests (with a link to the quest board), trade (discount, merchants, the items
- *       that the village looks for), shelter at night, inn;</li>
+ *   <li>the welcome line, for the reputation tier of the player.</li>
+ *   <li>the reputation: tier, effective value, village value and faction value with their weights.</li>
+ *   <li>what the player can do here: quests (with a link to the quest board), trade (discount, jobs that trade, the items
+ *       that the village looks for), shelter at night, inn.</li>
  *   <li>an advice: what not to do, or how to improve a bad reputation.</li>
  * </ul>
  *
  * <p>The village part is in sections:
  * <ul>
- *   <li><b>village</b>: faction, culture, level and tier, experience (bar), alert state, position;</li>
- *   <li><b>garrison</b>: for each role, the units alive and dead, and the configured count (segments);</li>
- *   <li><b>economy</b>: population (bar), jobs, food, treasury of the faction, and the main stocks with their
- *       price;</li>
+ *   <li><b>village</b>: faction, culture, level and tier, experience (bar), alert state, position.</li>
+ *   <li><b>growth</b>: the next level, the buildings of the next tier and what stops them, the free job posts and
+ *       the state of the new home (see {@link VillageGrowthInfo}).</li>
+ *   <li><b>garrison</b>: for each role, the units alive and dead, and the configured count (segments).</li>
+ *   <li><b>economy</b>: the market (state, hours, market day, see {@link VillageLife}), population (bar), housing
+ *       (bar), treasury of the faction, and the main stocks with their price.</li>
+ *   <li><b>jobs</b>: the active jobs and the job posts (see {@link VillageLife}).</li>
  *   <li><b>territory</b>: number of claimed territory chunks.</li>
  * </ul>
- * The services, the economy and the territory need the settlement of the village.
+ * The services, the economy, the jobs and the territory need the settlement of the village.
  */
 public final class VillageInfo {
     private static final String KEY = "screen.folkhold_world.village_heart.";
@@ -137,7 +141,9 @@ public final class VillageInfo {
         sections.add(villageSection(heart, faction, settlement, culture));
         sections.add(garrisonSection(heart));
         settlement.ifPresent(found -> {
-            sections.add(economySection(server, found));
+            sections.add(economySection(server, heart, found));
+            sections.add(VillageLife.jobsSection(heart, found));
+            sections.add(VillageGrowthInfo.growthSection(heart, found));
             sections.add(territorySection(server, found));
         });
         int level = settlement.map(Settlement::level).orElse(0);
@@ -184,12 +190,13 @@ public final class VillageInfo {
         Component state = factor < 1.0
                 ? available(Component.translatable(KEY + "trade.discount", Merchants.priceText(factor)))
                 : available(Component.translatable(KEY + "trade.normal"));
-        Component details = Component.translatable(KEY + "trade.merchants", Merchants.merchantCount(settlement));
+        int jobs = Merchants.tradingJobCount(settlement);
+        Component details = Component.translatable(KEY + (jobs == 1 ? "trade.job" : "trade.jobs"), jobs);
         List<String> needs = List.of();
         if (EconomyData.isActive()) {
             EconomyState economy = settlement.economy();
             Map<String, Integer> found = TradeMatcher.needs(economy.stock(), economy.population(),
-                    EconomyData.catalog(), VillageTrade.usedItems(settlement, EconomyData.catalog()));
+                    EconomyData.catalog(), VillageTrade.usedItems(settlement));
             needs = found.entrySet().stream()
                     .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                     .limit(NEED_ITEMS)
@@ -281,17 +288,29 @@ public final class VillageInfo {
         return new Section(Component.translatable(KEY + "garrison"), rows);
     }
 
-    private static Section economySection(MinecraftServer server, Settlement settlement) {
+    private static Section economySection(MinecraftServer server, VillageHeartBlockEntity heart,
+            Settlement settlement) {
         EconomyState economy = settlement.economy();
-        List<Row> rows = new ArrayList<>();
+        List<Row> rows = new ArrayList<>(VillageLife.marketRows(heart, settlement));
         int maxPopulation = LevelTables.get().traits(settlement.level()).maxPopulation();
         rows.add(Row.bar(Component.translatable(KEY + "population"),
                 Component.translatable(KEY + "value", economy.population(), maxPopulation), economy.population(),
                 maxPopulation));
-        rows.add(row("jobs", Component.literal(String.valueOf(economy.jobs().size()))));
-        rows.add(row("food", Component.translatable(KEY + "percent", Math.round(economy.foodCovered() * 100))));
+        int places = VillageBeds.places(settlement);
+        if (places != VillagePlaces.UNKNOWN) {
+            int inhabitants = VillageFolk.inhabitantCount(settlement);
+            rows.add(Row.bar(Component.translatable(KEY + "housing"),
+                    Component.translatable(KEY + "value", inhabitants, places), inhabitants, places));
+        }
+        int blocked = heart.blockedVillagers().count();
+        Component blockedText = Component.literal(String.valueOf(blocked));
+        rows.add(row("blocked_villagers", blocked > 0 ? blockedText.copy().withColor(TEXT_BAD) : blockedText));
+        if (heart.rescues().waitsForLadders()) {
+            rows.add(row("rescue", Component.translatable(KEY + "rescue.no_ladders").withColor(TEXT_BAD)));
+        }
         rows.add(row("treasury", Component.translatable(KEY + "emeralds",
                 SettlementData.get(server).treasury(settlement.factionId()))));
+        rows.addAll(VillageLife.skillRows(settlement));
         economy.stock().asMap().entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                 .limit(STOCK_ROWS)

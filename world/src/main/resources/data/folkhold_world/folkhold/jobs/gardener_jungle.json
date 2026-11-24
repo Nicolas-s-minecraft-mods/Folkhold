@@ -7,5 +7,13 @@
   "min_level": 1,
   "weight": 15,
   "biomes": ["#minecraft:is_jungle"],
-  "profession": "minecraft:farmer"
+  "profession": "minecraft:farmer",
+  "cultures": {"sunreach": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:melon_slice", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:cocoa_beans", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:sugar_cane", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:melon", "count": 1}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:melon_slice", "count": 9}]},
+    {"sell": {"item": "minecraft:glistering_melon_slice", "count": 1}, "level": 3, "volume": 2, "materials": [{"item": "minecraft:melon_slice", "count": 1}, {"item": "minecraft:gold_ingot", "count": 1}]}
+  ]
 }

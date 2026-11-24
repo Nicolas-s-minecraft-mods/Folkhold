@@ -1,0 +1,14 @@
+{
+  "kind": "delivery",
+  "need": "job_inputs",
+  "reward": {
+    "experience": 5,
+    "special": {"chance": 0.25, "goods_share": 0.5, "experience": 10}
+  },
+  "start_items": {
+    "chance": 0.5,
+    "items": [{"item": "minecraft:iron_pickaxe"}],
+    "targets": ["minecraft:raw_iron", "minecraft:raw_copper", "minecraft:raw_gold", "minecraft:coal",
+      "minecraft:redstone", "minecraft:cobblestone", "minecraft:flint"]
+  }
+}

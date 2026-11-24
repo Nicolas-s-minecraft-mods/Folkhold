@@ -1,0 +1,103 @@
+package io.github.nicolasgoyon.folkhold.world.client;
+
+import io.github.nicolasgoyon.folkhold.world.network.MapReliefPayload;
+import io.github.nicolasgoyon.folkhold.world.network.MapReliefRequestPayload;
+import io.github.nicolasgoyon.folkhold.world.network.RoutePayload;
+import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
+import java.util.List;
+import javax.annotation.Nullable;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+/**
+ * The map of the journal on the client: the discovered territories (see {@link TerritoryMapPayload}) and the relief
+ * that the server sends (see {@link io.github.nicolasgoyon.folkhold.world.journal.TerritoryReliefs}). The frame of the
+ * tab "Map" of the journal draws the relief below the explored chunks.
+ *
+ * <ul>
+ *   <li>While the journal shows the map, the client asks for the relief when the territories change.</li>
+ *   <li>While the server calculates the relief, the client asks again every {@link #POLL_TICKS} ticks.</li>
+ *   <li>The client keeps the last relief: the map shows it until the new relief comes.</li>
+ * </ul>
+ */
+public final class ClientJournalMap {
+    /** The interval between two requests while the server calculates the relief, in ticks. */
+    static final int POLL_TICKS = 100;
+
+    private static List<TerritoryMapPayload.Village> territories = List.of();
+    /** The entries of the legend of the last payload. */
+    private static List<TerritoryMapPayload.LegendEntry> legend = List.of();
+    /** The number of the last territories: a new payload gives a new number. */
+    private static int version;
+    @Nullable
+    private static RoutePayload.Relief relief;
+    private static MapReliefPayload.Status status = MapReliefPayload.Status.PENDING;
+    /** The number of the view of the territories at the last request, or -1 before the first request. */
+    private static int requestedVersion = -1;
+    private static int pollTimer;
+
+    private ClientJournalMap() {
+    }
+
+    /** Keeps the discovered territories of a payload. Called by the network handler. */
+    public static void setTerritories(TerritoryMapPayload payload) {
+        territories = payload.villages();
+        legend = payload.legend();
+        version++;
+    }
+
+    /** The discovered villages with a territory. */
+    static List<TerritoryMapPayload.Village> territories() {
+        return territories;
+    }
+
+    /** The entries of the legend of the map (see {@link TerritoryMapPayload#legend}). */
+    static List<TerritoryMapPayload.LegendEntry> legend() {
+        return legend;
+    }
+
+    /** Keeps the relief of a payload. Called by the network handler. */
+    public static void set(MapReliefPayload payload) {
+        status = payload.status();
+        if (payload.relief() != null) {
+            relief = payload.relief();
+        } else if (status == MapReliefPayload.Status.EMPTY) {
+            relief = null;
+        }
+    }
+
+    /** The last relief, or null. */
+    @Nullable
+    static RoutePayload.Relief relief() {
+        return relief;
+    }
+
+    /** True while the server calculates the relief. */
+    static boolean pending() {
+        return status == MapReliefPayload.Status.PENDING;
+    }
+
+    /** Asks for the relief when it is necessary. Called each tick while the journal shows the map. */
+    static void tick() {
+        if (version != requestedVersion) {
+            requestedVersion = version;
+            request();
+        } else if (status == MapReliefPayload.Status.PENDING && --pollTimer <= 0) {
+            request();
+        }
+    }
+
+    /** Forgets the map, for example when the player leaves the server. */
+    public static void clear() {
+        territories = List.of();
+        version++;
+        relief = null;
+        status = MapReliefPayload.Status.PENDING;
+        requestedVersion = -1;
+        pollTimer = 0;
+    }
+
+    private static void request() {
+        pollTimer = POLL_TICKS;
+        PacketDistributor.sendToServer(MapReliefRequestPayload.INSTANCE);
+    }
+}

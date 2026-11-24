@@ -37,6 +37,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>When the merchant is at the start of a water segment, the mod makes vanilla boats. The merchant and the first
  *       guard get into the first boat. The other guards get into the next boats, two in each boat. The mules swim
  *       behind the boats.</li>
+ *   <li>With the optional mod Small Ships, the group crosses in one ship with all its members: the merchant, the
+ *       guards and the mules (see {@link SmallShips}). The members with no seat take vanilla boats behind the
+ *       ship.</li>
  *   <li>Each tick, the first boat goes along the water segment, and the other boats follow it in a line. A mule that
  *       is far from the boats moves near the last boat.</li>
  *   <li>At the end of the water segment, the members get out on the shore, and the boats disappear. If the first
@@ -170,6 +173,32 @@ public final class GroupBoats {
             }
         }
         Boat boat = null;
+        List<LivingEntity> animals = new ArrayList<>();
+        for (LivingEntity member : GroupMaterializer.memberEntities(level, group)) {
+            if (role(group, member) == MemberRole.PACK_ANIMAL) {
+                animals.add(member);
+            }
+        }
+        // With Small Ships, the group crosses in one ship: the merchant first (it steers), the guards, then the pack
+        // animals. The riders with no seat in the ship take vanilla boats.
+        Optional<Boat> ship = SmallShips.create(level, riders.size() + animals.size(), x + 0.5, y, z + 0.5);
+        if (ship.isPresent()) {
+            boat = ship.get();
+            boat.getPersistentData().putString(BOAT_TAG, group.id());
+            BOATS.add(boat.getUUID());
+            crossing.boats.add(boat.getUUID());
+            level.addFreshEntity(boat);
+            List<LivingEntity> aboard = new ArrayList<>(riders);
+            aboard.addAll(animals);
+            for (LivingEntity rider : aboard) {
+                if (rider instanceof Mob mob) {
+                    mob.getNavigation().stop();
+                }
+                rider.startRiding(boat, true);
+            }
+            // The pack animals with no seat swim behind the boats.
+            riders = new ArrayList<>(riders.stream().filter(rider -> !rider.isPassenger()).toList());
+        }
         for (int i = 0; i < riders.size(); i++) {
             if (i % SEATS == 0) {
                 boat = new Boat(level, x + 0.5, y, z + 0.5);
@@ -228,7 +257,8 @@ public final class GroupBoats {
         }
         Boat last = boats.get(boats.size() - 1);
         for (LivingEntity member : GroupMaterializer.memberEntities(level, group)) {
-            if (role(group, member) == MemberRole.PACK_ANIMAL && member.distanceTo(last) > MULE_DISTANCE) {
+            if (role(group, member) == MemberRole.PACK_ANIMAL && !member.isPassenger()
+                    && member.distanceTo(last) > MULE_DISTANCE) {
                 member.teleportTo(last.getX() - heading.x * BOAT_SPACING, last.getY(),
                         last.getZ() - heading.z * BOAT_SPACING);
             }

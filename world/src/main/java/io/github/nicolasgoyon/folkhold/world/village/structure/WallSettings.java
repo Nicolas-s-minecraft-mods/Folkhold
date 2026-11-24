@@ -1,0 +1,72 @@
+package io.github.nicolasgoyon.folkhold.world.village.structure;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import io.github.nicolasgoyon.folkhold.core.sim.village.WallLayout;
+import java.util.Optional;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorList;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorType;
+
+/**
+ * The settings of the wall of a fortified village (see {@link FortifiedVillageStructure}).
+ *
+ * @param margin       the free blocks between the pieces of the village and the palisade
+ * @param towerSpacing the maximum distance between the middles of 2 towers of a side of the full layout (see
+ *                     {@link WallLayout#plan}). The generation keeps the towers of the garrison (see
+ *                     {@link WallLayout#withTowers})
+ * @param tower        the structure template of a tower with its stair. The outside of the template is to the west and
+ *                     to the north. The stair goes along the north side to the east.
+ * @param gate         the structure template of a gate. The outside of the template is to the north: the line of the
+ *                     palisade is the second row.
+ * @param processors   the processors of the templates of the towers and of the gates, for example a foundation
+ * @param palisade     the blocks of the palisade
+ * @param pier         the blocks of the pier of a gate that opens on water
+ * @param streetStairs the stair of the streets and of the paths where they go up or down by one block (see
+ *                     {@link StreetStepsPiece}): the stone of the style of the culture and of the biome. The default
+ *                     is cobblestone stairs.
+ * @param stone        the pieces and the blocks of the stone wall (see {@link StoneWall}), if the variant has them
+ */
+public record WallSettings(int margin, int towerSpacing, ResourceLocation tower, ResourceLocation gate,
+        Holder<StructureProcessorList> processors, PalisadeBlocks palisade, PierBlocks pier, BlockState streetStairs,
+        Optional<StoneWall> stone) {
+    /** The largest margin. */
+    public static final int MAX_MARGIN = 16;
+    /** The largest tower spacing. */
+    public static final int MAX_TOWER_SPACING = 128;
+
+    public static final Codec<WallSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.intRange(0, MAX_MARGIN).fieldOf("margin").forGetter(WallSettings::margin),
+            Codec.intRange(WallLayout.MIN_TOWER_SPACING, MAX_TOWER_SPACING).fieldOf("tower_spacing")
+                    .forGetter(WallSettings::towerSpacing),
+            ResourceLocation.CODEC.fieldOf("tower").forGetter(WallSettings::tower),
+            ResourceLocation.CODEC.fieldOf("gate").forGetter(WallSettings::gate),
+            StructureProcessorType.LIST_CODEC.fieldOf("processors").forGetter(WallSettings::processors),
+            PalisadeBlocks.CODEC.fieldOf("palisade").forGetter(WallSettings::palisade),
+            PierBlocks.CODEC.fieldOf("pier").forGetter(WallSettings::pier),
+            BlockState.CODEC.optionalFieldOf("street_stairs", Blocks.COBBLESTONE_STAIRS.defaultBlockState())
+                    .forGetter(WallSettings::streetStairs),
+            StoneWall.CODEC.optionalFieldOf("stone").forGetter(WallSettings::stone))
+            .apply(instance, WallSettings::new));
+
+    /**
+     * The stone wall of a village: the pieces and the blocks that take the place of the wooden pieces and of the logs of
+     * the palisade. A stone piece has the shape of its wooden piece: the same blocks with a collision shape, the same
+     * stairs and the same watch post (see {@code tools/structures/village.py}).
+     *
+     * @param tower    the structure template of a stone tower, with the size and the stair of {@link #tower()}
+     * @param gate     the structure template of a stone gate, with the size of {@link #gate()}
+     * @param palisade the blocks of a stone column: the stone in place of the logs, and a wall block on top of every
+     *                 second column
+     */
+    public record StoneWall(ResourceLocation tower, ResourceLocation gate, PalisadeBlocks palisade) {
+        public static final Codec<StoneWall> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                ResourceLocation.CODEC.fieldOf("tower").forGetter(StoneWall::tower),
+                ResourceLocation.CODEC.fieldOf("gate").forGetter(StoneWall::gate),
+                PalisadeBlocks.CODEC.fieldOf("palisade").forGetter(StoneWall::palisade))
+                .apply(instance, StoneWall::new));
+    }
+}

@@ -65,7 +65,7 @@ public final class SettlementCommands {
     private static final int MAX_RUNS = 1000;
     private static final int INFO_STOCKS = 12;
 
-    private static final SuggestionProvider<CommandSourceStack> SETTLEMENT_IDS = (context, builder) ->
+    static final SuggestionProvider<CommandSourceStack> SETTLEMENT_IDS = (context, builder) ->
             SharedSuggestionProvider.suggest(SettlementData.get(context.getSource().getServer()).registry().all()
                     .stream().map(Settlement::id), builder);
 
@@ -190,8 +190,7 @@ public final class SettlementCommands {
         source.sendSuccess(() -> Component.translatable(KEY + "settlement.info.position", settlement.x(),
                 settlement.z(), settlement.biome(), data.claims().chunkCount(settlement.id())), false);
         source.sendSuccess(() -> Component.translatable(KEY + "settlement.info.economy", economy.population(),
-                Math.round(economy.foodCovered() * 100), Math.round(economy.jobsWorking() * 100),
-                data.treasury(settlement.factionId())), false);
+                Math.round(economy.jobsWorking() * 100), data.treasury(settlement.factionId())), false);
         Map<String, Integer> jobs = new TreeMap<>();
         economy.jobs().forEach(job -> jobs.merge(job, 1, Integer::sum));
         source.sendSuccess(() -> Component.translatable(KEY + "settlement.info.jobs",

@@ -1,38 +1,76 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
 import io.github.nicolasgoyon.folkhold.blocks.block.BrazierBlock;
+import io.github.nicolasgoyon.folkhold.blocks.block.BuildingSignBlock;
+import io.github.nicolasgoyon.folkhold.blocks.block.BuildingSignKind;
+import io.github.nicolasgoyon.folkhold.blocks.block.JobSignBlock;
+import io.github.nicolasgoyon.folkhold.blocks.block.JobSignBlockEntity;
 import io.github.nicolasgoyon.folkhold.blocks.block.QuestBoardBlock;
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AbstractBannerBlock;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.BellBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.registries.DeferredBlock;
 
 /**
- * Important positions of a village, found once with a scan of the blocks around the heart:
+ * Important positions of a village, found with a scan of the blocks around the heart. The heart scans the village
+ * again on request (see {@link #invalidate()}), for example after a new building:
  * <ul>
  *   <li><b>posts</b>: the position above each watch post block (the archer stands there), with its view score
- *       (see {@link #viewScore});</li>
- *   <li><b>gates</b>: the fence gates;</li>
+ *       (see {@link #viewScore}).</li>
+ *   <li><b>gates</b>: the fence gates.</li>
  *   <li><b>braziers</b>: the braziers of the block library, and the campfires. The heart changes a campfire into a
- *       brazier, which does not burn the entities;</li>
- *   <li><b>banners</b>: the banners (standing and on walls). The heart gives them the banner of the faction;</li>
- *   <li><b>bank chests</b>: the chests of the village bank, in the scan order;</li>
- *   <li><b>bells</b>: the alarm bells. The heart rings them in an alert;</li>
+ *       brazier, which does not burn the entities.</li>
+ *   <li><b>banners</b>: the banners (standing and on walls). The heart gives them the banner of the faction.</li>
+ *   <li><b>bank chests</b>: the chests of the village bank, in the scan order.</li>
+ *   <li><b>bells</b>: the alarm bells. The heart rings them in an alert.</li>
  *   <li><b>quest boards</b>: the middle part of each quest board. The heart starts the updates of their papers.</li>
+ *   <li><b>beds</b>: the head part of each bed. The beds of the homes give the places of the inhabitants (see
+ *       {@link VillageBeds}).</li>
+ *   <li><b>buildings</b>: the number of building signs of each kind. The growth builds the missing buildings of the
+ *       level (see {@link VillageGrowth}).</li>
+ *   <li><b>job signs</b>: the position and the job id of each job sign, in the scan order. A job sign with no job is
+ *       not in the list. The heart finds the home of each job sign: the job posts (see {@link JobPosts} and
+ *       {@link VillageBeds#posts}).</li>
+ *   <li><b>markets</b>: the market signs of the market squares: a building sign of the kind {@code market} with the
+ *       market post behind it (a block of the tag {@link #MARKET_POSTS}). The scan does not count a market sign with
+ *       no market post, for example the sign of the fish market of a maritime village: this sign is not in
+ *       {@link #markets()} and not in the count of the kind {@code market} of {@link #buildings()}.</li>
  * </ul>
+ *
+ * <p>The scan area is the area of the village structure (see {@link VillageReference#area()}), larger by
+ * {@link #AREA_MARGIN} block on each side. A heart with no village structure, or a village structure with no area,
+ * scans a box of {@link #SCAN_RADIUS} blocks around the heart.
  *
  * <p>A saved layout with an other {@link #VERSION} is not valid: the heart scans the village again.
  *
@@ -40,12 +78,17 @@ import net.minecraft.world.phys.Vec3;
  * chunk.
  */
 public final class VillageLayout {
-    /** Horizontal scan radius around the heart, in blocks. The village structure is 39 × 39 blocks. */
+    /** Horizontal scan radius around a heart with no village structure, in blocks. */
     static final int SCAN_RADIUS = 24;
     private static final int SCAN_BELOW = 6;
     private static final int SCAN_ABOVE = 14;
+    /** The scan area is larger than the area of the village structure by this number of blocks on each side. */
+    static final int AREA_MARGIN = 1;
     /** Version of the scan. Increase it when the scan finds new kinds of positions. */
-    static final int VERSION = 6;
+    static final int VERSION = 14;
+    /** The blocks of a market post: the market sign of a market square stands in front of one. */
+    public static final TagKey<Block> MARKET_POSTS = TagKey.create(Registries.BLOCK,
+            ResourceLocation.fromNamespaceAndPath(FolkholdWorld.MOD_ID, "market_posts"));
     /** Number of horizontal directions of the view score. */
     public static final int VIEW_DIRECTIONS = 16;
     /** A post with a lower view score is not valid: no archer goes there. */
@@ -65,9 +108,31 @@ public final class VillageLayout {
     private final List<BlockPos> bankChests = new ArrayList<>();
     private final List<BlockPos> bells = new ArrayList<>();
     private final List<BlockPos> questBoards = new ArrayList<>();
+    private final List<BlockPos> beds = new ArrayList<>();
+    private final List<BlockPos> markets = new ArrayList<>();
+    private final Map<String, Integer> buildings = new HashMap<>();
+    private final List<JobSign> jobSigns = new ArrayList<>();
+
+    /**
+     * A job sign of the village.
+     *
+     * @param pos   the position of the sign
+     * @param jobId the job id of the sign, for example {@code folkhold_world:farmer}, or an empty text for a sign
+     *              with no job
+     */
+    public record JobSign(BlockPos pos, String jobId) {
+        public JobSign {
+            pos = pos.immutable();
+        }
+    }
 
     public boolean isScanned() {
         return scanned;
+    }
+
+    /** Asks for a new scan: the layout keeps its positions until the next scan. */
+    public void invalidate() {
+        scanned = false;
     }
 
     public List<BlockPos> posts() {
@@ -153,28 +218,138 @@ public final class VillageLayout {
         return Collections.unmodifiableList(questBoards);
     }
 
+    /** The head part of each bed. */
+    public List<BlockPos> beds() {
+        return Collections.unmodifiableList(beds);
+    }
+
+    /** The market signs of the market squares, in the scan order. */
+    public List<BlockPos> markets() {
+        return Collections.unmodifiableList(markets);
+    }
+
     /**
-     * True if all the chunks of the scan area around the heart are ready (see {@link ReadyChunks}).
+     * Checks a market sign: the sign of a market square has the market post behind it.
+     *
+     * @param level the level
+     * @param pos   the position of the market sign
+     * @param state the state of the market sign
+     * @return true if the block behind the sign is in the tag {@link #MARKET_POSTS}
+     */
+    public static boolean isMarket(BlockGetter level, BlockPos pos, BlockState state) {
+        Direction back = state.getValue(HorizontalDirectionalBlock.FACING).getOpposite();
+        return level.getBlockState(pos.relative(back)).is(MARKET_POSTS);
+    }
+
+    /**
+     * True if the market sign at a position is broken: the block is not a market sign any more, or the block behind it
+     * is not a market post (see {@link #isMarket}). A sign or a post in a chunk that is not ready is not broken.
+     *
+     * @param level the level
+     * @param pos   the position of the market sign of the scan
+     * @return true for a broken market
+     */
+    public static boolean isMarketBroken(ServerLevel level, BlockPos pos) {
+        if (!ReadyChunks.isReady(level, pos)) {
+            return false;
+        }
+        BlockState state = level.getBlockState(pos);
+        if (!state.is(ModBlocks.BUILDING_SIGNS.get(BuildingSignKind.MARKET).get())) {
+            return true;
+        }
+        BlockPos post = pos.relative(state.getValue(HorizontalDirectionalBlock.FACING).getOpposite());
+        return ReadyChunks.isReady(level, post) && !isMarket(level, pos, state);
+    }
+
+    /** The number of building signs of each kind, for example {@code forge}. */
+    public Map<String, Integer> buildings() {
+        return Collections.unmodifiableMap(buildings);
+    }
+
+    /** The job signs, in the scan order. A sign with no job has an empty job id. */
+    public List<JobSign> jobSigns() {
+        return Collections.unmodifiableList(jobSigns);
+    }
+
+    /**
+     * Changes the job of a job sign of the scan, after the heart writes a new job on the sign.
+     *
+     * @param pos   the position of the sign
+     * @param jobId the new job id
+     */
+    public void setJob(BlockPos pos, String jobId) {
+        jobSigns.replaceAll(sign -> sign.pos().equals(pos) ? new JobSign(pos, jobId) : sign);
+    }
+
+    /**
+     * The scan area of a heart with no village structure: a box of {@link #SCAN_RADIUS} blocks around the heart.
+     *
+     * @param heartPos the position of the heart
+     * @return the box
+     */
+    public static BoundingBox defaultArea(BlockPos heartPos) {
+        return new BoundingBox(heartPos.getX() - SCAN_RADIUS, heartPos.getY() - SCAN_BELOW,
+                heartPos.getZ() - SCAN_RADIUS, heartPos.getX() + SCAN_RADIUS, heartPos.getY() + SCAN_ABOVE,
+                heartPos.getZ() + SCAN_RADIUS);
+    }
+
+    /**
+     * The scan area of a village: the area of the village structure with a margin, or the default area.
+     *
+     * @param heartPos  the position of the heart
+     * @param reference the reference of the village structure, or null
+     * @return the box
+     */
+    public static BoundingBox area(BlockPos heartPos, @Nullable VillageReference reference) {
+        return Optional.ofNullable(reference).flatMap(VillageReference::area)
+                .map(area -> area.inflatedBy(AREA_MARGIN))
+                .orElseGet(() -> defaultArea(heartPos));
+    }
+
+    /**
+     * True if all the chunks of the default scan area around a heart are ready (see {@link ReadyChunks}).
      *
      * @param level    the level
      * @param heartPos the position of the heart
      * @return true if a scan does not wait for a chunk
      */
     public static boolean isScanAreaReady(Level level, BlockPos heartPos) {
-        return ReadyChunks.isAreaReady(level, heartPos.getX() - SCAN_RADIUS, heartPos.getZ() - SCAN_RADIUS,
-                heartPos.getX() + SCAN_RADIUS, heartPos.getZ() + SCAN_RADIUS);
+        return isAreaReady(level, defaultArea(heartPos));
     }
 
     /**
-     * Scans the blocks around the heart and fills the lists again. If a chunk of the scan area is not ready, the
-     * method does nothing (see {@link #isScanAreaReady}).
+     * True if all the chunks of a scan area are ready (see {@link ReadyChunks}).
+     *
+     * @param level the level
+     * @param area  the scan area
+     * @return true if a scan does not wait for a chunk
+     */
+    public static boolean isAreaReady(Level level, BoundingBox area) {
+        return ReadyChunks.isAreaReady(level, area.minX(), area.minZ(), area.maxX(), area.maxZ());
+    }
+
+    /**
+     * Scans the blocks of the default area around the heart and fills the lists again (see
+     * {@link #scan(Level, BoundingBox)}).
      *
      * @param level    the level
      * @param heartPos the position of the heart
      * @return true if the scan occurred
      */
     public boolean scan(Level level, BlockPos heartPos) {
-        if (!isScanAreaReady(level, heartPos)) {
+        return scan(level, defaultArea(heartPos));
+    }
+
+    /**
+     * Scans the blocks of an area and fills the lists again. If a chunk of the area is not ready, the method does
+     * nothing (see {@link #isAreaReady}).
+     *
+     * @param level the level
+     * @param area  the scan area
+     * @return true if the scan occurred
+     */
+    public boolean scan(Level level, BoundingBox area) {
+        if (!isAreaReady(level, area)) {
             return false;
         }
         posts.clear();
@@ -185,8 +360,12 @@ public final class VillageLayout {
         bankChests.clear();
         bells.clear();
         questBoards.clear();
-        BlockPos min = heartPos.offset(-SCAN_RADIUS, -SCAN_BELOW, -SCAN_RADIUS);
-        BlockPos max = heartPos.offset(SCAN_RADIUS, SCAN_ABOVE, SCAN_RADIUS);
+        beds.clear();
+        markets.clear();
+        buildings.clear();
+        jobSigns.clear();
+        BlockPos min = new BlockPos(area.minX(), area.minY(), area.minZ());
+        BlockPos max = new BlockPos(area.maxX(), area.maxY(), area.maxZ());
         for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
             BlockState state = level.getBlockState(pos);
             if (state.is(ModBlocks.WATCH_POST.get())) {
@@ -203,6 +382,26 @@ public final class VillageLayout {
                 bells.add(pos.immutable());
             } else if (state.getBlock() instanceof QuestBoardBlock && QuestBoardBlock.isRenderPart(state)) {
                 questBoards.add(pos.immutable());
+            } else if (state.getBlock() instanceof BedBlock && state.getValue(BedBlock.PART) == BedPart.HEAD) {
+                beds.add(pos.immutable());
+            } else if (state.getBlock() instanceof JobSignBlock) {
+                if (level.getBlockEntity(pos) instanceof JobSignBlockEntity sign) {
+                    jobSigns.add(new JobSign(pos, JobPosts.jobId(sign.job(), FolkholdWorld.MOD_ID)));
+                }
+            } else if (state.getBlock() instanceof BuildingSignBlock) {
+                for (Map.Entry<BuildingSignKind, DeferredBlock<BuildingSignBlock>> sign
+                        : ModBlocks.BUILDING_SIGNS.entrySet()) {
+                    if (!state.is(sign.getValue().get())) {
+                        continue;
+                    }
+                    if (sign.getKey() == BuildingSignKind.MARKET) {
+                        if (!isMarket(level, pos, state)) {
+                            continue;
+                        }
+                        markets.add(pos.immutable());
+                    }
+                    buildings.merge(sign.getKey().serializedName(), 1, Integer::sum);
+                }
             }
         }
         for (BlockPos post : posts) {
@@ -224,6 +423,19 @@ public final class VillageLayout {
         tag.put("BankChests", savePositions(bankChests));
         tag.put("Bells", savePositions(bells));
         tag.put("QuestBoards", savePositions(questBoards));
+        tag.put("Beds", savePositions(beds));
+        tag.put("Markets", savePositions(markets));
+        CompoundTag kinds = new CompoundTag();
+        buildings.forEach(kinds::putInt);
+        tag.put("Buildings", kinds);
+        ListTag signs = new ListTag();
+        for (JobSign sign : jobSigns) {
+            CompoundTag signTag = new CompoundTag();
+            signTag.put("Pos", NbtUtils.writeBlockPos(sign.pos()));
+            signTag.putString("Job", sign.jobId());
+            signs.add(signTag);
+        }
+        tag.put("JobSigns", signs);
         return tag;
     }
 
@@ -240,6 +452,20 @@ public final class VillageLayout {
         loadPositions(tag, "BankChests", bankChests);
         loadPositions(tag, "Bells", bells);
         loadPositions(tag, "QuestBoards", questBoards);
+        loadPositions(tag, "Beds", beds);
+        loadPositions(tag, "Markets", markets);
+        buildings.clear();
+        CompoundTag kinds = tag.getCompound("Buildings");
+        for (String kind : kinds.getAllKeys()) {
+            buildings.put(kind, kinds.getInt(kind));
+        }
+        jobSigns.clear();
+        ListTag signs = tag.getList("JobSigns", Tag.TAG_COMPOUND);
+        for (int i = 0; i < signs.size(); i++) {
+            CompoundTag signTag = signs.getCompound(i);
+            NbtUtils.readBlockPos(signTag, "Pos")
+                    .ifPresent(pos -> jobSigns.add(new JobSign(pos, signTag.getString("Job"))));
+        }
     }
 
     private static ListTag savePositions(List<BlockPos> positions) {

@@ -1,9 +1,13 @@
 package io.github.nicolasgoyon.folkhold.world.network;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claimant;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload.Row;
 import io.github.nicolasgoyon.folkhold.world.network.VillageInfoPayload.Section;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerFaction;
 import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.Optional;
@@ -40,7 +44,7 @@ class PayloadCodecsTest {
     private static Section section() {
         return new Section(Component.literal("Economy"), List.of(
                 new Row(Component.literal("Population"), Component.literal("12")),
-                Row.bar(Component.literal("Food"), Component.literal("8 / 10"), 8, 10),
+                Row.bar(Component.literal("Housing"), Component.literal("8 / 10"), 8, 10),
                 Row.segments(Component.literal("Garrison"), Component.literal("3"), 3, 5, 1)));
     }
 
@@ -48,9 +52,9 @@ class PayloadCodecsTest {
     void adminList() {
         AdminListPayload payload = new AdminListPayload(List.of(
                 new AdminListPayload.Summary("id-1", "Northam", Component.literal("Ash"), 7,
-                        Component.literal("Town"), true, 100, -200, 15, 320, true),
+                        Component.literal("Town"), true, 100, -200, 15, 320, true, "faction_1", 0x3C5A9A, "valeholm"),
                 new AdminListPayload.Summary("id-2", "Ruinton", Component.literal("Oak"), 1,
-                        Component.literal("Hamlet"), false, -5, 5, 0, 0, false)));
+                        Component.literal("Hamlet"), false, -5, 5, 0, 0, false, "faction_2", 0x9A3C3C, "")));
         assertEquals(payload, roundTrip(AdminListPayload.STREAM_CODEC, payload));
     }
 
@@ -61,6 +65,71 @@ class PayloadCodecsTest {
                 List.of(section()), List.of(new AdminDetailsPayload.Stock("minecraft:bread", 40),
                         new AdminDetailsPayload.Stock("minecraft:iron_ingot", 3)), 2);
         assertEquals(payload, roundTrip(AdminDetailsPayload.STREAM_CODEC, payload));
+    }
+
+    @Test
+    void adminMap() {
+        AdminMapPayload payload = new AdminMapPayload(-300, -40, 512, 900);
+        assertEquals(payload, roundTrip(AdminMapPayload.STREAM_CODEC, payload));
+        assertTrue(AdminMapPayload.EMPTY.empty());
+        String marker = AdminMapPayload.Kind.CARAVAN.markerId("group:1");
+        assertEquals(Optional.of(AdminMapPayload.Kind.CARAVAN), AdminMapPayload.Kind.of(marker));
+        assertEquals("group:1", AdminMapPayload.Kind.id(marker));
+        assertEquals(Optional.empty(), AdminMapPayload.Kind.of("northam"));
+    }
+
+    @Test
+    void territoryMap() {
+        TerritoryMapPayload payload = new TerritoryMapPayload(List.of(
+                new TerritoryMapPayload.Village(new Claimant("id-1", 100, -200, 3, 4), "Northam", "Ash", 0xAA5500),
+                new TerritoryMapPayload.Village(new Claimant("id-2", -900, 40, 1, 2), "Ruinton", "Oak",
+                        0x00FF00)));
+        assertEquals(payload, roundTrip(TerritoryMapPayload.STREAM_CODEC, payload));
+        assertEquals(TerritoryMapPayload.EMPTY, roundTrip(TerritoryMapPayload.STREAM_CODEC, TerritoryMapPayload.EMPTY));
+        TerritoryMapPayload pillagers = new TerritoryMapPayload(payload.villages(), true);
+        assertEquals(pillagers, roundTrip(TerritoryMapPayload.STREAM_CODEC, pillagers));
+    }
+
+    /**
+     * The legend of the map has each faction of the villages one time, in the order of the discovery, and the pillager
+     * faction only when the player entered a pillager territory.
+     */
+    @Test
+    void legendHasThePillagersWhenThePlayerKnowsACamp() {
+        List<TerritoryMapPayload.Village> villages = List.of(
+                new TerritoryMapPayload.Village(new Claimant("id-1", 0, 0, 1, 2), "Northam", "Ash", 0xAA5500),
+                new TerritoryMapPayload.Village(new Claimant("id-2", 99, 0, 1, 2), "Southam", "Oak", 0x00FF00),
+                new TerritoryMapPayload.Village(new Claimant("id-3", 0, 99, 1, 2), "Westam", "Ash", 0xAA5500));
+        List<TerritoryMapPayload.LegendEntry> without = new TerritoryMapPayload(villages, false).legend();
+        assertEquals(List.of("Ash", "Oak"), without.stream().map(entry -> entry.name().getString()).toList());
+        List<TerritoryMapPayload.LegendEntry> with = new TerritoryMapPayload(villages, true).legend();
+        assertEquals(3, with.size());
+        assertEquals(PillagerFaction.name(), with.get(2).name());
+        assertEquals(PillagerFaction.COLOR, with.get(2).color());
+        assertEquals(List.of(new TerritoryMapPayload.LegendEntry(PillagerFaction.name(), PillagerFaction.COLOR)),
+                new TerritoryMapPayload(List.of(), true).legend());
+    }
+
+    @Test
+    void mapRelief() {
+        RoutePayload.Relief relief = new RoutePayload.Relief(-120, 40, 8, 3, 2, new short[] {60, 61, 62, 70, 71, 72},
+                new byte[] {0, 0, 3, 0, 1, 0});
+        MapReliefPayload read = roundTrip(MapReliefPayload.STREAM_CODEC, MapReliefPayload.ready(relief));
+        RoutePayload.Relief copy = read.relief();
+        assertEquals(MapReliefPayload.Status.READY, read.status());
+        assertNotNull(copy);
+        assertEquals(List.of(-120, 40, 8, 3, 2),
+                List.of(copy.minX(), copy.minZ(), copy.cell(), copy.width(), copy.height()));
+        for (int j = 0; j < relief.height(); j++) {
+            for (int i = 0; i < relief.width(); i++) {
+                assertEquals(relief.floor(i, j), copy.floor(i, j));
+                assertEquals(relief.water(i, j), copy.water(i, j));
+            }
+        }
+        assertEquals(MapReliefPayload.PENDING, roundTrip(MapReliefPayload.STREAM_CODEC, MapReliefPayload.PENDING));
+        assertEquals(MapReliefPayload.EMPTY, roundTrip(MapReliefPayload.STREAM_CODEC, MapReliefPayload.EMPTY));
+        assertEquals(MapReliefRequestPayload.INSTANCE,
+                roundTrip(MapReliefRequestPayload.STREAM_CODEC, MapReliefRequestPayload.INSTANCE));
     }
 
     @Test
@@ -79,17 +148,32 @@ class PayloadCodecsTest {
     }
 
     @Test
+    void journalWithQuests() {
+        JournalPayload payload = new JournalPayload(List.of(), List.of(), 12, "", List.of(
+                new JournalPayload.Quest("q-1", true, "v-1", "Northam", "minecraft:bread", Component.literal("Bring"),
+                        Component.literal("4 / 8"), Component.literal("5 emeralds"), Component.literal("Failure"),
+                        600, Component.empty(), List.of(), 16),
+                new JournalPayload.Quest("q-2", false, "v-2", "Southam", "minecraft:iron_sword",
+                        Component.literal("Hunt"), Component.empty(), Component.literal("4 emeralds"),
+                        Component.empty(), 90, Component.literal("The wolves came back."),
+                        List.of(new QuestDetail(Component.literal("Time"), Component.literal("20 min"))), 0)));
+        assertEquals(payload, roundTrip(JournalPayload.STREAM_CODEC, payload));
+    }
+
+    @Test
     void questBoard() {
         QuestBoardPayload payload = new QuestBoardPayload(Component.literal("Northam"), "id-1", "neutral", 3, 20,
                 List.of(new QuestBoardPayload.Offer("q-1", "delivery", "minecraft:bread", Component.literal("Bring"),
-                        Component.literal("Delivery · 20 min"), Component.literal("5 emeralds"),
+                        Component.literal("The baker needs bread."),
+                        List.of(new QuestDetail(Component.literal("Time"), Component.literal("20 min")),
+                                new QuestDetail(Component.literal("Failure"), Component.literal("-16 rep."))),
                         Component.literal("4 / 8"), -1, 5, 20, Optional.empty()),
                         new QuestBoardPayload.Offer("q-2", "escort", "minecraft:chest", Component.literal("Escort"),
-                                Component.literal("Escort · 500 blocks"), Component.literal("12 emeralds"),
-                                Component.empty(), 90, 12, 30, Optional.of(Component.literal("Friends only")))),
+                                Component.empty(), List.of(), Component.empty(), 90, 12, 30,
+                                Optional.of(Component.literal("Friends only")))),
                 List.of(new QuestBoardPayload.Active("q-3", "minecraft:bread", Component.literal("Bring"),
                         Component.literal("Northam · 5"), 600, QuestBoardPayload.ACTION_DELIVER,
-                        Optional.of(Component.literal("Missing 2")), false)),
+                        Optional.of(Component.literal("Missing 2")), false, 16)),
                 Optional.of(Component.literal("Quest accepted")), true);
         assertEquals(payload, roundTrip(QuestBoardPayload.STREAM_CODEC, payload));
     }
@@ -100,7 +184,7 @@ class PayloadCodecsTest {
                 new QuestLogPayload.Entry("q-1", "minecraft:bread", Component.literal("Bring 8 bread"), 8, 600,
                         Optional.empty(), Optional.of(new BlockPos(100, 64, -200)), QuestLogPayload.NO_ENTITY),
                 new QuestLogPayload.Entry("q-2", "minecraft:chest", Component.literal("Escort to Southam"), 0, 1200,
-                        Optional.of(new QuestLogPayload.Escort(120, 500, 18, 20, 12, 48, 30)), Optional.empty(),
+                        Optional.of(new QuestLogPayload.Escort(120, 500, 18, 20, 12, 48, 30, 3)), Optional.empty(),
                         42)));
         assertEquals(payload, roundTrip(QuestLogPayload.STREAM_CODEC, payload));
     }

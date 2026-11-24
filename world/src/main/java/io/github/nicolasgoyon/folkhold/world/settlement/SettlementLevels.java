@@ -3,9 +3,11 @@ package io.github.nicolasgoyon.folkhold.world.settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.level.Experience;
 import io.github.nicolasgoyon.folkhold.core.sim.level.Experience.Progress;
 import io.github.nicolasgoyon.folkhold.core.sim.level.LevelTable;
+import io.github.nicolasgoyon.folkhold.core.sim.level.TierGate;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.tick.TickScheduler.TickInfo;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.village.VillageBuildingTable;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.ToDoubleBiFunction;
@@ -19,6 +21,10 @@ import net.neoforged.neoforge.common.NeoForge;
  * <ul>
  *   <li>At each cycle, a settlement gets experience from its prosperity (see {@link #addProsperitySource}).</li>
  *   <li>The death of the captain removes experience.</li>
+ *   <li>A village needs the buildings of the next tier before it leaves its tier (see {@link TierGate}): with a
+ *       missing building, it keeps the top level of its tier and the experience of this level. The gate applies with
+ *       the setting {@code construction.growth}, to a settlement with the buildings of a scan of its heart. A
+ *       settlement with no scan keeps the rule of the experience. {@link #setProgress} sets a level with no gate.</li>
  *   <li>When the level changes, the mod posts a {@link SettlementLevelChangedEvent}.</li>
  * </ul>
  */
@@ -59,7 +65,8 @@ public final class SettlementLevels {
     }
 
     /**
-     * Changes the experience of a settlement. Posts a {@link SettlementLevelChangedEvent} if the level changes.
+     * Changes the experience of a settlement, with the gates of the tiers. Posts a {@link SettlementLevelChangedEvent}
+     * if the level changes.
      *
      * @param server     the server
      * @param settlement the settlement
@@ -69,6 +76,10 @@ public final class SettlementLevels {
         LevelTable table = LevelTables.get();
         int oldLevel = settlement.level();
         Progress progress = Experience.apply(oldLevel, settlement.experience(), delta, table);
+        if (WorldConfig.CONSTRUCTION_GROWTH.get() && settlement.buildings().isPresent()) {
+            progress = TierGate.apply(oldLevel, progress, table, VillageBuildingTable.gates(),
+                    settlement.buildings().get());
+        }
         setProgress(server, settlement, progress.level(), progress.experience());
     }
 

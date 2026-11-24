@@ -3,19 +3,23 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
+import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSpawnProtection;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.Pig;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -65,6 +69,29 @@ public final class VillageGameTests {
             helper.assertTrue(!VillageSpawnProtection.isProtected(helper.getLevel(),
                     heartPos.getX() + 1000, heartPos.getY(), heartPos.getZ()), "A far position must not be protected");
         });
+    }
+
+    /**
+     * Hostile monsters cannot spawn naturally in the structure area of a heart, also out of the spawn protection
+     * radius. The test registers a heart with a structure area of 300 blocks to the east, as the wall of a city.
+     */
+    @GameTest(template = "arena", timeoutTicks = 100, batch = "village_spawn_structure_area")
+    public static void structureAreaBlocksMonsterSpawn(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos heart = helper.absolutePos(HEART);
+        int radius = WorldConfig.SPAWN_PROTECTION_RADIUS.get();
+        int edge = radius + 200;
+        VillageHearts.register(level, heart, Optional.of(new BoundingBox(heart.getX() - 8, heart.getY() - 8,
+                heart.getZ() - 8, heart.getX() + edge, heart.getY() + 8, heart.getZ() + 8)));
+        TestSupport.atTestEnd(helper, () -> VillageHearts.unregister(level, heart));
+
+        helper.assertTrue(VillageSpawnProtection.isProtected(level, heart.getX() + edge, heart.getY(), heart.getZ()),
+                "A position at the edge of the structure area must be protected");
+        helper.assertTrue(!VillageSpawnProtection.isProtected(level, heart.getX() + edge + 1, heart.getY(),
+                heart.getZ()), "A position out of the structure area and of the radius must not be protected");
+        helper.assertTrue(!VillageSpawnProtection.isProtected(level, heart.getX() + edge, heart.getY(),
+                heart.getZ() + radius), "A position at the side of the structure area must not be protected");
+        helper.succeed();
     }
 
     /** An attack on a guard puts the village in alert, and the other guards of the village target the attacker. */

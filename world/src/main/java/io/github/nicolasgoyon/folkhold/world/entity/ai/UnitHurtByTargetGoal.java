@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.entity.ai;
 
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
+import io.github.nicolasgoyon.folkhold.world.village.MonsterThreats;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.player.Player;
@@ -10,7 +11,7 @@ import net.minecraft.world.phys.AABB;
 /**
  * Targets the attacker of the unit, except a friendly player. Then:
  * <ul>
- *   <li>the other units in the alert radius also target the attacker;</li>
+ *   <li>the other units in the alert radius also target the attacker.</li>
  *   <li>the unit reports the attack to its village heart, which alerts all units of the village.</li>
  * </ul>
  */
@@ -44,6 +45,8 @@ public class UnitHurtByTargetGoal extends HurtByTargetGoal {
                 other.setTarget(attacker);
             }
         }
-        unit.getVillageHeart().ifPresent(heart -> heart.reportThreat(attacker));
+        if (MonsterThreats.startsAlert(attacker)) {
+            unit.getVillageHeart().ifPresent(heart -> heart.reportThreat(attacker));
+        }
     }
 }

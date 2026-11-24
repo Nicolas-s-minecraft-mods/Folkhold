@@ -1,8 +1,14 @@
 package io.github.nicolasgoyon.folkhold.core.sim.settlement;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeUses;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Abstract state of one village. The simulation uses it also when the chunks of the village are not loaded.
@@ -14,6 +20,9 @@ import java.util.Objects;
  * game generates its chunks.
  */
 public final class Settlement {
+    /** The value of {@link #lastFallPenalty()} for a settlement that did not pay a raid fall penalty. */
+    public static final long NO_FALL_PENALTY = Long.MIN_VALUE;
+
     private String id;
     private final int startChunkX;
     private final int startChunkZ;
@@ -28,7 +37,14 @@ public final class Settlement {
     private int experience;
     private String biome = "";
     private final EconomyState economy = new EconomyState();
+    private final JobSkills jobSkills = new JobSkills();
+    private final JobTradeUses jobTradeUses = new JobTradeUses();
     private List<Gate> gates = List.of();
+    private int beds = VillagePlaces.UNKNOWN;
+    private List<JobPosts.Post> jobPosts;
+    private Map<String, Integer> buildings;
+    private boolean legacyJobs;
+    private long lastFallPenalty = NO_FALL_PENALTY;
 
     /**
      * A gate of the palisade of the village: the caravans go in and out of the village there.
@@ -105,6 +121,20 @@ public final class Settlement {
         return z;
     }
 
+    /**
+     * Sets the position of a settlement with no known heart: the middle of the plaza of its village before the chunks
+     * generate. A settlement with a known heart keeps its position.
+     *
+     * @param x block X of the middle of the plaza
+     * @param z block Z of the middle of the plaza
+     */
+    public void setPlannedPosition(int x, int z) {
+        if (!hasHeart) {
+            this.x = x;
+            this.z = z;
+        }
+    }
+
     /** True after the heart of the village loaded once. */
     public boolean hasHeart() {
         return hasHeart;
@@ -179,6 +209,16 @@ public final class Settlement {
         return economy;
     }
 
+    /** The skill of the job posts and of the job slots with no post (see {@link JobSkills}). */
+    public JobSkills jobSkills() {
+        return jobSkills;
+    }
+
+    /** The uses of the job trades of the week of the posts and of the job slots with no post. */
+    public JobTradeUses jobTradeUses() {
+        return jobTradeUses;
+    }
+
     /** The gates of the palisade, as the heart saw them the last time. Empty if the heart did not see them. */
     public List<Gate> gates() {
         return gates;
@@ -197,6 +237,108 @@ public final class Settlement {
         }
         this.gates = copy;
         return true;
+    }
+
+    /**
+     * The beds of the homes of the village, as the heart counted them the last time (see {@link VillagePlaces}).
+     * {@link VillagePlaces#UNKNOWN} if the heart did not count them.
+     */
+    public int beds() {
+        return beds;
+    }
+
+    /**
+     * Sets the beds of the homes of the village.
+     *
+     * @param beds the number of beds, or {@link VillagePlaces#UNKNOWN}
+     * @return true if the number changed
+     */
+    public boolean setBeds(int beds) {
+        int value = Math.max(VillagePlaces.UNKNOWN, beds);
+        if (value == this.beds) {
+            return false;
+        }
+        this.beds = value;
+        return true;
+    }
+
+    /**
+     * The job posts of the village, in their order (see {@link JobPosts}), as the heart found them the last time.
+     * Empty if the heart did not scan the homes of the village.
+     */
+    public Optional<List<JobPosts.Post>> jobPosts() {
+        return Optional.ofNullable(jobPosts);
+    }
+
+    /**
+     * Sets the job posts of the village. A post with a new job at a known position starts at 0 experience (see
+     * {@link JobSkills#update}).
+     *
+     * @param posts the posts in their order, or empty if the posts are unknown
+     * @return true if the posts changed
+     */
+    public boolean setJobPosts(Optional<List<JobPosts.Post>> posts) {
+        List<JobPosts.Post> value = posts.map(List::copyOf).orElse(null);
+        if (Objects.equals(value, jobPosts)) {
+            return false;
+        }
+        jobPosts = value;
+        if (value != null) {
+            jobSkills.update(value);
+        }
+        return true;
+    }
+
+    /**
+     * The number of buildings of each kind in the village, for example {@code storehouse}, as the heart counted the
+     * building signs the last time. Empty if the heart did not scan the village.
+     */
+    public Optional<Map<String, Integer>> buildings() {
+        return Optional.ofNullable(buildings);
+    }
+
+    /**
+     * Sets the number of buildings of each kind in the village.
+     *
+     * @param counts the counts, or empty if the buildings are unknown
+     * @return true if the counts changed
+     */
+    public boolean setBuildings(Optional<Map<String, Integer>> counts) {
+        Map<String, Integer> value = counts.map(Map::copyOf).orElse(null);
+        if (Objects.equals(value, buildings)) {
+            return false;
+        }
+        buildings = value;
+        return true;
+    }
+
+    /**
+     * True for a legacy village: its save had an economy and no list of posts. It keeps the legacy job slots (see
+     * {@link JobPosts#legacySlots}).
+     */
+    public boolean legacyJobs() {
+        return legacyJobs;
+    }
+
+    public void setLegacyJobs(boolean legacyJobs) {
+        this.legacyJobs = legacyJobs;
+    }
+
+    /**
+     * The game time of the last raid fall penalty of the settlement (the loss of experience and stocks), or
+     * {@link #NO_FALL_PENALTY} if the settlement did not pay a fall penalty.
+     */
+    public long lastFallPenalty() {
+        return lastFallPenalty;
+    }
+
+    /**
+     * Sets the game time of the last raid fall penalty.
+     *
+     * @param gameTime the game time, or {@link #NO_FALL_PENALTY}
+     */
+    public void setLastFallPenalty(long gameTime) {
+        this.lastFallPenalty = gameTime;
     }
 
     /** Square of the horizontal distance from the settlement to a position, in blocks. */

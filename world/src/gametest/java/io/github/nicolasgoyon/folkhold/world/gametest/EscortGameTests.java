@@ -7,6 +7,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.group.GroupState;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MemberRole;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.EscortDifficulty;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
@@ -20,25 +21,38 @@ import io.github.nicolasgoyon.folkhold.world.faction.ReputationData;
 import io.github.nicolasgoyon.folkhold.world.group.CaravanInteractions;
 import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
+import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
+import io.github.nicolasgoyon.folkhold.world.quest.AmbushSpawns;
 import io.github.nicolasgoyon.folkhold.world.quest.Deliveries;
+import io.github.nicolasgoyon.folkhold.world.quest.EscortDifficulties;
 import io.github.nicolasgoyon.folkhold.world.quest.Escorts;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.RaidSpawns;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -55,13 +69,18 @@ public final class EscortGameTests {
     private EscortGameTests() {
     }
 
-    /** The origin village of the test, with a heart. */
+    /**
+     * The origin village of the test, with a heart, at the level 1: the escorts of its short routes have the lowest
+     * difficulty.
+     */
     private static Settlement village(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
         helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
         VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
         heart.ensureSettlement();
-        return Settlements.of(helper.getLevel().getServer(), heart).orElseThrow();
+        Settlement settlement = Settlements.of(helper.getLevel().getServer(), heart).orElseThrow();
+        settlement.setProgress(1, 0);
+        return settlement;
     }
 
     /** A waiting caravan of the village on a route along the arena: merchant, mule, guard, payment 20. */
@@ -119,8 +138,11 @@ public final class EscortGameTests {
                 "The village must offer an escort of its caravan");
         helper.assertTrue(departure == 100 + WorldConfig.QUEST_ESCORT_WAIT_TICKS.get(),
                 "The caravan must wait for an escort: " + departure);
-        helper.assertTrue(quest.rewardEmeralds() == Math.max(1,
-                Math.round(20 * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())), "The reward comes from the cargo");
+        // The factor of the difficulty of the escort (see EscortDifficulty) multiplies the share of the cargo.
+        double factor = EscortDifficulties.get().level(quest.difficulty()).rewardFactor();
+        helper.assertTrue(quest.difficulty() >= 1 && quest.rewardEmeralds() == Math.max(1,
+                Math.round(20 * factor * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get())),
+                "The reward comes from the cargo and the difficulty: " + quest.rewardEmeralds());
         helper.succeed();
     }
 
@@ -206,6 +228,69 @@ public final class EscortGameTests {
         helper.succeed();
     }
 
+    /**
+     * The row of an active escort on the quest board gives the ambush: the raiders that stay. With no living raider,
+     * the row gives the state of the caravan again.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_board_ambush")
+    public static void boardRowGivesTheAmbushOfTheEscort(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerLevel level = helper.getLevel();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+        BlockPos start = helper.absolutePos(START);
+        player.teleportTo(start.getX(), start.getY(), start.getZ());
+        GroupMaterializer.materialize(level, caravan);
+        long now = level.getGameTime();
+
+        Component before = boardRow(player, origin, quest);
+        Mob raider = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(raider));
+        Escorts.update(server, now);
+        Component during = boardRow(player, origin, quest);
+        raider.kill();
+        Escorts.update(server, now + 20);
+        Component after = boardRow(player, origin, quest);
+        raider.discard();
+
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertFalse(hasKey(before, AMBUSH_KEY), "The row must not give an ambush before the attack: "
+                + before.getString());
+        helper.assertTrue(hasKey(during, AMBUSH_KEY) && during.getString().contains(AMBUSH_RAIDERS),
+                "The row must give the ambush with 1 raider: " + during.getString());
+        helper.assertFalse(hasKey(after, AMBUSH_KEY), "The row must not give the ambush after the death of the "
+                + "raider: " + after.getString());
+        helper.succeed();
+    }
+
+    private static final String AMBUSH_KEY = "quest.folkhold_world.caravan.ambush";
+    /** The argument of the ambush text for 1 raider. */
+    private static final String AMBUSH_RAIDERS = "1";
+
+    /** The information of the row of an active quest on the quest board of a village. */
+    private static Component boardRow(ServerPlayer player, Settlement village, Quest quest) {
+        return QuestBoards.board(player, village).active().stream()
+                .filter(active -> active.questId().equals(quest.id())).findFirst()
+                .map(QuestBoardPayload.Active::info).orElse(Component.empty());
+    }
+
+    /** True if a text or one of its parts is a translation with a key. */
+    private static boolean hasKey(Component text, String key) {
+        if (text.getContents() instanceof TranslatableContents translatable && translatable.getKey().equals(key)) {
+            return true;
+        }
+        for (Object argument : text.getContents() instanceof TranslatableContents translatable
+                ? translatable.getArgs() : new Object[0]) {
+            if (argument instanceof Component part && hasKey(part, key)) {
+                return true;
+            }
+        }
+        return text.getSiblings().stream().anyMatch(sibling -> hasKey(sibling, key));
+    }
+
     private static QuestLogPayload.Escort escortOf(QuestLogPayload log, Quest quest) {
         return log.quests().stream().filter(entry -> entry.questId().equals(quest.id())).findFirst()
                 .flatMap(QuestLogPayload.Entry::escort).orElse(null);
@@ -261,9 +346,12 @@ public final class EscortGameTests {
         helper.succeed();
     }
 
-    /** An ambush of monsters appears in front of the caravan and attacks the merchant. */
+    /**
+     * An ambush of the lowest difficulty: 2 or 3 pillagers appear in front of the caravan and attack the merchant. The
+     * highest difficulty adds vindicators, a ravager and a helmet. An escort of the lowest difficulty has one ambush.
+     */
     @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_ambush")
-    public static void ambushAttacksTheMerchant(GameTestHelper helper) {
+    public static void ambushOfPillagersAttacksTheMerchant(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Settlement origin = village(helper);
         MobileGroup caravan = caravan(helper, origin);
@@ -271,21 +359,340 @@ public final class EscortGameTests {
         GroupMaterializer.keep(caravan.id(), true);
         GroupMaterializer.materialize(level, caravan);
         Entity merchant = level.getEntity(caravan.merchant().orElseThrow().id());
+        EscortDifficulty difficulties = EscortDifficulties.get();
+        EscortDifficulty.Level lowest = difficulties.level(1);
+        EscortDifficulty.Level highest = difficulties.level(difficulties.levels().size());
 
-        List<Mob> monsters = Escorts.spawnAmbush(level, caravan, 3);
+        List<Mob> low = Escorts.spawnAmbush(level, caravan, lowest, 7);
+        List<Mob> high = Escorts.spawnAmbush(level, caravan, highest, 7);
 
-        boolean attack = !monsters.isEmpty() && monsters.stream().allMatch(mob -> mob.getTarget() == merchant
-                && mob.getPersistentData().getBoolean(Escorts.AMBUSH_TAG));
-        int count = monsters.size();
-        monsters.forEach(Entity::discard);
-        Quest none = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
+        boolean attack = !low.isEmpty() && low.stream().allMatch(mob -> mob.getTarget() == merchant
+                && mob.getPersistentData().getBoolean(Escorts.AMBUSH_TAG) && mob.getType() == EntityType.PILLAGER
+                && mob instanceof Raider raider && !raider.canJoinRaid());
+        int count = low.size();
+        boolean ravager = high.stream().anyMatch(mob -> mob.getType() == EntityType.RAVAGER);
+        long vindicators = high.stream().filter(mob -> mob.getType() == EntityType.VINDICATOR).count();
+        boolean helmets = high.stream().filter(mob -> mob.getType() != EntityType.RAVAGER)
+                .allMatch(mob -> !mob.getItemBySlot(EquipmentSlot.HEAD).isEmpty());
+        low.forEach(Entity::discard);
+        high.forEach(Entity::discard);
+        Quest easy = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
                 caravan.id(), 0, 1, 1, ReputationTier.NEUTRAL, 0, 0);
-        Deque<Double> plan = Escorts.plan(none, caravan);
-        clear(helper, caravan, none);
-        helper.assertTrue(count == 3 && attack, "3 monsters must attack the merchant: " + count);
-        helper.assertTrue(plan.size() >= 1 && plan.size() <= 3, "An escort has 1 to 3 ambushes: " + plan.size());
-        helper.assertTrue(Escorts.ambushSize(400, 1) == 2 && Escorts.ambushSize(1600, 10) == 7
-                && Escorts.ambushSize(10_000, 20) == 8, "The size of an ambush follows the route and the level");
+        easy.setDifficulty(1);
+        Deque<Double> plan = Escorts.plan(easy, caravan);
+        clear(helper, caravan, easy);
+        helper.assertTrue(attack && count >= 2 && count <= 3, "2 or 3 pillagers must attack the merchant: " + count);
+        helper.assertTrue(plan.size() == 1, "An escort of the lowest difficulty has 1 ambush: " + plan.size());
+        helper.assertTrue(highest.ravager() && ravager && vindicators == highest.vindicators() && helmets,
+                "The highest difficulty must add a ravager, the vindicators and the helmets");
         helper.succeed();
+    }
+
+    /** The escort fails when the merchant of the caravan dies, and the caravan ends with no arrival. */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_merchant_dies")
+    public static void deadMerchantFailsTheEscort(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+
+        caravan.onMemberDied(caravan.merchant().orElseThrow().id());
+        Escorts.onGroupFinished(server, caravan);
+
+        QuestState state = quest.state();
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertTrue(state == QuestState.FAILED, "The escort must fail: " + state);
+        helper.succeed();
+    }
+
+    /**
+     * The difficulty of an escort follows the data file: a short route of a small village has the lowest difficulty,
+     * no extra guard and the reward of the config. A higher difficulty adds guards and grows the reward.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_difficulty")
+    public static void difficultySetsTheGuardsAndTheReward(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement origin = village(helper);
+        origin.setProgress(1, 0);
+        MobileGroup small = caravan(helper, origin);
+        long guardsBefore = guards(small);
+        Quest easy = Escorts.offer(server, small, origin, 100).orElseThrow();
+        long smallGuards = guards(small) - guardsBefore;
+        long expectedEasy = Math.max(1, Math.round(small.payment() * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()));
+        clear(helper, small, easy);
+
+        origin.setProgress(20, 0);
+        MobileGroup large = caravan(helper, origin);
+        Quest hard = Escorts.offer(server, large, origin, 100).orElseThrow();
+        EscortDifficulty.Level level = EscortDifficulties.get().level(hard.difficulty());
+        long largeGuards = guards(large) - 1;
+        clear(helper, large, hard);
+        origin.setProgress(1, 0);
+
+        helper.assertTrue(easy.difficulty() == 1 && smallGuards == 0 && easy.rewardEmeralds() == expectedEasy,
+                "The lowest difficulty: no extra guard and the reward of the config: " + easy.difficulty() + ", "
+                        + smallGuards + ", " + easy.rewardEmeralds());
+        helper.assertTrue(hard.difficulty() > 1 && largeGuards == level.guards() && level.guards() > 0
+                && hard.rewardEmeralds() > easy.rewardEmeralds(), "A higher difficulty adds guards and reward: "
+                        + hard.difficulty() + ", " + largeGuards + ", " + hard.rewardEmeralds());
+        helper.succeed();
+    }
+
+    /**
+     * The tier of an escort comes from its base reward, before the factor of the difficulty: an escort of the highest
+     * difficulty with a base reward below the threshold of the friends is open to a neutral player.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_tier")
+    public static void hardEscortWithASmallBaseRewardIsOpenToNeutrals(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement origin = village(helper);
+        origin.setProgress(20, 0);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        long base = Math.max(1, Math.round(caravan.payment() * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()));
+        long threshold = WorldConfig.QUEST_FRIEND_REWARD.get();
+
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+
+        int difficulty = quest.difficulty();
+        long reward = quest.rewardEmeralds();
+        ReputationTier tier = quest.minTier();
+        QuestState state = quest.state();
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        origin.setProgress(1, 0);
+        helper.assertTrue(difficulty == EscortDifficulties.get().levels().size() && base < threshold
+                && reward >= threshold, "The test needs the highest difficulty, a base reward below the threshold "
+                        + "and a reward above it: " + difficulty + ", " + base + ", " + reward);
+        helper.assertTrue(tier == ReputationTier.NEUTRAL && state == QuestState.ACCEPTED,
+                "A neutral player must accept the escort: " + tier + ", " + state);
+        helper.succeed();
+    }
+
+    /** The size of the arena of the tests of the spawn positions, in blocks. */
+    private static final int LARGE = 32;
+
+    /** The relative positions of a box of blocks, from a corner to the opposite corner. */
+    private static List<BlockPos> box(int x0, int y0, int z0, int x1, int y1, int z1) {
+        List<BlockPos> result = new ArrayList<>();
+        BlockPos.betweenClosed(x0, y0, z0, x1, y1, z1).forEach(pos -> result.add(pos.immutable()));
+        return result;
+    }
+
+    /**
+     * An ambush point in a hole of 5 by 5 blocks, 4 blocks deep: the raiders appear out of the hole, on the floor,
+     * with a walk path to the merchant.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_hole",
+            skyAccess = true)
+    public static void ambushInAHoleAppearsWhereTheMerchantCanBeReached(GameTestHelper helper) {
+        BlockPos merchant = helper.absolutePos(new BlockPos(2, 1, 16));
+        BlockPos hole = helper.absolutePos(new BlockPos(18, 1, 16));
+        ServerLevel level = helper.getLevel();
+        boolean holeFirst;
+        BlockPos pos;
+        List<BlockPos> pit = box(16, -3, 14, 20, 0, 18);
+        TestSupport.buildFloor(helper, LARGE);
+        List<BlockState> before = pit.stream().map(rel -> level.getBlockState(helper.absolutePos(rel))).toList();
+        pit.forEach(rel -> helper.setBlock(rel, Blocks.AIR));
+        try {
+            holeFirst = AmbushSpawns.check(level, AmbushSpawns.surface(level, hole.getX(), hole.getZ()), false)
+                    == AmbushSpawns.Check.HOLLOW;
+            Route route = new Route(List.of(new Route.Point(merchant.getX(), merchant.getZ()),
+                    new Route.Point(merchant.getX() + 28, merchant.getZ())));
+            pos = AmbushSpawns.find(level, route, 16.0, merchant, false).orElse(null);
+            helper.assertTrue(pos != null && RaidSpawns.canWalk(level, pos, merchant),
+                    "The ambush must have a position with a path to the merchant: " + pos + ", checks "
+                            + checks(helper));
+        } finally {
+            for (int i = 0; i < pit.size(); i++) {
+                level.setBlockAndUpdate(helper.absolutePos(pit.get(i)), before.get(i));
+            }
+        }
+        BlockPos rel = helper.relativePos(pos);
+        boolean inHole = rel.getX() >= 16 && rel.getX() <= 20 && rel.getZ() >= 14 && rel.getZ() <= 18;
+        helper.assertTrue(holeFirst, "The point of the route must be in the hole");
+        helper.assertTrue(!inHole && rel.getY() == 1, "The position must be on the floor, out of the hole: " + rel);
+        helper.succeed();
+    }
+
+    /**
+     * An ambush point under a roof of 7 by 7 blocks, 5 blocks above the floor: the raiders appear on the floor, not
+     * on the roof, with a walk path to the merchant.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 20, batch = "escort_ambush_roof",
+            skyAccess = true)
+    public static void ambushUnderARoofAppearsWhereTheMerchantCanBeReached(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos merchant = helper.absolutePos(new BlockPos(2, 1, 16));
+        List<BlockPos> roof = box(15, 5, 13, 21, 5, 19);
+        boolean roofFirst;
+        TestSupport.buildFloor(helper, LARGE);
+        List<BlockState> before = roof.stream().map(rel -> level.getBlockState(helper.absolutePos(rel))).toList();
+        roof.forEach(rel -> helper.setBlock(rel, Blocks.OAK_PLANKS));
+        BlockPos pos;
+        try {
+            BlockPos point = helper.absolutePos(new BlockPos(18, 1, 16));
+            roofFirst = AmbushSpawns.check(level, AmbushSpawns.surface(level, point.getX(), point.getZ()), false)
+                    == AmbushSpawns.Check.RAISED;
+            Route route = new Route(List.of(new Route.Point(merchant.getX(), merchant.getZ()),
+                    new Route.Point(merchant.getX() + 28, merchant.getZ())));
+            pos = AmbushSpawns.find(level, route, 16.0, merchant, false).orElse(null);
+            helper.assertTrue(pos != null && RaidSpawns.canWalk(level, pos, merchant),
+                    "The ambush must have a position with a path to the merchant: " + pos + ", checks "
+                            + checks(helper));
+        } finally {
+            for (int i = 0; i < roof.size(); i++) {
+                level.setBlockAndUpdate(helper.absolutePos(roof.get(i)), before.get(i));
+            }
+        }
+        BlockPos rel = helper.relativePos(pos);
+        helper.assertTrue(roofFirst, "The point of the route must be on the roof");
+        helper.assertTrue(rel.getY() == 1, "The position must be on the floor, not on the roof: " + rel);
+        helper.succeed();
+    }
+
+    /**
+     * The merchant waits while the raiders of an ambush live near it. It continues when they are dead, or when no
+     * raider is near it for the delay of the config.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_ambush_wait")
+    public static void merchantWaitsForTheAmbushAndContinuesWithNoRaiderNear(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerLevel level = helper.getLevel();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+        BlockPos start = helper.absolutePos(START);
+        player.teleportTo(start.getX(), start.getY(), start.getZ());
+        GroupMaterializer.materialize(level, caravan);
+        Entity merchant = level.getEntity(caravan.merchant().orElseThrow().id());
+        long now = level.getGameTime();
+        long delay = WorldConfig.QUEST_ESCORT_AMBUSH_SECONDS.get() * 20L;
+        double distance = WorldConfig.QUEST_ESCORT_AMBUSH_DISTANCE.get();
+
+        Mob near = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(near));
+        Escorts.update(server, now);
+        GroupState waits = caravan.state();
+        int hud = escortOf(QuestBoards.log(player), quest).raiders();
+        // The raider goes far from the merchant, above it: the merchant waits for the delay, then continues.
+        near.setNoGravity(true);
+        near.teleportTo(merchant.getX(), merchant.getY() + distance + 8, merchant.getZ());
+        Escorts.update(server, now + delay - 20);
+        GroupState inDelay = caravan.state();
+        Escorts.update(server, now + delay);
+        GroupState afterDelay = caravan.state();
+        near.discard();
+
+        Mob dead = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(dead));
+        Escorts.update(server, now + delay + 20);
+        GroupState waitsAgain = caravan.state();
+        dead.kill();
+        Escorts.update(server, now + delay + 40);
+        GroupState afterDeath = caravan.state();
+        dead.discard();
+
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertTrue(waits == GroupState.STOPPED && hud == 1,
+                "The merchant must wait for 1 raider near it: " + waits + ", " + hud);
+        helper.assertTrue(inDelay == GroupState.STOPPED, "The merchant must wait during the delay: " + inDelay);
+        helper.assertTrue(afterDelay == GroupState.TRAVELING,
+                "With no raider near for the delay, the merchant must continue: " + afterDelay);
+        helper.assertTrue(waitsAgain == GroupState.STOPPED && afterDeath == GroupState.TRAVELING,
+                "The merchant must continue when the raiders are dead: " + waitsAgain + ", " + afterDeath);
+        helper.succeed();
+    }
+
+    /**
+     * A raider of an attack that loads again, for example after a restart of the server, joins the attack of its
+     * caravan again. The merchant waits while the raider is near it, and the raider attacks the merchant. A raider that
+     * loads far from the merchant does not stop it.
+     */
+    @GameTest(template = "arena", timeoutTicks = 20, batch = "escort_ambush_restart")
+    public static void theRaiderOfAnAttackJoinsTheAttackAgainWhenItLoads(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerLevel level = helper.getLevel();
+        Settlement origin = village(helper);
+        MobileGroup caravan = caravan(helper, origin);
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Quest quest = acceptedEscort(helper, origin, caravan, player);
+        BlockPos start = helper.absolutePos(START);
+        player.teleportTo(start.getX(), start.getY(), start.getZ());
+        GroupMaterializer.materialize(level, caravan);
+        Entity merchant = level.getEntity(caravan.merchant().orElseThrow().id());
+        long now = level.getGameTime();
+        double distance = WorldConfig.QUEST_ESCORT_AMBUSH_DISTANCE.get();
+
+        Mob raider = spawnRaider(level, start.offset(3, 0, 0));
+        Escorts.track(level, caravan, List.of(raider));
+        String tag = raider.getPersistentData().getString(Escorts.ATTACK_TAG);
+        Escorts.update(server, now);
+        GroupState waits = caravan.state();
+        // The unload of the raider ends the attack, as a restart of the server.
+        CompoundTag saved = new CompoundTag();
+        raider.save(saved);
+        raider.discard();
+        Escorts.update(server, now + 20);
+        GroupState unloaded = caravan.state();
+        Mob loaded = (Mob) EntityType.loadEntityRecursive(saved, level, entity -> entity);
+        level.addFreshEntity(loaded);
+        Escorts.update(server, now + 40);
+        GroupState waitsAgain = caravan.state();
+        boolean attacks = loaded.getTarget() == merchant;
+        loaded.discard();
+        Escorts.update(server, now + 60);
+
+        // A raider that loads far from the merchant: above it, out of the distance of the attack.
+        Mob far = EntityType.PILLAGER.create(level);
+        far.setNoAi(true);
+        far.setNoGravity(true);
+        far.moveTo(merchant.getX(), merchant.getY() + distance + 8, merchant.getZ(), 0.0F, 0.0F);
+        far.getPersistentData().putString(Escorts.ATTACK_TAG, caravan.id());
+        level.addFreshEntity(far);
+        Escorts.update(server, now + 80);
+        GroupState farState = caravan.state();
+        far.discard();
+
+        server.getPlayerList().remove(player);
+        clear(helper, caravan, quest);
+        helper.assertTrue(tag.equals(caravan.id()), "The raider must keep the id of its caravan: " + tag);
+        helper.assertTrue(waits == GroupState.STOPPED && unloaded == GroupState.TRAVELING,
+                "The merchant must wait for the raider, then continue when it unloads: " + waits + ", " + unloaded);
+        helper.assertTrue(waitsAgain == GroupState.STOPPED,
+                "The merchant must wait for the raider that loads again: " + waitsAgain);
+        helper.assertTrue(attacks, "The raider that loads again must attack the merchant: " + loaded.getTarget());
+        helper.assertTrue(farState == GroupState.TRAVELING,
+                "A raider that loads far from the merchant must not stop it: " + farState);
+        helper.succeed();
+    }
+
+    /** The checks of the columns of the line z = 16 of the large arena, for the message of a failure. */
+    private static String checks(GameTestHelper helper) {
+        StringBuilder text = new StringBuilder();
+        for (int x = 4; x <= 30; x += 2) {
+            BlockPos column = helper.absolutePos(new BlockPos(x, 1, 13));
+            BlockPos pos = AmbushSpawns.surface(helper.getLevel(), column.getX(), column.getZ());
+            text.append(x).append(':').append(helper.relativePos(pos).getY()).append(' ')
+                    .append(AmbushSpawns.check(helper.getLevel(), pos, false)).append(", ");
+        }
+        return text.toString();
+    }
+
+    private static Mob spawnRaider(ServerLevel level, BlockPos pos) {
+        Mob raider = EntityType.PILLAGER.create(level);
+        raider.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, 0.0F, 0.0F);
+        raider.setNoAi(true);
+        level.addFreshEntity(raider);
+        return raider;
+    }
+
+    private static long guards(MobileGroup group) {
+        return group.members().stream().filter(member -> member.role() == MemberRole.GUARD).count();
     }
 }

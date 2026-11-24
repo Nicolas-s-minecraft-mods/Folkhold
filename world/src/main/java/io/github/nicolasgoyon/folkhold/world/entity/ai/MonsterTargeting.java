@@ -19,7 +19,9 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *
  * <p>Neutral monsters (for example the enderman) and the entity types in the tag
  * {@code folkhold_world:ignores_guards} do not target faction units. A monster looks for a unit only near a
- * loaded village heart: the units live in the villages, and a scan for each monster of the world costs too much.
+ * loaded village heart: the units live in the villages, and a scan for each monster of the world costs too much. A
+ * monster is near a heart when it is at {@link #gateRadius()} from the heart or nearer, or when it is at the chase
+ * radius from the structure area of the heart or nearer (see {@link VillageHearts#findNear}).
  */
 public final class MonsterTargeting {
 
@@ -47,7 +49,8 @@ public final class MonsterTargeting {
         @Override
         public boolean canUse() {
             if (mob.tickCount >= nextGateCheck) {
-                nearHeart = VillageHearts.findNearest(mob.level(), mob.blockPosition(), gateRadius()).isPresent();
+                nearHeart = VillageHearts.findNear(mob.level(), mob.blockPosition(), gateRadius(),
+                        WorldConfig.CHASE_RADIUS.get()).isPresent();
                 nextGateCheck = mob.tickCount + GATE_INTERVAL;
             }
             return nearHeart && super.canUse();

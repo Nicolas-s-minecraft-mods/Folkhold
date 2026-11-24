@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
 import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import java.util.ArrayList;
@@ -43,9 +44,14 @@ public final class QuestData extends SavedData {
      * @param emeralds     the emeralds, before the limit of the treasury
      * @param reputation   the reputation
      * @param name         the text of the quest
+     * @param experience   the experience points
+     * @param items        the items (see {@link RewardItem})
      */
     public record Reward(UUID playerId, String factionId, String settlementId, long emeralds, int reputation,
-            Component name) {
+            Component name, int experience, List<RewardItem> items) {
+        public Reward {
+            items = List.copyOf(items);
+        }
     }
 
     private QuestData() {
@@ -135,6 +141,33 @@ public final class QuestData extends SavedData {
                 entry.putUUID("Player", quest.playerId());
             }
             entry.putLong("Deadline", quest.deadline());
+            if (quest.rewardExperience() > 0) {
+                entry.putInt("RewardExperience", quest.rewardExperience());
+            }
+            if (!quest.rewardItems().isEmpty()) {
+                entry.put("RewardItems", saveItems(quest.rewardItems()));
+            }
+            if (!quest.startItems().isEmpty()) {
+                entry.put("StartItems", saveItems(quest.startItems()));
+            }
+            if (quest.failureReputation() > 0) {
+                entry.putInt("FailureReputation", quest.failureReputation());
+            }
+            if (quest.progress() > 0) {
+                entry.putInt("Progress", quest.progress());
+            }
+            if (!quest.giverJob().isEmpty()) {
+                entry.putString("GiverJob", quest.giverJob());
+            }
+            if (!quest.text().isEmpty()) {
+                entry.putString("Text", quest.text());
+            }
+            if (quest.difficulty() > 0) {
+                entry.putInt("Difficulty", quest.difficulty());
+            }
+            if (!quest.definitionId().isEmpty()) {
+                entry.putString("Definition", quest.definitionId());
+            }
             list.add(entry);
         }
         tag.put("Quests", list);
@@ -147,6 +180,12 @@ public final class QuestData extends SavedData {
             entry.putLong("Emeralds", reward.emeralds());
             entry.putInt("Reputation", reward.reputation());
             entry.putString("Name", Component.Serializer.toJson(reward.name(), registries));
+            if (reward.experience() > 0) {
+                entry.putInt("Experience", reward.experience());
+            }
+            if (!reward.items().isEmpty()) {
+                entry.put("Items", saveItems(reward.items()));
+            }
             rewards.add(entry);
         }
         tag.put("PendingRewards", rewards);
@@ -186,9 +225,17 @@ public final class QuestData extends SavedData {
                     .orElse(ReputationTier.NEUTRAL);
             Quest quest = new Quest(id, kind.get(), entry.getString("Settlement"), entry.getString("Faction"),
                     entry.getString("Target"), entry.getInt("Count"), entry.getLong("RewardEmeralds"),
-                    entry.getInt("RewardReputation"), minTier, entry.getLong("OfferEnd"), entry.getLong("Duration"));
+                    entry.getInt("RewardReputation"), minTier, entry.getLong("OfferEnd"), entry.getLong("Duration"),
+                    entry.getString("Definition"));
             quest.restore(state, entry.hasUUID("Player") ? entry.getUUID("Player") : null,
                     entry.getLong("Deadline"));
+            quest.setReward(Math.max(0, quest.rewardEmeralds()), Math.max(0, entry.getInt("RewardExperience")),
+                    loadItems(entry.getList("RewardItems", Tag.TAG_COMPOUND)));
+            quest.setRisk(loadItems(entry.getList("StartItems", Tag.TAG_COMPOUND)),
+                    Math.max(0, entry.getInt("FailureReputation")));
+            quest.setProgress(entry.getInt("Progress"));
+            quest.setGiver(entry.getString("GiverJob"), entry.getString("Text"));
+            quest.setDifficulty(entry.getInt("Difficulty"));
             if (data.quests.byId(quest.id()).isEmpty()) {
                 data.quests.add(quest);
             }
@@ -202,8 +249,38 @@ public final class QuestData extends SavedData {
             Component name = Component.Serializer.fromJson(entry.getString("Name"), registries);
             data.pendingRewards.add(new Reward(entry.getUUID("Player"), entry.getString("Faction"),
                     entry.getString("Settlement"), entry.getLong("Emeralds"), entry.getInt("Reputation"),
-                    name == null ? Component.empty() : name));
+                    name == null ? Component.empty() : name, Math.max(0, entry.getInt("Experience")),
+                    loadItems(entry.getList("Items", Tag.TAG_COMPOUND))));
         }
         return data;
+    }
+
+    /** Writes the items of a reward: the item id, the count, and the key {@code FromStock} for goods. */
+    private static ListTag saveItems(List<RewardItem> items) {
+        ListTag list = new ListTag();
+        for (RewardItem item : items) {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("Item", item.item());
+            entry.putInt("Count", item.count());
+            if (item.fromStock()) {
+                entry.putBoolean("FromStock", true);
+            }
+            list.add(entry);
+        }
+        return list;
+    }
+
+    /** Reads the items of a reward. An entry with no item or no count is skipped. */
+    private static List<RewardItem> loadItems(ListTag list) {
+        List<RewardItem> items = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag entry = list.getCompound(i);
+            String item = entry.getString("Item");
+            int count = entry.getInt("Count");
+            if (!item.isBlank() && count > 0) {
+                items.add(new RewardItem(item, count, entry.getBoolean("FromStock")));
+            }
+        }
+        return items;
     }
 }

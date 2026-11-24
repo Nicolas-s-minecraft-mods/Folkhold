@@ -8,13 +8,14 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Client to server: a button of the quest board screen (see
+ * Client to server: a button of the quest board screen or of the tab "Quests" of the journal (see
  * {@link io.github.nicolasgoyon.folkhold.world.quest.QuestBoards}).
  *
  * @param action       the action: {@link QuestBoardPayload#ACTION_ACCEPT}, {@link QuestBoardPayload#ACTION_ABANDON}
  *                     or {@link QuestBoardPayload#ACTION_DELIVER}
  * @param questId      the id of the quest
- * @param settlementId the id of the village of the screen
+ * @param settlementId the id of the village of the quest board, or an empty string for the journal. The journal
+ *                     sends only {@link QuestBoardPayload#ACTION_ABANDON}.
  */
 public record QuestActionPayload(int action, String questId, String settlementId) implements CustomPacketPayload {
 

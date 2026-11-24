@@ -56,6 +56,32 @@ public final class ClientQuestLog {
         return false;
     }
 
+    /**
+     * True if a log has an active escort. The server sends a new log each second while an escort is active.
+     *
+     * @param log the log
+     * @return true if one quest of the log is an escort
+     */
+    public static boolean hasEscort(QuestLogPayload log) {
+        return log.quests().stream().anyMatch(entry -> entry.escort().isPresent());
+    }
+
+    /**
+     * The living raiders of the attack on the caravan of an escort of a log.
+     *
+     * @param log     the log
+     * @param questId the id of the quest
+     * @return the number of raiders, or 0 for a quest that is not an escort of the log or with no attack
+     */
+    public static int raiders(QuestLogPayload log, String questId) {
+        for (QuestLogPayload.Entry entry : log.quests()) {
+            if (entry.questId().equals(questId)) {
+                return entry.escort().map(QuestLogPayload.Escort::raiders).orElse(0);
+            }
+        }
+        return 0;
+    }
+
     /** Clears the log, for example when the player leaves the server. */
     public static void clear() {
         log = QuestLogPayload.EMPTY;

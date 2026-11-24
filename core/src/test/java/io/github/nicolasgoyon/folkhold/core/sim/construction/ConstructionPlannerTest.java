@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test;
 class ConstructionPlannerTest {
     private static final String STONE = "minecraft:stone";
     private static final Reach REACH = Reach.DEFAULT;
+    /** The step out of the west room of {@link #twoRooms}: a block of the level. */
+    private static final Map<BuildPos, BuildBlock> STEP = Map.of(new BuildPos(-5, 1, 0),
+            BuildBlock.solid("minecraft:cobblestone"));
 
     /** A level with a floor of stone at y = 0, from -10 to 10 on X and Z, and the given blocks. */
     private static LevelView level(Map<BuildPos, BuildBlock> blocks) {
@@ -162,6 +165,29 @@ class ConstructionPlannerTest {
                 "The torch must come back after its wall");
     }
 
+    /**
+     * The same block with only other properties gets the state of the target with no removal. Another block, or the
+     * same block with other data, goes first.
+     */
+    @Test
+    void otherStateOfTheSameBlockHasNoRemoval() {
+        Map<BuildPos, BuildBlock> levelBlocks = new HashMap<>();
+        levelBlocks.put(pos(0, 1, 0), BuildBlock.solid("minecraft:oak_stairs[facing=east]"));
+        levelBlocks.put(pos(1, 1, 0), BuildBlock.solid("minecraft:oak_sign[rotation=0]").withData("{text:a}"));
+        levelBlocks.put(pos(2, 1, 0), BuildBlock.solid("minecraft:spruce_stairs[facing=north]"));
+        Map<BuildPos, BuildBlock> blocks = new HashMap<>();
+        blocks.put(pos(0, 1, 0), BuildBlock.solid("minecraft:oak_stairs[facing=north]"));
+        blocks.put(pos(1, 1, 0), BuildBlock.solid("minecraft:oak_sign[rotation=4]").withData("{text:b}"));
+        blocks.put(pos(2, 1, 0), BuildBlock.solid("minecraft:oak_stairs[facing=north]"));
+
+        Plan plan = ConstructionPlanner.plan(new Target(blocks), level(levelBlocks), REACH);
+
+        assertEquals(-1, index(plan, StepType.REMOVE, pos(0, 1, 0)));
+        assertTrue(index(plan, StepType.PLACE, pos(0, 1, 0)) >= 0);
+        assertTrue(index(plan, StepType.REMOVE, pos(1, 1, 0)) >= 0, "Other data needs a removal");
+        assertTrue(index(plan, StepType.REMOVE, pos(2, 1, 0)) >= 0, "Another block needs a removal");
+    }
+
     /** A waterlogged block comes with no water, and the water comes at the end. A water source also. */
     @Test
     void fluidsComeAtTheEnd() {
@@ -184,7 +210,7 @@ class ConstructionPlannerTest {
 
     /**
      * A block high above the floor needs scaffolding. The column comes before the block, and the builder stands on it
-     * in reach of the block. The column goes at the end, from the top.
+     * in reach of the block. The column goes after the block, from the top.
      */
     @Test
     void scaffoldingForABlockOutOfReach() {
@@ -365,8 +391,9 @@ class ConstructionPlannerTest {
     }
 
     /**
-     * A house of two storeys: the floor of the upper storey is on the walls of the lower storey. The builder stands on
-     * the upper floor, and the scaffolding of the roof stands on it.
+     * A house of two storeys: the floor of the upper storey is on the walls of the lower storey. A villager walks into
+     * the house through the doorway, and goes up the steps to the upper floor. The builder stands on the upper floor,
+     * and the scaffolding of the roof stands on it.
      */
     @Test
     void theBuilderStandsOnTheFloorOfAnUpperStorey() {
@@ -384,16 +411,111 @@ class ConstructionPlannerTest {
                 blocks.put(pos(x, 11, z), BuildBlock.solid("minecraft:oak_planks"));
             }
         }
+        // The doorway, the steps from the lower floor to the upper floor, and the hole of the steps in the upper floor.
+        blocks.put(pos(0, 2, -4), BuildBlock.AIR);
+        blocks.put(pos(0, 3, -4), BuildBlock.AIR);
+        for (int step = 0; step < 4; step++) {
+            blocks.put(pos(-3 + step, 2 + step, 3), BuildBlock.solid(STONE));
+            blocks.put(pos(-3 + step, 6, 3), BuildBlock.AIR);
+        }
 
         Plan plan = ConstructionPlanner.plan(new Target(blocks), emptyLevel(), REACH);
 
         assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
         boolean onUpperFloor = plan.steps().stream().anyMatch(step -> step.type() == StepType.PLACE
-                && step.stand().map(stand -> stand.y() == 7).orElse(false));
+                && step.stand().map(stand -> stand.y() == 7 && Math.abs(stand.x()) < 4 && Math.abs(stand.z()) < 4)
+                        .orElse(false));
         boolean scaffoldingOnUpperFloor = plan.steps().stream()
-                .anyMatch(step -> step.type() == StepType.PLACE_SCAFFOLDING && step.pos().y() == 7);
+                .anyMatch(step -> step.type() == StepType.PLACE_SCAFFOLDING && step.pos().y() == 7
+                        && Math.abs(step.pos().x()) < 4 && Math.abs(step.pos().z()) < 4);
         assertTrue(onUpperFloor, "The builder must stand on the upper floor");
         assertTrue(scaffoldingOnUpperFloor, "The scaffolding of the roof must stand on the upper floor");
+    }
+
+    /**
+     * A room with no way into it. For a block of the roof, the nearest position to stand is in the room. The builder
+     * stands out of the room, where a villager can walk from the ground.
+     */
+    @Test
+    void theBuilderStandsWhereAVillagerCanWalk() {
+        Map<BuildPos, BuildBlock> levelBlocks = new HashMap<>();
+        for (int x = 0; x <= 3; x++) {
+            for (int z = -2; z <= 2; z++) {
+                boolean wall = x == 0 || x == 3 || Math.abs(z) == 2;
+                for (int y = 1; y <= 2; y++) {
+                    if (wall) {
+                        levelBlocks.put(pos(x, y, z), BuildBlock.solid(STONE));
+                    }
+                }
+                levelBlocks.put(pos(x, 3, z), BuildBlock.solid(STONE));
+            }
+        }
+        BuildPos roof = pos(1, 3, 0);
+        Map<BuildPos, BuildBlock> blocks = Map.of(roof, BuildBlock.solid("minecraft:oak_planks"));
+
+        Plan plan = ConstructionPlanner.plan(new Target(blocks), level(levelBlocks), REACH);
+
+        assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
+        assertEquals(Optional.of(pos(-1, 1, 0)), plan.steps().get(index(plan, StepType.REMOVE, roof)).stand());
+        assertEquals(Optional.of(pos(-1, 1, 0)), plan.steps().get(index(plan, StepType.PLACE, roof)).stand());
+    }
+
+    /**
+     * A tower with no way into it, and a block above its top. The plan does not put scaffolding in the tower: the
+     * columns stand out of the tower, where a villager can walk to their bottom.
+     */
+    @Test
+    void scaffoldingStandsWhereAVillagerCanWalk() {
+        Map<BuildPos, BuildBlock> blocks = new HashMap<>();
+        for (int x = -2; x <= 2; x++) {
+            for (int z = -2; z <= 2; z++) {
+                boolean wall = Math.abs(x) == 2 || Math.abs(z) == 2;
+                for (int y = 1; y <= 5; y++) {
+                    blocks.put(pos(x, y, z), wall ? BuildBlock.solid(STONE) : BuildBlock.AIR);
+                }
+            }
+        }
+        BuildPos top = pos(1, 6, 0);
+        blocks.put(top, BuildBlock.solid("minecraft:oak_planks"));
+
+        Plan plan = ConstructionPlanner.plan(new Target(blocks), emptyLevel(), REACH);
+
+        assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
+        assertTrue(plan.count(StepType.PLACE_SCAFFOLDING) > 0, "The tower must need scaffolding");
+        for (Step step : plan.steps()) {
+            if (step.type() == StepType.PLACE_SCAFFOLDING) {
+                BuildPos cell = step.pos();
+                assertTrue(Math.abs(cell.x()) > 2 || Math.abs(cell.z()) > 2, "Scaffolding in the tower at " + cell);
+            }
+        }
+        BuildPos stand = plan.steps().get(index(plan, StepType.PLACE, top)).stand().orElseThrow();
+        assertTrue(stand.x() > 2 && REACH.contains(stand, top), "The builder stands at " + stand);
+    }
+
+    /**
+     * A column goes after the last step that uses it: the column of a high block goes before the column of the next
+     * high block. The column of a pillar stays until the top of the pillar.
+     */
+    @Test
+    void columnGoesAfterItsLastStep() {
+        BuildPos first = pos(-6, 9, 0);
+        BuildPos second = pos(6, 9, 0);
+        Map<BuildPos, BuildBlock> blocks = Map.of(first, BuildBlock.solid(STONE), second, BuildBlock.solid(STONE));
+
+        Plan plan = ConstructionPlanner.plan(new Target(blocks), emptyLevel(), REACH);
+
+        List<Step> steps = plan.steps();
+        int placeFirst = index(plan, StepType.PLACE, first);
+        int placeSecond = index(plan, StepType.PLACE, second);
+        assertTrue(placeFirst < placeSecond, "The blocks go from the west to the east");
+        BuildPos column = steps.get(placeFirst).stand().orElseThrow().below();
+        int removal = index(plan, StepType.REMOVE_SCAFFOLDING, column);
+        assertTrue(removal > placeFirst && removal < placeSecond,
+                "The column of the first block must go between the two blocks: " + removal);
+        for (int i = placeFirst + 1; i < removal; i++) {
+            assertEquals(StepType.REMOVE_SCAFFOLDING, steps.get(i).type(), "The column goes after its last step");
+        }
+        assertEquals(plan.count(StepType.PLACE_SCAFFOLDING), plan.count(StepType.REMOVE_SCAFFOLDING));
     }
 
     /** For a high pillar, the plan makes one scaffolding column higher, and makes no other column. */
@@ -417,5 +539,88 @@ class ConstructionPlannerTest {
         assertEquals(1, columns.size(), "Scaffolding columns: " + columns);
         assertEquals(cells.size(), plan.count(StepType.REMOVE_SCAFFOLDING));
         assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
+    }
+
+    /**
+     * Two rooms with walls of 2 blocks, and a wall between them. The room at the east has an opening. The room at the
+     * west has no opening: a step of 1 block out of it gives a way over its wall. A block above the wall between the
+     * rooms has a position to stand in each room at the same distance.
+     */
+    private static Map<BuildPos, BuildBlock> twoRooms(boolean opening) {
+        Map<BuildPos, BuildBlock> blocks = new HashMap<>();
+        for (int x = -4; x <= 4; x++) {
+            for (int z = -2; z <= 2; z++) {
+                boolean wall = x == -4 || x == 0 || x == 4 || Math.abs(z) == 2;
+                boolean gap = opening && x == 4 && z == 0;
+                for (int y = 1; y <= 2; y++) {
+                    blocks.put(pos(x, y, z), wall && !gap ? BuildBlock.solid(STONE) : BuildBlock.AIR);
+                }
+            }
+        }
+        blocks.put(pos(0, 3, 0), BuildBlock.solid("minecraft:oak_planks"));
+        return blocks;
+    }
+
+    /**
+     * A position to stand with a clear way comes before a position with a way over the top of a new wall. The builder
+     * stands in the east room, with the way through the opening, and not in the west room.
+     */
+    @Test
+    void aClearWayComesBeforeAWayOverAWall() {
+        Plan plan = ConstructionPlanner.plan(new Target(twoRooms(true)), level(STEP), REACH);
+
+        assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
+        BuildPos block = pos(0, 3, 0);
+        assertEquals(Optional.of(pos(1, 1, 0)), plan.steps().get(index(plan, StepType.PLACE, block)).stand());
+    }
+
+    /**
+     * With no clear way, the plan keeps a position to stand with a way over the top of a new wall: no scaffolding and
+     * no warning.
+     */
+    @Test
+    void aWayOverAWallStaysWithNoClearWay() {
+        Plan plan = ConstructionPlanner.plan(new Target(twoRooms(false)), level(STEP), REACH);
+
+        assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
+        BuildPos block = pos(0, 3, 0);
+        assertEquals(Optional.of(pos(-1, 1, 0)), plan.steps().get(index(plan, StepType.PLACE, block)).stand());
+        assertTrue(plan.steps().stream().noneMatch(step -> step.type() == StepType.PLACE_SCAFFOLDING),
+                "No scaffolding");
+    }
+
+    /**
+     * A wall of 2 blocks is in the level, with a step of 1 block at its end. The site placed the wall before the plan,
+     * for example before a load. A block is above the wall, out of the reach of a builder on the ground. The builder
+     * does not stand on the top of the wall: the plan adds scaffolding. With no blocks of the site, the wall is a
+     * block of the level, and the builder stands on it.
+     */
+    @Test
+    void theBuilderDoesNotStandOnAWallThatTheSitePlacedBefore() {
+        Map<BuildPos, BuildBlock> levelBlocks = new HashMap<>();
+        Set<BuildPos> wall = new HashSet<>();
+        for (int x = 0; x <= 4; x++) {
+            for (int y = 1; y <= 2; y++) {
+                levelBlocks.put(pos(x, y, 0), BuildBlock.solid(STONE));
+                wall.add(pos(x, y, 0));
+            }
+        }
+        levelBlocks.put(pos(-1, 1, 0), BuildBlock.solid("minecraft:cobblestone"));
+        Map<BuildPos, BuildBlock> blocks = new HashMap<>();
+        wall.forEach(pos -> blocks.put(pos, BuildBlock.solid(STONE)));
+        BuildPos block = pos(2, 4, 1);
+        blocks.put(block, BuildBlock.solid("minecraft:oak_planks"));
+
+        Plan plan = ConstructionPlanner.plan(new Target(blocks), level(levelBlocks), REACH, wall);
+
+        assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
+        BuildPos stand = plan.steps().get(index(plan, StepType.PLACE, block)).stand().orElseThrow();
+        assertFalse(wall.contains(stand.below()), "The builder stands on the wall at " + stand.below());
+        assertTrue(plan.steps().stream().anyMatch(step -> step.type() == StepType.PLACE_SCAFFOLDING),
+                "The plan must add scaffolding");
+
+        Plan levelOnly = ConstructionPlanner.plan(new Target(blocks), level(levelBlocks), REACH);
+        BuildPos onLevel = levelOnly.steps().get(index(levelOnly, StepType.PLACE, block)).stand().orElseThrow();
+        assertTrue(wall.contains(onLevel.below()), "A wall of the level is a floor: " + onLevel);
     }
 }

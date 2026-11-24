@@ -7,10 +7,9 @@
 NPC factions trade, defend their villages and hold territory. Caravans travel between the villages.<br>
 The reputation of the player decides how each village receives them.
 
-[![Build on main](https://img.shields.io/github/actions/workflow/status/nicolas-goyon/Folkhold/build.yml?branch=main&label=build%20%C2%B7%20main&logo=github)](https://github.com/nicolas-goyon/Folkhold/actions/workflows/build.yml?query=branch%3Amain)
-[![Build on develop](https://img.shields.io/github/actions/workflow/status/nicolas-goyon/Folkhold/build.yml?branch=develop&label=build%20%C2%B7%20develop&logo=github)](https://github.com/nicolas-goyon/Folkhold/actions/workflows/build.yml?query=branch%3Adevelop)
-[![Release workflow](https://img.shields.io/github/actions/workflow/status/nicolas-goyon/Folkhold/release.yml?label=release&logo=github)](https://github.com/nicolas-goyon/Folkhold/actions/workflows/release.yml)
-[![Latest version](https://img.shields.io/endpoint?url=https%3A%2F%2Fnicolas-goyon.github.io%2FFolkhold%2Fversion.json)](https://github.com/nicolas-goyon/Folkhold/releases)
+[![Build on develop](https://img.shields.io/github/actions/workflow/status/Nicolas-s-minecraft-mods/Folkhold/build.yml?branch=develop&label=build%20%C2%B7%20develop&logo=github)](https://github.com/Nicolas-s-minecraft-mods/Folkhold/actions/workflows/build.yml?query=branch%3Adevelop)
+[![Release workflow](https://img.shields.io/github/actions/workflow/status/Nicolas-s-minecraft-mods/Folkhold/release.yml?label=release&logo=github)](https://github.com/Nicolas-s-minecraft-mods/Folkhold/actions/workflows/release.yml)
+[![Latest version](https://img.shields.io/endpoint?url=https%3A%2F%2Fnicolas-s-minecraft-mods.github.io%2FFolkhold%2Fversion.json)](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases)
 
 [![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-62B47A)](https://www.minecraft.net)
 [![NeoForge 21.1](https://img.shields.io/badge/NeoForge-21.1-D7742F)](https://neoforged.net)
@@ -19,11 +18,13 @@ The reputation of the player decides how each village receives them.
 [![Code license: MIT](https://img.shields.io/badge/code-MIT-2EA44F)](LICENSE)
 [![Assets license: CC BY 4.0](https://img.shields.io/badge/assets-CC%20BY%204.0-8A8A8A)](docs/ASSETS_LICENSES.md)
 
-[Download](https://github.com/nicolas-goyon/Folkhold/releases) ·
+[Website](https://nicolas-s-minecraft-mods.github.io/Folkhold/) ·
+[Download](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases) ·
+[Release notes](https://nicolas-s-minecraft-mods.github.io/Folkhold/#release-notes) ·
 [Design](docs/design.md) ·
 [Getting started](docs/getting-started.md) ·
 [Contributing](CONTRIBUTING.md) ·
-[Roadmap](https://github.com/nicolas-goyon/Folkhold/milestones)
+[Roadmap](https://github.com/Nicolas-s-minecraft-mods/Folkhold/milestones)
 
 </div>
 
@@ -31,7 +32,7 @@ The reputation of the player decides how each village receives them.
 
 ## Features
 
-- **A world that lives on its own.** An abstract simulation runs the factions, the stocks and the caravans, also in the chunks that are not loaded. The world around the player changes with no visit.
+- **A world that lives on its own.** An abstract simulation runs the factions, the stocks and the caravans. It also runs in the chunks that the game does not load. The world around the player changes with no visit.
 - **Factions and territories.** Each village claims the territory around it. The claim grows with the level of the village, from a hamlet to a city.
 - **Fortified villages.** A walled compound with towers and a village heart. Guards patrol, archers hold the towers and a captain leads the garrison. Healers treat the wounded units, riders patrol outside the walls, and faction golems guard the gates of the large villages. The garrison grows with the level of the village. Kill the captain and destroy the heart: the village becomes ruins.
 - **Simulated economy.** Each village produces and consumes goods with the jobs of its inhabitants. Its prices follow its stock and its needs, and its merchants sell its stock.
@@ -41,14 +42,14 @@ The reputation of the player decides how each village receives them.
 
 ## Installation
 
-The modpack is the simple way to play. It contains the Folkhold mods and a selection of mods for performance, nature and terrain.
+The modpack is the simple way to play. It contains the Folkhold mods and a selection of mods for performance, nature, terrain, maps and inventory comfort.
 
-1. Download `folkhold-<version>.mrpack` from the [latest release](https://github.com/nicolas-goyon/Folkhold/releases).
+1. Download `folkhold-<version>.mrpack` from the [latest release](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases).
 2. Import the file in a launcher that reads Modrinth packs, for example [Prism Launcher](https://prismlauncher.org) or the [Modrinth App](https://modrinth.com/app).
 3. Start the game and create a new world.
 4. Optional: pre-generate the area around the spawn with Chunky. The game then generates fewer chunks during the play, for example with an elytra or a boat on ice. Use the commands `/chunky spawn`, `/chunky radius 2000` and `/chunky start` (cheats must be on). A radius of 2000 blocks is about 62,500 chunks: the generation takes time, and the world uses more disk space. Chunky continues after a restart of the game.
 
-To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance with NeoForge 21.1.259 or later and [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later.
+To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance. The instance needs NeoForge 21.1.259 or later, [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later and [Cartofold](https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases) 0.43.6 or later. The client also needs [Confee](https://www.curseforge.com/minecraft/mc-mods/confee) 0.2.0 or later. `folkhold_events` and `folkhold_balance` are optional.
 
 ## Modules
 
@@ -57,25 +58,27 @@ The project has two libraries and three mods. All mods share one version.
 | Module | Mod ID | Content |
 | --- | --- | --- |
 | `core` | `folkhold_core` | Shared library: abstract simulation, regions, scheduler, UI framework |
-| `blocks` | `folkhold_blocks` | Library of the Folkhold blocks, with no game logic. The other mods add the features. |
+| `blocks` | `folkhold_blocks` | Library of the Folkhold blocks. The blocks act as similar vanilla blocks. The other mods add the game logic. |
 | `world` | `folkhold_world` | Factions, villages, economy, caravans, quests |
-| `balance` | `folkhold_balance` | Planned: farm limits, villager budgets, chunk loading. The mod is empty. |
-| `events` | `folkhold_events` | Planned: earthquakes, collapses. The mod is empty. |
+| `balance` | `folkhold_balance` | A limit for the fast nights of the mod Slumber. Planned: farm limits, villager budgets, chunk loading. |
+| `events` | `folkhold_events` | Natural events: earthquakes and storms. A stabilizer block protects the buildings near it. |
 
-The packwiz modpack (`modpack/`) adds existing mods for performance, nature and terrain.
+The packwiz modpack (`modpack/`) adds existing mods for performance, nature and terrain. It also has the mods Markethold (trades), Runehold (enchantments and anvil) and Railhold (trains).
 
 ## Documentation
 
 | Document | Content |
 | --- | --- |
-| [Design document](docs/design.md) | Vision, rules of the simulation, what is implemented and what is planned |
+| [Design document](docs/design.md) | Vision, rules of the simulation, the features that the mods have and the features of the plan |
 | [Getting started](docs/getting-started.md) | Prerequisites, first build, daily workflow, CI and releases |
 | [UI framework](docs/ui-framework.md) | The shared widgets and the look of the screens |
+| [Quest definitions](docs/quest-definitions.md) | The JSON format of the quests, for the makers of data packs |
+| [Village generation study](docs/research/village-generation.md) | The village plan, a state of the art of procedural villages on terrain, and proposals |
 | [Contributing](CONTRIBUTING.md) | Branches, commit titles and versions, pull requests, translations |
 
 ## Status
 
-Early development. The [milestones](https://github.com/nicolas-goyon/Folkhold/milestones) give the roadmap, and the [issues](https://github.com/nicolas-goyon/Folkhold/issues) give the work in progress. Each merge of `develop` into `main` makes a [release](https://github.com/nicolas-goyon/Folkhold/releases).
+Early development. The [milestones](https://github.com/Nicolas-s-minecraft-mods/Folkhold/milestones) give the roadmap, and the [issues](https://github.com/Nicolas-s-minecraft-mods/Folkhold/issues) give the work in progress. Each merge of `develop` into `main` makes a [release](https://github.com/Nicolas-s-minecraft-mods/Folkhold/releases).
 
 ## License
 

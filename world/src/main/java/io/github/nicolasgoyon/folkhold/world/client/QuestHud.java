@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.config.ClientConfig;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload.Entry;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload.Escort;
+import io.github.nicolasgoyon.folkhold.world.network.TerritoryStatusPayload;
 import java.util.Optional;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -17,12 +18,15 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * The quest panel at the top left of the screen (client option {@link ClientConfig#SHOW_QUEST_HUD}).
+ * The quest panel at the top right of the screen (client option {@link ClientConfig#showQuestHud}), below the
+ * territory panel ({@link TerritoryHud}) and the vanilla icons of the status effects. The minimap of Cartofold and the
+ * coordinates are at the top left: the panel does not cover them. The panel has a scale of {@link #SCALE}.
  *
  * <ul>
  *   <li>A header with the number of active quests and the maximum.</li>
@@ -47,13 +51,23 @@ public final class QuestHud {
     /** Under this time, the time of a quest is on a red badge. */
     private static final int URGENT_SECONDS = 120;
     private static final int HEARTS = 4;
+    /** The scale of the text and of the icons of the panel. */
+    static final float SCALE = 0.75F;
+    /** The gap between the territory panel and the quest panel, in pixels of the screen. */
+    private static final int GAP = 2;
+    // The layout of the territory panel (see TerritoryHud): its margin, its padding, its banner and the height of a
+    // row of the vanilla icons of the status effects.
+    private static final int TERRITORY_MARGIN = 4;
+    private static final int TERRITORY_PAD = 4;
+    private static final int TERRITORY_BANNER = 14;
+    private static final int EFFECT_ROW = 26;
 
     private QuestHud() {
     }
 
     public static void render(GuiGraphics graphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!ClientConfig.SHOW_QUEST_HUD.get() || minecraft.options.hideGui
+        if (!ClientConfig.get().showQuestHud || minecraft.options.hideGui
                 || minecraft.getDebugOverlay().showDebugScreen() || minecraft.player == null) {
             return;
         }
@@ -73,20 +87,34 @@ public final class QuestHud {
                 int title = ICON + 4 + font.width(entry.name()) + 8 + font.width("00:00");
                 int blocks = font.width(blocks(escort)) + 8 + toward;
                 int merchant = escort.maxHealth() > 0 ? font.width(merchant(escort)) : 0;
+                merchant = Math.max(merchant, escort.attacked() ? font.width(attack(escort)) : 0);
                 width = Math.max(width, Math.max(title, Math.max(blocks, merchant)) + 8 + 2 * PAD);
             } else {
                 width = Math.max(width, ICON + 4 + font.width(rowText(entry, inventory)) + 6 + toward
                         + font.width("00:00") + 2 * PAD);
             }
         }
-        width = Math.min(width, Math.min(MAX_WIDTH, graphics.guiWidth() / 2 - MARGIN));
+        width = Math.min(width, Math.min(MAX_WIDTH, (int) ((graphics.guiWidth() / 2 - MARGIN) / SCALE)));
         int height = PAD + UiTheme.LINE + 3;
         for (Entry entry : log.quests()) {
             height += entry.escort().map(escort -> escortHeight(escort) + 2).orElse(ROW);
         }
         height += PAD - 2;
 
-        UiRect panel = new UiRect(MARGIN, MARGIN, width, height);
+        int screenWidth = Math.round(width * SCALE);
+        graphics.pose().pushPose();
+        graphics.pose().translate(graphics.guiWidth() - MARGIN - screenWidth, top(player), 0);
+        graphics.pose().scale(SCALE, SCALE, 1.0F);
+        try {
+            renderPanel(graphics, font, player, log, inventory, now, new UiRect(0, 0, width, height));
+        } finally {
+            graphics.pose().popPose();
+        }
+    }
+
+    /** Draws the panel in its own scaled coordinates. */
+    private static void renderPanel(GuiGraphics graphics, Font font, LocalPlayer player, QuestLogPayload log,
+            Inventory inventory, long now, UiRect panel) {
         UiDraw.fill(graphics, panel, UiTheme.HUD);
         UiRect inner = panel.inset(PAD);
         Component header = Component.translatable(KEY + "header", log.quests().size(), log.maxActive());
@@ -104,6 +132,57 @@ public final class QuestHud {
                 y += ROW;
             }
         }
+    }
+
+    /**
+     * The Y of the top of the quest panel, in pixels of the screen: below the vanilla icons of the status effects and
+     * below the territory panel when the territory panel shows.
+     */
+    private static int top(LocalPlayer player) {
+        TerritoryStatusPayload status = ClientTerritory.get();
+        int lines = status.faction().isEmpty() ? 0 : status.village().isPresent() ? 2 : 1;
+        boolean shown = ClientConfig.get().showTerritoryHud && lines > 0;
+        return top(effectsHeight(player), shown ? territoryHeight(lines, status.factionColor() >= 0) : 0);
+    }
+
+    /**
+     * The Y of the top of the quest panel.
+     *
+     * @param effects   the height of the vanilla icons of the status effects (0, 1 or 2 rows)
+     * @param territory the height of the territory panel, or 0 when it does not show
+     * @return the Y, in pixels of the screen
+     */
+    static int top(int effects, int territory) {
+        return TERRITORY_MARGIN + effects + (territory > 0 ? territory + GAP : 0);
+    }
+
+    /**
+     * The height of the territory panel (the layout of {@link TerritoryHud}).
+     *
+     * @param lines  the number of text lines (1 or 2)
+     * @param banner true when the panel has the banner of a faction
+     * @return the height, in pixels of the screen
+     */
+    static int territoryHeight(int lines, boolean banner) {
+        return TERRITORY_PAD + Math.max(lines * (UiTheme.LINE + 2) - 2, banner ? TERRITORY_BANNER : 0)
+                + TERRITORY_PAD;
+    }
+
+    /** The height of the vanilla icons of the status effects at the top right (the rule of {@link TerritoryHud}). */
+    private static int effectsHeight(LocalPlayer player) {
+        boolean beneficial = false;
+        boolean harmful = false;
+        for (MobEffectInstance effect : player.getActiveEffects()) {
+            if (!effect.showIcon()) {
+                continue;
+            }
+            if (effect.getEffect().value().isBeneficial()) {
+                beneficial = true;
+            } else {
+                harmful = true;
+            }
+        }
+        return harmful ? 2 * EFFECT_ROW : beneficial ? EFFECT_ROW : 0;
     }
 
     /**
@@ -128,10 +207,21 @@ public final class QuestHud {
     }
 
     private static Component rowText(Entry entry, Inventory inventory) {
-        if (entry.escort().isPresent()) {
+        return rowText(entry, hasItems(entry) ? count(inventory, entry.itemId()) : 0);
+    }
+
+    /**
+     * The text of a row: what to do, and for a delivery the items of the player. A quest with no items to give (a
+     * hunt, an escort) has a count of 0: its row has no progress of items.
+     *
+     * @param entry the quest
+     * @param have  the items of the player
+     * @return the text
+     */
+    static Component rowText(Entry entry, int have) {
+        if (!hasItems(entry)) {
             return entry.name();
         }
-        int have = count(inventory, entry.itemId());
         boolean ready = have >= entry.count();
         MutableComponent progress = Component.translatable(KEY + "progress", Math.min(have, entry.count()),
                 entry.count());
@@ -140,6 +230,11 @@ public final class QuestHud {
         }
         return Component.empty().append(entry.name()).append(UiStrings.separator().withColor(UiTheme.TEXT_FAINT))
                 .append(progress.withColor(ready ? UiTheme.TEXT_GOOD : UiTheme.TEXT_MUTED));
+    }
+
+    /** True for a quest with items to give: a delivery. */
+    private static boolean hasItems(Entry entry) {
+        return entry.escort().isEmpty() && entry.count() > 0;
     }
 
     private static void renderDelivery(GuiGraphics graphics, Font font, LocalPlayer player, Entry entry,
@@ -175,9 +270,9 @@ public final class QuestHud {
     }
 
     private static int escortHeight(Escort escort) {
-        // Padding, title, gap, bar, gap, blocks line, merchant line, warning line, padding.
+        // Padding, title, gap, bar, gap, blocks line, merchant line, warning line, attack line, padding.
         return 4 + ROW + 2 + 3 + 3 + UiTheme.LINE + (escort.maxHealth() > 0 ? 2 + UiTheme.LINE : 0)
-                + (escort.away() ? 2 + UiTheme.LINE : 0) + 4;
+                + (escort.away() ? 2 + UiTheme.LINE : 0) + (escort.attacked() ? 2 + UiTheme.LINE : 0) + 4;
     }
 
     private static void renderEscort(GuiGraphics graphics, Font font, LocalPlayer player, Entry entry, Escort escort,
@@ -216,6 +311,15 @@ public final class QuestHud {
                     UiText.clock(ClientQuestLog.secondsNow(escort.awaySeconds(), now)));
             UiText.draw(graphics, font, text, inner.x(), y, inner.width(), UiTheme.TEXT_URGENT);
         }
+        if (escort.attacked()) {
+            y += UiTheme.LINE + 2;
+            UiText.draw(graphics, font, attack(escort), inner.x(), y, inner.width(), UiTheme.TEXT_URGENT);
+        }
+    }
+
+    /** The line of an attack on the caravan: the raiders that stay, and the wait of the merchant. */
+    static Component attack(Escort escort) {
+        return Component.translatable(KEY + "ambush", escort.raiders());
     }
 
     /** The hearts of the merchant: full hearts in red, empty hearts in grey. */

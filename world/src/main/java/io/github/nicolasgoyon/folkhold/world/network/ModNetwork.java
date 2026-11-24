@@ -1,8 +1,10 @@
 package io.github.nicolasgoyon.folkhold.world.network;
 
 import io.github.nicolasgoyon.folkhold.world.admin.AdminActions;
+import io.github.nicolasgoyon.folkhold.world.client.AdminMapScreen;
 import io.github.nicolasgoyon.folkhold.world.client.AdminScreen;
 import io.github.nicolasgoyon.folkhold.world.client.BankPillageScreen;
+import io.github.nicolasgoyon.folkhold.world.client.ClientJournalMap;
 import io.github.nicolasgoyon.folkhold.world.client.ClientQuestLog;
 import io.github.nicolasgoyon.folkhold.world.client.ClientRouteView;
 import io.github.nicolasgoyon.folkhold.world.client.ClientTerritory;
@@ -17,6 +19,7 @@ import io.github.nicolasgoyon.folkhold.world.client.VillageHeartScreen;
 import io.github.nicolasgoyon.folkhold.world.construction.ConstructionPlacement;
 import io.github.nicolasgoyon.folkhold.world.journal.Journals;
 import io.github.nicolasgoyon.folkhold.world.journal.RouteViews;
+import io.github.nicolasgoyon.folkhold.world.journal.TerritoryReliefs;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.village.BankChests;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -60,6 +63,10 @@ public final class ModNetwork {
                 (payload, context) -> ClientTerritory.set(payload));
         registrar.playToClient(TerritoryTitlePayload.TYPE, TerritoryTitlePayload.STREAM_CODEC,
                 (payload, context) -> TerritoryTitleHud.show(payload));
+        registrar.playToClient(TerritoryMapPayload.TYPE, TerritoryMapPayload.STREAM_CODEC,
+                (payload, context) -> ClientJournalMap.setTerritories(payload));
+        registrar.playToClient(AdminMapPayload.TYPE, AdminMapPayload.STREAM_CODEC,
+                (payload, context) -> AdminMapScreen.open(payload));
         registrar.playToClient(VillageInfoPayload.TYPE, VillageInfoPayload.STREAM_CODEC,
                 (payload, context) -> InfoScreen.open(payload));
         registrar.playToClient(VillageHeartPayload.TYPE, VillageHeartPayload.STREAM_CODEC,
@@ -80,6 +87,14 @@ public final class ModNetwork {
                 });
         registrar.playToClient(RoutePayload.TYPE, RoutePayload.STREAM_CODEC,
                 (payload, context) -> ClientRouteView.set(payload));
+        registrar.playToServer(MapReliefRequestPayload.TYPE, MapReliefRequestPayload.STREAM_CODEC,
+                (payload, context) -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        TerritoryReliefs.request(player);
+                    }
+                });
+        registrar.playToClient(MapReliefPayload.TYPE, MapReliefPayload.STREAM_CODEC,
+                (payload, context) -> ClientJournalMap.set(payload));
         registrar.playToServer(QuestBoardRequestPayload.TYPE, QuestBoardRequestPayload.STREAM_CODEC,
                 (payload, context) -> {
                     if (context.player() instanceof ServerPlayer player) {

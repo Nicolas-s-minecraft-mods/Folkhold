@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -55,15 +56,16 @@ class GarrisonEquipmentTest {
                 dataFile().sets().get(GarrisonEquipment.DEFAULT_SET));
     }
 
-    /** Each variant of the archers of all the sets has a bow or a crossbow: their attack needs it. */
+    /** Each variant of the archers of all the sets has a bow, a crossbow or a trident: their attack needs it. */
     @Test
-    void archersHaveABowOrACrossbow() throws IOException {
+    void archersHaveARangedWeapon() throws IOException {
         Sets sets = dataFile();
 
         for (String set : sets.ids()) {
             for (Map<EquipmentSlot, Piece> variant : sets.variants(set, GarrisonRole.ARCHER)) {
                 String weapon = variant.get(EquipmentSlot.MAINHAND).item();
-                assertTrue(weapon.equals("minecraft:bow") || weapon.equals("minecraft:crossbow"), set + ": " + weapon);
+                assertTrue(weapon.equals("minecraft:bow") || weapon.equals("minecraft:crossbow")
+                        || weapon.equals("minecraft:trident"), set + ": " + weapon);
             }
         }
     }
@@ -104,6 +106,84 @@ class GarrisonEquipmentTest {
         }
         assertEquals(Set.of("minecraft:bow", "minecraft:crossbow"), weapons);
         assertThrows(IllegalArgumentException.class, () -> parse("{\"a\": {\"archer\": []}}"));
+    }
+
+    /**
+     * The set of a culture changes the roles that it gives. The other roles, and the units of the other cultures and
+     * of no culture, use the set with no culture.
+     */
+    @Test
+    void cultureSetChangesItsRoles() {
+        Sets sets = parse("""
+                {"hamlet": {"guard": {"mainhand": "minecraft:iron_sword"}, "archer": {"mainhand": "minecraft:bow"}},
+                 "valeholm/hamlet": {"guard": {"mainhand": "minecraft:iron_axe"}}}
+                """);
+        UUID id = new UUID(0L, 1L);
+
+        assertEquals("minecraft:iron_axe", sets.pieces("valeholm", "hamlet", GarrisonRole.GUARD, id)
+                .get(EquipmentSlot.MAINHAND).item());
+        assertEquals("minecraft:bow", sets.pieces("valeholm", "hamlet", GarrisonRole.ARCHER, id)
+                .get(EquipmentSlot.MAINHAND).item(), "A role that the culture does not change");
+        assertEquals("minecraft:iron_sword", sets.pieces("ashmark", "hamlet", GarrisonRole.GUARD, id)
+                .get(EquipmentSlot.MAINHAND).item(), "Another culture");
+        assertEquals("minecraft:iron_sword", sets.pieces(null, "hamlet", GarrisonRole.GUARD, id)
+                .get(EquipmentSlot.MAINHAND).item(), "No culture");
+    }
+
+    /**
+     * The cultures of the data file: Valeholm has axes and bows, Ashmark crossbows, Sunreach spears (tridents) for all
+     * the roles. The tridents of the Sunreach archers have Loyalty: they come back to the archer. Each culture has a set
+     * for each set of the level table.
+     */
+    @Test
+    void dataFileHasTheWeaponsOfTheCultures() throws IOException {
+        Sets sets = dataFile();
+        UUID id = new UUID(0L, 1L);
+        for (String set : List.of("hamlet", "village", "town", "city", "capital")) {
+            for (String culture : List.of("valeholm", "ashmark", "sunreach")) {
+                assertTrue(sets.ids().contains(culture + "/" + set), "No set " + culture + "/" + set);
+            }
+            for (GarrisonRole role : List.of(GarrisonRole.GUARD, GarrisonRole.CAPTAIN, GarrisonRole.RIDER)) {
+                assertTrue(weapon(sets, "valeholm", set, role).endsWith("_axe"), set + " " + role);
+                assertEquals("minecraft:trident", weapon(sets, "sunreach", set, role), set + " " + role);
+                assertTrue(weapon(sets, "ashmark", set, role).endsWith("_sword"), set + " " + role);
+            }
+            for (Map<EquipmentSlot, Piece> variant : sets.variants("ashmark", set, GarrisonRole.ARCHER)) {
+                assertEquals("minecraft:crossbow", variant.get(EquipmentSlot.MAINHAND).item(), set);
+            }
+            for (Map<EquipmentSlot, Piece> variant : sets.variants("valeholm", set, GarrisonRole.ARCHER)) {
+                assertEquals("minecraft:bow", variant.get(EquipmentSlot.MAINHAND).item(), set);
+            }
+            for (Map<EquipmentSlot, Piece> variant : sets.variants("sunreach", set, GarrisonRole.ARCHER)) {
+                Piece weapon = variant.get(EquipmentSlot.MAINHAND);
+                assertEquals("minecraft:trident", weapon.item(), set);
+                assertTrue(weapon.enchantments().getOrDefault(ResourceLocation.withDefaultNamespace("loyalty"), 0) > 0,
+                        "The trident of an archer comes back: " + set);
+            }
+            assertTrue(sets.pieces("sunreach", set, GarrisonRole.GUARD, id).get(EquipmentSlot.OFFHAND) == null,
+                    "A spear needs both hands: no shield " + set);
+            for (GarrisonRole role : List.of(GarrisonRole.GUARD, GarrisonRole.CAPTAIN, GarrisonRole.RIDER)) {
+                assertTrue(sets.pieces("sunreach", set, role, id).get(EquipmentSlot.MAINHAND).enchantments()
+                        .getOrDefault(ResourceLocation.withDefaultNamespace("loyalty"), 0) > 0,
+                        "The spear comes back after a throw: " + set + " " + role);
+            }
+        }
+    }
+
+    /** In each culture, the weapon of the guards of a capital is better than in a hamlet: another item or enchantments. */
+    @Test
+    void capitalWeaponIsBetterInEachCulture() throws IOException {
+        Sets sets = dataFile();
+        UUID id = new UUID(0L, 1L);
+        for (String culture : List.of("valeholm", "ashmark", "sunreach")) {
+            Piece hamlet = sets.pieces(culture, "hamlet", GarrisonRole.GUARD, id).get(EquipmentSlot.MAINHAND);
+            Piece capital = sets.pieces(culture, "capital", GarrisonRole.GUARD, id).get(EquipmentSlot.MAINHAND);
+            assertNotEquals(hamlet, capital, culture);
+        }
+    }
+
+    private static String weapon(Sets sets, String culture, String set, GarrisonRole role) {
+        return sets.pieces(culture, set, role, new UUID(0L, 1L)).get(EquipmentSlot.MAINHAND).item();
     }
 
     /** A piece can have enchantments. An unknown set or role gives the pieces of the role in the default set. */

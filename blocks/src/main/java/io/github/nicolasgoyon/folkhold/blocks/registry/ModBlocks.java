@@ -5,12 +5,14 @@ import io.github.nicolasgoyon.folkhold.blocks.block.BankChestBlock;
 import io.github.nicolasgoyon.folkhold.blocks.block.BrazierBlock;
 import io.github.nicolasgoyon.folkhold.blocks.block.BuildingSignBlock;
 import io.github.nicolasgoyon.folkhold.blocks.block.BuildingSignKind;
+import io.github.nicolasgoyon.folkhold.blocks.block.JobSignBlock;
 import io.github.nicolasgoyon.folkhold.blocks.block.QuestBoardBlock;
 import io.github.nicolasgoyon.folkhold.blocks.block.VillageHeartBlock;
 import io.github.nicolasgoyon.folkhold.blocks.feature.FeatureBlock;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
@@ -76,6 +78,25 @@ public final class ModBlocks {
 
     /** The building signs, one block for each kind. */
     public static final Map<BuildingSignKind, DeferredBlock<BuildingSignBlock>> BUILDING_SIGNS = buildingSigns();
+
+    /** The sign of the building of a job. Its block entity keeps the job id and the icon item. */
+    public static final DeferredBlock<JobSignBlock> JOB_SIGN = BLOCKS.register("job_sign",
+            () -> new JobSignBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.WOOD)
+                    .strength(1.5F, 3.0F)
+                    .sound(SoundType.WOOD)
+                    .noOcclusion()));
+
+    /**
+     * The stabilizer: reinforced foundations of stone and copper. The events mod protects the blocks near it from the
+     * natural events (tag {@code folkhold_events:stabilizer}). It has the strength of a copper block.
+     */
+    public static final DeferredBlock<Block> STABILIZER = BLOCKS.registerSimpleBlock("stabilizer",
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_ORANGE)
+                    .strength(3.0F, 6.0F)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.COPPER));
 
     private ModBlocks() {
     }

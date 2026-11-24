@@ -17,11 +17,9 @@ import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
-import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -32,9 +30,11 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class FolkholdWorldClient {
 
     public FolkholdWorldClient(IEventBus modEventBus, ModContainer modContainer) {
-        // Config screen in the mod list. Server values are editable only in a world.
-        modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
-        modContainer.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
+        // Config screen in the mod list: the Confee screen of the client options. Its button "Server options"
+        // opens the NeoForge screen of the server options, which edits them only in a single player world.
+        ClientConfig.register();
+        modContainer.registerExtensionPoint(IConfigScreenFactory.class,
+                (container, parent) -> ClientConfig.config().createScreen(parent));
         modEventBus.addListener(FolkholdWorldClient::onRegisterRenderers);
         modEventBus.addListener(FolkholdWorldClient::onRegisterLayers);
         modEventBus.addListener(FolkholdWorldClient::onRegisterGuiLayers);
@@ -55,9 +55,11 @@ public final class FolkholdWorldClient {
     /** The player leaves a world or a server: the client forgets what it knows about the world. */
     private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientTerritory.clear();
+        ClientJournalMap.clear();
         ClientQuestLog.clear();
         TerritoryTitleHud.clear();
         AdminScreen.clear();
+        AdminMapScreen.clear();
         JournalScreen.clear();
         ClientRouteView.clear();
         ClientRouteOverlay.clear();

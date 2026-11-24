@@ -156,5 +156,34 @@ class HistoryTest(unittest.TestCase):
         self.assertIn("https://github.com/owner/repo/compare/v0.1.0-alpha.1...v0.2.0", content)
 
 
+class ReleaseTypeTest(unittest.TestCase):
+    def release_type(self, content):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "gradle.properties")
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(content)
+            return version.release_type(path)
+
+    def test_each_release_type(self):
+        for kind in ("alpha", "beta", "release"):
+            with self.subTest(kind=kind):
+                self.assertEqual(self.release_type(f"# comment\nmod_version=1.0\nrelease_type = {kind}\n"), kind)
+
+    def test_unknown_release_type(self):
+        with self.assertRaises(ValueError):
+            self.release_type("release_type=stable\n")
+
+    def test_missing_release_type(self):
+        with self.assertRaises(ValueError):
+            self.release_type("mod_version=1.0\n")
+
+    def test_two_release_types(self):
+        with self.assertRaises(ValueError):
+            self.release_type("release_type=beta\nrelease_type=release\n")
+
+    def test_the_repository_has_a_release_type(self):
+        self.assertIn(version.release_type(), version.RELEASE_TYPES)
+
+
 if __name__ == "__main__":
     unittest.main()

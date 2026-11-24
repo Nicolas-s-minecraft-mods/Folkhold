@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.nicolasgoyon.folkhold.world.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "EntityMixin",
+    "LevelChunkMixin",
+    "MoveControlMixin",
+    "StructureCheckAccessor",
+    "StructureManagerAccessor",
+    "VillagerGoalPackagesMixin",
+    "VillagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -17,15 +17,30 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import io.netty.channel.embedded.EmbeddedChannel;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestInfo;
+import net.minecraft.gametest.framework.GameTestListener;
+import net.minecraft.gametest.framework.GameTestRunner;
+import net.minecraft.gametest.framework.GameTestSequence;
+import net.minecraft.gametest.framework.GameTestTicker;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
@@ -33,18 +48,29 @@ import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.fml.util.ObfuscationReflectionHelper;
+import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.event.EventHooks;
 
 /**
@@ -69,8 +95,26 @@ final class TestSupport {
     static final int ARENA_SIZE = 16;
     /** The day time of a test: noon. */
     static final long NOON = 6000L;
+    /**
+     * The real-time limit, in seconds, for work on another thread, for example the route worker thread. The worker
+     * thread also does the work that the earlier tests and the simulation gave to it.
+     */
+    static final long WORKER_SECONDS = 60;
+    /**
+     * The tick limit of a test that waits for work on another thread. The GameTest server does not wait between two
+     * ticks, so a number of ticks is not a real time. This limit is a safety limit only: {@link #WORKER_SECONDS}
+     * stops the wait before it.
+     */
+    static final int WORKER_TICKS = 2_000_000;
     /** The settlements of the earlier tests in this radius go into ruins, in blocks. */
     private static final long RETIRE_RADIUS = 4096;
+    /**
+     * The settings (config values and game rules) that each running test changed, for {@link #restoreAtTestEnd}. The
+     * GameTests run on the server thread only.
+     */
+    private static final Map<GameTestInfo, Set<Object>> CHANGED_SETTINGS = new WeakHashMap<>();
+    /** The key of the day time in the changed settings of a test. */
+    private static final Object DAY_TIME = new Object();
 
     private TestSupport() {
     }
@@ -105,42 +149,209 @@ final class TestSupport {
         }
     }
 
+    /**
+     * The margin around the area of another running test, in blocks. The framework puts 5 blocks between the cells of
+     * 2 tests, so the margins of 2 cells do not touch.
+     */
+    private static final double OTHER_TEST_MARGIN = 2.0;
+    /** The private list of the running tests of the GameTest framework. */
+    private static final Field RUNNING_TESTS = ObfuscationReflectionHelper.findField(GameTestTicker.class,
+            "testInfos");
     /** The entities of an earlier test this far from the test area are removed, in blocks. */
     private static final double SWEEP_DISTANCE = 64.0;
+    /**
+     * The drops of an earlier test this far from the test area are removed, in blocks. The distance is small: the
+     * tests of the same batch start at the same tick, and the cell of another test is not in this distance.
+     */
+    private static final double DROP_MARGIN = 2.0;
+    /**
+     * The largest age of a drop of the test, in ticks, when the test sees it for the first time. The test looks at
+     * the drops on each tick. A drop of an earlier test is older: it comes from a chunk that loads again, or it moves
+     * into the area.
+     */
+    static final int NEW_DROP_AGE = 5;
+
+    /** The largest number of beds that {@link #placeBeds} puts in an arena. */
+    static final int MAX_ARENA_BEDS = 2 * ARENA_SIZE + 2 * (ARENA_SIZE - 6);
+
+    /**
+     * Places beds on the floor of the arena (y = 1): along the north edge, along the south edge, then along the west
+     * edge and the east edge. The 2 parts of a bed go with no updates of the neighbors.
+     *
+     * @param helper the helper of the test
+     * @param count  the number of beds, at most {@link #MAX_ARENA_BEDS}
+     */
+    static void placeBeds(GameTestHelper helper, int count) {
+        List<BlockPos> feet = new ArrayList<>();
+        List<Direction> directions = new ArrayList<>();
+        for (int x = 0; x < ARENA_SIZE; x++) {
+            feet.add(new BlockPos(x, 1, 0));
+            directions.add(Direction.SOUTH);
+            feet.add(new BlockPos(x, 1, ARENA_SIZE - 1));
+            directions.add(Direction.NORTH);
+        }
+        for (int z = 3; z < ARENA_SIZE - 3; z++) {
+            feet.add(new BlockPos(0, 1, z));
+            directions.add(Direction.EAST);
+            feet.add(new BlockPos(ARENA_SIZE - 1, 1, z));
+            directions.add(Direction.WEST);
+        }
+        if (count > feet.size()) {
+            throw new IllegalArgumentException("An arena has room for " + feet.size() + " beds, not " + count);
+        }
+        for (int i = 0; i < count; i++) {
+            placeBed(helper, feet.get(i), directions.get(i));
+        }
+    }
+
+    /**
+     * Places a red bed with no updates of the neighbors.
+     *
+     * @param helper    the helper of the test
+     * @param foot      the position of the foot, relative to the test
+     * @param direction the direction from the foot to the head
+     */
+    static void placeBed(GameTestHelper helper, BlockPos foot, Direction direction) {
+        BlockState bed = Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, direction);
+        ServerLevel level = helper.getLevel();
+        BlockPos absolute = helper.absolutePos(foot);
+        level.setBlock(absolute, bed.setValue(BedBlock.PART, BedPart.FOOT), Block.UPDATE_CLIENTS);
+        level.setBlock(absolute.relative(direction), bed.setValue(BedBlock.PART, BedPart.HEAD), Block.UPDATE_CLIENTS);
+    }
+
+    /**
+     * Removes the blocks of the earlier tests in the scan area of a village heart, outside the structure of the test
+     * and above its floor. The tests of the earlier batches use the same cells. A test structure is higher or larger
+     * than the arena of a later test (for example a house template), and the framework removes only the blocks in the
+     * structure of the later test. Thus a scan of the heart can find a sign or a bed of an earlier test. The batch of
+     * the test must have no other test: the area can reach the cell of a test of the same batch.
+     *
+     * @param helper the test
+     * @param area   the scan area, in absolute positions
+     */
+    static void clearEarlierBlocks(GameTestHelper helper, BoundingBox area) {
+        ServerLevel level = helper.getLevel();
+        AABB bounds = helper.getBounds();
+        int floor = helper.absolutePos(BlockPos.ZERO).getY() + 1;
+        for (BlockPos pos : BlockPos.betweenClosed(area.minX(), Math.max(floor, area.minY()), area.minZ(),
+                area.maxX(), area.maxY(), area.maxZ())) {
+            if (!bounds.contains(pos.getCenter()) && !level.getBlockState(pos).isAir()) {
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            }
+        }
+    }
 
     /**
      * Removes what an earlier test can leave behind when it fails: its units, monsters and villagers within
-     * {@link #SWEEP_DISTANCE} blocks of the test area, the kept groups of the materializer, and a day time that
-     * is not noon. A test does not depend on the success of the test before it.
+     * {@link #SWEEP_DISTANCE} blocks of the test area, its drops in the test area (see {@link #removeDrops}), the
+     * kept groups of the materializer, and a day time that is not noon. A test does not depend on the success of the
+     * test before it. The entities in the areas of the other running tests stay (see {@link #otherRunningAreas}).
      */
     static void sweep(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         AABB area = helper.getBounds().inflate(SWEEP_DISTANCE);
+        List<AABB> running = otherRunningAreas(helper);
         for (Entity entity : level.getEntitiesOfClass(Entity.class, area, entity ->
                 entity instanceof FactionUnit || entity instanceof Monster || entity instanceof Villager)) {
-            entity.discard();
+            if (running.stream().noneMatch(other -> other.contains(entity.position()))) {
+                entity.discard();
+            }
         }
+        removeDrops(level, helper.getBounds().inflate(DROP_MARGIN));
         for (MobileGroup group : MobileGroupData.get(level.getServer()).groups().all()) {
             GroupMaterializer.keep(group.id(), false);
         }
+        // The day time at the start of each test. This is not a change of the test: it has no restore.
         level.setDayTime(NOON);
     }
 
     /**
-     * Puts in ruins the active settlements near the test that are outside the test area. Each batch has one test,
-     * so these settlements are of earlier tests. An active settlement claims the territory around it, and a
-     * territory of another faction changes the chase area of the units of the test.
+     * The areas of the other tests that run at the same time as a test: the other tests of its batch that are not
+     * done. Each area has a margin of {@link #OTHER_TEST_MARGIN} blocks on the 4 sides, and goes from the bottom to
+     * the top of the level. A test can put an entity above its structure, for example on a tower. The tests of one
+     * batch start at the same time, in cells side by side. Thus the cleanup of a test must keep the entities and the
+     * settlements in these areas.
+     *
+     * @param helper the helper of the test
+     * @return the areas, in absolute positions
+     */
+    static List<AABB> otherRunningAreas(GameTestHelper helper) {
+        Collection<GameTestInfo> tests;
+        try {
+            @SuppressWarnings("unchecked")
+            Collection<GameTestInfo> running = (Collection<GameTestInfo>) RUNNING_TESTS.get(GameTestTicker.SINGLETON);
+            tests = running;
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("The running GameTests are not available", e);
+        }
+        ServerLevel level = helper.getLevel();
+        List<AABB> areas = new ArrayList<>();
+        for (GameTestInfo test : tests) {
+            if (test != helper.testInfo && !test.isDone()) {
+                AABB bounds = test.getStructureBounds().inflate(OTHER_TEST_MARGIN, 0.0, OTHER_TEST_MARGIN);
+                areas.add(new AABB(bounds.minX, level.getMinBuildHeight(), bounds.minZ, bounds.maxX,
+                        level.getMaxBuildHeight(), bounds.maxZ));
+            }
+        }
+        return areas;
+    }
+
+    /**
+     * Fails the test when an entity is not in the level, or when the level did not tick the entity on each tick since
+     * a game time. A test with an entity that does not tick can pass and check nothing.
+     *
+     * @param helper the helper of the test
+     * @param entity the entity
+     * @param added  the game time when the test added the entity to the level
+     */
+    static void assertTicks(GameTestHelper helper, Entity entity, long added) {
+        long elapsed = helper.getLevel().getGameTime() - added;
+        helper.assertTrue(!entity.isRemoved(), "The entity must stay in the level: " + entity + ", removal "
+                + entity.getRemovalReason());
+        // The entity gets its first tick on the tick after the test adds it.
+        helper.assertTrue(entity.tickCount >= elapsed - 1, "The entity must tick on each tick: " + entity.tickCount
+                + " ticks in " + elapsed + " ticks of the level, " + entity);
+    }
+
+    /**
+     * Removes the item entities and the experience orbs in an area. Monsters that die outside their test area, for
+     * example the raiders of a raid test, drop items there. The GameTest framework removes only the entities in the
+     * test area when a test passes. These drops can stay in the area of a later test, and change its count of items.
+     *
+     * @param level the level
+     * @param area  the area, in absolute positions
+     */
+    static void removeDrops(ServerLevel level, AABB area) {
+        level.getEntitiesOfClass(ItemEntity.class, area).forEach(Entity::discard);
+        level.getEntitiesOfClass(ExperienceOrb.class, area).forEach(Entity::discard);
+    }
+
+    /**
+     * Tells if an item entity is a new drop: its age is {@link #NEW_DROP_AGE} ticks or less. A test that looks at the
+     * drops on each tick uses this to ignore the drops of earlier tests.
+     */
+    static boolean isNewDrop(ItemEntity item) {
+        return item.getAge() <= NEW_DROP_AGE;
+    }
+
+    /**
+     * Puts in ruins the active settlements of the earlier tests near the test: the settlements outside the test area
+     * and outside the areas of the other running tests (see {@link #otherRunningAreas}). An active settlement claims
+     * the territory around it, and a territory of another faction changes the chase area of the units of the test.
      */
     static void retireEarlierSettlements(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         SettlementData data = SettlementData.get(server);
         AABB area = helper.getBounds().inflate(2.0);
         BlockPos center = BlockPos.containing(area.getCenter());
+        List<AABB> running = otherRunningAreas(helper);
         boolean changed = false;
         for (Settlement settlement : data.registry().all()) {
             boolean inside = settlement.x() >= area.minX && settlement.x() <= area.maxX
                     && settlement.z() >= area.minZ && settlement.z() <= area.maxZ;
-            if (settlement.isActive() && !inside
+            boolean other = running.stream().anyMatch(box -> settlement.x() >= box.minX
+                    && settlement.x() <= box.maxX && settlement.z() >= box.minZ && settlement.z() <= box.maxZ);
+            if (settlement.isActive() && !inside && !other
                     && settlement.distanceSquared(center.getX(), center.getZ()) <= RETIRE_RADIUS * RETIRE_RADIUS) {
                 settlement.setState(SettlementState.RUINS);
                 changed = true;
@@ -149,6 +360,40 @@ final class TestSupport {
         if (changed) {
             data.setDirty();
         }
+    }
+
+    /**
+     * Removes the village hearts of earlier tests near a position: the registered hearts outside the test area and
+     * outside the areas of the other running tests (see {@link #otherRunningAreas}), at a horizontal distance of
+     * {@code radius} blocks or less. The test removes the block of a loaded heart, and also removes the registry
+     * entry of a heart with no block. A heart of an earlier test stays in the registry, and a search of the village
+     * at a position can find it in place of the heart of the test.
+     *
+     * @param helper the test
+     * @param center the center of the search, in absolute positions
+     * @param radius the horizontal radius of the search, in blocks
+     * @return the positions of the removed hearts
+     */
+    static List<BlockPos> removeEarlierHearts(GameTestHelper helper, BlockPos center, double radius) {
+        ServerLevel level = helper.getLevel();
+        AABB bounds = helper.getBounds();
+        List<AABB> running = otherRunningAreas(helper);
+        List<BlockPos> removed = new ArrayList<>();
+        for (BlockPos heart : VillageHearts.registered(level)) {
+            double dx = heart.getX() - center.getX();
+            double dz = heart.getZ() - center.getZ();
+            Vec3 middle = Vec3.atCenterOf(heart);
+            if (dx * dx + dz * dz > radius * radius || bounds.contains(middle)
+                    || running.stream().anyMatch(area -> area.contains(middle))) {
+                continue;
+            }
+            if (level.isLoaded(heart) && level.getBlockEntity(heart) instanceof VillageHeartBlockEntity) {
+                level.setBlock(heart, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            }
+            VillageHearts.unregister(level, heart);
+            removed.add(heart);
+        }
+        return removed;
     }
 
     /**
@@ -234,6 +479,48 @@ final class TestSupport {
     }
 
     /**
+     * Waits until a condition is true, with the real-time limit {@link #WORKER_SECONDS}, and not with a number of
+     * ticks. Use it for a result that comes from another thread. The limit starts when the wait starts. After the
+     * limit, the test fails with the message.
+     *
+     * @param helper    the helper of the test
+     * @param sequence  the sequence of the test
+     * @param condition the condition
+     * @param message   the message of the failure
+     * @return the sequence
+     */
+    static GameTestSequence thenWaitForWorker(GameTestHelper helper, GameTestSequence sequence,
+            BooleanSupplier condition, String message) {
+        return thenWaitForWorker(helper, sequence, condition, () -> message);
+    }
+
+    /**
+     * Waits until a condition is true, with the real-time limit {@link #WORKER_SECONDS} (see
+     * {@link #thenWaitForWorker(GameTestHelper, GameTestSequence, BooleanSupplier, String)}). The message of the
+     * failure comes after the last check of the condition: it can give the state of this check.
+     *
+     * @param helper    the helper of the test
+     * @param sequence  the sequence of the test
+     * @param condition the condition
+     * @param message   the message of the failure
+     * @return the sequence
+     */
+    static GameTestSequence thenWaitForWorker(GameTestHelper helper, GameTestSequence sequence,
+            BooleanSupplier condition, Supplier<String> message) {
+        long[] deadline = {0L};
+        return sequence.thenWaitUntil(() -> {
+            long now = System.nanoTime();
+            if (deadline[0] == 0L) {
+                deadline[0] = now + WORKER_SECONDS * 1_000_000_000L;
+            }
+            if (!condition.getAsBoolean() && now - deadline[0] < 0) {
+                throw new GameTestAssertException("Waiting: " + message.get());
+            }
+        }).thenExecute(() -> helper.assertTrue(condition.getAsBoolean(),
+                message.get() + " (real-time limit: " + WORKER_SECONDS + " s)"));
+    }
+
+    /**
      * Sets each item of the stock of a settlement to zero. The start stock of a settlement depends on its level and
      * on its biome, which change with the position of the test: a test that checks a stock puts its own items.
      */
@@ -245,7 +532,8 @@ final class TestSupport {
     /**
      * A mock server player in the level of the test, with a connection that sends nothing. It is creative for
      * {@link Player#isCreative()} (as the vanilla mock player), but its game mode is survival: the units can attack
-     * it. Remove it at the end of the test with {@code getPlayerList().remove(player)}.
+     * it. A test can remove it with {@code getPlayerList().remove(player)}. At the end of the test, also after a
+     * failure, {@link #logOutAtEnd} removes the player and its operator entry.
      */
     static ServerPlayer mockPlayer(GameTestHelper helper) {
         return mockPlayer(helper, UUID.randomUUID());
@@ -253,9 +541,17 @@ final class TestSupport {
 
     /** A mock server player with a given id. See {@link #mockPlayer(GameTestHelper)}. */
     static ServerPlayer mockPlayer(GameTestHelper helper, UUID id) {
+        return mockPlayer(helper, id, "test-mock-player");
+    }
+
+    /**
+     * A mock server player with a given id and a given name. Use a name that no other test uses when a command finds
+     * the player by its name: a mock player of an earlier test can stay online after a failure. See
+     * {@link #mockPlayer(GameTestHelper)}.
+     */
+    static ServerPlayer mockPlayer(GameTestHelper helper, UUID id, String name) {
         ServerLevel level = helper.getLevel();
-        CommonListenerCookie cookie = CommonListenerCookie.createInitial(
-                new GameProfile(id, "test-mock-player"), false);
+        CommonListenerCookie cookie = CommonListenerCookie.createInitial(new GameProfile(id, name), false);
         ServerPlayer player = new ServerPlayer(level.getServer(), level, cookie.gameProfile(),
                 cookie.clientInformation()) {
             @Override
@@ -273,6 +569,127 @@ final class TestSupport {
         level.getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
         // The default game mode of the GameTest server is creative.
         player.setGameMode(GameType.SURVIVAL);
+        logOutAtEnd(helper, player);
         return player;
+    }
+
+    /**
+     * Removes a mock player and its operator entry when the test passes or fails. A failed test does not get to its
+     * own logout: without this listener, the player stays online for the next tests. The listener removes only this
+     * player: a player of another test can have the same id.
+     */
+    private static void logOutAtEnd(GameTestHelper helper, ServerPlayer player) {
+        helper.testInfo.addListener(new GameTestListener() {
+            @Override
+            public void testStructureLoaded(GameTestInfo info) {
+            }
+
+            @Override
+            public void testPassed(GameTestInfo info, GameTestRunner runner) {
+                logOut(player);
+            }
+
+            @Override
+            public void testFailed(GameTestInfo info, GameTestRunner runner) {
+                logOut(player);
+            }
+
+            @Override
+            public void testAddedForRerun(GameTestInfo info, GameTestInfo rerun, GameTestRunner runner) {
+            }
+        });
+    }
+
+    /**
+     * Runs a cleanup when a test ends: when it passes, and also when it fails or stops at its timeout. The next tests
+     * of the level do not see the sites, the blocks or the data of a test that failed.
+     */
+    static void atTestEnd(GameTestHelper helper, Runnable cleanup) {
+        helper.testInfo.addListener(new GameTestListener() {
+            @Override
+            public void testStructureLoaded(GameTestInfo info) {
+            }
+
+            @Override
+            public void testPassed(GameTestInfo info, GameTestRunner runner) {
+                cleanup.run();
+            }
+
+            @Override
+            public void testFailed(GameTestInfo info, GameTestRunner runner) {
+                cleanup.run();
+            }
+
+            @Override
+            public void testAddedForRerun(GameTestInfo info, GameTestInfo rerun, GameTestRunner runner) {
+            }
+        });
+    }
+
+    /**
+     * Sets a config value for one test. When the test ends (pass, failure or timeout), a listener sets the value that
+     * the config had before the first change of the test: the next tests see this value also after a failure. Only
+     * the first change of a value in a test adds a listener, so a test can change the same value more than one time.
+     */
+    static <T> void setConfigForTest(GameTestHelper helper, ModConfigSpec.ConfigValue<T> value, T newValue) {
+        T old = value.get();
+        restoreAtTestEnd(helper, value, () -> value.set(old));
+        value.set(newValue);
+    }
+
+    /**
+     * Sets a boolean game rule for one test. When the test ends (pass, failure or timeout), a listener sets the value
+     * that the rule had before the first change of the test, as {@link #setConfigForTest}. The game rule applies to the
+     * full level: a test that uses this method goes in its own batch.
+     */
+    static void setGameRuleForTest(GameTestHelper helper, GameRules.Key<GameRules.BooleanValue> key,
+            boolean newValue) {
+        MinecraftServer server = helper.getLevel().getServer();
+        GameRules.BooleanValue rule = helper.getLevel().getGameRules().getRule(key);
+        boolean old = rule.get();
+        restoreAtTestEnd(helper, key, () -> rule.set(old, server));
+        rule.set(newValue, server);
+    }
+
+    /**
+     * Sets the day time of the level for one test. When the test ends (pass, failure or timeout), a listener sets the
+     * day time to noon, the day time at the start of each test (see {@link #sweep}): the next tests see the day also
+     * after a failure. The day time applies to the full level: a test that needs a day time for more than one tick
+     * goes in its own batch, or sets the day time on each tick.
+     */
+    static void setDayTimeForTest(GameTestHelper helper, long dayTime) {
+        ServerLevel level = helper.getLevel();
+        restoreAtTestEnd(helper, DAY_TIME, () -> level.setDayTime(NOON));
+        level.setDayTime(dayTime);
+    }
+
+    /**
+     * Runs the restore of a setting when the test ends, only for the first change of this setting in the test. The
+     * listeners of a test run in their order: a second listener for the same setting would set the value of the
+     * first change again.
+     */
+    private static void restoreAtTestEnd(GameTestHelper helper, Object setting, Runnable restore) {
+        Set<Object> changed = CHANGED_SETTINGS.computeIfAbsent(helper.testInfo, info -> new HashSet<>());
+        if (!changed.add(setting)) {
+            return;
+        }
+        atTestEnd(helper, () -> {
+            restore.run();
+            CHANGED_SETTINGS.remove(helper.testInfo);
+        });
+    }
+
+    private static void logOut(ServerPlayer player) {
+        PlayerList players = player.server.getPlayerList();
+        ServerPlayer online = players.getPlayer(player.getUUID());
+        if (online != null && online != player) {
+            return;
+        }
+        if (players.getOps().get(player.getGameProfile()) != null) {
+            players.getOps().remove(player.getGameProfile());
+        }
+        if (online == player) {
+            players.remove(player);
+        }
     }
 }

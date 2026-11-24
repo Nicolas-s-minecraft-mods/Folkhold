@@ -9,11 +9,43 @@ evaluationDependsOn(':core')
 evaluationDependsOn(':blocks')
 
 apply from: rootProject.file('gradle/mod-common.gradle')
+apply from: rootProject.file('gradle/confee.gradle')
 
 dependencies {
     api project(':core')
     api project(':blocks')
     implementation "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
+    // Required: the survey maps of Cartofold, with the moves and the updates at the cartography table.
+    implementation "io.github.nicolasgoyon.cartofold:cartofold:${cartofold_version}"
+}
+
+// The Cartofold jar must be the jar of the modpack: its sha256 must be the hash of modpack/mods/cartofold.pw.toml.
+def cartofoldJars = configurations.compileClasspath.incoming.artifactView {
+    componentFilter { it instanceof ModuleComponentIdentifier && it.group == 'io.github.nicolasgoyon.cartofold' }
+}.files
+def verifyCartofold = tasks.register('verifyCartofold') {
+    def metafile = rootProject.file('modpack/mods/cartofold.pw.toml')
+    def jars = cartofoldJars
+    inputs.files(jars)
+    inputs.file(metafile)
+    doLast {
+        def match = metafile.text =~ /(?m)^hash = "([0-9a-f]{64})"$/
+        if (!match.find()) {
+            throw new GradleException("No sha256 hash in ${metafile}")
+        }
+        if (jars.isEmpty()) {
+            throw new GradleException("No Cartofold jar on the compile classpath. See docs/getting-started.md, Cartofold dependency.")
+        }
+        jars.each { jar ->
+            def actual = java.security.MessageDigest.getInstance('SHA-256').digest(jar.bytes).encodeHex().toString()
+            if (actual != match.group(1)) {
+                throw new GradleException("The sha256 of ${jar.name} is ${actual}, not the hash of ${metafile.name}")
+            }
+        }
+    }
+}
+tasks.named('compileJava') {
+    dependsOn verifyCartofold
 }
 
 neoForge {

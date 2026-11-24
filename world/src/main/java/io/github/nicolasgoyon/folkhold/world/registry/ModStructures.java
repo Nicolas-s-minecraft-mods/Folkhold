@@ -1,0 +1,101 @@
+package io.github.nicolasgoyon.folkhold.world.registry;
+
+import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.village.structure.CavePiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.CaveSealPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.FoundationProcessor;
+import io.github.nicolasgoyon.folkhold.world.village.structure.GroundFillPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.OptionalReplaceProcessor;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PortPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.RockShellProcessor;
+import io.github.nicolasgoyon.folkhold.world.village.structure.StreetStepsPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRingStructure;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.levelgen.structure.StructureType;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorType;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+/**
+ * Structure types, structure piece types and structure processor types of the world mod.
+ */
+public final class ModStructures {
+    private static final DeferredRegister<StructureType<?>> TYPES =
+            DeferredRegister.create(Registries.STRUCTURE_TYPE, FolkholdWorld.MOD_ID);
+    private static final DeferredRegister<StructurePieceType> PIECES =
+            DeferredRegister.create(Registries.STRUCTURE_PIECE, FolkholdWorld.MOD_ID);
+    private static final DeferredRegister<StructureProcessorType<?>> PROCESSORS =
+            DeferredRegister.create(Registries.STRUCTURE_PROCESSOR, FolkholdWorld.MOD_ID);
+
+    /** The faction village: the pieces of the jigsaw pools in a closed wall ({@link FortifiedVillageStructure}). */
+    public static final DeferredHolder<StructureType<?>, StructureType<FortifiedVillageStructure>> FORTIFIED_VILLAGE =
+            TYPES.register("fortified_village", () -> () -> FortifiedVillageStructure.CODEC);
+
+    /** A ring district of a faction village ({@link VillageRingStructure}). */
+    public static final DeferredHolder<StructureType<?>, StructureType<VillageRingStructure>> VILLAGE_RING =
+            TYPES.register("village_ring", () -> () -> VillageRingStructure.CODEC);
+
+    /** A segment of the palisade of a village ({@link PalisadePiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> PALISADE =
+            PIECES.register("palisade", () -> PalisadePiece::new);
+
+    /** A path from a gate of a village to its streets ({@link VillagePathPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> VILLAGE_PATH =
+            PIECES.register("village_path", () -> (StructurePieceType.ContextlessType) VillagePathPiece::new);
+
+    /** A pier from a water gate of a village ({@link PierPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> PIER =
+            PIECES.register("pier", () -> PierPiece::new);
+
+    /** A port at a water gate of the outer wall of a village on large water ({@link PortPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> PORT =
+            PIECES.register("port", () -> PortPiece::new);
+
+    /** The stairs of a street piece of a village on a slope ({@link StreetStepsPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> STREET_STEPS =
+            PIECES.register("street_steps", () -> (StructurePieceType.ContextlessType) StreetStepsPiece::new);
+
+    /** A piece with no blocks that changes the shape of the terrain ({@link TerrainPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> TERRAIN =
+            PIECES.register("terrain", () -> (StructurePieceType.ContextlessType) TerrainPiece::new);
+
+    /** A piece that fills the gaps under the surface near a tower or a gate ({@link GroundFillPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> GROUND_FILL =
+            PIECES.register("ground_fill", () -> (StructurePieceType.ContextlessType) GroundFillPiece::new);
+
+    /** A piece with no terrain adaptation: a piece of a cave village, or a cliff house ({@link CavePiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> CAVE_PIECE =
+            PIECES.register("cave_piece", () -> CavePiece::new);
+
+    /** The seal of a free plot of a cave village ({@link CaveSealPiece}). */
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> CAVE_SEAL =
+            PIECES.register("cave_seal", () -> (StructurePieceType.ContextlessType) CaveSealPiece::new);
+
+    /** A foundation under a structure template ({@link FoundationProcessor}). */
+    public static final DeferredHolder<StructureProcessorType<?>, StructureProcessorType<FoundationProcessor>>
+            FOUNDATION = PROCESSORS.register("foundation", () -> () -> FoundationProcessor.CODEC);
+
+    /** The blocks of an optional mod in a template ({@link OptionalReplaceProcessor}). */
+    public static final DeferredHolder<StructureProcessorType<?>, StructureProcessorType<OptionalReplaceProcessor>>
+            OPTIONAL_REPLACE = PROCESSORS.register("optional_replace", () -> () -> OptionalReplaceProcessor.CODEC);
+
+    /** The shell of rock of a carved piece of a cave village ({@link RockShellProcessor}). */
+    public static final DeferredHolder<StructureProcessorType<?>, StructureProcessorType<RockShellProcessor>>
+            ROCK_SHELL = PROCESSORS.register("rock_shell", () -> () -> RockShellProcessor.CODEC);
+
+    private ModStructures() {
+    }
+
+    public static void register(IEventBus modEventBus) {
+        TYPES.register(modEventBus);
+        PIECES.register(modEventBus);
+        PROCESSORS.register(modEventBus);
+    }
+}

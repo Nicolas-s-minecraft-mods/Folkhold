@@ -1,13 +1,18 @@
 package io.github.nicolasgoyon.folkhold.world.config;
 
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Reach;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeRules;
+import io.github.nicolasgoyon.folkhold.core.sim.schedule.DaySchedule;
+import java.util.List;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
  * Server configuration of the world mod: file {@code folkhold_world-server.toml} in the {@code serverconfig}
  * folder of each world.
  *
- * <p>The values apply to units that spawn after the change. Existing units keep their values.
+ * <p>The values of the units (attributes, attack interval and range, charge speed) apply to units that spawn after
+ * the change. Existing units keep their values. The other values, for example the values of the section {@code raid},
+ * apply at once.
  */
 public final class WorldConfig {
     static final String KEY_PREFIX = "folkhold_world.configuration.";
@@ -18,21 +23,39 @@ public final class WorldConfig {
     public static final ModConfigSpec.DoubleValue DAMAGE_MULTIPLIER;
 
     public static final ModConfigSpec.IntValue PATROL_RADIUS;
+    public static final ModConfigSpec.BooleanValue GUARD_STATIONS;
+    public static final ModConfigSpec.IntValue ROUND_GUARDS_PER_RING;
     public static final ModConfigSpec.IntValue CHASE_RADIUS;
     public static final ModConfigSpec.IntValue ALERT_RADIUS;
+    public static final ModConfigSpec.IntValue MONSTER_ALERT_DISTANCE;
     public static final ModConfigSpec.BooleanValue MONSTERS_ATTACK_GUARDS;
 
     public static final ModConfigSpec.IntValue VILLAGE_RADIUS;
     public static final ModConfigSpec.IntValue VILLAGE_MESSAGE_RADIUS;
+    public static final ModConfigSpec.IntValue VILLAGE_MESSAGE_MARGIN;
     public static final ModConfigSpec.IntValue SPAWN_PROTECTION_RADIUS;
     public static final ModConfigSpec.IntValue CALM_DELAY_SECONDS;
     public static final ModConfigSpec.IntValue BUILDERS;
     public static final ModConfigSpec.IntValue HANDYMEN;
+    public static final ModConfigSpec.IntValue HEART_SHIFT;
+    public static final ModConfigSpec.IntValue STREET_CUT_FILL;
 
 
     public static final ModConfigSpec.IntValue CAPTAIN_AURA_RADIUS;
     public static final ModConfigSpec.DoubleValue CAPTAIN_ROUT_SHARE;
     public static final ModConfigSpec.IntValue CAPTAIN_ROUT_SECONDS;
+    public static final ModConfigSpec.DoubleValue CAPTAIN_ROUT_SPEED;
+    public static final ModConfigSpec.IntValue CAPTAIN_ROUT_WEAKNESS_LEVEL;
+    public static final ModConfigSpec.IntValue CAPTAIN_AURA_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue CAPTAIN_AURA_DURATION_TICKS;
+    public static final ModConfigSpec.IntValue CAPTAIN_AURA_LEVEL;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> WAR_HORN_CULTURES;
+    public static final ModConfigSpec.IntValue WAR_HORN_SECONDS;
+    public static final ModConfigSpec.IntValue WAR_HORN_INTERVAL_SECONDS;
+    public static final ModConfigSpec.IntValue WAR_HORN_LEVEL;
+    public static final ModConfigSpec.IntValue ARCHER_ATTACK_INTERVAL_TICKS;
+    public static final ModConfigSpec.DoubleValue ARCHER_ATTACK_RADIUS;
+    public static final ModConfigSpec.DoubleValue ARCHER_BOLT_SPEED;
     public static final ModConfigSpec.DoubleValue HEALER_HEAL_AMOUNT;
     public static final ModConfigSpec.IntValue HEALER_HEAL_COOLDOWN_SECONDS;
     public static final ModConfigSpec.DoubleValue HEALER_WOUNDED_SHARE;
@@ -41,14 +64,32 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue HEALER_BUFF_SECONDS;
     public static final ModConfigSpec.IntValue HEALER_SUPPLY;
     public static final ModConfigSpec.IntValue HEALER_SUPPLY_REFILL_SECONDS;
+    public static final ModConfigSpec.DoubleValue HEALER_BUFF_RADIUS;
+    public static final ModConfigSpec.IntValue HEALER_REGENERATION_LEVEL;
+    public static final ModConfigSpec.IntValue HEALER_RESISTANCE_LEVEL;
     public static final ModConfigSpec.IntValue GOLEM_CHASE_RADIUS;
     public static final ModConfigSpec.DoubleValue GOLEM_KNOCKBACK_RESISTANCE;
+    public static final ModConfigSpec.DoubleValue GOLEM_THROW_UP_SPEED;
     public static final ModConfigSpec.IntValue RIDER_PATROL_RADIUS;
     public static final ModConfigSpec.DoubleValue RIDER_HORSE_HEALTH;
     public static final ModConfigSpec.DoubleValue RIDER_HORSE_SPEED;
+    public static final ModConfigSpec.DoubleValue RIDER_CHARGE_SPEED;
+    public static final ModConfigSpec.IntValue RAID_HEART_RADIUS;
+    public static final ModConfigSpec.IntValue RAID_SPAWN_MIN_DISTANCE;
+    public static final ModConfigSpec.IntValue RAID_SPAWN_MAX_DISTANCE;
+    public static final ModConfigSpec.IntValue RAID_CAMP_SIDE_DISTANCE;
+    public static final ModConfigSpec.IntValue RAID_CAMP_SIDE_SPREAD;
+    public static final ModConfigSpec.IntValue RAID_EXTRA_RAVAGERS_LEVEL_4;
+    public static final ModConfigSpec.IntValue RAID_EXTRA_RAVAGERS_LEVEL_5;
+    public static final ModConfigSpec.IntValue RAID_GATE_FORCE_SECONDS;
+    public static final ModConfigSpec.IntValue RAID_GATE_FORCE_MEMORY_SECONDS;
+    public static final ModConfigSpec.IntValue RAID_GATE_BREAK_AFTER_SECONDS;
+    public static final ModConfigSpec.IntValue RAID_GATE_BREAK_SECONDS;
     public static final ModConfigSpec.IntValue GARRISON_REFILL_DELAY_SECONDS;
     public static final ModConfigSpec.IntValue DETACHMENT_GUARDS;
     public static final ModConfigSpec.IntValue GARRISON_ACTIVATION_RADIUS;
+    public static final ModConfigSpec.IntValue PEN_ANIMALS;
+    public static final ModConfigSpec.IntValue PEN_REPLACE_SECONDS;
     public static final ModConfigSpec.IntValue INHABITANT_LIMIT;
     public static final ModConfigSpec.IntValue ARCHER_ROTATION_SECONDS;
 
@@ -65,6 +106,14 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue REPUTATION_KILL_CAT;
     public static final ModConfigSpec.IntValue REPUTATION_RAID_CARAVAN;
 
+    public static final ModConfigSpec.IntValue RAID_REWARD_MIN_KILLS;
+    public static final ModConfigSpec.DoubleValue RAID_REWARD_MIN_DAMAGE;
+    public static final ModConfigSpec.IntValue RAID_FALL_EXPERIENCE_PERCENT;
+    public static final ModConfigSpec.IntValue RAID_FALL_STOCK_PERCENT;
+    public static final ModConfigSpec.IntValue RAID_HOLD_REPUTATION;
+    public static final ModConfigSpec.IntValue RAID_FALL_REPUTATION;
+    public static final ModConfigSpec.IntValue RAID_FALL_COOLDOWN_TICKS;
+
     public static final ModConfigSpec.IntValue DISCOVERY_RADIUS;
     public static final ModConfigSpec.IntValue ADMIN_DISCOVERY_RADIUS;
     public static final ModConfigSpec.IntValue DISCOVERY_CHECKS_PER_TICK;
@@ -75,12 +124,22 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue LEVEL_MAX_GAIN_PER_CYCLE;
     public static final ModConfigSpec.IntValue LEVEL_CAPTAIN_DEATH_LOSS;
     public static final ModConfigSpec.IntValue ECONOMY_WORKERS_PER_JOB;
-    public static final ModConfigSpec.IntValue ECONOMY_FOOD_PER_INHABITANT;
     public static final ModConfigSpec.DoubleValue ECONOMY_DECAY_RATE;
     public static final ModConfigSpec.DoubleValue ECONOMY_ELASTICITY;
     public static final ModConfigSpec.IntValue ECONOMY_START_TREASURY;
     public static final ModConfigSpec.IntValue ECONOMY_TREASURY_MINIMUM;
-    public static final ModConfigSpec.IntValue ECONOMY_FOOD_SHORTAGE_LOSS;
+    public static final ModConfigSpec.IntValue ECONOMY_SKILL_CYCLE_EXPERIENCE;
+    public static final ModConfigSpec.IntValue ECONOMY_SKILL_NEED_TRADE_EXPERIENCE;
+    public static final ModConfigSpec.IntValue ECONOMY_SKILL_JOB_TRADE_EXPERIENCE;
+    public static final ModConfigSpec.BooleanValue ECONOMY_JOB_TRADES_ENABLED;
+    public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_SELL_MARKUP;
+    public static final ModConfigSpec.DoubleValue ECONOMY_SKILL_FRIEND_STEP;
+    public static final ModConfigSpec.DoubleValue ECONOMY_SKILL_ALLY_STEP;
+    public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_NEUTRAL;
+    public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_FRIEND;
+    public static final ModConfigSpec.ConfigValue<List<? extends Double>> ECONOMY_JOB_TRADE_ENCHANT_ALLY;
+    public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_BUY_MARKDOWN;
+    public static final ModConfigSpec.DoubleValue ECONOMY_JOB_TRADE_WORK_FACTOR;
 
     public static final ModConfigSpec.IntValue GROUP_BLOCKS_PER_TICK;
     public static final ModConfigSpec.IntValue GROUP_MAX_GROUPS;
@@ -108,10 +167,17 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue QUEST_DELIVERY_MAX_COUNT;
     public static final ModConfigSpec.IntValue QUEST_FRIEND_REWARD;
     public static final ModConfigSpec.IntValue QUEST_MAX_ACTIVE;
+    public static final ModConfigSpec.IntValue QUEST_FAILURE_REPUTATION;
+    public static final ModConfigSpec.DoubleValue QUEST_START_ITEMS_PENALTY;
+    public static final ModConfigSpec.IntValue QUEST_MAX_START_ITEM_QUESTS;
+    public static final ModConfigSpec.DoubleValue QUEST_MAX_NEED_SHARE;
+    public static final ModConfigSpec.IntValue QUEST_HUNT_RADIUS;
     public static final ModConfigSpec.BooleanValue QUEST_ESCORT_OFFERS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_WAIT_TICKS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_DISTANCE;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_AWAY_SECONDS;
+    public static final ModConfigSpec.IntValue QUEST_ESCORT_AMBUSH_DISTANCE;
+    public static final ModConfigSpec.IntValue QUEST_ESCORT_AMBUSH_SECONDS;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_MINUTES;
     public static final ModConfigSpec.IntValue QUEST_ESCORT_BLOCKS_PER_MINUTE;
     public static final ModConfigSpec.DoubleValue QUEST_ESCORT_REWARD_SHARE;
@@ -119,6 +185,16 @@ public final class WorldConfig {
 
     public static final ModConfigSpec.DoubleValue MERCHANT_FRIEND_FACTOR;
     public static final ModConfigSpec.DoubleValue MERCHANT_ALLY_FACTOR;
+    public static final ModConfigSpec.IntValue SCHEDULE_WORK_START;
+    public static final ModConfigSpec.IntValue SCHEDULE_MARKET_START;
+    public static final ModConfigSpec.IntValue SCHEDULE_MARKET_END;
+    public static final ModConfigSpec.IntValue SCHEDULE_HOME_START;
+    public static final ModConfigSpec.IntValue SCHEDULE_SLEEP_START;
+    public static final ModConfigSpec.IntValue SCHEDULE_MARKET_DAY_PERIOD;
+    public static final ModConfigSpec.IntValue SCHEDULE_MARKET_DAY_OFFERS;
+    public static final ModConfigSpec.BooleanValue SCHEDULE_VILLAGE_MARKET_DAYS;
+    public static final ModConfigSpec.IntValue SCHEDULE_WORKER_SPREAD_TICKS;
+    public static final ModConfigSpec.BooleanValue SCHEDULE_NEAR_HOME;
     public static final ModConfigSpec.IntValue BANK_PILLAGE_VALUE;
     public static final ModConfigSpec.IntValue BANK_PILLAGE_LOSS;
     public static final ModConfigSpec.DoubleValue BANK_TREASURY_SHARE;
@@ -133,8 +209,13 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue CONSTRUCTION_MATERIAL_QUEST_MINUTES;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_REPAIRS;
     public static final ModConfigSpec.BooleanValue CONSTRUCTION_FREE_REPAIRS;
+    public static final ModConfigSpec.BooleanValue CONSTRUCTION_FREE_REPLANT;
     public static final ModConfigSpec.IntValue CONSTRUCTION_REPAIR_CHECK_SECONDS;
     public static final ModConfigSpec.IntValue CONSTRUCTION_CATCH_UP_STEPS;
+    public static final ModConfigSpec.BooleanValue CONSTRUCTION_GROWTH;
+    public static final ModConfigSpec.IntValue CONSTRUCTION_GROWTH_SURPLUS_DAYS;
+    public static final ModConfigSpec.IntValue CONSTRUCTION_GROWTH_HOME_DELAY_DAYS;
+    public static final ModConfigSpec.BooleanValue CONSTRUCTION_LAND;
 
     public static final UnitStats GUARD;
     public static final UnitStats ARCHER;
@@ -142,6 +223,19 @@ public final class WorldConfig {
     public static final UnitStats HEALER;
     public static final UnitStats GOLEM;
     public static final UnitStats RIDER;
+    public static final ModConfigSpec.IntValue PILLAGER_TERRITORY_RADIUS;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_DELAY_SECONDS;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_COOLDOWN_SECONDS;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_SIZE;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROLS_PER_CAMP;
+    public static final ModConfigSpec.IntValue PILLAGER_PATROL_RESPAWN_MINUTES;
+    public static final ModConfigSpec.IntValue PILLAGER_SWORN_ENEMY_EXTRA;
+    public static final ModConfigSpec.IntValue PILLAGER_SPAWN_DISTANCE;
+    public static final ModConfigSpec.IntValue PILLAGER_KILL_REPUTATION;
+    public static final ModConfigSpec.BooleanValue PILLAGER_CARAVAN_ENCOUNTERS;
+    public static final ModConfigSpec.DoubleValue PILLAGER_ENCOUNTER_DAMAGE;
+    public static final ModConfigSpec.DoubleValue PILLAGER_ENCOUNTER_CARGO_LOSS;
+    public static final ModConfigSpec.IntValue PILLAGER_ENCOUNTER_COOLDOWN_MINUTES;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -166,6 +260,19 @@ public final class WorldConfig {
                 .comment("Radius in blocks of the patrol area around the home position.")
                 .translation(KEY_PREFIX + "patrolRadius")
                 .defineInRange("patrolRadius", 16, 2, 128);
+        GUARD_STATIONS = builder
+                .comment("By day, each guard with no post keeps a station inside a gate or at the foot of a tower. The",
+                        "guards share the stations in turn, the gates first. False: the guards stay near their home,",
+                        "near the heart.")
+                .translation(KEY_PREFIX + "guardStations")
+                .define("guardStations", true);
+        ROUND_GUARDS_PER_RING = builder
+                .comment("By day, the number of guards for each ring of a town, a city or a capital that walk rounds",
+                        "from station to station, around the heart. At least one guard keeps a station. A hamlet and",
+                        "a village have no rings, thus no rounds. 0 turns the rounds off. The rounds need the guard",
+                        "stations (guardStations).")
+                .translation(KEY_PREFIX + "roundGuardsPerRing")
+                .defineInRange("roundGuardsPerRing", 1, 0, 8);
         CHASE_RADIUS = builder
                 .comment("Radius in blocks of the chase area around the village heart (around the home position for a",
                         "unit without a village). A unit chases a target only in this area, and not in the territory of",
@@ -177,6 +284,13 @@ public final class WorldConfig {
                 .comment("Radius in blocks in which an attack on one unit alerts the other units.")
                 .translation(KEY_PREFIX + "alertRadius")
                 .defineInRange("alertRadius", 24, 4, 128);
+        MONSTER_ALERT_DISTANCE = builder
+                .comment("Distance in blocks from a villager. A monster that a unit fights starts the alert of the",
+                        "village (bells, villagers that hide) only when a villager is at this distance or nearer. A",
+                        "raider (pillager, vindicator, witch...), a player and a unit always start the alert. With 0,",
+                        "each monster that a unit fights starts the alert.")
+                .translation(KEY_PREFIX + "monsterAlertDistance")
+                .defineInRange("monsterAlertDistance", 16, 0, 128);
         MONSTERS_ATTACK_GUARDS = builder
                 .comment("Hostile monsters attack guards first, as they attack iron golems.",
                         "The entity types in the tag folkhold_world:ignores_guards never do.",
@@ -189,18 +303,26 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "village")
                 .push("village");
         VILLAGE_RADIUS = builder
-                .comment("Radius in blocks of a village around its heart. Units in this radius join the village",
-                        "when they spawn. An alert reaches all units of the village in this radius. The territory of",
-                        "a village has a radius of at least 1.5 times this radius.")
+                .comment("Minimum radius in blocks of a village around its heart. The area of a village is this",
+                        "radius and the area of its village structure (the box of its wall). Units in this area join",
+                        "the village when they spawn. An alert reaches all units of the village in this area. The",
+                        "territory of a village has a radius of at least 1.5 times this radius.")
                 .translation(KEY_PREFIX + "villageRadius")
                 .defineInRange("radius", 48, 8, 256);
         VILLAGE_MESSAGE_RADIUS = builder
-                .comment("Distance in blocks from a village heart where a player gets the village message",
-                        "(village name, faction, reputation). The village wall is at approximately 20 blocks.")
+                .comment("Smallest distance in blocks from a village heart where a player gets the village message",
+                        "(village name, faction, reputation). A large village also gives the message at",
+                        "messageMargin blocks from its structure area (the box of its wall).")
                 .translation(KEY_PREFIX + "villageMessageRadius")
                 .defineInRange("messageRadius", 50, 8, 256);
+        VILLAGE_MESSAGE_MARGIN = builder
+                .comment("Distance in blocks out of the structure area of a village (the box of its wall) where a",
+                        "player gets the village message. Thus the message of a large village shows at its limit.")
+                .translation(KEY_PREFIX + "villageMessageMargin")
+                .defineInRange("messageMargin", 16, 0, 128);
         SPAWN_PROTECTION_RADIUS = builder
                 .comment("Radius in blocks around a village heart where hostile monsters do not spawn naturally.",
+                        "The protection also covers the area of the village structure of the heart.",
                         "0 turns off the protection.")
                 .translation(KEY_PREFIX + "spawnProtectionRadius")
                 .defineInRange("spawnProtectionRadius", 48, 0, 256);
@@ -217,6 +339,20 @@ public final class WorldConfig {
                         "They light the braziers of the village in the evening and put them out in the morning.")
                 .translation(KEY_PREFIX + "handymen")
                 .defineInRange("handymen", 1, 0, 16);
+        HEART_SHIFT = builder
+                .comment("Largest distance in blocks of the heart of a new village from its structure start. On a",
+                        "steep start, the plaza moves to flatter ground at this distance or nearer. The range of the",
+                        "structure can give a smaller limit. 0 turns off the search. Only a world that a version with",
+                        "the search creates moves its villages. The value applies to the villages that the game did not",
+                        "generate.")
+                .translation(KEY_PREFIX + "heartShift")
+                .defineInRange("heartShift", 48, 0, 48);
+        STREET_CUT_FILL = builder
+                .comment("Blocks of cut and fill on each side of the streets of a new village. The terrain beside",
+                        "the street goes to the level of the street over this width. 0 changes only the street. The",
+                        "value applies to the villages that the game did not generate.")
+                .translation(KEY_PREFIX + "streetCutFill")
+                .defineInRange("streetCutFill", 1, 0, 3);
         builder.pop();
 
         builder.comment("Garrison of each village. The level table sets the number of units and their equipment",
@@ -231,10 +367,22 @@ public final class WorldConfig {
                 .comment("A heart creates its missing units only when a player is in this radius, in blocks.")
                 .translation(KEY_PREFIX + "garrisonActivationRadius")
                 .defineInRange("activationRadius", 64, 16, 256);
+        PEN_ANIMALS = builder
+                .comment("Number of animals in the pen of a job building (cows for the rancher, sheep for the",
+                        "shepherd). The heart of the village puts them into a complete pen one time. 0: no animals.")
+                .translation(KEY_PREFIX + "penAnimals")
+                .defineInRange("penAnimals", 3, 0, 8);
+        PEN_REPLACE_SECONDS = builder
+                .comment("When a pen has fewer animals than its number for this time, in seconds, the missing",
+                        "animals come back.")
+                .translation(KEY_PREFIX + "penReplaceSeconds")
+                .defineInRange("penReplaceSeconds", 1200, 10, 86400);
         INHABITANT_LIMIT = builder
                 .comment("Maximum number of inhabitants (villagers with no trades) in the world for each village.",
-                        "0: no maximum. The number comes from the population of the settlement, minus the merchants.",
-                        "The server and the other mods can limit the number of entities.")
+                        "0: no maximum. The number comes from the population of the settlement.",
+                        "The places of the village (the beds of its homes, and a place in the hall for each builder",
+                        "and handyman) are also a maximum. The server and the other mods can limit the number of",
+                        "entities.")
                 .translation(KEY_PREFIX + "inhabitantLimit")
                 .defineInRange("inhabitantLimit", 0, 0, 10000);
         ARCHER_ROTATION_SECONDS = builder
@@ -258,7 +406,7 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "captain")
                 .push("captain");
         CAPTAIN_AURA_RADIUS = builder
-                .comment("Radius in blocks of the morale aura (Strength I for the units of the village).")
+                .comment("Radius in blocks of the morale aura (Strength for the units of the village).")
                 .translation(KEY_PREFIX + "captainAuraRadius")
                 .defineInRange("auraRadius", 16, 0, 64);
         CAPTAIN_ROUT_SHARE = builder
@@ -269,6 +417,68 @@ public final class WorldConfig {
                 .comment("Duration in seconds of the rout and of the Weakness effect after the death of the captain.")
                 .translation(KEY_PREFIX + "captainRoutSeconds")
                 .defineInRange("routSeconds", 20, 1, 600);
+        CAPTAIN_ROUT_SPEED = builder
+                .comment("Speed modifier of a unit that runs back home in a rout (1 is the walk speed).")
+                .translation(KEY_PREFIX + "captainRoutSpeed")
+                .defineInRange("routSpeed", 1.3, 0.1, 4.0);
+        CAPTAIN_ROUT_WEAKNESS_LEVEL = builder
+                .comment("Level of the Weakness effect on the units of the village after the death of the captain.",
+                        "0: no Weakness effect.")
+                .translation(KEY_PREFIX + "captainRoutWeaknessLevel")
+                .defineInRange("routWeaknessLevel", 1, 0, 5);
+        CAPTAIN_AURA_INTERVAL_TICKS = builder
+                .comment("Time in ticks between two updates of the morale aura. 20 ticks are 1 second.")
+                .translation(KEY_PREFIX + "captainAuraIntervalTicks")
+                .defineInRange("auraIntervalTicks", 40, 1, 1200);
+        CAPTAIN_AURA_DURATION_TICKS = builder
+                .comment("Duration in ticks of the Strength effect of each update of the aura. Make it longer than",
+                        "auraIntervalTicks: else the effect stops between two updates.")
+                .translation(KEY_PREFIX + "captainAuraDurationTicks")
+                .defineInRange("auraDurationTicks", 60, 1, 2400);
+        CAPTAIN_AURA_LEVEL = builder
+                .comment("Level of the Strength effect of the aura. 0: no aura.")
+                .translation(KEY_PREFIX + "captainAuraLevel")
+                .defineInRange("auraLevel", 1, 0, 5);
+        builder.pop();
+
+        builder.comment("War horn: when a village of these cultures goes into alert, a horn gives Resistance to the",
+                        "units of the village.")
+                .translation(KEY_PREFIX + "warHorn")
+                .push("warHorn");
+        WAR_HORN_CULTURES = builder
+                .comment("The ids of the cultures with a war horn.")
+                .translation(KEY_PREFIX + "warHornCultures")
+                .defineListAllowEmpty("cultures", List.of("valeholm"), () -> "", value -> value instanceof String);
+        WAR_HORN_SECONDS = builder
+                .comment("Duration in seconds of the Resistance effect of one sound of the horn.")
+                .translation(KEY_PREFIX + "warHornSeconds")
+                .defineInRange("seconds", 30, 1, 600);
+        WAR_HORN_INTERVAL_SECONDS = builder
+                .comment("While the alert continues, the horn sounds again after this time, in seconds. 0: the horn",
+                        "sounds only when the village goes into alert.")
+                .translation(KEY_PREFIX + "warHornIntervalSeconds")
+                .defineInRange("intervalSeconds", 30, 0, 3600);
+        WAR_HORN_LEVEL = builder
+                .comment("Level of the Resistance effect of the horn. 0: no war horn.")
+                .translation(KEY_PREFIX + "warHornLevel")
+                .defineInRange("level", 1, 0, 4);
+        builder.pop();
+
+        builder.comment("Archer: the ranged unit of the garrison.")
+                .translation(KEY_PREFIX + "archer")
+                .push("archer");
+        ARCHER_ATTACK_INTERVAL_TICKS = builder
+                .comment("Time in ticks between two shots of the bow. 20 ticks are 1 second.")
+                .translation(KEY_PREFIX + "archerAttackIntervalTicks")
+                .defineInRange("attackIntervalTicks", 30, 5, 200);
+        ARCHER_ATTACK_RADIUS = builder
+                .comment("Maximum distance in blocks of a shot of the bow or the crossbow.")
+                .translation(KEY_PREFIX + "archerAttackRadius")
+                .defineInRange("attackRadius", 16.0, 4.0, 64.0);
+        ARCHER_BOLT_SPEED = builder
+                .comment("Speed of a bolt of the crossbow. An arrow of the bow has the speed 1.6.")
+                .translation(KEY_PREFIX + "archerBoltSpeed")
+                .defineInRange("boltSpeed", 2.0, 0.5, 5.0);
         builder.pop();
 
         builder.comment("Healer: heals with bandages and gives buffs, with cooldowns and a limited supply.")
@@ -295,7 +505,7 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "healerBuffCooldownSeconds")
                 .defineInRange("buffCooldownSeconds", 60, 1, 3600);
         HEALER_BUFF_SECONDS = builder
-                .comment("Duration in seconds of the buff (Regeneration I and Resistance I).")
+                .comment("Duration in seconds of the buff (Regeneration and Resistance).")
                 .translation(KEY_PREFIX + "healerBuffSeconds")
                 .defineInRange("buffSeconds", 10, 1, 600);
         HEALER_SUPPLY = builder
@@ -306,6 +516,19 @@ public final class WorldConfig {
                 .comment("Time in seconds to get back one bandage while the village is calm.")
                 .translation(KEY_PREFIX + "healerSupplyRefillSeconds")
                 .defineInRange("supplyRefillSeconds", 30, 1, 3600);
+        HEALER_BUFF_RADIUS = builder
+                .comment("The buff reaches the units of the village at this distance from the healer, in blocks.")
+                .translation(KEY_PREFIX + "healerBuffRadius")
+                .defineInRange("buffRadius", 6.0, 1.0, 32.0);
+        HEALER_REGENERATION_LEVEL = builder
+                .comment("Level of the Regeneration effect of the buff. 0: no Regeneration effect.")
+                .translation(KEY_PREFIX + "healerRegenerationLevel")
+                .defineInRange("regenerationLevel", 1, 0, 5);
+        HEALER_RESISTANCE_LEVEL = builder
+                .comment("Level of the Resistance effect of the buff. 0: no Resistance effect. At level 5, the units",
+                        "get no damage.")
+                .translation(KEY_PREFIX + "healerResistanceLevel")
+                .defineInRange("resistanceLevel", 1, 0, 5);
         builder.pop();
 
         builder.comment("Faction golem: the heavy unit of the large villages. It guards a gate or the village heart.")
@@ -320,6 +543,11 @@ public final class WorldConfig {
                 .comment("Knockback resistance of the golem (0 to 1). At 1, the attacks do not push the golem.")
                 .translation(KEY_PREFIX + "golemKnockbackResistance")
                 .defineInRange("knockbackResistance", 1.0, 0.0, 1.0);
+        GOLEM_THROW_UP_SPEED = builder
+                .comment("Upward speed of a target that the golem hits. The knockback resistance of the target makes",
+                        "it smaller.")
+                .translation(KEY_PREFIX + "golemThrowUpSpeed")
+                .defineInRange("throwUpSpeed", 0.4, 0.0, 2.0);
         builder.pop();
 
         builder.comment("Rider: a mounted unit that patrols outside the walls and charges the threats.")
@@ -338,6 +566,74 @@ public final class WorldConfig {
                 .comment("Movement speed attribute of the horse of a rider (vanilla horses: 0.11 to 0.34).")
                 .translation(KEY_PREFIX + "riderHorseSpeed")
                 .defineInRange("horseSpeed", 0.3, 0.05, 1.0);
+        RIDER_CHARGE_SPEED = builder
+                .comment("Speed modifier of the horse when the rider charges a target (1 is the patrol speed).")
+                .translation(KEY_PREFIX + "riderChargeSpeed")
+                .defineInRange("chargeSpeed", 1.5, 0.5, 4.0);
+        builder.pop();
+
+        builder.comment("Vanilla raids against the faction villages. The vanilla raids at the other villages do not",
+                        "change. The garrison of each level is in the level table (data/folkhold_world/folkhold/",
+                        "levels.json).")
+                .translation(KEY_PREFIX + "raid")
+                .push("raid");
+        RAID_HEART_RADIUS = builder
+                .comment("A raid is at a faction village when a loaded village heart is this distance or less from",
+                        "the center of the raid, in blocks, or when the center of the raid is in the area of the",
+                        "village structure of the heart.")
+                .translation(KEY_PREFIX + "raidHeartRadius")
+                .defineInRange("heartRadius", 64, 16, 256);
+        RAID_SPAWN_MIN_DISTANCE = builder
+                .comment("Minimum distance in blocks from the heart to the spawn position of a wave.")
+                .translation(KEY_PREFIX + "raidSpawnMinDistance")
+                .defineInRange("spawnMinDistance", 40, 16, 80);
+        RAID_SPAWN_MAX_DISTANCE = builder
+                .comment("Maximum distance in blocks from the heart to the spawn position of a wave. When this value",
+                        "is less than spawnMinDistance, the waves spawn at spawnMinDistance. The maximum is 80: the",
+                        "search for a spawn position reads the terrain at this distance, and at a larger distance it",
+                        "loads more chunks and finds fewer paths to the village.")
+                .translation(KEY_PREFIX + "raidSpawnMaxDistance")
+                .defineInRange("spawnMaxDistance", 56, 16, 80);
+        RAID_CAMP_SIDE_DISTANCE = builder
+                .comment("A raid at a faction village comes from the side of the nearest pillager camp when the center",
+                        "of the camp is this distance or less from the heart, in blocks. 0 turns it off: the waves come",
+                        "from a random direction.")
+                .translation(KEY_PREFIX + "raidCampSideDistance")
+                .defineInRange("campSideDistance", 512, 0, 4096);
+        RAID_CAMP_SIDE_SPREAD = builder
+                .comment("Largest angle in degrees between the direction of the camp and the direction of the spawn",
+                        "position of a wave, seen from the heart. When no position on this side is good, the wave",
+                        "spawns in another direction.")
+                .translation(KEY_PREFIX + "raidCampSideSpread")
+                .defineInRange("campSideSpread", 45, 0, 180);
+        RAID_EXTRA_RAVAGERS_LEVEL_4 = builder
+                .comment("Ravagers that each wave of a raid of level 4 gets more than the vanilla wave.")
+                .translation(KEY_PREFIX + "raidExtraRavagersLevel4")
+                .defineInRange("extraRavagersLevel4", 1, 0, 16);
+        RAID_EXTRA_RAVAGERS_LEVEL_5 = builder
+                .comment("Ravagers that each wave of a raid of level 5 gets more than the vanilla wave.")
+                .translation(KEY_PREFIX + "raidExtraRavagersLevel5")
+                .defineInRange("extraRavagersLevel5", 2, 0, 16);
+        RAID_GATE_FORCE_SECONDS = builder
+                .comment("Time in seconds that a raider stays in front of a closed gate before the gate opens.")
+                .translation(KEY_PREFIX + "raidGateForceSeconds")
+                .defineInRange("gateForceSeconds", 10, 1, 600);
+        RAID_GATE_FORCE_MEMORY_SECONDS = builder
+                .comment("A raider that moves away from the gate that it forces keeps its time when it comes back to",
+                        "the same gate in this time, in seconds. Else it starts again from zero.")
+                .translation(KEY_PREFIX + "raidGateForceMemorySeconds")
+                .defineInRange("gateForceMemorySeconds", 5, 0, 600);
+        RAID_GATE_BREAK_AFTER_SECONDS = builder
+                .comment("A raider that forced a gate open and is still in front of the same closed gate this time",
+                        "after its first hit breaks the gate, in seconds. The time starts again when the raider is",
+                        "away from the gate for this time. The break follows the game rule mobGriefing: when it is",
+                        "false, the raider only forces the gate.")
+                .translation(KEY_PREFIX + "raidGateBreakAfterSeconds")
+                .defineInRange("gateBreakAfterSeconds", 20, 1, 600);
+        RAID_GATE_BREAK_SECONDS = builder
+                .comment("Time in seconds that a raider needs to break the middle column of fence gates of a gate.")
+                .translation(KEY_PREFIX + "raidGateBreakSeconds")
+                .defineInRange("gateBreakSeconds", 10, 1, 600);
         builder.pop();
 
         builder.comment("Reputation of the players with the factions and the villages (-1000 to +1000).")
@@ -396,6 +692,55 @@ public final class WorldConfig {
                 .defineInRange("raidCaravan", -150, -1000, 0);
         builder.pop();
 
+        builder.comment("Rewards of the players who help a faction village during a raid. A player helps when the",
+                        "player kills raiders or hurts them in the raid area (96 blocks or less from the center).",
+                        "After a victory of the village, each helper gets the effect Hero of the Village, with the",
+                        "level of the raid. The other players get no reward.")
+                .translation(KEY_PREFIX + "raidRewards")
+                .push("raidRewards");
+        RAID_REWARD_MIN_KILLS = builder
+                .comment("Raiders that a player must kill in the raid area to help the village.")
+                .translation(KEY_PREFIX + "raidRewardMinKills")
+                .defineInRange("minKills", 1, 1, 1000);
+        RAID_REWARD_MIN_DAMAGE = builder
+                .comment("Damage (half hearts) that a player must give to the raiders in the raid area to help the",
+                        "village, also with no kill. 0: the damage alone does not make a helper.")
+                .translation(KEY_PREFIX + "raidRewardMinDamage")
+                .defineInRange("minDamage", 40.0, 0.0, 100000.0);
+        builder.pop();
+
+        builder.comment("Effects of the end of a raid at a faction village on its settlement and on the reputation.",
+                        "The village holds when the raid ends in a victory and the garrison did not die. Else the",
+                        "village falls. A fall with a victory and a heart that is not broken (the players saved the",
+                        "village) does not remove experience or stocks. The players who do not help get no change.")
+                .translation(KEY_PREFIX + "raidEffects")
+                .push("raidEffects");
+        RAID_FALL_EXPERIENCE_PERCENT = builder
+                .comment("Experience that a settlement loses when its village falls, in percent of the experience of",
+                        "its current level. When the settlement has less experience, it goes down one level.")
+                .translation(KEY_PREFIX + "raidFallExperiencePercent")
+                .defineInRange("fallExperiencePercent", 50, 0, 100);
+        RAID_FALL_STOCK_PERCENT = builder
+                .comment("Part of each item of the stocks that a settlement loses when its village falls, in percent",
+                        "(rounded down).")
+                .translation(KEY_PREFIX + "raidFallStockPercent")
+                .defineInRange("fallStockPercent", 25, 0, 100);
+        RAID_HOLD_REPUTATION = builder
+                .comment("Reputation change of each helper with the faction and the village when the village holds.")
+                .translation(KEY_PREFIX + "raidHoldReputation")
+                .defineInRange("holdReputation", 50, 0, 1000);
+        RAID_FALL_REPUTATION = builder
+                .comment("Reputation change of each helper with the faction and the village when the village falls.")
+                .translation(KEY_PREFIX + "raidFallReputation")
+                .defineInRange("fallReputation", 15, 0, 1000);
+        RAID_FALL_COOLDOWN_TICKS = builder
+                .comment("Time after a fall penalty (the loss of experience and stocks) when the same settlement does",
+                        "not pay a new fall penalty, in ticks of game time (24000 = one game day, 0: no cooldown).",
+                        "A sleep or /time set does not end it. The helpers still get the reputation.")
+                .translation(KEY_PREFIX + "raidFallCooldownTicks")
+                .defineInRange("fallCooldownTicks", 24000, 0, 2400000);
+        builder.pop();
+
         builder.comment("Abstract simulation of the settlements.")
                 .translation(KEY_PREFIX + "simulation")
                 .push("simulation");
@@ -418,7 +763,7 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "simulationIntervalTicks")
                 .defineInRange("intervalTicks", 2400, 20, 72000);
         SIMULATION_CYCLE_LENGTH = builder
-                .comment("Abstract ticks in one cycle. Production and consumption run once each cycle.",
+                .comment("Abstract ticks in one cycle. The production of the jobs runs once each cycle.",
                         "With the default interval, 10 abstract ticks are one game day.")
                 .translation(KEY_PREFIX + "simulationCycleLength")
                 .defineInRange("cycleLength", 10, 1, 1000);
@@ -447,13 +792,9 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "economy")
                 .push("economy");
         ECONOMY_WORKERS_PER_JOB = builder
-                .comment("Inhabitants for one active job.")
+                .comment("Inhabitants for one active job in the economy: each cycle runs at most population / workersPerJob job slots. In a village with job posts, the household of a post shows the job, and this value does not change the households.")
                 .translation(KEY_PREFIX + "economyWorkersPerJob")
                 .defineInRange("workersPerJob", 2, 1, 20);
-        ECONOMY_FOOD_PER_INHABITANT = builder
-                .comment("Food points that one inhabitant eats in one cycle (bread: 5 points).")
-                .translation(KEY_PREFIX + "economyFoodPerInhabitant")
-                .defineInRange("foodPerInhabitant", 4, 0, 100);
         ECONOMY_DECAY_RATE = builder
                 .comment("Share of each stock that rots or wears in one cycle.")
                 .translation(KEY_PREFIX + "economyDecayRate")
@@ -470,10 +811,49 @@ public final class WorldConfig {
                 .comment("A faction with fewer emeralds in its treasury gives less prosperity to its settlements.")
                 .translation(KEY_PREFIX + "economyTreasuryMinimum")
                 .defineInRange("treasuryMinimum", 100, 0, 1_000_000);
-        ECONOMY_FOOD_SHORTAGE_LOSS = builder
-                .comment("Experience that a settlement loses in a cycle with a food shortage (less than half of its need).")
-                .translation(KEY_PREFIX + "economyFoodShortageLoss")
-                .defineInRange("foodShortageLoss", 10, 0, 10000);
+        ECONOMY_SKILL_CYCLE_EXPERIENCE = builder
+                .comment("Experience that each active job post gets in its job at each cycle.",
+                        "The skill levels: Novice 0, Apprentice 10, Journeyman 70, Expert 150, Master 250.")
+                .translation(KEY_PREFIX + "economySkillCycleExperience")
+                .defineInRange("skillCycleExperience", 2, 0, 1000);
+        ECONOMY_SKILL_NEED_TRADE_EXPERIENCE = builder
+                .comment("Experience that a job post gets for each trade of a player with a worker of the post.")
+                .translation(KEY_PREFIX + "economySkillNeedTradeExperience")
+                .defineInRange("skillNeedTradeExperience", 1, 0, 1000);
+        ECONOMY_SKILL_JOB_TRADE_EXPERIENCE = builder
+                .comment("Experience that a job post gets for each use of a job trade of the trade list of its job.")
+                .translation(KEY_PREFIX + "economySkillJobTradeExperience")
+                .defineInRange("skillJobTradeExperience", 2, 0, 1000);
+        ECONOMY_SKILL_FRIEND_STEP = builder
+                .comment("For a post Novice or Apprentice: the factor of the experience of a trade of a Friend is",
+                        "1 + this value x (wealth tier - 1). The wealth tier is 1 for a hamlet to 5 for a capital.")
+                .translation(KEY_PREFIX + "economySkillFriendStep")
+                .defineInRange("skillFriendStep", 0.25, 0.0, 10.0);
+        ECONOMY_SKILL_ALLY_STEP = builder
+                .comment("For a post Novice or Apprentice: the factor of the experience of a trade of an Ally is",
+                        "1 + this value x (wealth tier - 1). The wealth tier is 1 for a hamlet to 5 for a capital.")
+                .translation(KEY_PREFIX + "economySkillAllyStep")
+                .defineInRange("skillAllyStep", 0.5, 0.0, 10.0);
+        ECONOMY_JOB_TRADES_ENABLED = builder
+                .comment("Turns on the job trades: each worker also shows the trades of the trade list of its job.",
+                        "With false, the workers show only the trades of the stock and of the needs of the village.")
+                .translation(KEY_PREFIX + "economyJobTradesEnabled")
+                .define("jobTradesEnabled", true);
+        ECONOMY_JOB_TRADE_ENCHANT_NEUTRAL = enchantChances(builder, "Neutral", 0);
+        ECONOMY_JOB_TRADE_ENCHANT_FRIEND = enchantChances(builder, "Friend", 1);
+        ECONOMY_JOB_TRADE_ENCHANT_ALLY = enchantChances(builder, "Ally", 2);
+        ECONOMY_JOB_TRADE_SELL_MARKUP = builder
+                .comment("Factor of the local price when a worker sells with a job trade of the trade list of its job.")
+                .translation(KEY_PREFIX + "economyJobTradeSellMarkup")
+                .defineInRange("jobTradeSellMarkup", 1.30, 0.1, 10.0);
+        ECONOMY_JOB_TRADE_BUY_MARKDOWN = builder
+                .comment("Factor of the local price when a worker buys with a job trade of the trade list of its job.")
+                .translation(KEY_PREFIX + "economyJobTradeBuyMarkdown")
+                .defineInRange("jobTradeBuyMarkdown", 0.70, 0.01, 10.0);
+        ECONOMY_JOB_TRADE_WORK_FACTOR = builder
+                .comment("Factor of the sum of the local prices of the materials of a job trade that a worker makes to order.")
+                .translation(KEY_PREFIX + "economyJobTradeWorkFactor")
+                .defineInRange("jobTradeWorkFactor", 1.25, 0.1, 10.0);
         builder.pop();
 
         builder.comment("Mobile groups: caravans and traveling merchants.")
@@ -591,6 +971,29 @@ public final class WorldConfig {
                 .comment("Maximum number of active quests of a player.")
                 .translation(KEY_PREFIX + "questMaxActive")
                 .defineInRange("maxActive", 3, 1, 20);
+        QUEST_FAILURE_REPUTATION = builder
+                .comment("Reputation that a player loses with the faction of the village when an accepted quest fails:",
+                        "abandoned, expired, or failed. A quest definition can give an other value.")
+                .translation(KEY_PREFIX + "questFailureReputation")
+                .defineInRange("failureReputation", 10, 0, 1000);
+        QUEST_START_ITEMS_PENALTY = builder
+                .comment("Extra reputation that a player loses at the failure of a quest with start items, for each",
+                        "emerald of the base value of the start items. A quest definition can give an other value.")
+                .translation(KEY_PREFIX + "questStartItemsPenalty")
+                .defineInRange("startItemsPenalty", 2.0, 0.0, 100.0);
+        QUEST_MAX_START_ITEM_QUESTS = builder
+                .comment("Maximum number of active quests with start items of a player.")
+                .translation(KEY_PREFIX + "questMaxStartItemQuests")
+                .defineInRange("maxStartItemQuests", 1, 0, 20);
+        QUEST_MAX_NEED_SHARE = builder
+                .comment("Maximum share of the offers of a village for one type of quest (rounded, 1 offer at least).",
+                        "Thus a village with several offers has several types of quests.")
+                .translation(KEY_PREFIX + "questMaxNeedShare")
+                .defineInRange("maxNeedShare", 0.6, 0.0, 1.0);
+        QUEST_HUNT_RADIUS = builder
+                .comment("Distance in blocks from the middle of the village where the monsters of a hunt count.")
+                .translation(KEY_PREFIX + "questHuntRadius")
+                .defineInRange("huntRadius", 96, 16, 512);
         QUEST_ESCORT_OFFERS = builder
                 .comment("Each new trade caravan offers an escort quest and waits at its village.")
                 .translation(KEY_PREFIX + "questEscortOffers")
@@ -609,6 +1012,16 @@ public final class WorldConfig {
                         "fails and the caravan continues with no escort.")
                 .translation(KEY_PREFIX + "questEscortAwaySeconds")
                 .defineInRange("escortAwaySeconds", 120, 10, 3600);
+        QUEST_ESCORT_AMBUSH_DISTANCE = builder
+                .comment("The merchant of an escort waits while the raiders of an ambush or of a patrol live. It",
+                        "continues when no raider is at this distance in blocks or less for escortAmbushSeconds.")
+                .translation(KEY_PREFIX + "questEscortAmbushDistance")
+                .defineInRange("escortAmbushDistance", 48, 8, 256);
+        QUEST_ESCORT_AMBUSH_SECONDS = builder
+                .comment("Seconds with no raider near the merchant (see escortAmbushDistance) before the merchant",
+                        "continues its travel.")
+                .translation(KEY_PREFIX + "questEscortAmbushSeconds")
+                .defineInRange("escortAmbushSeconds", 30, 1, 600);
         QUEST_ESCORT_MINUTES = builder
                 .comment("Minimum minutes from the acceptance of an escort quest to its deadline.")
                 .translation(KEY_PREFIX + "questEscortMinutes")
@@ -629,7 +1042,7 @@ public final class WorldConfig {
                 .defineInRange("escortReputation", 30, 0, 1000);
         builder.pop();
 
-        builder.comment("Merchants of the faction villages.")
+        builder.comment("Trades of the workers of the faction villages.")
                 .translation(KEY_PREFIX + "merchant")
                 .push("merchant");
         MERCHANT_FRIEND_FACTOR = builder
@@ -640,6 +1053,59 @@ public final class WorldConfig {
                 .comment("Factor of the sell prices for a player in the tier ally.")
                 .translation(KEY_PREFIX + "merchantAllyFactor")
                 .defineInRange("allyFactor", 0.8, 0.1, 1.0);
+        builder.pop();
+
+        builder.comment("Daily schedule of the workers of the faction villages, and the market day. The times are",
+                        "times of the day in ticks: 0 is the sunrise, 6000 is noon, 18000 is midnight. The bounds",
+                        "must be in this order: workStart <= marketStart < marketEnd <= homeStart <= sleepStart. If",
+                        "they are not, the villages use the default values.")
+                .translation(KEY_PREFIX + "schedule")
+                .push("schedule");
+        SCHEDULE_WORK_START = builder
+                .comment("The workers go to the building of their job at this time.")
+                .translation(KEY_PREFIX + "scheduleWorkStart")
+                .defineInRange("workStart", DaySchedule.DEFAULT.workStart(), 0, DaySchedule.DAY_TICKS - 1);
+        SCHEDULE_MARKET_START = builder
+                .comment("The workers go to the market at this time. The players can trade with them until",
+                        "marketEnd.")
+                .translation(KEY_PREFIX + "scheduleMarketStart")
+                .defineInRange("marketStart", DaySchedule.DEFAULT.marketStart(), 0, DaySchedule.DAY_TICKS - 1);
+        SCHEDULE_MARKET_END = builder
+                .comment("The market closes at this time, and the workers go back to the building of their job.")
+                .translation(KEY_PREFIX + "scheduleMarketEnd")
+                .defineInRange("marketEnd", DaySchedule.DEFAULT.marketEnd(), 0, DaySchedule.DAY_TICKS - 1);
+        SCHEDULE_HOME_START = builder
+                .comment("The workers stop the work and go home at this time.")
+                .translation(KEY_PREFIX + "scheduleHomeStart")
+                .defineInRange("homeStart", DaySchedule.DEFAULT.homeStart(), 0, DaySchedule.DAY_TICKS - 1);
+        SCHEDULE_SLEEP_START = builder
+                .comment("The workers go to bed at this time. They sleep until the sunrise.")
+                .translation(KEY_PREFIX + "scheduleSleepStart")
+                .defineInRange("sleepStart", DaySchedule.DEFAULT.sleepStart(), 0, DaySchedule.DAY_TICKS - 1);
+        SCHEDULE_MARKET_DAY_PERIOD = builder
+                .comment("Number of days from one market day to the next. 1: each day is a market day.")
+                .translation(KEY_PREFIX + "scheduleMarketDayPeriod")
+                .defineInRange("marketDayPeriod", DaySchedule.DEFAULT.marketDayPeriod(), 1, 365);
+        SCHEDULE_MARKET_DAY_OFFERS = builder
+                .comment("Number of offers that each worker adds on a market day.")
+                .translation(KEY_PREFIX + "scheduleMarketDayOffers")
+                .defineInRange("marketDayOffers", DaySchedule.DEFAULT.marketDayOffers(), 0, 64);
+        SCHEDULE_VILLAGE_MARKET_DAYS = builder
+                .comment("True: each village has its market day on a different day of the period, from the position",
+                        "of the village. False: all the villages have the market day on the same day.")
+                .translation(KEY_PREFIX + "scheduleVillageMarketDays")
+                .define("marketDayForEachVillage", true);
+        SCHEDULE_WORKER_SPREAD_TICKS = builder
+                .comment("Each worker changes its phase from 0 to this number of ticks after the time of the phase,",
+                        "so that the workers of a village do not all start to walk in the same tick.")
+                .translation(KEY_PREFIX + "scheduleWorkerSpreadTicks")
+                .defineInRange("workerSpreadTicks", DaySchedule.DEFAULT.workerSpreadTicks(), 0, 2000);
+        SCHEDULE_NEAR_HOME = builder
+                .comment("An idle villager of a faction village stays near its home. An inhabitant with no job has no",
+                        "meeting at the bell: it stays near its home by day and sleeps at night. The workers keep",
+                        "their market. False: the vanilla meeting at the bell and the vanilla walks.")
+                .translation(KEY_PREFIX + "scheduleNearHome")
+                .define("villagersNearHome", true);
         builder.pop();
 
         builder.comment("Bank of the faction villages.")
@@ -715,6 +1181,11 @@ public final class WorldConfig {
                         "from the stock of the village, as the construction sites.")
                 .translation(KEY_PREFIX + "constructionFreeRepairs")
                 .define("freeRepairs", false);
+        CONSTRUCTION_FREE_REPLANT = builder
+                .comment("True: a repair that replants a crop takes the seeds from the stock of the village, and with",
+                        "no seeds in the stock, it replants the crop for free. False: the repair waits for the seeds.")
+                .translation(KEY_PREFIX + "constructionFreeReplant")
+                .define("freeReplant", true);
         CONSTRUCTION_REPAIR_CHECK_SECONDS = builder
                 .comment("A loaded village with builders looks for its damaged blocks every this number of seconds.")
                 .translation(KEY_PREFIX + "constructionRepairCheckSeconds")
@@ -724,6 +1195,32 @@ public final class WorldConfig {
                         "were not loaded: this number of steps at most for each tick.")
                 .translation(KEY_PREFIX + "constructionCatchUpSteps")
                 .defineInRange("catchUpStepsPerTick", 32, 1, 4096);
+        CONSTRUCTION_GROWTH = builder
+                .comment("True: the builders of a village build a new home on a free plot of its streets when the",
+                        "village needs a home: a job slot of its level has no job post, or a resource of the village",
+                        "has a surplus. The population of the level is a maximum, not a target.",
+                        "They also build the buildings of the level and the first market on the free plots.",
+                        "The village looks for a free plot after the check of the repairs.",
+                        "False (default): the villages take no new plot for a new home, a building of the level or a",
+                        "first market. The first post of a village with no post that trades, and a broken market on",
+                        "its plot, still come back.")
+                .translation(KEY_PREFIX + "constructionGrowth")
+                .define("growth", false);
+        CONSTRUCTION_GROWTH_SURPLUS_DAYS = builder
+                .comment("A village with a surplus of a resource for this number of days needs a new home.")
+                .translation(KEY_PREFIX + "constructionGrowthSurplusDays")
+                .defineInRange("growthSurplusDays", 3, 1, 365);
+        CONSTRUCTION_GROWTH_HOME_DELAY_DAYS = builder
+                .comment("After the start of a new home, a village waits this number of days before a new home for",
+                        "a surplus. A job slot with no job post does not wait.")
+                .translation(KEY_PREFIX + "constructionGrowthHomeDelayDays")
+                .defineInRange("growthHomeDelayDays", 2, 0, 365);
+        CONSTRUCTION_LAND = builder
+                .comment("True: the builders of a village build the fields and the mills of its level outside its",
+                        "palisade, in the territory of the village. The village looks for a site after the check of",
+                        "the repairs and the growth on the plots.")
+                .translation(KEY_PREFIX + "constructionLand")
+                .define("land", true);
         builder.pop();
 
         builder.comment("Base values of each unit type.")
@@ -740,6 +1237,73 @@ public final class WorldConfig {
         RIDER = new UnitStats(builder, "rider", new UnitStats.Defaults(30.0, 3.0, 2.0, 0.3, 32.0));
         builder.pop();
 
+        builder.comment("The pillager faction: the territories around the pillager camps (the structures of the tag",
+                        "#folkhold_world:pillager_sites), the patrols and the reputation.")
+                .translation(KEY_PREFIX + "pillagers")
+                .push("pillagers");
+        PILLAGER_TERRITORY_RADIUS = builder
+                .comment("Radius of the territory of a pillager camp, in chunks. The claims of the settlements",
+                        "always win. A new value applies to the camps that the mod finds after the change.")
+                .translation(KEY_PREFIX + "pillagerTerritoryRadius")
+                .defineInRange("territoryRadius", 6, 1, 32);
+        PILLAGER_PATROL_DELAY_SECONDS = builder
+                .comment("Time in seconds that a player stays in a pillager territory before a patrol leaves the",
+                        "camp for this player.")
+                .translation(KEY_PREFIX + "pillagerPatrolDelaySeconds")
+                .defineInRange("patrolDelaySeconds", 30, 1, 3600);
+        PILLAGER_PATROL_COOLDOWN_SECONDS = builder
+                .comment("Time in seconds between two patrols for the same player.")
+                .translation(KEY_PREFIX + "pillagerPatrolCooldownSeconds")
+                .defineInRange("patrolCooldownSeconds", 300, 0, 86400);
+        PILLAGER_PATROL_SIZE = builder
+                .comment("Pillagers in a patrol for a hostile player. 0 turns off the patrols.")
+                .translation(KEY_PREFIX + "pillagerPatrolSize")
+                .defineInRange("patrolSize", 3, 0, 16);
+        PILLAGER_PATROLS_PER_CAMP = builder
+                .comment("Abstract patrols of each pillager camp. A patrol walks a loop around its camp, in the",
+                        "territory, also with no player near. 0 removes the patrols of the camps.")
+                .translation(KEY_PREFIX + "pillagerPatrolsPerCamp")
+                .defineInRange("patrolsPerCamp", 2, 0, 4);
+        PILLAGER_PATROL_RESPAWN_MINUTES = builder
+                .comment("Minutes of game time before a camp sends again a patrol with no living member, with new",
+                        "members.")
+                .translation(KEY_PREFIX + "pillagerPatrolRespawnMinutes")
+                .defineInRange("patrolRespawnMinutes", 20, 0, 1440);
+        PILLAGER_SWORN_ENEMY_EXTRA = builder
+                .comment("Pillagers that a patrol gets more for a sworn enemy of the pillagers.")
+                .translation(KEY_PREFIX + "pillagerSwornEnemyExtra")
+                .defineInRange("swornEnemyExtra", 2, 0, 16);
+        PILLAGER_SPAWN_DISTANCE = builder
+                .comment("Distance in blocks from the player to the spawn position of a patrol, in the direction of",
+                        "the camp. A player nearer to the camp gets the patrol at the camp.")
+                .translation(KEY_PREFIX + "pillagerSpawnDistance")
+                .defineInRange("spawnDistance", 32, 8, 64);
+        PILLAGER_KILL_REPUTATION = builder
+                .comment("Change of the reputation with the pillagers when a player kills an illager in a pillager",
+                        "territory. The reputation with the pillagers never goes up.")
+                .translation(KEY_PREFIX + "pillagerKillReputation")
+                .defineInRange("killReputation", -10, -1000, 0);
+        PILLAGER_CARAVAN_ENCOUNTERS = builder
+                .comment("The patrols of a camp attack the caravans that cross its territory. A caravan with no",
+                        "entities has an abstract fight. A caravan with entities gets a real attack.")
+                .translation(KEY_PREFIX + "pillagerCaravanEncounters")
+                .define("caravanEncounters", true);
+        PILLAGER_ENCOUNTER_DAMAGE = builder
+                .comment("Attack damage of one pillager in an abstract fight with a caravan. The strength of a",
+                        "fighter is its health multiplied by its damage. The guards use unit.guard.attackDamage.")
+                .translation(KEY_PREFIX + "pillagerEncounterDamage")
+                .defineInRange("encounterDamage", 2.5, 0.0, 100.0);
+        PILLAGER_ENCOUNTER_CARGO_LOSS = builder
+                .comment("Share of the cargo and of the payment that a caravan loses when a patrol beats its guards",
+                        "in an abstract fight.")
+                .translation(KEY_PREFIX + "pillagerEncounterCargoLoss")
+                .defineInRange("encounterCargoLoss", 0.5, 0.0, 1.0);
+        PILLAGER_ENCOUNTER_COOLDOWN_MINUTES = builder
+                .comment("Minutes of game time before a caravan can meet a patrol of the same camp again.")
+                .translation(KEY_PREFIX + "pillagerEncounterCooldownMinutes")
+                .defineInRange("encounterCooldownMinutes", 10, 0, 1440);
+        builder.pop();
+
         SPEC = builder.build();
     }
 
@@ -750,5 +1314,19 @@ public final class WorldConfig {
     }
 
     private WorldConfig() {
+    }
+
+    /**
+     * The chances of an enchanted item of a job trade for a reputation tier: 5 values from 0 to 1, from Novice to
+     * Master (see {@link JobTradeRules#ENCHANT_CHANCES}).
+     */
+    private static ModConfigSpec.ConfigValue<List<? extends Double>> enchantChances(ModConfigSpec.Builder builder,
+            String tier, int row) {
+        return builder
+                .comment("Chances (0 to 1) of an enchanted item in a job trade with \"enchant\" for a player " + tier
+                        + ",", "for a worker Novice, Apprentice, Journeyman, Expert and Master. Use 5 decimal values.")
+                .translation(KEY_PREFIX + "economyJobTradeEnchant" + tier)
+                .defineList("jobTradeEnchant" + tier, JobTradeRules.ENCHANT_CHANCES.get(row), () -> 0.0,
+                        value -> value instanceof Double chance && chance >= 0.0 && chance <= 1.0);
     }
 }

@@ -18,28 +18,42 @@ import io.github.nicolasgoyon.folkhold.world.network.QuestActionPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Active;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Offer;
+import io.github.nicolasgoyon.folkhold.world.network.QuestBoardRequestPayload;
+import io.github.nicolasgoyon.folkhold.world.network.QuestDetail;
+import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.function.IntConsumer;
+import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Screen of a quest board: the offers of the village as papers pinned on a wood board, and the active quests of the
- * player in a column (see {@link QuestBoardPayload}).
+ * Screen of a quest board: the offers of the village as rows on a wood board with a detail panel, and the active
+ * quests of the player in a column (see {@link QuestBoardPayload}).
  *
  * <ul>
- *   <li>Each offer has one button: accept, or the reason why the player cannot accept it.</li>
+ *   <li>A row of an offer shows the objective, the category and the reward in emeralds (see {@link #rowText}).</li>
+ *   <li>The detail panel shows all the information of one offer (see {@link #panelLines}): the offer under the
+ *       pointer, else the selected offer. A click on a row selects the offer. The first offer of the page is
+ *       selected by default.</li>
+ *   <li>The panel has the button of the selected offer: accept, or the reason why the player cannot accept it. While
+ *       the pointer is on an other row, the panel shows a hint in place of the button.</li>
+ *   <li>The panel shows the lines that fit above its button. No text goes below the button.</li>
  *   <li>Each active quest has the deliver button (or the reason why the player cannot deliver now) and the abandon
  *       button. Abandon needs a confirmation.</li>
  *   <li>The offers can be sorted by reward, time or kind. The board shows pages when the offers do not fit.</li>
  *   <li>The times count down from the moment the payload comes.</li>
+ *   <li>While an escort of the player is active, the screen asks the server for a new payload each second (see
+ *       {@link #refreshDue}). The state of the caravan and the ambush on the rows stay current.</li>
  *   <li>A small panel shows tabs: the offers, or the active quests.</li>
  *   <li>A button sends the action to the server (see {@link QuestActionPayload}) and waits for the answer. The
  *       result shows in the status line.</li>
@@ -50,9 +64,27 @@ public class QuestBoardScreen extends UiScreen {
     private static final int BOARD_COLOR = 0xFF6B4A2C;
     private static final int BOARD_TEXT = 0xFFE5D5B5;
     private static final int COLUMN_WIDTH = 150;
-    private static final int CARD_HEIGHT = 64;
+    /** The height of an offer row: the objective, then the category and the reward. */
+    static final int ROW_HEIGHT = 26;
+    /** The space between 2 rows, in pixels. */
+    private static final int ROW_GAP = 3;
+    /** The detail panel is at the right of the rows on a board of this width or more, else below the rows. */
+    private static final int SIDE_PANEL_WIDTH = 280;
+    /** The height of the detail panel below the rows. */
+    private static final int BOTTOM_PANEL_HEIGHT = 112;
+    /** The height of one line of the detail panel. */
+    static final int PANEL_STEP = 11;
+    /** The space between the last line of the panel and its button. */
+    static final int BUTTON_GAP = 4;
+    /** The space at the borders of the panel. */
+    private static final int PANEL_PADDING = 5;
+    /** The maximum number of lines of the objective and of the story in the panel. */
+    private static final int TITLE_LINES = 2;
+    private static final int STORY_LINES = 3;
     private static final int ACTIVE_HEIGHT = 46;
     private static final int URGENT_SECONDS = 120;
+    /** The open screen asks the server for a new payload at this interval during an escort, in client ticks. */
+    static final int REFRESH_TICKS = 20;
 
     /** The sort order of the offers. */
     private enum Sort {
@@ -73,8 +105,52 @@ public class QuestBoardScreen extends UiScreen {
         }
     }
 
-    /** One offer on the current page, with its rectangle. */
+    /** One offer row on the current page, with its rectangle. */
     private record Card(Offer offer, UiRect rect) {
+    }
+
+    /**
+     * The lines of the detail panel that fit above its button.
+     *
+     * @param top       the top of the first line
+     * @param buttonTop the top of the button of the panel
+     * @param lines     the number of lines to show
+     * @return the number of lines that fit, from 0 to {@code lines}
+     */
+    static int fittingLines(int top, int buttonTop, int lines) {
+        int space = buttonTop - BUTTON_GAP - top;
+        return Mth.clamp((space + PANEL_STEP - UiTheme.LINE) / PANEL_STEP, 0, lines);
+    }
+
+    /**
+     * The second line of an offer row: the category of the quest and its reward in emeralds.
+     *
+     * @param offer the offer
+     * @return the text
+     */
+    static Component rowText(Offer offer) {
+        return Component.translatable(KEY + "row", Component.translatable("quest.folkhold_world.kind." + offer.kind()),
+                offer.emeralds());
+    }
+
+    /**
+     * The lines of the detail panel of an offer: the lines of the server, then the items of the player for a
+     * delivery, then the time before the caravan of an escort leaves.
+     *
+     * @param offer   the offer
+     * @param seconds the seconds before the caravan leaves (for an offer with a countdown)
+     * @return the lines
+     */
+    static List<QuestDetail> panelLines(Offer offer, int seconds) {
+        List<QuestDetail> lines = new ArrayList<>(offer.details());
+        if (!offer.progress().getString().isEmpty()) {
+            lines.add(new QuestDetail(Component.translatable(KEY + "detail.have"), offer.progress()));
+        }
+        if (offer.countdown() >= 0) {
+            lines.add(new QuestDetail(Component.translatable(KEY + "detail.leaves"),
+                    Component.literal(UiText.clock(seconds)).withColor(UiTheme.WAX & 0xFFFFFF)));
+        }
+        return lines;
     }
 
     /** One active quest on the current page, with its rectangle. */
@@ -85,10 +161,18 @@ public class QuestBoardScreen extends UiScreen {
 
     private QuestBoardPayload board;
     private long receivedAt;
+    /** The client ticks since the last request for a new payload. */
+    private int ticksSinceRefresh;
     private int compactTab;
     private int offerPage;
     private int activePage;
     private final List<Card> cards = new ArrayList<>();
+    /** The id of the selected offer, or null. */
+    @Nullable
+    private String selectedId;
+    @Nullable
+    private UiButton panelButton;
+    private UiRect panelRect = new UiRect(0, 0, 0, 0);
     private final List<Entry> entries = new ArrayList<>();
     private UiRect boardRect = new UiRect(0, 0, 0, 0);
     private UiRect columnRect = new UiRect(0, 0, 0, 0);
@@ -122,6 +206,10 @@ public class QuestBoardScreen extends UiScreen {
     }
 
     private void update(QuestBoardPayload payload) {
+        if (payload.status().isEmpty() && actionPending()) {
+            // A refresh does not rebuild the buttons while an action waits for its answer.
+            return;
+        }
         this.board = payload;
         this.receivedAt = gameTime();
         rebuildWidgets();
@@ -130,6 +218,35 @@ public class QuestBoardScreen extends UiScreen {
 
     private void showResult(QuestBoardPayload payload) {
         payload.status().ifPresent(text -> showStatus(text, payload.statusGood() ? UiTone.GOOD : UiTone.BAD));
+    }
+
+    /**
+     * True if the open screen asks the server for a new payload now: an escort of the player is active, and the last
+     * request is {@link #REFRESH_TICKS} client ticks old or more.
+     *
+     * @param log               the last quest log of the player (see {@link ClientQuestLog})
+     * @param ticksSinceRefresh the client ticks since the last request
+     * @return true to send a request
+     */
+    static boolean refreshDue(QuestLogPayload log, int ticksSinceRefresh) {
+        return ticksSinceRefresh >= REFRESH_TICKS && ClientQuestLog.hasEscort(log);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        ticksSinceRefresh++;
+        // Only the visible screen asks: a dialog of the screen, or a pending action, waits.
+        if (minecraft != null && minecraft.screen == this && !actionPending()
+                && refreshDue(ClientQuestLog.get(), ticksSinceRefresh)) {
+            ticksSinceRefresh = 0;
+            PacketDistributor.sendToServer(new QuestBoardRequestPayload(board.settlementId()));
+        }
+    }
+
+    /** True if a button of the screen waits for the answer of the server to its action. */
+    private boolean actionPending() {
+        return children().stream().anyMatch(child -> child instanceof UiButton button && button.isPending());
     }
 
     private ReputationTier tier() {
@@ -191,11 +308,19 @@ public class QuestBoardScreen extends UiScreen {
         UiRect header = boardHeader();
         List<Offer> offers = new ArrayList<>(board.offers());
         offers.sort(lastSort.comparator);
-        UiRect grid = new UiRect(boardRect.x() + UiTheme.PADDING, header.bottom() + 6,
+        UiRect area = new UiRect(boardRect.x() + UiTheme.PADDING, header.bottom() + 6,
                 boardRect.width() - 2 * UiTheme.PADDING, boardRect.bottom() - header.bottom() - 10);
-        int columns = grid.width() >= 260 ? 2 : 1;
-        int rows = Math.max(1, (grid.height() + UiTheme.GAP + 2) / (CARD_HEIGHT + UiTheme.GAP + 2));
-        int perPage = columns * rows;
+        UiRect list;
+        if (area.width() >= SIDE_PANEL_WIDTH) {
+            int panelWidth = area.width() / 2;
+            list = area.beforeRight(panelWidth, UiTheme.GAP + 2);
+            panelRect = area.rightPart(panelWidth);
+        } else {
+            int panelHeight = Math.min(BOTTOM_PANEL_HEIGHT, area.height() * 3 / 5);
+            list = new UiRect(area.x(), area.y(), area.width(), area.height() - panelHeight - UiTheme.GAP - 2);
+            panelRect = area.bottomPart(panelHeight);
+        }
+        int perPage = Math.max(1, (list.height() + ROW_GAP) / (ROW_HEIGHT + ROW_GAP));
         offerPages = Math.max(1, (offers.size() + perPage - 1) / perPage);
         offerPage = Mth.clamp(offerPage, 0, offerPages - 1);
 
@@ -214,24 +339,57 @@ public class QuestBoardScreen extends UiScreen {
 
         int first = offerPage * perPage;
         for (int i = first; i < Math.min(offers.size(), first + perPage); i++) {
-            int index = i - first;
-            UiRect cell = grid.column(index % columns, columns, UiTheme.GAP + 2);
-            UiRect rect = new UiRect(cell.x(), grid.y() + (index / columns) * (CARD_HEIGHT + UiTheme.GAP + 2),
-                    cell.width(), CARD_HEIGHT);
-            Offer offer = offers.get(i);
-            cards.add(new Card(offer, rect));
-            UiRect buttonRect = new UiRect(rect.x() + 5, rect.bottom() - 5 - UiTheme.CONTROL, rect.width() - 10,
-                    UiTheme.CONTROL);
-            UiButton button;
-            if (offer.blocked().isPresent()) {
-                button = UiButton.normal(buttonRect, offer.blocked().get(), b -> {
-                }).onParchment().setDisabled(offer.blocked().get());
-            } else {
-                button = UiButton.primary(buttonRect, Component.translatable(KEY + "accept"),
-                        b -> send(b, QuestBoardPayload.ACTION_ACCEPT, offer.questId())).onParchment();
-            }
-            addRenderableWidget(button);
+            UiRect rect = new UiRect(list.x(), list.y() + (i - first) * (ROW_HEIGHT + ROW_GAP), list.width(),
+                    ROW_HEIGHT);
+            cards.add(new Card(offers.get(i), rect));
         }
+        panelButton = null;
+        Optional<Offer> selected = selected();
+        if (selected.isEmpty()) {
+            return;
+        }
+        Offer offer = selected.get();
+        UiButton button;
+        if (offer.blocked().isPresent()) {
+            button = UiButton.normal(panelButtonRect(), offer.blocked().get(), b -> {
+            }).onParchment().setDisabled(offer.blocked().get());
+        } else {
+            button = UiButton.primary(panelButtonRect(), Component.translatable(KEY + "accept"),
+                    b -> send(b, QuestBoardPayload.ACTION_ACCEPT, offer.questId())).onParchment();
+        }
+        panelButton = addRenderableWidget(button);
+    }
+
+    /** The selected offer of the page: the offer of {@link #selectedId}, else the first offer of the page. */
+    private Optional<Offer> selected() {
+        Optional<Card> found = cards.stream().filter(card -> card.offer().questId().equals(selectedId)).findFirst();
+        if (found.isEmpty() && !cards.isEmpty()) {
+            found = Optional.of(cards.get(0));
+            selectedId = cards.get(0).offer().questId();
+        }
+        return found.map(Card::offer);
+    }
+
+    private UiRect panelButtonRect() {
+        return new UiRect(panelRect.x() + PANEL_PADDING, panelRect.bottom() - PANEL_PADDING - UiTheme.CONTROL,
+                panelRect.width() - 2 * PANEL_PADDING, UiTheme.CONTROL);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        for (Card card : cards) {
+            if (card.rect().contains(mouseX, mouseY)) {
+                if (!card.offer().questId().equals(selectedId)) {
+                    selectedId = card.offer().questId();
+                    rebuildWidgets();
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     private void initColumn() {
@@ -303,13 +461,31 @@ public class QuestBoardScreen extends UiScreen {
     }
 
     private void confirmAbandon(Active quest) {
-        UiDialog.builder(this, Component.translatable(KEY + "abandon.title"))
+        confirmAbandon(this, quest.name(), quest.failureReputation(), quest.questId(), board.settlementId());
+    }
+
+    /**
+     * Opens the confirmation of an abandon, for the quest board and the journal. The dialog shows the reputation
+     * that the player loses.
+     *
+     * @param screen            the screen under the dialog
+     * @param name              the name of the quest
+     * @param failureReputation the reputation that the player loses, 0 or more
+     * @param questId           the id of the quest
+     * @param settlementId      the village of the quest board, or an empty string for the journal
+     */
+    static void confirmAbandon(Screen screen, Component name, int failureReputation, String questId,
+            String settlementId) {
+        Component message = failureReputation > 0
+                ? Component.translatable(KEY + "abandon.message", name, failureReputation)
+                : Component.translatable(KEY + "abandon.message_no_loss", name);
+        UiDialog.builder(screen, Component.translatable(KEY + "abandon.title"))
                 .danger()
-                .message(Component.translatable(KEY + "abandon.message", quest.name()))
+                .message(message)
                 .cancel(Component.translatable(KEY + "abandon.keep"))
                 .confirm(Component.translatable(KEY + "abandon"),
                         () -> PacketDistributor.sendToServer(new QuestActionPayload(QuestBoardPayload.ACTION_ABANDON,
-                                quest.questId(), board.settlementId())))
+                                questId, settlementId)))
                 .open();
     }
 
@@ -334,14 +510,14 @@ public class QuestBoardScreen extends UiScreen {
     @Override
     protected void renderBody(GuiGraphics graphics, UiRect body, int mouseX, int mouseY, float partialTick) {
         if (boardRect.width() > 0) {
-            renderBoard(graphics);
+            renderBoard(graphics, mouseX, mouseY);
         }
         if (columnRect.width() > 0) {
             renderColumn(graphics);
         }
     }
 
-    private void renderBoard(GuiGraphics graphics) {
+    private void renderBoard(GuiGraphics graphics, int mouseX, int mouseY) {
         UiDraw.fill(graphics, boardRect, BOARD_COLOR);
         UiRect header = boardHeader();
         UiText.drawLeft(graphics, font, Component.translatable(KEY + "offers_count", board.offers().size()),
@@ -352,34 +528,94 @@ public class QuestBoardScreen extends UiScreen {
             UiText.drawCentered(graphics, font, Component.translatable(KEY + "no_offers"), empty, BOARD_TEXT);
             return;
         }
+        Card hovered = null;
         for (Card card : cards) {
-            renderCard(graphics, card);
+            if (card.rect().contains(mouseX, mouseY)) {
+                hovered = card;
+            }
+        }
+        Card shown = hovered;
+        for (Card card : cards) {
+            boolean selected = card.offer().questId().equals(selectedId);
+            if (shown == null && selected) {
+                shown = card;
+            }
+            renderRow(graphics, card, selected, card == hovered);
+        }
+        boolean preview = hovered != null && !hovered.offer().questId().equals(selectedId);
+        if (panelButton != null) {
+            panelButton.visible = !preview;
+        }
+        if (shown != null) {
+            renderPanel(graphics, shown.offer(), preview);
         }
     }
 
-    private void renderCard(GuiGraphics graphics, Card card) {
+    private void renderRow(GuiGraphics graphics, Card card, boolean selected, boolean hovered) {
         Offer offer = card.offer();
         UiRect rect = card.rect();
         boolean off = offer.blocked().isPresent();
         UiDraw.fill(graphics, new UiRect(rect.x() + 2, rect.y() + 2, rect.width(), rect.height()), 0x50000000);
         UiDraw.fill(graphics, rect, off ? UiTheme.PARCHMENT_EDGE : UiTheme.PARCHMENT);
-        UiDraw.mark(graphics, rect.centerX() - 2, rect.y() - 2, 5, off ? UiTheme.WOOD_EDGE : UiTheme.WAX);
-        UiDraw.itemSlot(graphics, UiDraw.stack(offer.itemId()), rect.x() + 5, rect.y() + 6);
-        int textX = rect.x() + 28;
-        int textWidth = rect.right() - 5 - textX;
-        UiText.draw(graphics, font, offer.name(), textX, rect.y() + 6, textWidth,
-                off ? UiTheme.INK_MUTED : UiTheme.INK);
-        UiText.draw(graphics, font, offer.info(), textX, rect.y() + 16, textWidth, UiTheme.INK_MUTED);
-        Component right = offer.progress();
-        if (offer.countdown() >= 0) {
-            right = Component.translatable(KEY + "leaves_in", UiText.clock(secondsNow(offer.countdown())))
-                    .withColor(UiTheme.WAX & 0xFFFFFF);
+        if (selected || hovered) {
+            UiDraw.outline(graphics, rect, selected ? UiTheme.WAX : UiTheme.WOOD_EDGE);
         }
-        int rightWidth = font.width(right);
-        int y = rect.y() + 28;
-        UiText.draw(graphics, font, offer.reward(), rect.x() + 5, y, rect.width() - 14 - rightWidth,
+        UiDraw.itemSlot(graphics, UiDraw.stack(offer.itemId()), rect.x() + 4, rect.y() + 5);
+        int textX = rect.x() + 26;
+        int textWidth = rect.right() - 4 - textX;
+        UiText.draw(graphics, font, offer.name(), textX, rect.y() + 4, textWidth,
                 off ? UiTheme.INK_MUTED : UiTheme.INK);
-        UiText.drawRight(graphics, font, right, rect.right() - 5, y, rect.width() / 2, UiTheme.INK_MUTED);
+        Component right = Component.empty();
+        if (offer.countdown() >= 0) {
+            right = Component.literal(UiText.clock(secondsNow(offer.countdown()))).withColor(UiTheme.WAX & 0xFFFFFF);
+        }
+        int rightWidth = UiText.drawRight(graphics, font, right, rect.right() - 4, rect.y() + 15, textWidth / 3,
+                UiTheme.INK_MUTED);
+        UiText.draw(graphics, font, rowText(offer), textX, rect.y() + 15,
+                textWidth - (rightWidth > 0 ? rightWidth + 4 : 0), UiTheme.INK_MUTED);
+    }
+
+    private void renderPanel(GuiGraphics graphics, Offer offer, boolean preview) {
+        UiRect rect = panelRect;
+        UiDraw.fill(graphics, new UiRect(rect.x() + 2, rect.y() + 2, rect.width(), rect.height()), 0x50000000);
+        UiDraw.fill(graphics, rect, UiTheme.PARCHMENT);
+        UiDraw.mark(graphics, rect.centerX() - 2, rect.y() - 2, 5, UiTheme.WAX);
+        UiRect button = panelButtonRect();
+        int x = rect.x() + PANEL_PADDING;
+        int width = rect.width() - 2 * PANEL_PADDING;
+        UiDraw.itemSlot(graphics, UiDraw.stack(offer.itemId()), x, rect.y() + PANEL_PADDING + 1);
+        int titleX = x + 22;
+        List<FormattedCharSequence> title = UiText.wrap(font, offer.name(), rect.right() - PANEL_PADDING - titleX,
+                TITLE_LINES);
+        int y = rect.y() + PANEL_PADDING + 1;
+        for (FormattedCharSequence line : title) {
+            graphics.drawString(font, line, titleX, y, UiTheme.INK, false);
+            y += UiTheme.LINE + 1;
+        }
+        y = Math.max(y, rect.y() + PANEL_PADDING + 19) + 3;
+        if (!offer.story().getString().isEmpty()) {
+            List<FormattedCharSequence> story = UiText.wrap(font, offer.story(), width, STORY_LINES);
+            int shown = fittingLines(y, button.y(), story.size());
+            for (int i = 0; i < shown; i++) {
+                graphics.drawString(font, story.get(i), x, y, UiTheme.INK_MUTED, false);
+                y += PANEL_STEP;
+            }
+            y += 2;
+        }
+        List<QuestDetail> lines = panelLines(offer, offer.countdown() >= 0 ? secondsNow(offer.countdown()) : 0);
+        int shown = fittingLines(y, button.y(), lines.size());
+        for (int i = 0; i < shown; i++) {
+            QuestDetail line = lines.get(i);
+            int labelWidth = Math.min(font.width(line.label()), width * 2 / 5);
+            int valueWidth = UiText.drawRight(graphics, font, line.value(), x + width, y, width - labelWidth - 6,
+                    UiTheme.INK);
+            UiText.draw(graphics, font, line.label(), x, y, width - valueWidth - 6, UiTheme.INK_MUTED);
+            y += PANEL_STEP;
+        }
+        if (preview) {
+            UiText.drawCentered(graphics, font, Component.translatable(KEY + "select_hint"), button,
+                    UiTheme.INK_MUTED);
+        }
     }
 
     private void renderColumn(GuiGraphics graphics) {

@@ -1,0 +1,286 @@
+package io.github.nicolasgoyon.folkhold.core.sim.village;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle.Home;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Box;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Dir;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Kind;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Piece;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Plot;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.PlotRole;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlan.Start;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize.Wall;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
+
+class VillagePlanTest {
+    private static final int PLAZA = 15;
+    private static final List<Start> STARTS = Start.around(PLAZA);
+    private static boolean good(Box box) {
+        return true;
+    }
+
+    /** About 1 plot in 6 has bad terrain. */
+    private static boolean someBad(Box box) {
+        return Math.floorMod(box.minX() * 31 + box.minZ() * 17, 6) != 0;
+    }
+
+    private static VillagePlan plan(VillageSize size, StreetStyle style, Predicate<Box> terrain, long seed) {
+        return VillagePlan.plan(size, size.plots(0, 0), style, PLAZA, STARTS, terrain, seed);
+    }
+
+    /** Each tier and style: the plot target, the spare share, no overlap, inside the radius, the 4 axis streets. */
+    @Test
+    void eachTierAndStyleGetsItsPlots() {
+        List<Predicate<Box>> terrains = List.of(VillagePlanTest::good, VillagePlanTest::someBad);
+        for (VillageSize size : VillageSizeTable.DEFAULT.sizes()) {
+            for (StreetStyle style : StreetStyle.ALL) {
+                for (long seed = 0; seed < 4; seed++) {
+                    for (Predicate<Box> terrain : terrains) {
+                        VillagePlan plan = plan(size, style, terrain, seed);
+                        String name = size.tier() + " " + style.name() + " seed " + seed;
+                        checkLayout(plan, style, name);
+                        assertTrue(plan.radius() <= size.maxRadius(), name);
+                        assertEquals(size.plots(0, 0), plan.plots().size() + plan.missingPlots(), name);
+                        assertTrue(plan.plots().stream()
+                                .allMatch(plot -> plot.good() || plot.spare() || plot.role() != PlotRole.HOME), name);
+                        assertEquals(0, plan.missingPlots(), name);
+                        assertEquals(0, plan.missingHomes(), name);
+                        long spare = plan.plots().stream().filter(Plot::spare).count();
+                        double share = (double) spare / (plan.plots().size() - spare);
+                        assertTrue(share >= VillageSize.MIN_SPARE && share <= VillageSize.MAX_SPARE, name);
+                        assertEquals(size.sparePlots(size.plots(0, 0)), spare, name);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void checkLayout(VillagePlan plan, StreetStyle style, String name) {
+        List<Box> boxes = new ArrayList<>();
+        boxes.add(new Box(-7, -7, 7, 7));
+        plan.pieces().forEach(piece -> boxes.add(piece.box()));
+        plan.plots().forEach(plot -> boxes.add(plot.area()));
+        for (int i = 0; i < boxes.size(); i++) {
+            for (int j = i + 1; j < boxes.size(); j++) {
+                assertFalse(boxes.get(i).overlaps(boxes.get(j)), name + ": " + boxes.get(i) + " " + boxes.get(j));
+            }
+        }
+        // The area of a plot holds the largest home of the plot, centered on the plot.
+        for (Plot plot : plan.plots()) {
+            for (Home home : plot.homes()) {
+                int along = plot.facing().dx() == 0 ? plot.area().maxX() - plot.area().minX()
+                        : plot.area().maxZ() - plot.area().minZ();
+                int depth = plot.facing().dx() == 0 ? plot.area().maxZ() - plot.area().minZ()
+                        : plot.area().maxX() - plot.area().minX();
+                assertTrue(along + 1 >= home.frontage() && depth + 1 >= home.depth(), name);
+            }
+            assertTrue(plot.area().contains(plot.x() + plot.facing().dx(), plot.z() + plot.facing().dz()), name);
+        }
+        for (Start start : STARTS) {
+            assertTrue(plan.pieces().stream().anyMatch(p -> p.parent() == -1 && p.kind() == Kind.SEGMENT
+                    && p.x() == start.x() && p.z() == start.z() && p.dir() == start.dir()),
+                    name + " axis " + start.dir());
+        }
+        // The rule of the end of a piece: a wide home goes past the end only when a street end is after it.
+        for (Plot plot : plan.plots().stream().filter(Plot::wide).toList()) {
+            Piece piece = plan.pieces().get(plot.piece());
+            if (style.endOverflow() == 0 && overflows(plot, piece)) {
+                assertTrue(plan.pieces().stream().noneMatch(p -> p.parent() == plot.piece() && p.exit() == 0
+                        && p.kind() != Kind.END), name);
+            }
+        }
+    }
+
+    /** True when the area of the plot goes past the end of its piece. */
+    private static boolean overflows(Plot plot, Piece piece) {
+        int endX = piece.x() + piece.dir().dx() * (piece.length() - 1);
+        int endZ = piece.z() + piece.dir().dz() * (piece.length() - 1);
+        Box area = plot.area();
+        return switch (piece.dir()) {
+            case NORTH -> area.minZ() < endZ;
+            case SOUTH -> area.maxZ() > endZ;
+            case WEST -> area.minX() < endX;
+            case EAST -> area.maxX() > endX;
+        };
+    }
+
+    /** Each tier and style marks plots for its wide homes. */
+    @Test
+    void wideHomesGetTheirPlots() {
+        for (VillageSize size : VillageSizeTable.DEFAULT.sizes()) {
+            for (StreetStyle style : StreetStyle.ALL) {
+                VillagePlan plan = plan(size, style, VillagePlanTest::good, 1);
+                assertTrue(plan.missingWide().isEmpty(), size.tier() + " " + style.name() + " " + plan.missingWide());
+                int wide = style.wide().stream().mapToInt(Home::count).sum();
+                assertEquals(wide, plan.plots().stream().filter(Plot::wide).count(),
+                        size.tier() + " " + style.name() + ": the wide plots");
+                assertTrue(plan.plots().stream().filter(Plot::wide).noneMatch(Plot::spare));
+            }
+        }
+    }
+
+    /**
+     * The first pieces of the streets to the north and to the south keep the plots of the bank and of the first jobs:
+     * never wide, never spare, also on bad terrain.
+     */
+    @Test
+    void firstPiecesKeepTheBankAndTheJobPlots() {
+        for (VillageSize size : VillageSizeTable.DEFAULT.sizes()) {
+            for (StreetStyle style : StreetStyle.ALL) {
+                for (Predicate<Box> terrain : List.<Predicate<Box>>of(VillagePlanTest::good, box -> false)) {
+                    VillagePlan plan = plan(size, style, terrain, 5);
+                    String name = size.tier() + " " + style.name();
+                    Map<PlotRole, Long> roles = plan.plots().stream()
+                            .collect(Collectors.groupingBy(Plot::role, Collectors.counting()));
+                    assertEquals(1, roles.get(PlotRole.BANK), name);
+                    assertEquals(1, roles.get(PlotRole.JOBS_FIRST), name);
+                    assertEquals(style == StreetStyle.VALEHOLM ? 2 : 1, roles.get(PlotRole.JOBS_START), name);
+                    for (Plot plot : plan.plots().stream().filter(p -> p.role() != PlotRole.HOME).toList()) {
+                        Piece piece = plan.pieces().get(plot.piece());
+                        assertEquals(-1, piece.parent(), name);
+                        assertEquals(plot.role() == PlotRole.BANK ? Dir.NORTH : Dir.SOUTH, piece.dir(), name);
+                        assertFalse(plot.spare() || plot.wide(), name);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Small ground: a Valeholm village in a small radius gets short segments where the segments do not fit, and more
+     * plots than with no short segment. On large ground, the plan has no short segment.
+     */
+    @Test
+    void valeholmGetsShortSegmentsOnSmallGround() {
+        VillageSize full = VillageSizeTable.DEFAULT.size("village").orElseThrow();
+        VillageSize small = new VillageSize(full.tier(), full.plots(), full.bedsPerPlot(), full.spareShare(), 52,
+                full.rings(), full.wall(), full.minTerritoryRadius());
+        int shortPlots = 0;
+        int plainPlots = 0;
+        boolean shortPiece = false;
+        for (long seed = 0; seed < 4; seed++) {
+            VillagePlan withShort = plan(small, StreetStyle.VALEHOLM, VillagePlanTest::good, seed);
+            VillagePlan plain = plan(small, StreetStyle.VALEHOLM.withoutShort(), VillagePlanTest::good, seed);
+            shortPiece |= withShort.pieces().stream().anyMatch(piece -> piece.kind() == Kind.SHORT
+                    && piece.length() == StreetStyle.VALEHOLM.shortSegment());
+            shortPlots += withShort.plots().size();
+            plainPlots += plain.plots().size();
+            assertTrue(plain.pieces().stream().noneMatch(piece -> piece.kind() == Kind.SHORT));
+        }
+        assertTrue(shortPiece, "A small Valeholm plan must have a short segment");
+        assertTrue(shortPlots > plainPlots, shortPlots + " plots with short segments, " + plainPlots + " with none");
+        assertTrue(plan(full, StreetStyle.BASE, VillagePlanTest::good, 1).pieces().stream()
+                .noneMatch(piece -> piece.kind() == Kind.SHORT));
+    }
+
+    /** The same seed gives the same plan. */
+    @Test
+    void sameSeedGivesTheSamePlan() {
+        VillageSize size = VillageSizeTable.DEFAULT.size("capital").orElseThrow();
+        for (StreetStyle style : StreetStyle.ALL) {
+            assertEquals(plan(size, style, VillagePlanTest::someBad, 42),
+                    plan(size, style, VillagePlanTest::someBad, 42));
+        }
+        assertNotEquals(plan(size, StreetStyle.BASE, VillagePlanTest::good, 1).pieces(),
+                plan(size, StreetStyle.BASE, VillagePlanTest::good, 2).pieces());
+    }
+
+    /** The bad plots are spare plots first, then the farthest plots. */
+    @Test
+    void sparePlotsAreTheBadPlotsThenTheFarthestPlots() {
+        VillageSize size = VillageSizeTable.DEFAULT.size("village").orElseThrow();
+        VillagePlan plan = plan(size, StreetStyle.BASE, VillagePlanTest::good, 3);
+        // The homes with no role and no wide home are nearer than the spare plots.
+        double home = plan.plots().stream().filter(p -> !p.spare() && !p.wide() && p.role() == PlotRole.HOME)
+                .mapToDouble(p -> distance(plan, p)).max().orElseThrow();
+        assertTrue(plan.plots().stream().filter(Plot::spare).allMatch(p -> distance(plan, p) >= home));
+        // A bad plot near the plaza: it is a spare plot, except a plot with a role (the bank).
+        Predicate<Box> badNorth = box -> !box.overlaps(new Box(-30, -30, 30, -8));
+        VillagePlan bad = plan(size, StreetStyle.BASE, badNorth, 3);
+        assertTrue(bad.plots().stream().filter(p -> !p.good() && p.role() == PlotRole.HOME).allMatch(Plot::spare));
+        assertTrue(bad.plots().stream().anyMatch(p -> !p.good() && p.spare()));
+        assertTrue(bad.plots().stream().anyMatch(p -> !p.good() && p.role() == PlotRole.BANK && !p.spare()));
+    }
+
+    /**
+     * The terrain of a coast: only the plots north-west of the plaza are on land, the others are over deep water.
+     * With no foundation test, the village has missing homes. With the foundation test, the missing homes take the
+     * nearest plots over deep water, and the village has all its homes. With the good plots that the village needs,
+     * no home takes a bad plot.
+     */
+    @Test
+    void missingHomesTakeThePlotsOnTheirFoundation() {
+        VillageSize size = VillageSizeTable.DEFAULT.size("capital").orElseThrow();
+        Predicate<Box> coast = box -> box.maxX() < 0 && box.maxZ() < 0;
+        VillagePlan missing = VillagePlan.plan(size, size.plots(0, 0), StreetStyle.BASE, PLAZA, STARTS, coast, 4);
+        VillagePlan full = VillagePlan.plan(size, size.plots(0, 0), StreetStyle.BASE, PLAZA, STARTS, coast,
+                box -> true, 4);
+        VillagePlan land = VillagePlan.plan(size, size.plots(0, 0), StreetStyle.BASE, PLAZA, STARTS,
+                VillagePlanTest::good, box -> true, 4);
+
+        assertTrue(missing.missingHomes() > 0, "The coast leaves too few good plots");
+        assertEquals(0, full.missingHomes());
+        long onFoundation = full.plots().stream().filter(p -> !p.good() && !p.spare() && p.role() == PlotRole.HOME)
+                .count();
+        assertTrue(onFoundation > 0 && onFoundation <= missing.missingHomes(), onFoundation + " homes on their "
+                + "foundation for " + missing.missingHomes() + " missing homes");
+        // The nearest bad plots take the homes: the bad spare plots are farther.
+        double farthestHome = full.plots().stream().filter(p -> !p.good() && !p.spare() && p.role() == PlotRole.HOME)
+                .mapToDouble(p -> distance(full, p)).max().orElseThrow();
+        assertTrue(full.plots().stream().filter(p -> !p.good() && p.spare())
+                .allMatch(p -> distance(full, p) >= farthestHome));
+        assertEquals(plan(size, StreetStyle.BASE, VillagePlanTest::good, 4).plots(), land.plots());
+    }
+
+    /** The distance of the choice of the plots: a plot of a side street counts at a part of its distance. */
+    private static double distance(VillagePlan plan, Plot plot) {
+        double weight = plan.onSideStreet(plot) ? Math.sqrt(VillagePlan.SIDE_PLOT_WEIGHT) : 1;
+        return Math.hypot(plot.x(), plot.z()) * weight;
+    }
+
+    /** A radius that is too small gives a plan with a shortfall, not an error. */
+    @Test
+    void smallRadiusGivesAShortfall() {
+        VillageSize small = new VillageSize("capital", 66, 0, 0.15, 40, 0, Wall.PALISADE, 3);
+        for (StreetStyle style : StreetStyle.ALL) {
+            VillagePlan plan = plan(small, style, VillagePlanTest::good, 0);
+            assertTrue(plan.missingPlots() > 0, style.name());
+            assertEquals(66, plan.plots().size() + plan.missingPlots());
+            assertTrue(plan.radius() <= 40);
+        }
+    }
+
+    /** Writes a map of one plan for each tier and style to build/village-plans.txt, for a review. */
+    @Test
+    void writeMaps() throws IOException {
+        StringBuilder text = new StringBuilder();
+        for (VillageSize size : VillageSizeTable.DEFAULT.sizes()) {
+            for (StreetStyle style : StreetStyle.ALL) {
+                VillagePlan plan = plan(size, style, VillagePlanTest::someBad, 1);
+                long spare = plan.plots().stream().filter(Plot::spare).count();
+                text.append(String.format(Locale.ROOT, "%s %s: %d plots of %d, %d spare, %d wide, radius %.1f of %d"
+                        + ", %d pieces%n", size.tier(), style.name(), plan.plots().size(), plan.target(), spare,
+                        plan.plots().stream().filter(Plot::wide).count(), plan.radius(), size.maxRadius(),
+                        plan.pieces().size()));
+                int scale = size.maxRadius() <= 64 ? 2 : size.maxRadius() <= 128 ? 4 : 5;
+                text.append(VillagePlanMap.map(plan, PLAZA, size.maxRadius(), scale)).append('\n');
+            }
+        }
+        Path out = Path.of("build", "village-plans.txt");
+        Files.createDirectories(out.getParent());
+        Files.writeString(out, text.toString());
+    }
+}

@@ -1,12 +1,22 @@
 package io.github.nicolasgoyon.folkhold.world.block;
 
+import io.github.nicolasgoyon.folkhold.blocks.block.JobSignBlockEntity;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobAssignment;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.faction.FactionSpec;
 import io.github.nicolasgoyon.folkhold.core.sim.faction.VillageNames;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.GarrisonTraits;
 import io.github.nicolasgoyon.folkhold.core.sim.garrison.PostAssignment;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.construction.VillageRescues;
+import io.github.nicolasgoyon.folkhold.world.economy.Economies;
+import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import io.github.nicolasgoyon.folkhold.world.economy.WorkerSkills;
 import io.github.nicolasgoyon.folkhold.world.entity.ArcherEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.CaptainEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionGolemEntity;
@@ -20,36 +30,62 @@ import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
 import io.github.nicolasgoyon.folkhold.world.notice.Notices;
 import io.github.nicolasgoyon.folkhold.world.registry.ModBlockEntities;
 import io.github.nicolasgoyon.folkhold.world.registry.ModEntities;
-import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.settlement.SimulationProfiler;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
+import io.github.nicolasgoyon.folkhold.world.village.BlockedVillagers;
+import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.Handymen;
+import io.github.nicolasgoyon.folkhold.world.village.RaidShelters;
+import io.github.nicolasgoyon.folkhold.world.village.RingWall;
+import io.github.nicolasgoyon.folkhold.world.village.StoneWall;
+import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBraziers;
+import io.github.nicolasgoyon.folkhold.world.village.VillageClearing;
 import io.github.nicolasgoyon.folkhold.world.village.VillageExits;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
+import io.github.nicolasgoyon.folkhold.world.village.VillageGrowth;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
+import io.github.nicolasgoyon.folkhold.world.village.VillageHomes;
+import io.github.nicolasgoyon.folkhold.world.village.VillageLand;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
+import io.github.nicolasgoyon.folkhold.world.village.VillageMarket;
+import io.github.nicolasgoyon.folkhold.world.village.VillagePens;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
+import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
+import io.github.nicolasgoyon.folkhold.world.village.WallZones;
+import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
+import io.github.nicolasgoyon.folkhold.world.village.schedule.IdleVillagers;
+import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SplittableRandom;
 import java.util.UUID;
+import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -57,6 +93,8 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -65,6 +103,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.neoforged.neoforge.event.EventHooks;
 
 /**
@@ -73,14 +112,16 @@ import net.neoforged.neoforge.event.EventHooks;
  * <p>When a player is in the activation radius, the heart creates the missing units of its garrison.
  *
  * <p>The work of the heart reads and changes the blocks of the village. The heart does this work only when all the
- * chunks of the scan area are ready ({@link VillageLayout#isScanAreaReady}): the server thread never waits for the
- * generation of a chunk.
+ * chunks of the scan area are ready ({@link #scanArea}): the server thread never waits for the generation of a
+ * chunk.
  */
 public class VillageHeartBlockEntity extends BlockEntity {
     private static final String ID_TAG = "VillageId";
     private static final String ALERT_TAG = "Alert";
     private static final String LAST_THREAT_TAG = "LastThreat";
     private static final String GARRISON_TAG = "Garrison";
+    private static final String PENS_TAG = "Pens";
+    private static final String RESCUES_TAG = "Rescues";
     /** The heart checks its garrison every 2 seconds. */
     private static final int GARRISON_INTERVAL = 40;
     /** In an alert, the heart rings the bells every 5 seconds. */
@@ -91,11 +132,16 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final int ROTATION_INTERVAL = 400;
     /** The heart checks the end of the alert once each second. */
     private static final int CHECK_INTERVAL = 20;
+    /** The heart checks the pens of its job buildings at this interval, in ticks (see {@link VillagePens}). */
+    private static final int PEN_INTERVAL = 200;
+    /** The name of the search of the units in the simulation profiler (see {@link #getUnits()}). */
+    public static final String UNITS_PROFILER_NAME = "village units (area search)";
 
     private UUID villageId = UUID.randomUUID();
     private AlertState alertState = AlertState.CALM;
     private long lastThreatTick;
     private final Garrison garrison = new Garrison();
+    private final VillagePens pens = new VillagePens();
     private final Map<UUID, Offense> offenses = new HashMap<>();
     /**
      * Players that attacked the village, with the game time when the hostility ends. All units of the village
@@ -107,6 +153,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final String EXITS_TAG = "ExitStairs";
     private static final String NIGHT_TAG = "NightMode";
     private static final String CATS_TAG = "CatsSpawned";
+    private static final String CLEARED_TAG = "Cleared";
+    private static final String SNOW_CLEARED_TAG = "SnowCleared";
     private static final String CAT_SPAWN_TAG = "LastCatSpawn";
     private static final String VILLAGERS_TAG = "VillagersSpawned";
     private static final String VILLAGER_SPAWN_TAG = "LastVillagerSpawn";
@@ -115,6 +163,13 @@ public class VillageHeartBlockEntity extends BlockEntity {
     public static final int VILLAGER_GROUP = 4;
     private static final String FACTION_TAG = "Faction";
     private static final String NAME_TAG = "Name";
+    private static final String MARKET_PLOT_TAG = "MarketPlot";
+    private static final String LAND_TAG = "LandPieces";
+    private static final String LAST_HOME_TAG = "LastHomeTick";
+    private static final String GROWN_HOMES_TAG = "GrownHomes";
+    private static final String STONE_WALL_TAG = "StoneWall";
+    private static final String RING_WALL_TAG = "RingWall";
+
     /** Name of the village, or null before the village has a faction. */
     @Nullable
     private String villageName;
@@ -125,6 +180,22 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final int GATE_WATCH_DISTANCE = 2;
     /** A faction golem guards a gate at this distance from the middle of the gate, toward the heart. */
     private static final int GOLEM_GATE_DISTANCE = 4;
+    /** The first distance of a guard station from a gate or a tower post, toward the heart, in blocks. */
+    private static final int STATION_MIN_DISTANCE = 3;
+    /** The last distance of a guard station from a gate or a tower post, toward the heart, in blocks. */
+    private static final int STATION_MAX_DISTANCE = 8;
+    /** A station is on the ground at this number of blocks above the gate or the post or less. */
+    private static final int STATION_RISE = 2;
+    /** A station is on the ground at this number of blocks under the gate or the post or less. */
+    private static final int STATION_DROP = 16;
+    /** Two stations are this number of blocks apart or more (horizontal distance). */
+    private static final int STATION_SPACING = 4;
+    /** A guard on a round goes to the next station at this horizontal distance from its station or less, in blocks. */
+    private static final int ROUND_ARRIVED = 3;
+    /** The stations of the rounds, in the order of their angle around the heart. Not saved. */
+    private List<BlockPos> roundRoute = List.of();
+    /** The guards on a round. Not saved: the heart gives the rounds again at each check of the garrison. */
+    private Set<UUID> roundGuards = Set.of();
     /** True after the heart closed the gates and lit the braziers for the night. */
     private boolean nightMode;
     /** The period of the day of the last check of the braziers, or null before the first check. Not saved. */
@@ -137,22 +208,76 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private VillageReference repairReference;
     /** True after the search of {@link #repairReference}. */
     private boolean repairReferenceSearched;
+    /** The blocked villagers of the village. Not saved: the villagers wait for the delay again after a load. */
+    private final BlockedVillagers blockedVillagers = new BlockedVillagers();
+    /** The rescues of the blocked villagers by the builders. The heart saves the blocks of the rescue. */
+    private final VillageRescues rescues = new VillageRescues();
+    /** The zones of the wall where the villagers do not walk, or null before the first use. Not saved. */
+    @Nullable
+    private WallZones wallZones;
+    /** True if the last check of the growth found no free plot for the market. Not saved: the next check sets it. */
+    private boolean marketNoSpace;
+    /**
+     * True if the last check of the growth found no free plot for a new home: no house-workshop of the tried jobs has
+     * a piece and a free plot. Not saved: the next check sets it.
+     */
+    private boolean homeNoSpace;
+    /**
+     * The kinds of the buildings for which the last check of the growth found no free plot (no piece of the kind, or
+     * no free plot that holds it). Not saved: the next check sets it.
+     */
+    private final Set<String> buildingNoSpace = new HashSet<>();
+    /** The plot of the market of the village, or null before the growth starts the market. */
+    @Nullable
+    private VillageMarket.Plot marketPlot;
+    /**
+     * The homes of the village structure that grow in place (see {@link VillageGrowth}): the piece of the step of each
+     * home, at the origin and with the turn of its piece of the structure.
+     */
+    private final List<VillageReference.Piece> grownHomes = new ArrayList<>();
+    /** The parts of the first wall in stone (see {@link StoneWall}). */
+    private final StoneWall.State stoneWall = new StoneWall.State();
+    /** The new rings of the village at runtime (see {@link RingWall}). */
+    private final RingWall.State ringWall = new RingWall.State();
+    /** The game time of the start of the last new home of the growth, or -1 with no such home. */
+    private long lastHomeTick = -1;
+    /** The fields and the mills that the builders of the village started outside the palisade (see {@link VillageLand}). */
+    private final List<VillageReference.Piece> landPieces = new ArrayList<>();
     /** The positions of the last repairs, with the game time of their end. Not saved. */
     private final Map<BlockPos, Long> repaired = new HashMap<>();
     /** True when the stairs of the gates are built (see {@link VillageExits}). */
     private boolean exitStairs;
     /** True after the first cats of the village appeared. */
     private boolean catsSpawned;
+    /** True after the heart removed the trees of the village (see {@link VillageClearing}). */
+    private boolean cleared;
+    /** True after the heart replaced the powder snow of the village (see {@link VillageClearing}). */
+    private boolean snowCleared;
     /** Game time of the last creation of cats. */
     private long lastCatSpawn;
-    /** True after the first villagers (merchants and inhabitants) of the village appeared. */
+    /** True after the first inhabitants of the village appeared. */
     private boolean villagersSpawned;
     /** True while the heart creates the villagers of an incomplete fill (see {@link #ensureVillagers}). */
     private boolean villagersFilling;
     /** Game time of the last creation of villagers. */
     private long lastVillagerSpawn;
+    /** The homes of the last record of the job posts (see {@link #recordJobPosts}), or null. Not saved. */
+    @Nullable
+    private VillageBeds.Homes homes;
+    /** The places of the daily schedule of the workers. Not saved: the next check calculates them again. */
+    private final VillageWorkers workers = new VillageWorkers();
+    /**
+     * The trade place of the last calculation, or null. Not saved: a scan, a request for a scan and a new reference
+     * of the village structure clear it.
+     */
+    @Nullable
+    private TradePlaceCache tradePlaceCache;
+    /** The number of calculations of the trade place. Not saved. For the tests. */
+    private int tradePlaceCalculations;
     /** Game time of the last ring of the bells. Not saved. */
     private long lastBellTick = Long.MIN_VALUE / 2;
+    /** The game time of the last sound of the war horn (see {@link WarHorn}). Not saved. */
+    private long lastHornTick = Long.MIN_VALUE / 2;
     /** Game time of the last shared target. Not saved. */
     private long lastShareTick = Long.MIN_VALUE / 2;
     /** True after the heart is linked to its settlement. Not saved: the heart links again after a load. */
@@ -296,7 +421,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
 
     /**
      * Changes the alert state and saves the change. When the village leaves the calm state, each archer goes to the
-     * nearest free tower (see {@link #assignAlertPosts()}).
+     * nearest free tower (see {@link #assignAlertPosts()}), the bells ring, and the war horn of the village sounds
+     * (see {@link WarHorn}).
      */
     public void setAlertState(AlertState state) {
         if (alertState != state) {
@@ -306,13 +432,23 @@ public class VillageHeartBlockEntity extends BlockEntity {
             if (wasCalm) {
                 assignAlertPosts();
                 ringBells();
+                soundWarHorn();
             }
+        }
+    }
+
+    /** Sounds the war horn of the village, when the culture of its faction has one (see {@link WarHorn}). */
+    private void soundWarHorn() {
+        if (level instanceof ServerLevel serverLevel && WarHorn.hasHorn(serverLevel, this)) {
+            lastHornTick = level.getGameTime();
+            WarHorn.sound(serverLevel, this);
         }
     }
 
     /**
      * Rings the alarm bells of the village. The vanilla villagers near a bell go into the houses, as in a raid. A
-     * bell in a chunk that is not ready does not ring.
+     * bell in a chunk that is not ready does not ring. The loaded workers of the village also hear the bells far from
+     * a bell: they stop their daily schedule and hide (see {@link VillageWorkers#hearAlarm}).
      */
     public void ringBells() {
         if (level == null || level.isClientSide()) {
@@ -327,6 +463,9 @@ public class VillageHeartBlockEntity extends BlockEntity {
             if (state.getBlock() instanceof BellBlock bellBlock) {
                 bellBlock.attemptToRing(null, level, bell, null);
             }
+        }
+        if (level instanceof ServerLevel serverLevel) {
+            VillageWorkers.hearAlarm(serverLevel, VillageFolk.inhabitants(serverLevel, worldPosition));
         }
     }
 
@@ -421,13 +560,19 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
     }
 
-    /** The loaded units of this village: units in the village radius that are linked to this heart. */
+    /**
+     * The loaded units of this village: units in the area of the village that are linked to this heart. The
+     * simulation profiler records the time of the search ({@link #UNITS_PROFILER_NAME}).
+     */
     public List<FactionUnit> getUnits() {
         if (level == null) {
             return List.of();
         }
-        return level.getEntitiesOfClass(FactionUnit.class, VillageHearts.area(worldPosition),
+        long start = System.nanoTime();
+        List<FactionUnit> units = level.getEntitiesOfClass(FactionUnit.class, VillageHearts.area(level, worldPosition),
                 unit -> worldPosition.equals(unit.getVillagePos()));
+        SimulationProfiler.record(UNITS_PROFILER_NAME, System.nanoTime() - start);
+        return units;
     }
 
     public Garrison getGarrison() {
@@ -494,6 +639,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
         return layout;
     }
 
+    /** The pens of the job buildings of the village, with their animals. */
+    public VillagePens getPens() {
+        return pens;
+    }
+
     /**
      * Puts the gates of the palisade into the settlement: the routes of the caravans go through them (see
      * {@link io.github.nicolasgoyon.folkhold.core.sim.group.RouteGates}). A gate in a chunk that is not loaded is not
@@ -517,19 +667,175 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
-     * Creates the missing units of the garrison now (see {@link Garrison#ensure}). Before the first garrison, the
-     * heart scans the village. The method does nothing while a chunk of the scan area is not ready
-     * ({@link VillageLayout#isScanAreaReady}).
+     * Records the beds of the homes of the village in the settlement (see {@link VillageBeds}), from the last scan of
+     * the village.
+     */
+    public void recordBeds() {
+        if (!(level instanceof ServerLevel serverLevel) || !layout.isScanned()) {
+            return;
+        }
+        int beds = VillageBeds.homeBeds(serverLevel, layout.beds(), repairReference(serverLevel).orElse(null));
+        Settlements.of(serverLevel.getServer(), this).ifPresent(settlement -> {
+            if (settlement.setBeds(beds)) {
+                SettlementData.get(serverLevel.getServer()).setDirty();
+            }
+        });
+    }
+
+    /**
+     * Records the number of buildings of each kind in the settlement, from the building signs of the last scan of the
+     * village. The gates of the tiers read them (see
+     * {@link io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels}).
+     */
+    public void recordBuildings() {
+        if (!(level instanceof ServerLevel serverLevel) || !layout.isScanned()) {
+            return;
+        }
+        Settlements.of(serverLevel.getServer(), this).ifPresent(settlement -> {
+            if (settlement.setBuildings(Optional.of(layout.buildings()))) {
+                SettlementData.get(serverLevel.getServer()).setDirty();
+            }
+        });
+    }
+
+    /**
+     * Records the job posts of the village in the settlement (see {@link JobPosts}), from the last scan of the village.
+     * The posts with a job that trades come first (see {@link JobPosts#order}). A heart with no village structure has
+     * no homes to find: its posts stay unknown, and the village keeps the job slots of its level.
+     */
+    public void recordJobPosts() {
+        if (!(level instanceof ServerLevel serverLevel) || !layout.isScanned()) {
+            return;
+        }
+        Optional<VillageReference> reference = repairReference(serverLevel);
+        if (reference.isEmpty()) {
+            return;
+        }
+        homes = VillageBeds.homes(serverLevel, worldPosition, layout.jobSigns(), layout.beds(), reference.get());
+        List<JobPosts.Post> scanned = homes.posts();
+        Settlements.of(serverLevel.getServer(), this).ifPresent(settlement -> {
+            List<JobPosts.Post> posts = JobPosts.order(settlement.jobPosts(), scanned, Merchants::trades);
+            if (settlement.setJobPosts(Optional.of(posts))) {
+                SettlementData.get(serverLevel.getServer()).setDirty();
+            }
+        });
+    }
+
+    /**
+     * Gives a new job to each job post that needs a job (see {@link Economies#needsNewJob} and
+     * {@link JobAssignment#renew}): a job sign with no job (for example a blank job sign that a player places in a
+     * home), or a job that is not valid in the biome. The heart writes the new job and its icon (the first output item
+     * of the job) on the job sign. The blocks of the building do not change. The other jobs do not change: a post with
+     * a minimum level above the level of the village, or with no job file, is inactive. The heart does not change the
+     * blocks of a legacy village. A post with a sign in a chunk that is not loaded keeps its job until a later check.
+     */
+    public void renewJobPosts() {
+        if (!(level instanceof ServerLevel serverLevel) || !layout.isScanned()) {
+            return;
+        }
+        MinecraftServer server = serverLevel.getServer();
+        Settlements.of(server, this).ifPresent(settlement -> {
+            if (settlement.legacyJobs() || settlement.jobPosts().isEmpty()) {
+                return;
+            }
+            List<JobPosts.Post> posts = settlement.jobPosts().get();
+            Predicate<String> needsJob = job -> Economies.needsNewJob(server, settlement, job);
+            if (posts.stream().map(JobPosts.Post::jobId).noneMatch(needsJob)) {
+                return;
+            }
+            List<JobPosts.Post> renewed = JobAssignment.renew(posts, needsJob,
+                    Economies.eligibleJobs(server, settlement), Merchants::trades,
+                    Settlements.seed(settlement.id()), post -> writeJobSign(serverLevel, post));
+            if (!renewed.equals(posts)) {
+                settlement.setJobPosts(Optional.of(JobPosts.order(Optional.of(renewed), renewed, Merchants::trades)));
+                SettlementData.get(server).setDirty();
+                setChanged();
+            }
+        });
+    }
+
+    /** Writes the job of a post and its icon on its job sign. Returns false when the sign is not there. */
+    private boolean writeJobSign(ServerLevel serverLevel, JobPosts.Post post) {
+        BlockPos pos = new BlockPos(post.x(), post.y(), post.z());
+        if (!serverLevel.isLoaded(pos) || !(serverLevel.getBlockEntity(pos) instanceof JobSignBlockEntity sign)) {
+            return false;
+        }
+        Job job = EconomyData.jobs().get(post.jobId());
+        ResourceLocation icon = job == null || job.recipe().outputs().isEmpty() ? null
+                : ResourceLocation.tryParse(job.recipe().outputs().get(0).item());
+        String prefix = FolkholdWorld.MOD_ID + ":";
+        String signJob = post.jobId().startsWith(prefix) ? post.jobId().substring(prefix.length()) : post.jobId();
+        FolkholdWorld.LOGGER.info("Village {}: the job post at {} gets the job {} (job of the sign: '{}')",
+                worldPosition, pos, post.jobId(), sign.job());
+        sign.setJob(signJob, icon);
+        layout.setJob(pos, post.jobId());
+        return true;
+    }
+
+    /**
+     * Removes the trees of the village and replaces its powder snow with snow blocks, once, before its first garrison
+     * (see {@link VillageClearing}). Each of the 2 steps occurs once, and a call does one step at most: the 2 large
+     * reads of blocks do not occur in the same tick. A heart with no village structure has nothing to clear. The heart
+     * waits while a chunk of a step is not ready.
+     *
+     * @param serverLevel the level of the heart
+     */
+    public void clearTrees(ServerLevel serverLevel) {
+        Optional<VillageReference> reference = repairReference(serverLevel);
+        if (reference.isEmpty()) {
+            cleared = true;
+            snowCleared = true;
+            setChanged();
+            return;
+        }
+        if (!cleared) {
+            Optional<Integer> removed = VillageClearing.clear(serverLevel, worldPosition, reference.get());
+            if (removed.isPresent()) {
+                FolkholdWorld.LOGGER.debug("Village {}: {} blocks of trees removed", worldPosition, removed.get());
+                cleared = true;
+                setChanged();
+            }
+            return;
+        }
+        if (!snowCleared) {
+            Optional<Integer> replaced = VillageClearing.replacePowderSnow(serverLevel, worldPosition,
+                    reference.get());
+            if (replaced.isPresent()) {
+                FolkholdWorld.LOGGER.debug("Village {}: {} blocks of powder snow replaced", worldPosition,
+                        replaced.get());
+                snowCleared = true;
+                setChanged();
+            }
+        }
+    }
+
+    /**
+     * Asks for a new scan of the village (see {@link VillageLayout}): the next check of the garrison scans the
+     * blocks again. Examples: the end of a construction site, a bed that a player places or breaks.
+     */
+    public void requestScan() {
+        layout.invalidate();
+        tradePlaceCache = null;
+        setChanged();
+    }
+
+    /**
+     * Creates the missing units of the garrison now (see {@link Garrison#ensure}). Before the first garrison and after
+     * a request (see {@link #requestScan()}), the heart scans the village. The method does nothing while a chunk of
+     * the scan area is not ready ({@link #scanArea}).
      *
      * @param now the game time to use
      */
     public void ensureGarrison(long now) {
-        if (!(level instanceof ServerLevel serverLevel) || !VillageLayout.isScanAreaReady(serverLevel, worldPosition)) {
+        if (!(level instanceof ServerLevel serverLevel)
+                || !VillageLayout.isAreaReady(serverLevel, scanArea(serverLevel))) {
             return;
         }
         ensureSettlement();
         if (!layout.isScanned()) {
-            layout.scan(serverLevel, worldPosition);
+            layout.scan(serverLevel, scanArea(serverLevel));
+            tradePlaceCache = null;
+            recordMarketPlot(serverLevel);
             paintBanners();
             setChanged();
         }
@@ -539,6 +845,10 @@ public class VillageHeartBlockEntity extends BlockEntity {
             setChanged();
         }
         recordGates();
+        recordBeds();
+        recordBuildings();
+        recordJobPosts();
+        renewJobPosts();
         if (alertState == AlertState.CALM && ensureCats(serverLevel, now)) {
             setChanged();
         }
@@ -551,18 +861,22 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 garrisonTraits())) {
             setChanged();
         }
+        assignStations();
     }
 
     /**
-     * The garrison of the level of the settlement of the heart (see {@code garrison} in the level table). A heart with
-     * no settlement uses the level 1.
+     * The garrison of the level of the settlement of the heart (see {@code garrison} in the level table), with the
+     * extra units of the culture of the faction of the heart ({@code culture_garrison}). A heart with no settlement
+     * uses the level 1.
      */
     public GarrisonTraits garrisonTraits() {
         int settlementLevel = 1;
+        String culture = null;
         if (level != null && level.getServer() != null) {
             settlementLevel = Settlements.of(level.getServer(), this).map(Settlement::level).orElse(1);
+            culture = FactionVisuals.faction(level.getServer(), factionId).map(FactionSpec::cultureId).orElse(null);
         }
-        return LevelTables.get().traits(settlementLevel).garrison();
+        return LevelTables.get().traits(settlementLevel).garrison().forCulture(culture);
     }
 
     /** The loaded cats of this village. */
@@ -570,7 +884,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (level == null) {
             return List.of();
         }
-        return level.getEntitiesOfClass(VillageCat.class, VillageHearts.area(worldPosition),
+        return level.getEntitiesOfClass(VillageCat.class, VillageHearts.area(level, worldPosition),
                 cat -> worldPosition.equals(cat.getVillagePos()));
     }
 
@@ -595,7 +909,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     public List<BlockPos> catAnchors() {
         List<BlockPos> anchors = new ArrayList<>();
         List<BlockPos> seen = new ArrayList<>();
-        for (BlockPos gate : layout.gates()) {
+        for (BlockPos gate : floorGates()) {
             boolean sameGate = seen.stream().anyMatch(other -> other.distManhattan(gate) <= 2);
             seen.add(gate);
             if (!sameGate) {
@@ -641,10 +955,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
-     * Creates the missing villagers of the village: the merchants ({@link Merchants#merchantCount}), then the
-     * inhabitants ({@link VillageFolk#inhabitantCount}) with the professions of the settlement
-     * ({@link VillageFolk#professions}). When the jobs change, the inhabitants get the new professions at once
-     * ({@link VillageFolk#assign}).
+     * Creates the missing villagers of the village: the inhabitants ({@link VillageFolk#inhabitantCount}) with the
+     * professions of the settlement ({@link VillageFolk#professions}). When the jobs change, the inhabitants get the
+     * new professions at once ({@link VillageFolk#assign}). Then the inhabitants get their beds ({@link VillageHomes})
+     * and the workers get the places of their daily schedule ({@link VillageWorkers}) and the skill level of their posts
+     * ({@link WorkerSkills}).
      *
      * <ul>
      *   <li>The villagers appear in groups of {@link #VILLAGER_GROUP} at most, one group at each call. A large
@@ -663,13 +978,23 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (settlement.isEmpty()) {
             return false;
         }
-        int missingMerchants = Merchants.merchantCount(settlement.get())
-                - VillageFolk.of(serverLevel, worldPosition, ModProfessions.MERCHANT.get()).size();
-        List<VillagerProfession> wanted = VillageFolk.professions(settlement.get(),
+        List<VillageFolk.Seat> seats = VillageFolk.seats(settlement.get(),
                 VillageFolk.inhabitantCount(settlement.get()));
+        List<Villager> inhabitants = VillageFolk.inhabitants(serverLevel, worldPosition);
         List<VillagerProfession> missingInhabitants =
-                VillageFolk.assign(VillageFolk.inhabitants(serverLevel, worldPosition), wanted);
-        int missing = Math.max(0, missingMerchants) + missingInhabitants.size();
+                VillageFolk.assign(inhabitants, seats.stream().map(VillageFolk.Seat::profession).toList());
+        List<BlockPos> beds = homeBeds(settlement.get(), seats);
+        VillageHomes.claim(serverLevel, worldPosition, inhabitants, seats, beds);
+        VillageHomes.lieDown(serverLevel, inhabitants);
+        IdleVillagers.update(serverLevel, inhabitants);
+        workers.update(serverLevel, this, inhabitants, seats, beds, settlement.get().jobPosts().orElse(List.of()));
+        WorkerSkills.applyAll(settlement.get(), inhabitants);
+        FolkNavigation.leaveWall(worldPosition, wallZones(serverLevel), inhabitants);
+        List<PathfinderMob> mobs = new ArrayList<>(inhabitants);
+        mobs.addAll(getUnits());
+        blockedVillagers.update(worldPosition, mobs, now);
+        rescues.update(serverLevel, worldPosition, blockedVillagers.blocked(), now);
+        int missing = missingInhabitants.size();
         if (missing == 0) {
             boolean changed = villagersFilling;
             villagersFilling = false;
@@ -680,10 +1005,6 @@ public class VillageHeartBlockEntity extends BlockEntity {
             return false;
         }
         int spawned = 0;
-        for (int i = 0; i < missingMerchants && spawned < VILLAGER_GROUP; i++) {
-            VillageFolk.spawn(serverLevel, worldPosition, ModProfessions.MERCHANT.get());
-            spawned++;
-        }
         for (VillagerProfession profession : missingInhabitants) {
             if (spawned >= VILLAGER_GROUP) {
                 break;
@@ -695,6 +1016,53 @@ public class VillageHeartBlockEntity extends BlockEntity {
         villagersFilling = spawned < missing;
         lastVillagerSpawn = now;
         return true;
+    }
+
+    /**
+     * Gives to the loaded inhabitants the beds of their places (see {@link VillageHomes}): the household of a home
+     * sleeps in the home. A village with no list of posts keeps the vanilla rules for the beds.
+     *
+     * @return the number of villagers with a new bed
+     */
+    public int claimHomeBeds() {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return 0;
+        }
+        return Settlements.of(serverLevel.getServer(), this).map(settlement -> {
+            List<VillageFolk.Seat> seats = VillageFolk.seats(settlement, VillageFolk.inhabitantCount(settlement));
+            return VillageHomes.claim(serverLevel, worldPosition, VillageFolk.inhabitants(serverLevel, worldPosition),
+                    seats, homeBeds(settlement, seats));
+        }).orElse(0);
+    }
+
+    /**
+     * Gives to the loaded workers their daily schedule, their job sign and their meeting point (see
+     * {@link VillageWorkers}).
+     *
+     * @return the number of changes in the brains of the workers
+     */
+    public int updateWorkers() {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return 0;
+        }
+        return Settlements.of(serverLevel.getServer(), this).map(settlement -> {
+            List<VillageFolk.Seat> seats = VillageFolk.seats(settlement, VillageFolk.inhabitantCount(settlement));
+            return workers.update(serverLevel, this, VillageFolk.inhabitants(serverLevel, worldPosition), seats,
+                    homeBeds(settlement, seats), settlement.jobPosts().orElse(List.of()));
+        }).orElse(0);
+    }
+
+    /** The places of the daily schedule of the workers. */
+    public VillageWorkers workers() {
+        return workers;
+    }
+
+    /** The bed of each place (see {@link VillageHomes#beds}). A village with no list of posts gives no bed. */
+    private List<BlockPos> homeBeds(Settlement settlement, List<VillageFolk.Seat> seats) {
+        if (homes == null || settlement.jobPosts().isEmpty()) {
+            return List.of();
+        }
+        return VillageHomes.beds(seats, settlement.jobPosts().get(), homes);
     }
 
     /** Gives the banner of the faction to the banners of the village. */
@@ -718,6 +1086,17 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     /**
+     * The scan area of the village (see {@link VillageLayout#area}): the area of the village structure, or a box around
+     * the heart.
+     *
+     * @param serverLevel the level of the heart
+     * @return the box
+     */
+    public BoundingBox scanArea(ServerLevel serverLevel) {
+        return VillageLayout.area(worldPosition, repairReference(serverLevel).orElse(null));
+    }
+
+    /**
      * The structure pieces of the village for the repairs (see {@link VillageRepairs}). The heart looks for them once
      * after a load.
      *
@@ -729,7 +1108,94 @@ public class VillageHeartBlockEntity extends BlockEntity {
             repairReferenceSearched = true;
             repairReference = VillageReference.find(serverLevel, worldPosition).orElse(null);
         }
-        return Optional.ofNullable(repairReference);
+        Optional<VillageReference> rings = ringWall.reference(serverLevel);
+        return Optional.ofNullable(repairReference)
+                .map(reference -> stoneWall.apply(reference.withReplaced(grownHomes)))
+                .map(reference -> rings.map(reference::with).orElse(reference));
+    }
+
+    /**
+     * The new rings of the village at runtime: the pieces of the planned rings and the parts with a site (see
+     * {@link RingWall}). The reference of the repairs has the parts with a site (see {@link #repairReference}).
+     */
+    public RingWall.State ringWall() {
+        return ringWall;
+    }
+
+    /**
+     * The parts of the new rings changed: the zones of the wall come again from the reference, and the area of the
+     * village follows the reference.
+     *
+     * @param serverLevel the level of the heart
+     */
+    public void onRingWallChanged(ServerLevel serverLevel) {
+        wallZones = null;
+        tradePlaceCache = null;
+        VillageHearts.register(serverLevel, worldPosition, repairReference(serverLevel).flatMap(VillageReference::area));
+        setChanged();
+    }
+
+    /**
+     * The stone wall of the village: the parts of its first wall that its builders changed into stone (see
+     * {@link StoneWall}). The reference of the repairs has these parts (see {@link #repairReference}).
+     */
+    public StoneWall.State stoneWall() {
+        return stoneWall;
+    }
+
+    /** The parts of the stone wall changed: the zones of the wall come again from the reference. */
+    public void onStoneWallChanged() {
+        wallZones = null;
+        setChanged();
+    }
+
+    /**
+     * The homes of the village structure that grow in place: the piece of the step of each home (see
+     * {@link VillageGrowth}). The reference of the repairs has these pieces (see {@link #repairReference}).
+     *
+     * @return the pieces, in the order of their first growth
+     */
+    public List<VillageReference.Piece> grownHomes() {
+        return Collections.unmodifiableList(grownHomes);
+    }
+
+    /**
+     * Records the piece of the next step of a home that grows in place. The piece takes the place of the piece of the
+     * home with the same origin and the same turn.
+     *
+     * @param piece the piece of the step
+     */
+    public void addGrownHome(VillageReference.Piece piece) {
+        grownHomes.removeIf(found -> found.origin().equals(piece.origin()) && found.rotation() == piece.rotation());
+        grownHomes.add(piece);
+        wallZones = null;
+        setChanged();
+    }
+
+    /** The rescues of the blocked villagers by the builders of the village (see {@link VillageRescues}). */
+    public VillageRescues rescues() {
+        return rescues;
+    }
+
+    /** The blocked villagers of the village (see {@link BlockedVillagers}). The heart screen shows their number. */
+    public BlockedVillagers blockedVillagers() {
+        return blockedVillagers;
+    }
+
+    /**
+     * The zones of the wall of the village where its villagers do not walk (see {@link WallZones} and
+     * {@link FolkNavigation}): the towers and the tops of the palisade, from the structure pieces of the village.
+     *
+     * @param serverLevel the level of the heart
+     * @return the zones, or {@link WallZones#NONE} for a heart outside a village structure
+     */
+    public WallZones wallZones(ServerLevel serverLevel) {
+        if (wallZones == null) {
+            wallZones = repairReference(serverLevel)
+                    .map(reference -> WallZones.of(serverLevel.getStructureManager(), reference))
+                    .orElse(WallZones.NONE);
+        }
+        return wallZones;
     }
 
     /**
@@ -740,6 +1206,201 @@ public class VillageHeartBlockEntity extends BlockEntity {
     public void setRepairReference(@Nullable VillageReference reference) {
         repairReference = reference;
         repairReferenceSearched = true;
+        wallZones = null;
+        tradePlaceCache = null;
+        if (level != null) {
+            VillageHearts.register(level, worldPosition,
+                    Optional.ofNullable(reference).flatMap(VillageReference::area));
+        }
+    }
+
+    /** True if the last check of the growth found no free plot for the market (see {@link VillageMarket.State}). */
+    public boolean isMarketNoSpace() {
+        return marketNoSpace;
+    }
+
+    /** Records the result of the last check of the growth for the market (see {@link VillageGrowth}). */
+    public void setMarketNoSpace(boolean noSpace) {
+        marketNoSpace = noSpace;
+    }
+
+    /**
+     * True if the last check of the growth found no free plot for a new home (see {@link VillageGrowth}): the village
+     * needs a home or a first post, and no house-workshop of the tried jobs has a piece and a free plot. The heart
+     * screen shows it.
+     */
+    public boolean isHomeNoSpace() {
+        return homeNoSpace;
+    }
+
+    /**
+     * The homes of the last record of the job posts (see {@link #recordJobPosts}). The heart screen shows the number
+     * of homes with no post.
+     *
+     * @return the homes, or empty before the first record after a load
+     */
+    public Optional<VillageBeds.Homes> homes() {
+        return Optional.ofNullable(homes);
+    }
+
+    /**
+     * True if the last check of the growth found no free plot for a building of a kind (see {@link VillageGrowth}).
+     * The heart screen shows it (see
+     * {@link io.github.nicolasgoyon.folkhold.world.village.VillageGrowthInfo}).
+     *
+     * @param kind the kind of the building, for example {@code storehouse}
+     * @return true with no free plot
+     */
+    public boolean isBuildingNoSpace(String kind) {
+        return buildingNoSpace.contains(kind);
+    }
+
+    /** Records the result of the last check of the growth for a building of a kind (see {@link VillageGrowth}). */
+    public void setBuildingNoSpace(String kind, boolean noSpace) {
+        if (noSpace) {
+            buildingNoSpace.add(kind);
+        } else {
+            buildingNoSpace.remove(kind);
+        }
+    }
+
+    /** Records the result of the last check of the growth for a new home (see {@link VillageGrowth}). */
+    public void setHomeNoSpace(boolean noSpace) {
+        homeNoSpace = noSpace;
+    }
+
+    /**
+     * The game time of the start of the last new home of the growth (see {@link VillageGrowth#homeNeed}).
+     *
+     * @return the game time, or -1 when the growth started no new home
+     */
+    public long lastHomeTick() {
+        return lastHomeTick;
+    }
+
+    /** Records the start of a new home of the growth. */
+    public void setLastHomeTick(long tick) {
+        if (lastHomeTick != tick) {
+            lastHomeTick = tick;
+            setChanged();
+        }
+    }
+
+    /**
+     * The plot of the market of the village (see {@link VillageMarket.Plot}). The growth builds the market again on
+     * this plot when the market is broken or not finished.
+     *
+     * @return the plot, or empty before the growth starts the market
+     */
+    public Optional<VillageMarket.Plot> marketPlot() {
+        return Optional.ofNullable(marketPlot);
+    }
+
+    /**
+     * Scans the village again now when a market sign of the scan is not a market any more: a player, a raid or an
+     * explosion broke the market sign or the market post. No block event tells the heart about all these changes.
+     * Then the market is not in the scan, and the growth builds it again on its plot (see {@link VillageGrowth}). The
+     * growth calls this method before its steps: with the setting {@code construction.growth} on, builders and no
+     * site. A market sign or a market post in a chunk that is not ready is not broken.
+     *
+     * @param serverLevel the level of the heart
+     * @return true if the heart scanned the village
+     */
+    public boolean checkMarkets(ServerLevel serverLevel) {
+        boolean broken = layout.markets().stream().anyMatch(pos -> VillageLayout.isMarketBroken(serverLevel, pos));
+        if (!broken || !VillageLayout.isAreaReady(serverLevel, scanArea(serverLevel))) {
+            return false;
+        }
+        layout.scan(serverLevel, scanArea(serverLevel));
+        tradePlaceCache = null;
+        recordMarketPlot(serverLevel);
+        recordBuildings();
+        paintBanners();
+        setChanged();
+        return true;
+    }
+
+    /**
+     * Records the plot of a market of the village structure after a scan: the market piece that holds the first market
+     * sign. A heart with a plot keeps it.
+     */
+    private void recordMarketPlot(ServerLevel serverLevel) {
+        if (marketPlot != null || layout.markets().isEmpty()) {
+            return;
+        }
+        repairReference(serverLevel)
+                .flatMap(reference -> VillageMarket.generatedPlot(serverLevel, reference, layout.markets().get(0)))
+                .ifPresent(this::setMarketPlot);
+    }
+
+    /**
+     * The fields and the mills that the builders of the village started outside the palisade (see
+     * {@link VillageLand}), in the order of their start.
+     *
+     * @return the land pieces
+     */
+    public List<VillageReference.Piece> landPieces() {
+        return Collections.unmodifiableList(landPieces);
+    }
+
+    /**
+     * Records a field or a mill that the builders of the village start (see {@link VillageLand}).
+     *
+     * @param piece the land piece
+     */
+    public void addLandPiece(VillageReference.Piece piece) {
+        landPieces.add(piece);
+        setChanged();
+    }
+
+    /**
+     * Sets the plot of the market of the village (see {@link VillageGrowth}).
+     *
+     * @param plot the plot, or null for no plot
+     */
+    public void setMarketPlot(@Nullable VillageMarket.Plot plot) {
+        if (!Objects.equals(marketPlot, plot)) {
+            marketPlot = plot;
+            setChanged();
+        }
+    }
+
+    /**
+     * The trade place of the village: the area of its market, or the area of its plaza with no market (see
+     * {@link VillageMarket}). The heart keeps the result until the next scan, a request for a scan, a change of the
+     * market signs of the scan or a new reference of the village structure. Thus a trade or a check of the workers
+     * does not calculate the place again.
+     *
+     * @param serverLevel the level of the heart
+     * @return the trade place
+     */
+    public VillageMarket.TradePlace tradePlace(ServerLevel serverLevel) {
+        TradePlaceCache cache = tradePlaceCache;
+        if (cache == null || !cache.markets().equals(layout.markets())) {
+            tradePlaceCalculations++;
+            cache = new TradePlaceCache(List.copyOf(layout.markets()), VillageMarket.tradePlace(serverLevel, this));
+            tradePlaceCache = cache;
+        }
+        return cache.place();
+    }
+
+    /** The number of calculations of the trade place since the creation of this heart. For the tests. */
+    public int tradePlaceCalculations() {
+        return tradePlaceCalculations;
+    }
+
+    /** A trade place and the market signs of the scan that gave it. */
+    private record TradePlaceCache(List<BlockPos> markets, VillageMarket.TradePlace place) {
+    }
+
+    /**
+     * The state of the market of the village (see {@link VillageMarket}).
+     *
+     * @param serverLevel the level of the heart
+     * @return the state
+     */
+    public VillageMarket.State marketState(ServerLevel serverLevel) {
+        return VillageMarket.state(serverLevel, this);
     }
 
     /** True if a repair of the village ended at a position less than {@link VillageRepairs#RETRY_TICKS} ago. */
@@ -767,7 +1428,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
      * <ul>
      *   <li>Night: the gates close, the braziers burn, and the guards (not the captain, not the units with a
      *       post) watch the gates.</li>
-     *   <li>Day: the gates open, and the guards patrol around their home again. In a village with no handymen, the
+     *   <li>Day: the gates open, and the guards go back to their day stations (see {@link #assignStations()}). In a village with no handymen, the
      *       braziers go out. In a village with handymen, the braziers burn until the handymen put them out in the
      *       morning (see {@link VillageBraziers}).</li>
      *   <li>A campfire of the layout becomes a brazier of the block library, which does not burn the entities.</li>
@@ -797,6 +1458,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
             setBraziers(night);
         }
         assignGateWatch(night);
+        assignStations();
     }
 
     /** Lights all the braziers of the village, or puts them all out. */
@@ -831,7 +1493,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
     }
 
     private void assignGateWatch(boolean night) {
-        List<BlockPos> gates = layout.gates();
+        List<BlockPos> gates = floorGates();
         int index = 0;
         for (FactionUnit unit : getUnits()) {
             if (!(unit instanceof GuardEntity) || unit instanceof CaptainEntity || unit.getPostPos() != null) {
@@ -844,6 +1506,184 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 unit.setNightPos(null);
             }
         }
+    }
+
+    /**
+     * Gives a day station to each loaded guard with no post (not the captain), see {@link #guardStations()}.
+     *
+     * <ul>
+     *   <li>Rounds: in a village with rings, {@code roundGuardsPerRing} guards for each ring walk rounds. Their
+     *       route is the list of the stations in the order of their angle around the heart (see
+     *       {@link #advanceRounds()}). At least one guard keeps a station, and a route has 3 stations or more. A guard
+     *       on a round keeps its station of the route, else it starts at its own part of the route.</li>
+     *   <li>The other guards share the stations in turn, in the order of their UUIDs: each station gets a guard before
+     *       a station gets a second guard.</li>
+     *   <li>With the option {@code guardStations} off, or with no station, the guards have no station and stay near
+     *       their home.</li>
+     * </ul>
+     */
+    private void assignStations() {
+        List<BlockPos> stations = WorldConfig.GUARD_STATIONS.get() ? guardStations() : List.of();
+        List<FactionUnit> guards = getUnits().stream()
+                .filter(unit -> unit instanceof GuardEntity && !(unit instanceof CaptainEntity)
+                        && unit.getPostPos() == null)
+                .sorted(Comparator.comparing(FactionUnit::getUUID))
+                .toList();
+        int rounds = stations.size() >= 3
+                ? Math.max(0, Math.min(rings() * WorldConfig.ROUND_GUARDS_PER_RING.get(), guards.size() - 1)) : 0;
+        roundRoute = rounds > 0 ? byAngle(stations) : List.of();
+        Set<UUID> onRounds = new HashSet<>();
+        for (int i = 0; i < rounds; i++) {
+            FactionUnit guard = guards.get(i);
+            if (!roundRoute.contains(guard.getStationPos())) {
+                guard.setStationPos(roundRoute.get(i * roundRoute.size() / rounds));
+            }
+            onRounds.add(guard.getUUID());
+        }
+        roundGuards = Set.copyOf(onRounds);
+        for (int i = rounds; i < guards.size(); i++) {
+            int index = i - rounds;
+            guards.get(i).setStationPos(stations.isEmpty() ? null : stations.get(index % stations.size()));
+        }
+    }
+
+    /**
+     * Moves each loaded guard on a round to the next station of the route when it is near its station. The heart
+     * calls this method at each check, by day, while the village is calm.
+     */
+    private void advanceRounds() {
+        if (!(level instanceof ServerLevel serverLevel) || roundRoute.isEmpty()) {
+            return;
+        }
+        for (UUID id : roundGuards) {
+            if (serverLevel.getEntity(id) instanceof FactionUnit guard && guard.getTarget() == null) {
+                BlockPos station = guard.getStationPos();
+                int index = station == null ? -1 : roundRoute.indexOf(station);
+                if (index < 0) {
+                    continue;
+                }
+                double dx = guard.getX() - (station.getX() + 0.5);
+                double dz = guard.getZ() - (station.getZ() + 0.5);
+                if (dx * dx + dz * dz <= ROUND_ARRIVED * ROUND_ARRIVED) {
+                    guard.setStationPos(roundRoute.get((index + 1) % roundRoute.size()));
+                }
+            }
+        }
+    }
+
+    /** The guards on a round, see {@link #assignStations()}. For the tests. */
+    public Set<UUID> roundGuards() {
+        return roundGuards;
+    }
+
+    /** The stations of the rounds in the order of their angle around the heart. For the tests. */
+    public List<BlockPos> roundRoute() {
+        return roundRoute;
+    }
+
+    /** The stations in the order of their angle around the heart. */
+    private List<BlockPos> byAngle(List<BlockPos> stations) {
+        return stations.stream()
+                .sorted(Comparator.comparingDouble(station -> Math.atan2(station.getZ() - worldPosition.getZ(),
+                        station.getX() - worldPosition.getX())))
+                .toList();
+    }
+
+    /** The number of rings of the tier of the settlement of the heart (0 for a hamlet and a village). */
+    private int rings() {
+        if (level == null || level.getServer() == null) {
+            return 0;
+        }
+        int settlementLevel = Settlements.of(level.getServer(), this).map(Settlement::level).orElse(1);
+        String tier = LevelTables.get().tier(settlementLevel).id();
+        return VillageSizes.get().size(tier).map(VillageSize::rings).orElse(0);
+    }
+
+    /**
+     * The day stations of the guards: one position inside each gate, then one position at the foot of each tower with
+     * a valid post, inside the wall. A station is on the ground under the open sky, at
+     * {@link #STATION_MIN_DISTANCE} to {@link #STATION_MAX_DISTANCE} blocks from the gate or the post, toward the
+     * heart. A gate or a tower with no such position gives no station. A tower station near another station is not a
+     * station.
+     *
+     * @return the stations, the gates first
+     */
+    public List<BlockPos> guardStations() {
+        List<BlockPos> stations = new ArrayList<>();
+        if (level == null) {
+            return stations;
+        }
+        for (List<BlockPos> gate : gateGroups()) {
+            BlockPos middle = gate.get(gate.size() / 2);
+            int bottom = gate.stream().mapToInt(BlockPos::getY).min().orElse(middle.getY());
+            station(middle.atY(bottom)).filter(pos -> isFreeStation(stations, pos)).ifPresent(stations::add);
+        }
+        for (BlockPos post : layout.validPosts()) {
+            station(post).filter(pos -> isFreeStation(stations, pos)).ifPresent(stations::add);
+        }
+        return stations;
+    }
+
+    /**
+     * The first station position toward the heart from a gate or a post, see {@link #guardStations()}. The search
+     * follows the main axis toward the heart first, then the other axis. A tower in a corner of the wall can have its
+     * stair on one axis.
+     */
+    private Optional<BlockPos> station(BlockPos from) {
+        int dx = Integer.signum(worldPosition.getX() - from.getX());
+        int dz = Integer.signum(worldPosition.getZ() - from.getZ());
+        List<BlockPos> steps = new ArrayList<>();
+        BlockPos alongX = new BlockPos(dx, 0, 0);
+        BlockPos alongZ = new BlockPos(0, 0, dz);
+        boolean xFirst = Math.abs(worldPosition.getX() - from.getX()) >= Math.abs(worldPosition.getZ() - from.getZ());
+        for (BlockPos step : xFirst ? List.of(alongX, alongZ) : List.of(alongZ, alongX)) {
+            if (!step.equals(BlockPos.ZERO)) {
+                steps.add(step);
+            }
+        }
+        for (BlockPos step : steps) {
+            for (int distance = STATION_MIN_DISTANCE; distance <= STATION_MAX_DISTANCE; distance++) {
+                BlockPos column = from.offset(step.getX() * distance, 0, step.getZ() * distance);
+                for (int dy = STATION_RISE; dy >= -STATION_DROP; dy--) {
+                    BlockPos pos = column.above(dy);
+                    if (isStationGround(pos)) {
+                        return Optional.of(pos);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** True if a guard can stand at a position under the open sky, in a ready chunk, out of a fluid. */
+    private boolean isStationGround(BlockPos pos) {
+        if (level == null || !ReadyChunks.isReady(level, pos)) {
+            return false;
+        }
+        BlockPos below = pos.below();
+        return level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)
+                && level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
+                && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
+                && level.getFluidState(pos).isEmpty()
+                && level.canSeeSky(pos);
+    }
+
+    /** True if a position is {@link #STATION_SPACING} blocks or more from each station (horizontal distance). */
+    private static boolean isFreeStation(List<BlockPos> stations, BlockPos pos) {
+        return stations.stream().noneMatch(other -> {
+            int dx = other.getX() - pos.getX();
+            int dz = other.getZ() - pos.getZ();
+            return dx * dx + dz * dz < STATION_SPACING * STATION_SPACING;
+        });
+    }
+
+    /**
+     * The fence gates of the village at the floor level: the fence gates with no fence gate of the village below them.
+     * A gate can have fence gates stacked in its opening, and the stacked fence gates are above the floor.
+     */
+    private List<BlockPos> floorGates() {
+        List<BlockPos> gates = layout.gates();
+        return gates.stream().filter(gate -> !gates.contains(gate.below())).toList();
     }
 
     /** The position at {@link #GATE_WATCH_DISTANCE} blocks from the gate, toward the heart. */
@@ -957,17 +1797,26 @@ public class VillageHeartBlockEntity extends BlockEntity {
     public static void serverTick(Level level, BlockPos pos, BlockState state, VillageHeartBlockEntity heart) {
         if (level instanceof ServerLevel serverLevel) {
             heart.handymen.tick(serverLevel);
+            heart.rescues.tick(serverLevel, heart);
         }
         long time = level.getGameTime() + Math.floorMod(pos.hashCode(), ROTATION_INTERVAL);
         if (time % CHECK_INTERVAL != 0) {
             return;
         }
-        // The registration in onLoad can happen before the level is ready. Register again: it costs nothing.
-        VillageHearts.register(level, pos);
-        if (!VillageLayout.isScanAreaReady(level, pos)) {
+        if (!(level instanceof ServerLevel areaLevel)) {
             return;
         }
-        if (time % GARRISON_INTERVAL == 0) {
+        // The registration in onLoad can happen before the level is ready, and the heart finds its structure after
+        // the load. Register again with the structure area: it costs nothing.
+        VillageHearts.register(level, pos, heart.repairReference(areaLevel).flatMap(VillageReference::area));
+        if (!VillageLayout.isAreaReady(level, heart.scanArea(areaLevel))) {
+            return;
+        }
+        if (!heart.cleared || !heart.snowCleared) {
+            heart.clearTrees(areaLevel);
+        }
+        // The first garrison waits for the clearing: the units do not appear on powder snow.
+        if (time % GARRISON_INTERVAL == 0 && heart.cleared && heart.snowCleared) {
             double activation = WorldConfig.GARRISON_ACTIVATION_RADIUS.get();
             if (level.hasNearbyAlivePlayer(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, activation)) {
                 heart.ensureGarrison(level.getGameTime());
@@ -981,16 +1830,35 @@ public class VillageHeartBlockEntity extends BlockEntity {
         if (heart.layout.isScanned() && level.isNight() != heart.nightMode) {
             heart.applyDayNight(level.isNight());
         }
+        if (heart.layout.isScanned() && !level.isNight() && heart.alertState == AlertState.CALM) {
+            heart.advanceRounds();
+        }
         if (heart.layout.isScanned() && level instanceof ServerLevel serverLevel) {
             heart.updateBraziers(serverLevel);
-            long repairTicks = WorldConfig.CONSTRUCTION_REPAIR_CHECK_SECONDS.get() * 20L;
-            if (heart.alertState == AlertState.CALM && time % repairTicks < CHECK_INTERVAL) {
-                VillageRepairs.check(serverLevel, heart);
+            if (time % PEN_INTERVAL == 0
+                    && heart.pens.check(serverLevel, heart.layout.jobSigns(), level.getGameTime())) {
+                heart.setChanged();
             }
+            long repairTicks = WorldConfig.CONSTRUCTION_REPAIR_CHECK_SECONDS.get() * 20L;
+            if (heart.alertState == AlertState.CALM && !heart.rescues.isActive() && time % repairTicks < CHECK_INTERVAL
+                    && VillageRepairs.check(serverLevel, heart).isEmpty()
+                    && VillageGrowth.check(serverLevel, heart).isEmpty()
+                    && StoneWall.check(serverLevel, heart).isEmpty()
+                    && RingWall.check(serverLevel, heart).isEmpty()) {
+                VillageLand.check(serverLevel, heart);
+            }
+        }
+        if (heart.layout.isScanned() && level instanceof ServerLevel serverLevel
+                && RaidShelters.raidAt(serverLevel, pos).isPresent()) {
+            RaidShelters.shelter(serverLevel, VillageFolk.inhabitants(serverLevel, pos), heart.layout.beds());
         }
         long calmDelayTicks = WorldConfig.CALM_DELAY_SECONDS.get() * 20L;
         if (heart.alertState != AlertState.CALM && level.getGameTime() - heart.lastBellTick >= BELL_INTERVAL) {
             heart.ringBells();
+        }
+        long hornTicks = WarHorn.intervalTicks();
+        if (heart.alertState != AlertState.CALM && hornTicks > 0 && level.getGameTime() - heart.lastHornTick >= hornTicks) {
+            heart.soundWarHorn();
         }
         if (heart.alertState != AlertState.CALM && level.getGameTime() - heart.lastThreatTick > calmDelayTicks) {
             heart.setAlertState(AlertState.CALM);
@@ -1012,6 +1880,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (level instanceof ServerLevel serverLevel) {
             handymen.stop(serverLevel);
+            rescues.stop(serverLevel);
         }
         super.setRemoved();
     }
@@ -1023,6 +1892,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (level instanceof ServerLevel serverLevel) {
             handymen.stop(serverLevel);
+            rescues.stop(serverLevel);
         }
         super.onChunkUnloaded();
     }
@@ -1034,10 +1904,14 @@ public class VillageHeartBlockEntity extends BlockEntity {
         tag.putString(ALERT_TAG, alertState.serializedName());
         tag.putLong(LAST_THREAT_TAG, lastThreatTick);
         tag.put(GARRISON_TAG, garrison.save());
+        tag.put(PENS_TAG, pens.save());
+        tag.put(RESCUES_TAG, rescues.save());
         tag.put(LAYOUT_TAG, layout.save());
         tag.putBoolean(NIGHT_TAG, nightMode);
         tag.putBoolean(EXITS_TAG, exitStairs);
         tag.putBoolean(CATS_TAG, catsSpawned);
+        tag.putBoolean(CLEARED_TAG, cleared);
+        tag.putBoolean(SNOW_CLEARED_TAG, snowCleared);
         tag.putLong(CAT_SPAWN_TAG, lastCatSpawn);
         tag.putBoolean(VILLAGERS_TAG, villagersSpawned);
         tag.putLong(VILLAGER_SPAWN_TAG, lastVillagerSpawn);
@@ -1047,6 +1921,24 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (villageName != null) {
             tag.putString(NAME_TAG, villageName);
+        }
+        if (marketPlot != null) {
+            tag.put(MARKET_PLOT_TAG, marketPlot.save());
+        }
+        if (!landPieces.isEmpty()) {
+            tag.put(LAND_TAG, VillageLand.save(landPieces));
+        }
+        if (lastHomeTick >= 0) {
+            tag.putLong(LAST_HOME_TAG, lastHomeTick);
+        }
+        if (!stoneWall.isEmpty()) {
+            tag.put(STONE_WALL_TAG, stoneWall.save());
+        }
+        if (!ringWall.isEmpty()) {
+            tag.put(RING_WALL_TAG, ringWall.save(level instanceof ServerLevel serverLevel ? serverLevel : null));
+        }
+        if (!grownHomes.isEmpty()) {
+            tag.put(GROWN_HOMES_TAG, VillageLand.save(grownHomes));
         }
     }
 
@@ -1065,15 +1957,30 @@ public class VillageHeartBlockEntity extends BlockEntity {
         });
         lastThreatTick = tag.getLong(LAST_THREAT_TAG);
         garrison.load(tag.getList(GARRISON_TAG, Garrison.TAG_TYPE));
+        pens.load(tag.getList(PENS_TAG, Tag.TAG_COMPOUND));
+        rescues.load(registries.lookupOrThrow(Registries.BLOCK), tag.getCompound(RESCUES_TAG));
         layout.load(tag.getCompound(LAYOUT_TAG));
+        tradePlaceCache = null;
         nightMode = tag.getBoolean(NIGHT_TAG);
         exitStairs = tag.getBoolean(EXITS_TAG);
         catsSpawned = tag.getBoolean(CATS_TAG);
+        cleared = tag.getBoolean(CLEARED_TAG);
+        snowCleared = tag.getBoolean(SNOW_CLEARED_TAG);
         lastCatSpawn = tag.getLong(CAT_SPAWN_TAG);
         villagersSpawned = tag.getBoolean(VILLAGERS_TAG);
         lastVillagerSpawn = tag.getLong(VILLAGER_SPAWN_TAG);
         villagersFilling = tag.getBoolean(VILLAGERS_FILLING_TAG);
         factionId = tag.contains(FACTION_TAG) ? tag.getString(FACTION_TAG) : null;
         villageName = tag.contains(NAME_TAG) ? tag.getString(NAME_TAG) : null;
+        marketPlot = tag.contains(MARKET_PLOT_TAG, Tag.TAG_COMPOUND)
+                ? VillageMarket.Plot.load(tag.getCompound(MARKET_PLOT_TAG)).orElse(null)
+                : null;
+        landPieces.clear();
+        landPieces.addAll(VillageLand.load(tag.getList(LAND_TAG, Tag.TAG_COMPOUND)));
+        lastHomeTick = tag.contains(LAST_HOME_TAG, Tag.TAG_LONG) ? tag.getLong(LAST_HOME_TAG) : -1;
+        grownHomes.clear();
+        grownHomes.addAll(VillageLand.load(tag.getList(GROWN_HOMES_TAG, Tag.TAG_COMPOUND)));
+        stoneWall.load(registries.lookupOrThrow(Registries.BLOCK), tag.getCompound(STONE_WALL_TAG));
+        ringWall.load(tag.getCompound(RING_WALL_TAG));
     }
 }

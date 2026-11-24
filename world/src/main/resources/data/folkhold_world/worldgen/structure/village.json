@@ -1,15 +1,1869 @@
 {
-  "type": "minecraft:jigsaw",
+  "type": "folkhold_world:fortified_village",
   "biomes": "#folkhold_world:has_village",
   "step": "surface_structures",
   "spawn_overrides": {},
-  "terrain_adaptation": "beard_box",
-  "start_pool": "folkhold_world:village/center",
-  "size": 2,
-  "start_height": {
-    "absolute": -3
+  "terrain_adaptation": "beard_thin",
+  "start_pool": "folkhold_world:village/plaza",
+  "max_distance_from_center": 110,
+  "wall": {
+    "margin": 4,
+    "tower_spacing": 40,
+    "tower": "folkhold_world:village/tower",
+    "gate": "folkhold_world:village/gate",
+    "processors": "folkhold_world:village/foundation",
+    "palisade": {
+      "log": {
+        "Name": "minecraft:spruce_log",
+        "Properties": {
+          "axis": "y"
+        }
+      },
+      "base": {
+        "Name": "minecraft:cobblestone"
+      },
+      "point": {
+        "Name": "minecraft:spruce_fence"
+      },
+      "foundation": {
+        "Name": "minecraft:cobblestone"
+      }
+    },
+    "pier": {
+      "deck": {
+        "Name": "minecraft:spruce_planks"
+      },
+      "post": {
+        "Name": "minecraft:spruce_log",
+        "Properties": {
+          "axis": "y"
+        }
+      },
+      "rail": {
+        "Name": "minecraft:spruce_fence"
+      },
+      "stairs": {
+        "Name": "minecraft:spruce_stairs",
+        "Properties": {
+          "facing": "north",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    "street_stairs": {
+      "Name": "minecraft:cobblestone_stairs"
+    },
+    "stone": {
+      "tower": "folkhold_world:village/stone/tower",
+      "gate": "folkhold_world:village/stone/gate",
+      "palisade": {
+        "log": {
+          "Name": "minecraft:stone_bricks"
+        },
+        "base": {
+          "Name": "minecraft:cobblestone"
+        },
+        "point": {
+          "Name": "minecraft:stone_brick_wall"
+        },
+        "foundation": {
+          "Name": "minecraft:cobblestone"
+        }
+      }
+    }
   },
-  "project_start_to_heightmap": "WORLD_SURFACE_WG",
-  "max_distance_from_center": 80,
-  "use_expansion_hack": false
+  "homes": "folkhold_world:village/homes",
+  "variants": [
+    {
+      "biomes": [
+        "minecraft:plains",
+        "minecraft:sunflower_plains",
+        "minecraft:meadow",
+        "minecraft:cherry_grove",
+        "minecraft:forest"
+      ],
+      "start_pool": "folkhold_world:village/plains/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/plains/tower",
+        "gate": "folkhold_world:village/plains/gate",
+        "processors": "folkhold_world:village/plains/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:oak_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:oak_planks"
+          },
+          "post": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/plains/stone/tower",
+          "gate": "folkhold_world:village/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/plains/homes"
+    },
+    {
+      "biomes": [
+        "minecraft:birch_forest"
+      ],
+      "start_pool": "folkhold_world:village/birch/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/birch/tower",
+        "gate": "folkhold_world:village/birch/gate",
+        "processors": "folkhold_world:village/birch/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:birch_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:birch_planks"
+          },
+          "post": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/birch/stone/tower",
+          "gate": "folkhold_world:village/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/birch/homes"
+    },
+    {
+      "biomes": [
+        "minecraft:savanna"
+      ],
+      "start_pool": "folkhold_world:village/savanna/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/savanna/tower",
+        "gate": "folkhold_world:village/savanna/gate",
+        "processors": "folkhold_world:village/savanna/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:acacia_planks"
+          },
+          "post": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/savanna/stone/tower",
+          "gate": "folkhold_world:village/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/savanna/homes"
+    },
+    {
+      "biomes": [
+        "minecraft:desert"
+      ],
+      "start_pool": "folkhold_world:village/desert/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/desert/tower",
+        "gate": "folkhold_world:village/desert/gate",
+        "processors": "folkhold_world:village/desert/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "base": {
+            "Name": "minecraft:sandstone"
+          },
+          "point": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "foundation": {
+            "Name": "minecraft:sandstone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:smooth_sandstone"
+          },
+          "post": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "rail": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/desert/stone/tower",
+          "gate": "folkhold_world:village/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:cut_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/desert/homes"
+    },
+    {
+      "biomes": [
+        "minecraft:swamp",
+        "minecraft:mangrove_swamp"
+      ],
+      "start_pool": "folkhold_world:village/swamp/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/swamp/tower",
+        "gate": "folkhold_world:village/swamp/gate",
+        "processors": "folkhold_world:village/swamp/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:mud_bricks"
+          },
+          "point": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:mud_bricks"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:mangrove_planks"
+          },
+          "post": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mud_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/swamp/stone/tower",
+          "gate": "folkhold_world:village/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "base": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "point": {
+              "Name": "minecraft:mud_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/swamp/homes"
+    },
+    {
+      "biomes": [],
+      "start_pool": "folkhold_world:village/valeholm/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/valeholm/tower",
+        "gate": "folkhold_world:village/valeholm/gate",
+        "processors": "folkhold_world:village/valeholm/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:spruce_planks"
+          },
+          "post": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/stone/tower",
+          "gate": "folkhold_world:village/valeholm/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mossy_stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:mossy_cobblestone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/valeholm/homes",
+      "culture": "valeholm"
+    },
+    {
+      "biomes": [
+        "minecraft:plains",
+        "minecraft:sunflower_plains",
+        "minecraft:meadow",
+        "minecraft:cherry_grove",
+        "minecraft:forest"
+      ],
+      "start_pool": "folkhold_world:village/valeholm/plains/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/valeholm/plains/tower",
+        "gate": "folkhold_world:village/valeholm/plains/gate",
+        "processors": "folkhold_world:village/valeholm/plains/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:oak_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:oak_planks"
+          },
+          "post": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/plains/stone/tower",
+          "gate": "folkhold_world:village/valeholm/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mossy_stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:mossy_cobblestone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/valeholm/plains/homes",
+      "culture": "valeholm"
+    },
+    {
+      "biomes": [
+        "minecraft:birch_forest"
+      ],
+      "start_pool": "folkhold_world:village/valeholm/birch/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/valeholm/birch/tower",
+        "gate": "folkhold_world:village/valeholm/birch/gate",
+        "processors": "folkhold_world:village/valeholm/birch/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:birch_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:birch_planks"
+          },
+          "post": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/birch/stone/tower",
+          "gate": "folkhold_world:village/valeholm/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mossy_stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:mossy_cobblestone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/valeholm/birch/homes",
+      "culture": "valeholm"
+    },
+    {
+      "biomes": [
+        "minecraft:savanna"
+      ],
+      "start_pool": "folkhold_world:village/valeholm/savanna/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/valeholm/savanna/tower",
+        "gate": "folkhold_world:village/valeholm/savanna/gate",
+        "processors": "folkhold_world:village/valeholm/savanna/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:acacia_planks"
+          },
+          "post": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mossy_cobblestone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/savanna/stone/tower",
+          "gate": "folkhold_world:village/valeholm/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mossy_stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:mossy_cobblestone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/valeholm/savanna/homes",
+      "culture": "valeholm"
+    },
+    {
+      "biomes": [
+        "minecraft:desert"
+      ],
+      "start_pool": "folkhold_world:village/valeholm/desert/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/valeholm/desert/tower",
+        "gate": "folkhold_world:village/valeholm/desert/gate",
+        "processors": "folkhold_world:village/valeholm/desert/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "base": {
+            "Name": "minecraft:sandstone"
+          },
+          "point": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "foundation": {
+            "Name": "minecraft:sandstone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:smooth_sandstone"
+          },
+          "post": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "rail": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/desert/stone/tower",
+          "gate": "folkhold_world:village/valeholm/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:cut_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/valeholm/desert/homes",
+      "culture": "valeholm"
+    },
+    {
+      "biomes": [
+        "minecraft:swamp",
+        "minecraft:mangrove_swamp"
+      ],
+      "start_pool": "folkhold_world:village/valeholm/swamp/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/valeholm/swamp/tower",
+        "gate": "folkhold_world:village/valeholm/swamp/gate",
+        "processors": "folkhold_world:village/valeholm/swamp/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:mud_bricks"
+          },
+          "point": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:mud_bricks"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:mangrove_planks"
+          },
+          "post": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mud_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/valeholm/swamp/stone/tower",
+          "gate": "folkhold_world:village/valeholm/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "base": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "point": {
+              "Name": "minecraft:mud_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/valeholm/swamp/homes",
+      "culture": "valeholm"
+    },
+    {
+      "biomes": [],
+      "start_pool": "folkhold_world:village/sunreach/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/sunreach/tower",
+        "gate": "folkhold_world:village/sunreach/gate",
+        "processors": "folkhold_world:village/sunreach/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:spruce_planks"
+          },
+          "post": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/stone/tower",
+          "gate": "folkhold_world:village/sunreach/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:smooth_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/sunreach/homes",
+      "culture": "sunreach"
+    },
+    {
+      "biomes": [
+        "minecraft:plains",
+        "minecraft:sunflower_plains",
+        "minecraft:meadow",
+        "minecraft:cherry_grove",
+        "minecraft:forest"
+      ],
+      "start_pool": "folkhold_world:village/sunreach/plains/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/sunreach/plains/tower",
+        "gate": "folkhold_world:village/sunreach/plains/gate",
+        "processors": "folkhold_world:village/sunreach/plains/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:oak_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:oak_planks"
+          },
+          "post": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/plains/stone/tower",
+          "gate": "folkhold_world:village/sunreach/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:smooth_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/sunreach/plains/homes",
+      "culture": "sunreach"
+    },
+    {
+      "biomes": [
+        "minecraft:birch_forest"
+      ],
+      "start_pool": "folkhold_world:village/sunreach/birch/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/sunreach/birch/tower",
+        "gate": "folkhold_world:village/sunreach/birch/gate",
+        "processors": "folkhold_world:village/sunreach/birch/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:birch_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:birch_planks"
+          },
+          "post": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/birch/stone/tower",
+          "gate": "folkhold_world:village/sunreach/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:smooth_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/sunreach/birch/homes",
+      "culture": "sunreach"
+    },
+    {
+      "biomes": [
+        "minecraft:savanna"
+      ],
+      "start_pool": "folkhold_world:village/sunreach/savanna/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/sunreach/savanna/tower",
+        "gate": "folkhold_world:village/sunreach/savanna/gate",
+        "processors": "folkhold_world:village/sunreach/savanna/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:acacia_planks"
+          },
+          "post": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/savanna/stone/tower",
+          "gate": "folkhold_world:village/sunreach/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:smooth_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/sunreach/savanna/homes",
+      "culture": "sunreach"
+    },
+    {
+      "biomes": [
+        "minecraft:desert"
+      ],
+      "start_pool": "folkhold_world:village/sunreach/desert/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/sunreach/desert/tower",
+        "gate": "folkhold_world:village/sunreach/desert/gate",
+        "processors": "folkhold_world:village/sunreach/desert/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "base": {
+            "Name": "minecraft:sandstone"
+          },
+          "point": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "foundation": {
+            "Name": "minecraft:sandstone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:smooth_sandstone"
+          },
+          "post": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "rail": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/desert/stone/tower",
+          "gate": "folkhold_world:village/sunreach/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:smooth_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/sunreach/desert/homes",
+      "culture": "sunreach"
+    },
+    {
+      "biomes": [
+        "minecraft:swamp",
+        "minecraft:mangrove_swamp"
+      ],
+      "start_pool": "folkhold_world:village/sunreach/swamp/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/sunreach/swamp/tower",
+        "gate": "folkhold_world:village/sunreach/swamp/gate",
+        "processors": "folkhold_world:village/sunreach/swamp/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:mud_bricks"
+          },
+          "point": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:mud_bricks"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:mangrove_planks"
+          },
+          "post": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/sunreach/swamp/stone/tower",
+          "gate": "folkhold_world:village/sunreach/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:smooth_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/sunreach/swamp/homes",
+      "culture": "sunreach"
+    },
+    {
+      "biomes": [],
+      "start_pool": "folkhold_world:village/maritime/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/maritime/tower",
+        "gate": "folkhold_world:village/maritime/gate",
+        "processors": "folkhold_world:village/maritime/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:spruce_planks"
+          },
+          "post": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/stone/tower",
+          "gate": "folkhold_world:village/maritime/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/maritime/homes",
+      "maritime": true
+    },
+    {
+      "biomes": [
+        "minecraft:plains",
+        "minecraft:sunflower_plains",
+        "minecraft:meadow",
+        "minecraft:cherry_grove",
+        "minecraft:forest"
+      ],
+      "start_pool": "folkhold_world:village/maritime/plains/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/maritime/plains/tower",
+        "gate": "folkhold_world:village/maritime/plains/gate",
+        "processors": "folkhold_world:village/maritime/plains/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:oak_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:oak_planks"
+          },
+          "post": {
+            "Name": "minecraft:oak_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:oak_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:oak_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/plains/stone/tower",
+          "gate": "folkhold_world:village/maritime/plains/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/maritime/plains/homes",
+      "maritime": true
+    },
+    {
+      "biomes": [
+        "minecraft:birch_forest"
+      ],
+      "start_pool": "folkhold_world:village/maritime/birch/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/maritime/birch/tower",
+        "gate": "folkhold_world:village/maritime/birch/gate",
+        "processors": "folkhold_world:village/maritime/birch/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:birch_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:birch_planks"
+          },
+          "post": {
+            "Name": "minecraft:birch_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:birch_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:birch_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/birch/stone/tower",
+          "gate": "folkhold_world:village/maritime/birch/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/maritime/birch/homes",
+      "maritime": true
+    },
+    {
+      "biomes": [
+        "minecraft:savanna"
+      ],
+      "start_pool": "folkhold_world:village/maritime/savanna/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/maritime/savanna/tower",
+        "gate": "folkhold_world:village/maritime/savanna/gate",
+        "processors": "folkhold_world:village/maritime/savanna/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:acacia_planks"
+          },
+          "post": {
+            "Name": "minecraft:acacia_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:acacia_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:acacia_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:stone_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/savanna/stone/tower",
+          "gate": "folkhold_world:village/maritime/savanna/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:stone_bricks"
+            },
+            "base": {
+              "Name": "minecraft:cobblestone"
+            },
+            "point": {
+              "Name": "minecraft:stone_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:cobblestone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/maritime/savanna/homes",
+      "maritime": true
+    },
+    {
+      "biomes": [
+        "minecraft:desert"
+      ],
+      "start_pool": "folkhold_world:village/maritime/desert/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/maritime/desert/tower",
+        "gate": "folkhold_world:village/maritime/desert/gate",
+        "processors": "folkhold_world:village/maritime/desert/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "base": {
+            "Name": "minecraft:sandstone"
+          },
+          "point": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "foundation": {
+            "Name": "minecraft:sandstone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:smooth_sandstone"
+          },
+          "post": {
+            "Name": "minecraft:cut_sandstone"
+          },
+          "rail": {
+            "Name": "minecraft:sandstone_wall"
+          },
+          "stairs": {
+            "Name": "minecraft:smooth_sandstone_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:sandstone_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/desert/stone/tower",
+          "gate": "folkhold_world:village/maritime/desert/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:cut_sandstone"
+            },
+            "base": {
+              "Name": "minecraft:sandstone"
+            },
+            "point": {
+              "Name": "minecraft:sandstone_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:sandstone"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/maritime/desert/homes",
+      "maritime": true
+    },
+    {
+      "biomes": [
+        "minecraft:swamp",
+        "minecraft:mangrove_swamp"
+      ],
+      "start_pool": "folkhold_world:village/maritime/swamp/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/maritime/swamp/tower",
+        "gate": "folkhold_world:village/maritime/swamp/gate",
+        "processors": "folkhold_world:village/maritime/swamp/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:mud_bricks"
+          },
+          "point": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:mud_bricks"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:mangrove_planks"
+          },
+          "post": {
+            "Name": "minecraft:mangrove_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:mangrove_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:mangrove_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:mud_brick_stairs"
+        },
+        "stone": {
+          "tower": "folkhold_world:village/maritime/swamp/stone/tower",
+          "gate": "folkhold_world:village/maritime/swamp/stone/gate",
+          "palisade": {
+            "log": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "base": {
+              "Name": "minecraft:mud_bricks"
+            },
+            "point": {
+              "Name": "minecraft:mud_brick_wall"
+            },
+            "foundation": {
+              "Name": "minecraft:mud_bricks"
+            }
+          }
+        }
+      },
+      "homes": "folkhold_world:village/maritime/swamp/homes",
+      "maritime": true
+    },
+    {
+      "biomes": [],
+      "start_pool": "folkhold_world:village/cave/plaza",
+      "wall": {
+        "margin": 4,
+        "tower_spacing": 40,
+        "tower": "folkhold_world:village/tower",
+        "gate": "folkhold_world:village/cave/gate",
+        "processors": "folkhold_world:village/foundation",
+        "palisade": {
+          "log": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "base": {
+            "Name": "minecraft:cobblestone"
+          },
+          "point": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "foundation": {
+            "Name": "minecraft:cobblestone"
+          }
+        },
+        "pier": {
+          "deck": {
+            "Name": "minecraft:spruce_planks"
+          },
+          "post": {
+            "Name": "minecraft:spruce_log",
+            "Properties": {
+              "axis": "y"
+            }
+          },
+          "rail": {
+            "Name": "minecraft:spruce_fence"
+          },
+          "stairs": {
+            "Name": "minecraft:spruce_stairs",
+            "Properties": {
+              "facing": "north",
+              "half": "bottom",
+              "shape": "straight",
+              "waterlogged": "false"
+            }
+          }
+        },
+        "street_stairs": {
+          "Name": "minecraft:cobblestone_stairs"
+        }
+      },
+      "homes": "folkhold_world:village/cave/homes",
+      "cave": true
+    }
+  ]
 }

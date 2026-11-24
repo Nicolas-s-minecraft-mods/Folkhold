@@ -6,9 +6,11 @@ import io.github.nicolasgoyon.folkhold.core.sim.group.RouteFinder;
 import io.github.nicolasgoyon.folkhold.core.sim.group.RouteGates;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementRegistry;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PlotTerrain;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData.RouteEntry;
+import io.github.nicolasgoyon.folkhold.world.level.TerrainColumns;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SimulationProfiler;
 import java.util.HashMap;
@@ -22,12 +24,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.NoiseColumn;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -84,9 +84,16 @@ public final class CaravanRoutes {
     /** Extra cost for each block of distance in a boat. */
     private static final double BOAT_COST = 1.0;
     /** Extra cost each time the group gets into or out of the boats. */
-    private static final double EMBARK_COST = 64.0;
+    private static final double EMBARK_COST = 160.0;
     /** The cost of a move on a road of a detailed route, as a multiple of its length. */
     private static final double ROAD_FACTOR = 0.7;
+    /**
+     * Extra cost for each block in a boat next to the land, on a detailed route. The cost goes down to 0 at
+     * {@link #BANK_CELLS} + 1 cells from the bank: on a wide river, the boats stay in the middle.
+     */
+    private static final double BANK_COST = 3.0;
+    /** The distance of the bank cost from the land, in cells of the detailed route. */
+    private static final int BANK_CELLS = 2;
     /** Weight of the heuristic of the coarse search: fewer examined cells, a route a little longer than the best. */
     private static final double HEURISTIC_WEIGHT = 1.5;
     /** Weight of the heuristic of the detailed search. */
@@ -627,12 +634,16 @@ public final class CaravanRoutes {
                 WorldConfig.ROUTE_MAX_LENGTH.get(), WorldConfig.ROUTE_MAX_NODES.get(), HEURISTIC_WEIGHT);
     }
 
-    /** The settings of the detailed search from the server configuration. */
+    /**
+     * The settings of the detailed search from the server configuration: the roads cost less, the water near the
+     * banks costs more, and the route loses the turns that a straight line can replace.
+     */
     public static RouteFinder.Settings detailSettings() {
         return new RouteFinder.Settings(WorldConfig.ROUTE_DETAIL_STEP.get(), FORD_DEPTH,
                 WorldConfig.ROUTE_MAX_RISE.get(), SLOPE_COST, FORD_COST, WorldConfig.ROUTE_BOATS.get(), BOAT_COST,
                 EMBARK_COST, WorldConfig.ROUTE_MAX_LENGTH.get() * DETAIL_LENGTH_FACTOR,
-                WorldConfig.ROUTE_DETAIL_MAX_NODES.get(), DETAIL_HEURISTIC_WEIGHT, ROAD_FACTOR);
+                WorldConfig.ROUTE_DETAIL_MAX_NODES.get(), DETAIL_HEURISTIC_WEIGHT, ROAD_FACTOR, BANK_COST, BANK_CELLS,
+                true);
     }
 
     /**
@@ -740,23 +751,8 @@ public final class CaravanRoutes {
      * @return the column for the route search
      */
     static RouteFinder.Column column(NoiseColumn blocks, int minY, int maxY) {
-        Predicate<BlockState> surfaceBlock = Heightmap.Types.WORLD_SURFACE_WG.isOpaque();
-        Predicate<BlockState> floorBlock = Heightmap.Types.OCEAN_FLOOR_WG.isOpaque();
-        int surface = minY;
-        int floor = minY;
-        boolean surfaceFound = false;
-        for (int y = maxY - 1; y >= minY; y--) {
-            BlockState state = blocks.getBlock(y);
-            if (!surfaceFound && surfaceBlock.test(state)) {
-                surface = y + 1;
-                surfaceFound = true;
-            }
-            if (floorBlock.test(state)) {
-                floor = y + 1;
-                break;
-            }
-        }
-        return new RouteFinder.Column(floor - 1, surface - floor);
+        PlotTerrain.Column column = TerrainColumns.column(blocks, minY, maxY);
+        return new RouteFinder.Column(column.floor() - 1, column.depth());
     }
 
     private static synchronized ExecutorService worker() {

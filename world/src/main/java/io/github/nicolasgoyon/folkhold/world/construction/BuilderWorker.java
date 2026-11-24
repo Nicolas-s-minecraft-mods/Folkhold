@@ -20,6 +20,8 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.schedule.Activity;
+import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * A builder of a construction site: a villager of the village with the builder profession (see {@link BuilderSite}).
@@ -28,9 +30,12 @@ import net.minecraft.world.entity.schedule.Activity;
  *
  * <ul>
  *   <li>The builder claims a step of the site (see {@link SiteSchedule}). It walks to a position where the block of
- *       the step is in its reach zone: the position to stand of the plan, or a free position near the block.</li>
- *   <li>For a position on a scaffolding column, the builder walks to the bottom of the column and climbs it. To go to
- *       another position, it goes down the column first.</li>
+ *       the step is in its reach zone: the position to stand of the plan, or a free position near the block with a
+ *       way from the ground (see {@link BuilderSite#standFor}). With no such position, the builder waits near the
+ *       bottom of the column of the position of the plan, or near the block.</li>
+ *   <li>The builder does not walk through the scaffolding, and does not walk on the top of a new wall (see
+ *       {@link BuilderNavigation}). For a position on a scaffolding column, the builder walks to the bottom of the
+ *       column and climbs it. To go to another position, it goes down the column first.</li>
  *   <li>At the position, the builder looks at the block. When the stock of the village has the materials of the
  *       step, the builder plays the animation of a placement, then the step applies.</li>
  *   <li>A builder takes the next step of the site when no builder claimed it, or when the builder is in position
@@ -45,10 +50,13 @@ final class BuilderWorker {
     /** The speed of a builder that climbs a scaffolding column, in blocks for each tick. */
     static final double CLIMB_SPEED = 0.2;
     /**
-     * A builder whose step can apply, and that does not get to its position in this number of ticks, goes there
-     * directly.
+     * A builder whose step can apply, and that does not get nearer to its walk target in this number of ticks, goes to
+     * its position directly. A builder that gets nearer to its walk target gets more time, up to
+     * {@link #STEP_TIMEOUT}.
      */
     static final int MOVE_TIMEOUT = 300;
+    /** A builder gets nearer to its walk target when its distance to the target goes down by this distance. */
+    private static final double PROGRESS_DISTANCE = 0.5;
     /** A builder whose step can apply, with no path to its position for this number of ticks, goes there directly. */
     static final int NO_PATH_TIMEOUT = 100;
     /** A builder that does not get to the bottom of a column in this number of ticks goes there directly. */
@@ -60,6 +68,8 @@ final class BuilderWorker {
     static final int STEP_TIMEOUT = 2 * MOVE_TIMEOUT;
     /** A builder that walks selects its position again every this number of ticks. */
     static final int RECHECK_TICKS = 20;
+    /** A builder with no position for its step waits at this distance from its wait position, or nearer. */
+    private static final int WAIT_DISTANCE = 2;
     /** A builder with no path to its position tries again every {@link #RECHECK_TICKS} ticks, after this time. */
     private static final int NO_PATH_PAUSE = 20;
     /** A builder at this distance below the top of its column, or nearer, is on the top. */
@@ -96,6 +106,13 @@ final class BuilderWorker {
      * time, the other steps wait for this builder.
      */
     private int blockingTicks;
+    /**
+     * The time during which the step of the builder can apply and the builder does not get nearer to its walk
+     * target, in ticks.
+     */
+    private int stuckTicks;
+    /** The smallest distance of the builder to its walk target since the start of the walk, or NaN before. */
+    private double nearest = Double.NaN;
     private int workTicks;
     private int blockedTicks;
     /** The position where the builder stands for its step, or null before the choice. */
@@ -108,6 +125,9 @@ final class BuilderWorker {
     private boolean teleported;
     /** True when the builder works from where it is: it cannot go to a position. */
     private boolean direct;
+    /** The last walk target of the builder, or null. */
+    @Nullable
+    private BlockPos walkTarget;
 
     BuilderWorker(UUID id) {
         this.id = id;
@@ -117,16 +137,32 @@ final class BuilderWorker {
         return id;
     }
 
+    /** The state of the builder as text: the state, the step, the position to stand and the bottom of the column. */
+    String describe() {
+        return "state " + state + ", step " + step + ", stand " + stand + ", column " + climbBase;
+    }
+
     /** True if the builder climbs or goes down a column: it must not stop on the way. */
     boolean isOnTheWay() {
         return state == State.CLIMB || state == State.DESCEND;
     }
 
     /**
-     * True if a villager can work on a site now: an adult builder that is awake. It does not panic, hide or fight a
-     * raid.
+     * True if a villager can work on a site now: an adult builder that is awake, with no rescue. It does not panic,
+     * hide or fight a raid.
      */
     static boolean isAvailable(Villager villager) {
+        return canWork(villager) && !VillageRescues.isRescuer(villager.getUUID());
+    }
+
+    /**
+     * True if a builder can work: awake and calm, with the builder profession. A builder with a rescue (see
+     * {@link VillageRescues}) can work, but it is not available for a construction site.
+     *
+     * @param villager the villager
+     * @return true if the builder can work
+     */
+    static boolean canWork(Villager villager) {
         Brain<Villager> brain = villager.getBrain();
         return villager.isAlive() && !villager.isBaby() && !villager.isSleeping() && !villager.isPassenger()
                 && !villager.isLeashed()
@@ -145,6 +181,8 @@ final class BuilderWorker {
      *                 or null. With an entity, the builder does not move and does not work.
      */
     void tick(ServerLevel level, BuilderSite site, Villager villager, @Nullable Entity watched) {
+        BuilderNavigation.equip(villager);
+        BuilderNavigation.site(villager, site);
         stateTicks++;
         if (state == State.CLIMB) {
             climb(villager);
@@ -174,7 +212,7 @@ final class BuilderWorker {
         }
         int index = claim.getAsInt();
         if (index != step) {
-            startStep(index);
+            startStep(villager, index);
         }
         if (direct || site.canWorkFrom(level, villager, index)) {
             work(level, site, villager, index);
@@ -203,27 +241,29 @@ final class BuilderWorker {
         Optional<BuilderWorker> owner = schedule.owner(next).map(site::worker);
         if (owner.isEmpty()) {
             schedule.takeNext(id);
-            startStep(next);
+            startStep(villager, next);
             return false;
         }
         if (owner.get().state == State.WORK || !site.canWorkFrom(level, villager, next)) {
             return false;
         }
         schedule.takeNext(id);
-        startStep(next);
+        startStep(villager, next);
         work(level, site, villager, next);
         return true;
     }
 
-    private void startStep(int index) {
+    private void startStep(Villager villager, int index) {
         step = index;
         blockingTicks = 0;
+        stuckTicks = 0;
         workTicks = 0;
         blockedTicks = 0;
         stand = null;
         climbBase = null;
         teleported = false;
         direct = false;
+        forgetWalk(villager);
         setState(State.IDLE);
     }
 
@@ -298,8 +338,10 @@ final class BuilderWorker {
 
     /**
      * The builder walks to its position, or to the bottom of the column below its position. The builder selects its
-     * position again every {@link #RECHECK_TICKS} ticks. Thus it uses the position of the plan when this position
-     * becomes free, for example when the steps before it put its scaffolding column.
+     * position again every {@link #RECHECK_TICKS} ticks, and when the step can apply. Thus it uses the position of the
+     * plan when this position becomes free, for example when the steps before it put its scaffolding column. With no
+     * position, the builder waits near the bottom of the column of the position of the plan, or near the block (see
+     * {@link BuilderSite#waitPos}).
      */
     private void move(ServerLevel level, BuilderSite site, Villager villager, int index) {
         if (state != State.MOVE) {
@@ -315,9 +357,10 @@ final class BuilderWorker {
             direct = true;
             return;
         }
-        if (stand == null || stateTicks % RECHECK_TICKS == 0) {
+        if (stand == null || stateTicks % RECHECK_TICKS == 0 || blockingTicks == 1) {
             chooseStand(level, site, villager, index);
         }
+        BuilderNavigation.climb(villager, climbBase);
         boolean onThisColumn = climbBase != null && isInColumn(villager, climbBase);
         if (BuilderSite.isOnScaffolding(level, villager) && !onThisColumn) {
             startDescent(villager);
@@ -325,8 +368,11 @@ final class BuilderWorker {
         }
         if (climbBase != null && stand != null) {
             if (onThisColumn) {
-                if (villager.getY() >= stand.getY() - TOP_MARGIN || site.isColumnTaken(level, climbBase, this)) {
-                    // On the top of the column, or another builder is up the column: the builder waits.
+                if (villager.getY() >= stand.getY() - TOP_MARGIN) {
+                    // On the top of the column: the builder steps to the middle of its position.
+                    toMiddle(villager, stand);
+                } else if (site.isColumnTaken(level, climbBase, this)) {
+                    // Another builder is up the column: the builder waits.
                     stay(villager);
                 } else {
                     FolkholdWorld.LOGGER.debug("Builder {}: climbs the column at {} to {}", id, climbBase, stand);
@@ -338,17 +384,59 @@ final class BuilderWorker {
         } else if (stand != null) {
             if (villager.blockPosition().equals(stand)) {
                 // The builder is at its position, but not in its middle: it steps to the middle.
-                villager.getMoveControl().setWantedPosition(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5,
-                        WALK_SPEED);
+                toMiddle(villager, stand);
             } else {
                 walk(level, villager, stand, 0);
             }
         } else {
-            walk(level, villager, site.reachTarget(level, index), 1);
+            walk(level, villager, site.waitPos(level, index), WAIT_DISTANCE);
         }
-        if (blocking && (blockingTicks > MOVE_TIMEOUT || noPathFor(level, villager) > NO_PATH_TIMEOUT)) {
+        trackProgress(villager, blocking);
+        if (blocking && (stuckTicks > MOVE_TIMEOUT || noPathFor(level, villager) > NO_PATH_TIMEOUT)) {
             goDirectly(level, site, villager, index);
         }
+    }
+
+    /**
+     * Counts the time with no progress: the step of the builder can apply, and the builder does not get nearer to its
+     * walk target on its path (see {@link #remaining}). A long walk around a building does not make the builder go
+     * directly to its position. A new walk target keeps the time.
+     */
+    private void trackProgress(Villager villager, boolean blocking) {
+        BlockPos target = walkTarget;
+        if (target != null) {
+            double distance = remaining(villager, target);
+            if (Double.isNaN(nearest)) {
+                nearest = distance;
+            } else if (distance < nearest - PROGRESS_DISTANCE) {
+                nearest = distance;
+                stuckTicks = 0;
+                return;
+            }
+        }
+        if (blocking) {
+            stuckTicks++;
+        }
+    }
+
+    /**
+     * The distance from a villager to its walk target along its path: to the next node of the path, then from node to
+     * node, then from the last node to the target. With no path, the straight distance to the target.
+     */
+    private static double remaining(Villager villager, BlockPos target) {
+        Vec3 end = Vec3.atBottomCenterOf(target);
+        Path path = villager.getNavigation().getPath();
+        if (path == null || path.isDone()) {
+            return villager.position().distanceTo(end);
+        }
+        double length = 0.0;
+        Vec3 previous = villager.position();
+        for (int i = path.getNextNodeIndex(); i < path.getNodeCount(); i++) {
+            Vec3 node = Vec3.atBottomCenterOf(path.getNode(i).asBlockPos());
+            length += previous.distanceTo(node);
+            previous = node;
+        }
+        return length + previous.distanceTo(end);
     }
 
     /** Selects the position of the builder for its step (see {@link BuilderSite#standFor}). */
@@ -361,6 +449,22 @@ final class BuilderWorker {
         climbBase = chosen != null && BuilderSite.isScaffolding(level, chosen.below())
                 ? BuilderSite.columnBase(level, chosen.below()) : null;
         teleported = false;
+        forgetWalk(villager);
+    }
+
+    /** The builder steps to the middle of its position: its body does not go into the blocks next to it. */
+    private static void toMiddle(Villager villager, BlockPos feet) {
+        villager.getMoveControl().setWantedPosition(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, WALK_SPEED);
+    }
+
+    /**
+     * Forgets the last walk of the builder: the time with no path counts again from the next walk. Else the time with
+     * no path to an old walk target makes the builder go directly to a new position.
+     */
+    private void forgetWalk(Villager villager) {
+        walkTarget = null;
+        nearest = Double.NaN;
+        villager.getBrain().eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
     }
 
     /** The time since the villager has no path to its walk target, in ticks, or 0. */
@@ -376,12 +480,18 @@ final class BuilderWorker {
     private void goDirectly(ServerLevel level, BuilderSite site, Villager villager, int index) {
         villager.getBrain().eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
         if (!teleported && stand != null && site.isStandFor(level, stand, index)) {
-            FolkholdWorld.LOGGER.debug("Builder {}: no way to {} for step {}, the builder goes there directly", id,
-                    stand, index);
+            if (FolkholdWorld.LOGGER.isDebugEnabled()) {
+                FolkholdWorld.LOGGER.debug("Builder {}: no path to {} for step {} (way from the ground: {}), the"
+                        + " builder goes there directly", id, stand, index, site.hasWay(level, stand));
+            }
             teleported = true;
             BuilderSite.teleport(villager, stand);
-            // The builder gets some ticks to land at its position before it works from where it is.
-            blockingTicks = MOVE_TIMEOUT - LANDING_TICKS;
+            // The brain must not walk back to the old walk target, for example to the bottom of the column.
+            stay(villager);
+            // The builder gets some ticks to land at its position before it works from where it is. The walk makes no
+            // progress after the move.
+            stuckTicks = MOVE_TIMEOUT - LANDING_TICKS;
+            nearest = 0.0;
             setState(State.MOVE);
             return;
         }
@@ -482,11 +592,31 @@ final class BuilderWorker {
     /** Gives the villager back to its vanilla behaviors. */
     void release(Villager villager) {
         villager.setShiftKeyDown(false);
+        BuilderNavigation.restore(villager);
         Brain<Villager> brain = villager.getBrain();
         brain.eraseMemory(MemoryModuleType.WALK_TARGET);
         brain.eraseMemory(MemoryModuleType.LOOK_TARGET);
         step = -1;
         setState(State.IDLE);
+    }
+
+    /**
+     * The builder leaves the column under it, because a step removes a block of this column: it goes down the column,
+     * then it selects a position again.
+     */
+    void leaveColumn(ServerLevel level, Villager villager) {
+        if (state == State.DESCEND) {
+            return;
+        }
+        stand = null;
+        climbBase = null;
+        if (BuilderSite.isOnScaffolding(level, villager) || BuilderSite.isScaffolding(level, villager.blockPosition())) {
+            FolkholdWorld.LOGGER.debug("Builder {}: a step removes the column at {}, the builder goes down", id,
+                    villager.blockPosition());
+            startDescent(villager);
+        } else {
+            setState(State.MOVE);
+        }
     }
 
     /** Forgets the position of the step: the builder selects a position again. */
@@ -500,10 +630,13 @@ final class BuilderWorker {
         }
     }
 
-    /** The villager stops where it is. */
+    /**
+     * The villager stops where it is: no walk target, no path, no walk input and no jump (see
+     * {@link BuilderSite#stopMoving}).
+     */
     private static void stay(Villager villager) {
         villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-        villager.getNavigation().stop();
+        BuilderSite.stopMoving(villager);
     }
 
     /**
@@ -511,6 +644,10 @@ final class BuilderWorker {
      * ticks: a search of a path that fails costs time on the server.
      */
     private void walk(ServerLevel level, Villager villager, BlockPos pos, int closeEnough) {
+        if (!pos.equals(walkTarget)) {
+            forgetWalk(villager);
+            walkTarget = pos;
+        }
         if (noPathFor(level, villager) > NO_PATH_PAUSE && stateTicks % RECHECK_TICKS != 0) {
             stay(villager);
             return;

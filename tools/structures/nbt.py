@@ -4,7 +4,9 @@ A Template holds blocks by position. Positions without a block are structure voi
 blocks of the world there.
 """
 import gzip
+import os
 import struct
+import zlib
 
 TAG_END, TAG_BYTE, TAG_INT, TAG_STRING, TAG_LIST, TAG_COMPOUND = 0, 1, 3, 8, 9, 10
 
@@ -50,18 +52,58 @@ def _payload(value):
     raise TypeError(f"Unsupported NBT value: {value!r}")
 
 
-def write_nbt(path, root):
+# The gzip header of each written file: magic, deflate, no flags, mtime 0, maximum compression, OS unknown.
+GZIP_HEADER = b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff"
+COMPRESS_LEVEL = 9
+
+
+def encode_nbt(root):
+    """Returns the uncompressed bytes of a structure file for the root compound."""
     tag, data = _payload(root)
     assert tag == TAG_COMPOUND
-    # mtime=0: the same content gives the same file, so Git sees no change.
-    with gzip.GzipFile(path, "wb", mtime=0) as out:
-        out.write(bytes([TAG_COMPOUND]) + _name("") + data)
+    return bytes([TAG_COMPOUND]) + _name("") + data
+
+
+def gzip_bytes(raw):
+    """Returns the gzip file for raw. The header is fixed and the compression level is fixed.
+
+    The deflate bytes can be different with a different zlib (zlib or zlib-ng) for the same raw bytes.
+    """
+    deflate = zlib.compressobj(COMPRESS_LEVEL, zlib.DEFLATED, -zlib.MAX_WBITS)
+    body = deflate.compress(raw) + deflate.flush()
+    return GZIP_HEADER + body + struct.pack("<II", zlib.crc32(raw), len(raw) & 0xFFFFFFFF)
+
+
+def read_nbt_bytes(path):
+    """Returns the uncompressed bytes of the file at path, or None when the file is missing or is not gzip."""
+    try:
+        with gzip.open(path, "rb") as f:
+            return f.read()
+    except (OSError, EOFError, zlib.error):
+        return None
+
+
+def write_nbt(path, root):
+    """Writes the structure file. Returns True when the file is written.
+
+    When the file exists and its uncompressed content is equal to the new content, the function does not write the
+    file. Thus the output does not depend on the zlib of the machine, and Git sees a change only when the content
+    changes.
+    """
+    raw = encode_nbt(root)
+    if os.path.exists(path) and read_nbt_bytes(path) == raw:
+        return False
+    with open(path, "wb") as out:
+        out.write(gzip_bytes(raw))
+    return True
 
 
 class Template:
     def __init__(self, size_x, size_y, size_z):
         self.size = (size_x, size_y, size_z)
         self.blocks = {}
+        # The positions that the biome variants do not change (see village.py, Variant.apply).
+        self.fixed = set()
 
     def inside(self, x, y, z):
         sx, sy, sz = self.size
@@ -83,8 +125,11 @@ class Template:
                 for z in range(min(z1, z2), max(z1, z2) + 1):
                     self.set(x, y, z, name, props)
 
-    def jigsaw(self, x, y, z, orientation, name, target, pool, final_state):
-        """A jigsaw block. orientation: for example "north_up" (the block faces north)."""
+    def jigsaw(self, x, y, z, orientation, name, target, pool, final_state, placement_priority=0,
+               selection_priority=0):
+        """A jigsaw block. orientation: for example "north_up" (the block faces north). The jigsaw processes the piece
+        of a connector with a higher placement_priority before the pieces of the other connectors. In a piece, the
+        jigsaw fills the connectors with a higher selection_priority first."""
         self.set(x, y, z, "minecraft:jigsaw", {"orientation": orientation}, {
             "id": "minecraft:jigsaw",
             "name": name,
@@ -92,8 +137,8 @@ class Template:
             "pool": pool,
             "final_state": final_state,
             "joint": "rollable",
-            "placement_priority": 0,
-            "selection_priority": 0,
+            "placement_priority": placement_priority,
+            "selection_priority": selection_priority,
         })
 
     def write(self, path):

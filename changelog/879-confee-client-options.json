@@ -1,0 +1,5 @@
+{
+  "category": "changed",
+  "en_us": "The Config button of Folkhold World and Folkhold Events opens a Confee screen with the client options (HUDs, camera shake) and a \"Server options\" button. The mods need Confee on the client. Your client options stay: Confee reads the same files.",
+  "fr_fr": "Le bouton Config de Folkhold World et Folkhold Events ouvre un écran Confee avec les options du client (HUD, tremblement de la caméra) et un bouton « Options du serveur ». Les mods ont besoin de Confee sur le client. Vos options du client restent."
+}

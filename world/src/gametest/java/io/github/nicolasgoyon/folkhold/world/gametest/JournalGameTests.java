@@ -4,9 +4,14 @@ import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
+import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.journal.JournalData;
 import io.github.nicolasgoyon.folkhold.world.journal.Journals;
+import io.github.nicolasgoyon.folkhold.world.journal.TerritoryMaps;
+import io.github.nicolasgoyon.folkhold.world.journal.TerritoryReliefs;
 import io.github.nicolasgoyon.folkhold.world.network.JournalPayload;
+import io.github.nicolasgoyon.folkhold.world.network.RoutePayload;
+import io.github.nicolasgoyon.folkhold.world.network.TerritoryMapPayload;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,7 +51,7 @@ public final class JournalGameTests {
         JournalData.Visit discovered = data.visits(player.getUUID()).get(settlement.id());
         Journals.update(player, Optional.empty(), Optional.of(settlement.id()));
         JournalData.Visit visited = data.visits(player.getUUID()).get(settlement.id());
-        JournalPayload payload = Journals.payload(player);
+        JournalPayload payload = Journals.payload(player, "");
         server.getPlayerList().remove(player);
 
         helper.assertTrue(discovered != null && !discovered.visited(), "The territory must discover the village");
@@ -58,6 +63,72 @@ public final class JournalGameTests {
                 && payload.factions().get(0).id().equals(settlement.factionId())
                 && payload.factions().get(0).villages() == 1, "The journal must have the faction of the village");
         helper.succeed();
+    }
+
+    /**
+     * The map of a player has the territory of a discovered village, with the color of its faction. Before the
+     * discovery, the map does not have the village.
+     */
+    @GameTest(template = "arena", batch = "journal_map")
+    public static void mapHasTheDiscoveredTerritory(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
+        VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
+        heart.ensureSettlement();
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement settlement = Settlements.of(server, heart).orElseThrow();
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+
+        TerritoryMapPayload before = TerritoryMaps.payload(player);
+        Journals.update(player, Optional.of(settlement), Optional.empty());
+        TerritoryMapPayload after = TerritoryMaps.payload(player);
+        int color = FactionData.get(server).byId(settlement.factionId()).orElseThrow().color();
+        server.getPlayerList().remove(player);
+
+        helper.assertTrue(before.villages().stream().noneMatch(village -> village.id().equals(settlement.id())),
+                "The map must not have the village before the discovery");
+        Optional<TerritoryMapPayload.Village> village = after.villages().stream()
+                .filter(found -> found.id().equals(settlement.id())).findFirst();
+        helper.assertTrue(village.isPresent(), "The map must have the discovered village");
+        helper.assertTrue(village.get().name().equals(settlement.name()) && village.get().color() == color
+                && village.get().claimant().radius() > 0, "The village must have its name, its color and its claim: "
+                        + village.get());
+        helper.succeed();
+    }
+
+    /**
+     * The server calculates the relief of the map of the journal on the worker thread, then keeps it. The relief
+     * covers the territory of the discovered village.
+     */
+    @GameTest(template = "arena", batch = "journal_relief", timeoutTicks = 600)
+    public static void reliefOfTheJournalMap(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
+        VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
+        heart.ensureSettlement();
+        MinecraftServer server = helper.getLevel().getServer();
+        Settlement settlement = Settlements.of(server, heart).orElseThrow();
+        ServerPlayer player = TestSupport.mockPlayer(helper);
+        Journals.update(player, Optional.of(settlement), Optional.empty());
+        TerritoryMapPayload.Village village = TerritoryMaps.payload(player).villages().stream()
+                .filter(found -> found.id().equals(settlement.id())).findFirst().orElseThrow();
+
+        TerritoryReliefs.request(player);
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(TerritoryReliefs.known(player).isPresent(),
+                        "The worker thread must calculate the relief"))
+                .thenExecute(() -> {
+                    RoutePayload.Relief relief = TerritoryReliefs.known(player).orElseThrow();
+                    int reach = 16 * village.claimant().radius();
+                    int maxX = relief.minX() + (relief.width() - 1) * relief.cell();
+                    int maxZ = relief.minZ() + (relief.height() - 1) * relief.cell();
+                    server.getPlayerList().remove(player);
+                    helper.assertTrue(relief.minX() <= village.claimant().x() - reach
+                            && maxX >= village.claimant().x() + reach && relief.minZ() <= village.claimant().z() - reach
+                            && maxZ >= village.claimant().z() + reach, "The relief must cover the territory");
+                })
+                .thenSucceed();
     }
 
     /** A new id of a settlement keeps its place in the journals. */

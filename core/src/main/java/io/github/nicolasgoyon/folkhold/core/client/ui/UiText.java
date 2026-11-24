@@ -147,7 +147,7 @@ public final class UiText {
 
     /**
      * Draws the lines of a text in a rectangle, from the top. The lines that do not fit in the height are not
-     * drawn; the last drawn line ends with "…" if the text is longer.
+     * drawn. The last drawn line ends with "…" if the text is longer.
      *
      * @return the height of the drawn lines
      */

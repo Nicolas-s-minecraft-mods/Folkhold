@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quests;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardItem;
 import io.github.nicolasgoyon.folkhold.core.sim.reputation.ReputationTier;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
@@ -15,16 +16,20 @@ import io.github.nicolasgoyon.folkhold.world.entity.CaptainEntity;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionVisuals;
 import io.github.nicolasgoyon.folkhold.world.faction.Reputations;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
+import io.github.nicolasgoyon.folkhold.world.journal.Journals;
+import io.github.nicolasgoyon.folkhold.world.network.JournalPayload;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.network.QuestActionPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Active;
 import io.github.nicolasgoyon.folkhold.world.network.QuestBoardPayload.Offer;
+import io.github.nicolasgoyon.folkhold.world.network.QuestDetail;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
 import io.github.nicolasgoyon.folkhold.world.notice.Notices;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
+import io.github.nicolasgoyon.folkhold.world.village.VillageLife;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -68,6 +73,8 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 public final class QuestBoards {
     /** The item of the icon of an escort. */
     private static final String ESCORT_ICON = "minecraft:chest";
+    /** The item of the icon of a hunt. */
+    private static final String HUNT_ICON = "minecraft:iron_sword";
     /** Colors of the texts on the parchment of the screen. */
     private static final int INK_GOOD = 0x3F6B28;
     private static final int INK_BAD = 0x8E2F22;
@@ -75,6 +82,7 @@ public final class QuestBoards {
     /** Colors of the texts on the wood of the screen. */
     private static final int TEXT_GOOD = 0x9AD07E;
     private static final int TEXT_WARN = 0xE0A635;
+    private static final int TEXT_BAD = 0xE8846F;
     /** A player this far outside the village radius can still use the quest screen: the reach of a click. */
     private static final double ACTION_MARGIN = 8.0;
     private static final List<BiConsumer<ServerPlayer, Quest>> ACCEPT_LISTENERS = new ArrayList<>();
@@ -115,7 +123,7 @@ public final class QuestBoards {
 
     /** The active settlement of the village near a position, if a village heart is near. */
     public static Optional<Settlement> villageAt(ServerLevel level, BlockPos pos) {
-        return VillageHearts.findNearest(level, pos, WorldConfig.VILLAGE_RADIUS.get())
+        return VillageHearts.findAt(level, pos)
                 .map(level::getBlockEntity)
                 .filter(VillageHeartBlockEntity.class::isInstance)
                 .map(VillageHeartBlockEntity.class::cast)
@@ -140,8 +148,9 @@ public final class QuestBoards {
     }
 
     /**
-     * The player opens the quest screen of a village from the village heart screen. The player must be in the
-     * village radius, and the village must give quests to the player (not hostile).
+     * The player opens the quest screen of a village from the village heart screen, or the open quest screen asks
+     * for a new state during an escort. The player must be in the village radius, and the village must give quests
+     * to the player (not hostile).
      *
      * @param player       the player
      * @param settlementId the id of the village
@@ -154,16 +163,29 @@ public final class QuestBoards {
     }
 
     /**
-     * True if the player can use the quest screen of a village: the player is in the village radius (plus the
-     * reach of a click), and the village is not hostile to the player.
+     * True if the player can use the quest screen of a village: the player is in the village and the village is not
+     * hostile to the player. The player is in the village when the village of the position of the player is this
+     * village (see {@link VillageHearts#findAt}), or when the player is in the village radius plus the reach of a
+     * click (for example when the heart is not loaded).
      */
     public static boolean canAct(ServerPlayer player, Settlement village) {
-        double radius = WorldConfig.VILLAGE_RADIUS.get() + ACTION_MARGIN;
-        if (village.distanceSquared(player.getBlockX(), player.getBlockZ()) > radius * radius) {
+        if (!inVillage(player, village)) {
             return false;
         }
         return !Reputations.effective(player.server, player, village.factionId(), village.id())
                 .map(ReputationTier::of).map(ReputationTier::isHostile).orElse(false);
+    }
+
+    /** True if the player is in the area of the village, or in the village radius plus the reach of a click. */
+    private static boolean inVillage(ServerPlayer player, Settlement village) {
+        if (village.hasHeart() && VillageHearts.findAt(player.serverLevel(), player.blockPosition())
+                .filter(heart -> heart.getX() == village.x() && heart.getY() == village.heartY()
+                        && heart.getZ() == village.z())
+                .isPresent()) {
+            return true;
+        }
+        double radius = WorldConfig.VILLAGE_RADIUS.get() + ACTION_MARGIN;
+        return village.distanceSquared(player.getBlockX(), player.getBlockZ()) <= radius * radius;
     }
 
     /** A click on a captain opens the quest screen of its village. */
@@ -199,13 +221,18 @@ public final class QuestBoards {
 
     /**
      * A button of the quest screen. The action happens only when the player is in the village of the screen and
-     * the village is not hostile (see {@link #canAct}). Then the screen shows the result.
+     * the village is not hostile (see {@link #canAct}). Then the screen shows the result. A payload with no village
+     * comes from the journal: only the abandon has an effect, at any distance.
      *
      * @param player  the player
      * @param payload the action
      */
     public static void handle(ServerPlayer player, QuestActionPayload payload) {
         MinecraftServer server = player.server;
+        if (payload.settlementId().isEmpty()) {
+            abandonFromJournal(player, payload);
+            return;
+        }
         Optional<Settlement> village = SettlementData.get(server).registry().byId(payload.settlementId())
                 .filter(Settlement::isActive);
         Optional<Outcome> outcome;
@@ -233,6 +260,22 @@ public final class QuestBoards {
         sendLog(player);
     }
 
+    /**
+     * A button of the tab "Quests" of the journal: the player abandons an active quest at any distance from its
+     * village. The rules are the rules of the abandon at the board. The player gets the result in the chat and the
+     * journal again.
+     */
+    private static void abandonFromJournal(ServerPlayer player, QuestActionPayload payload) {
+        if (payload.action() != QuestBoardPayload.ACTION_ABANDON) {
+            return;
+        }
+        Outcome outcome = abandon(player, payload.questId());
+        QuestData.get(player.server).setDirty();
+        player.displayClientMessage(outcome.message(), false);
+        Journals.request(player);
+        sendLog(player);
+    }
+
     /** A player accepts an offer of the quest screen of a village. The offer must come from this village. */
     private static Outcome acceptAt(ServerPlayer player, String questId, Settlement village) {
         MinecraftServer server = player.server;
@@ -245,6 +288,8 @@ public final class QuestBoards {
             case ACCEPTED -> Outcome.of(true, "quest_accepted", name(server, quest.get()));
             case TIER_TOO_LOW -> Outcome.of(false, "quest_tier_too_low");
             case TOO_MANY -> Outcome.of(false, "quest_too_many", WorldConfig.QUEST_MAX_ACTIVE.get());
+            case TOO_MANY_START_ITEMS -> Outcome.of(false, "quest_too_many_start_items",
+                    WorldConfig.QUEST_MAX_START_ITEM_QUESTS.get());
             default -> Outcome.of(false, "quest_gone");
         };
     }
@@ -276,8 +321,12 @@ public final class QuestBoards {
         ReputationTier tier = quest.map(found -> tier(server, player, found)).orElse(ReputationTier.NEUTRAL);
         long now = server.overworld().getGameTime();
         Quests.AcceptResult result = data.quests().accept(questId, player.getUUID(), tier, now,
-                WorldConfig.QUEST_MAX_ACTIVE.get());
+                WorldConfig.QUEST_MAX_ACTIVE.get(), WorldConfig.QUEST_MAX_START_ITEM_QUESTS.get());
         if (result == Quests.AcceptResult.ACCEPTED) {
+            // The start items: the player keeps them after a success.
+            for (RewardItem item : quest.get().startItems()) {
+                ItemIds.item(item.item()).ifPresent(found -> giveItems(player, new ItemStack(found), item.count()));
+            }
             ACCEPT_LISTENERS.forEach(listener -> listener.accept(player, quest.get()));
         }
         data.setDirty();
@@ -310,9 +359,9 @@ public final class QuestBoards {
     }
 
     /**
-     * Completes an accepted quest: the player gets the emeralds (from the treasury of the faction of the village) and
-     * the reputation. A player who is not in the game gets the reward at the next login: the treasury pays at that
-     * time.
+     * Completes an accepted quest: the player gets the emeralds (from the treasury of the faction of the village), the
+     * reputation, the experience and the items. A player who is not in the game gets the reward at the next login:
+     * the treasury and the stock of the village pay at that time.
      *
      * @param server the server
      * @param quest  the quest
@@ -326,7 +375,8 @@ public final class QuestBoards {
         }
         data.setDirty();
         QuestData.Reward reward = new QuestData.Reward(playerId, quest.factionId(), quest.settlementId(),
-                quest.rewardEmeralds(), quest.rewardReputation(), name(server, quest));
+                quest.rewardEmeralds(), quest.rewardReputation(), name(server, quest), quest.rewardExperience(),
+                quest.rewardItems());
         ServerPlayer player = server.getPlayerList().getPlayer(playerId);
         Optional<Component> message = Optional.empty();
         if (player != null) {
@@ -356,7 +406,9 @@ public final class QuestBoards {
     }
 
     /**
-     * Pays a reward to a player: the emeralds, up to the treasury of the faction, and the reputation.
+     * Pays a reward to a player: the emeralds, up to the treasury of the faction, the reputation, the experience
+     * points and the items. The goods of the village come from its stock, up to the stock. An item that does not go
+     * into the inventory falls at the feet of the player.
      *
      * @param player the player
      * @param reward the reward
@@ -369,8 +421,29 @@ public final class QuestBoards {
         settlements.addTreasury(reward.factionId(), -emeralds);
         giveEmeralds(player, emeralds);
         Reputations.apply(server, player, reward.factionId(), reward.settlementId(), reward.reputation());
-        return Notices.asText(Component.translatable("message.folkhold_world.quest_completed", reward.name()),
-                Component.translatable("message.folkhold_world.quest_reward", emeralds));
+        if (reward.experience() > 0) {
+            player.giveExperiencePoints(reward.experience());
+        }
+        List<RewardItem> given = new ArrayList<>();
+        Optional<Settlement> village = settlements.registry().byId(reward.settlementId());
+        for (RewardItem item : reward.items()) {
+            Optional<Item> found = ItemIds.item(item.item());
+            int count = item.count();
+            if (item.fromStock()) {
+                count = village.map(settlement -> settlement.economy().stock().remove(item.item(), item.count()))
+                        .orElse(0);
+                settlements.setDirty();
+            }
+            if (found.isPresent() && count > 0) {
+                giveItems(player, new ItemStack(found.get()), count);
+                given.add(new RewardItem(item.item(), count, item.fromStock()));
+            }
+        }
+        MutableComponent text = Component.translatable("message.folkhold_world.quest_reward", emeralds);
+        for (Component part : QuestRewards.extras(reward.experience(), given)) {
+            text = Component.translatable("quest.folkhold_world.reward.more", text, part);
+        }
+        return Notices.asText(Component.translatable("message.folkhold_world.quest_completed", reward.name()), text);
     }
 
     /**
@@ -388,6 +461,22 @@ public final class QuestBoards {
         data.setDirty();
         onQuestEnded(server, quest);
         return true;
+    }
+
+    /**
+     * The failure penalty of a quest: a failed quest that a player accepted removes its failure reputation with the
+     * faction and the village of the giver (see {@link io.github.nicolasgoyon.folkhold.core.sim.quest.QuestRisk}).
+     * A player who is not in the game also loses it. A completed quest gives no penalty.
+     *
+     * @param server the server
+     * @param quest  the quest that ended
+     */
+    public static void applyFailurePenalty(MinecraftServer server, Quest quest) {
+        if (quest.state() != QuestState.FAILED || quest.playerId() == null || quest.failureReputation() <= 0) {
+            return;
+        }
+        Reputations.apply(server, quest.playerId(), quest.factionId(), quest.settlementId(),
+                -quest.failureReputation());
     }
 
     /**
@@ -435,6 +524,13 @@ public final class QuestBoards {
                         Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
                                 itemName(quest.target())),
                         quest.count(), secondsLeft, Optional.empty(), village, QuestLogPayload.NO_ENTITY));
+            } else if (quest.kind() == QuestKind.HUNT) {
+                Optional<BlockPos> village = SettlementData.get(server).registry().byId(quest.settlementId())
+                        .map(settlement -> Settlements.position(server, settlement));
+                entries.add(new QuestLogPayload.Entry(quest.id(), HUNT_ICON,
+                        Component.translatable("quest.folkhold_world.active.hunt", quest.progress(), quest.count(),
+                                villageName(server, quest.settlementId())),
+                        0, secondsLeft, Optional.empty(), village, QuestLogPayload.NO_ENTITY));
             } else {
                 String destination = Escorts.caravan(server, quest).map(MobileGroup::destinationId).orElse("");
                 Optional<Entity> merchant = Escorts.merchantEntity(server, quest);
@@ -480,29 +576,81 @@ public final class QuestBoards {
                 Optional.empty(), true);
     }
 
+    /**
+     * The quests of the tab "Quests" of the journal of a player: the active quests of the player, then the offers of
+     * the villages that the player visited. The offers are read-only: the player accepts a quest at the board or from
+     * the captain of the village.
+     *
+     * @param player  the player
+     * @param visited the settlement ids of the villages that the player visited, nearest first
+     * @return the quests
+     */
+    public static List<JournalPayload.Quest> journal(ServerPlayer player, List<String> visited) {
+        MinecraftServer server = player.server;
+        Quests quests = QuestData.get(server).quests();
+        SettlementData settlements = SettlementData.get(server);
+        long now = server.overworld().getGameTime();
+        int maxActive = WorldConfig.QUEST_MAX_ACTIVE.get();
+        List<Quest> mine = quests.active(player.getUUID());
+        List<JournalPayload.Quest> result = new ArrayList<>();
+        for (Quest quest : mine) {
+            Optional<Settlement> village = settlements.registry().byId(quest.settlementId());
+            if (village.isEmpty()) {
+                continue;
+            }
+            Active active = active(server, player, quest, now, village.get());
+            result.add(new JournalPayload.Quest(quest.id(), true, quest.settlementId(), village.get().name(),
+                    active.itemId(), active.name(), active.info(), QuestRewards.describe(quest),
+                    joined(QuestRewards.risks(quest)), active.secondsLeft(), Component.empty(), List.of(),
+                    quest.failureReputation()));
+        }
+        for (String villageId : visited) {
+            Optional<Settlement> village = settlements.registry().byId(villageId).filter(Settlement::isActive);
+            if (village.isEmpty()) {
+                continue;
+            }
+            ReputationTier tier = Reputations.effective(server, player, village.get().factionId(), villageId)
+                    .map(ReputationTier::of).orElse(ReputationTier.NEUTRAL);
+            for (Quest quest : quests.offers(villageId)) {
+                Offer offer = offer(server, player, quest, now, tier, mine.size(), maxActive);
+                int seconds = (int) Math.max(0, (quest.offerEnd() - now) / SharedConstants.TICKS_PER_SECOND);
+                result.add(new JournalPayload.Quest(quest.id(), false, villageId, village.get().name(),
+                        offer.itemId(), offer.name(), Component.empty(), QuestRewards.describe(quest),
+                        joined(QuestRewards.risks(quest)), seconds, offer.story(), offer.details(),
+                        quest.failureReputation()));
+            }
+        }
+        return result;
+    }
+
     private static Offer offer(MinecraftServer server, ServerPlayer player, Quest quest, long now,
             ReputationTier playerTier, int activeCount, int maxActive) {
         int minutes = (int) (quest.duration() / SharedConstants.TICKS_PER_MINUTE);
-        Component kind = Component.translatable("quest.folkhold_world.kind." + quest.kind().serializedName());
-        Component info;
+        Component story = Component.empty();
         Component progress = Component.empty();
         int countdown = -1;
+        long routeBlocks = 0L;
         String icon;
         if (quest.kind() == QuestKind.DELIVERY) {
             icon = quest.target();
-            info = Component.translatable("quest.folkhold_world.info.delivery", kind, minutes);
+            if (!quest.text().isEmpty()) {
+                story = Component.translatable(quest.text(), Component.translatable(
+                        "quest.folkhold_world.active.delivery", quest.count(), itemName(quest.target())));
+            }
             int have = Deliveries.count(player.getInventory(), ItemIds.item(quest.target()).orElse(Items.AIR));
             progress = Component.translatable("quest.folkhold_world.have", have, quest.count())
                     .withColor(have >= quest.count() ? INK_GOOD : have > 0 ? INK_BAD : INK_MUTED);
+        } else if (quest.kind() == QuestKind.HUNT) {
+            icon = HUNT_ICON;
         } else {
             icon = ESCORT_ICON;
-            long blocks = Escorts.caravan(server, quest).map(group -> Math.round(group.route().length())).orElse(0L);
-            info = Component.translatable("quest.folkhold_world.info.escort", kind, blocks, minutes);
+            routeBlocks = Escorts.caravan(server, quest).map(group -> Math.round(group.route().length())).orElse(0L);
             countdown = (int) Math.max(0, (quest.offerEnd() - now) / SharedConstants.TICKS_PER_SECOND);
         }
-        if (quest.minTier() != ReputationTier.NEUTRAL) {
-            info = Component.translatable("quest.folkhold_world.info.tier", info, tierMark(quest.minTier()));
-        }
+        List<QuestDetail> details = QuestOfferDetails.lines(new QuestOfferDetails.Facts(quest.kind(), minutes,
+                routeBlocks, WorldConfig.QUEST_HUNT_RADIUS.get(), villageName(server, quest.settlementId()),
+                quest.difficulty(), EscortDifficulties.get().levels().size(), quest.minTier(),
+                QuestRewards.describe(quest), QuestRewards.startItems(quest), quest.failureReputation()));
         Optional<Component> blocked = Optional.empty();
         if (activeCount >= maxActive) {
             blocked = Optional.of(Component.translatable("quest.folkhold_world.blocked.full", activeCount,
@@ -511,9 +659,7 @@ public final class QuestBoards {
             blocked = Optional.of(Component.translatable("quest.folkhold_world.blocked.tier",
                     FactionVisuals.tierName(quest.minTier())));
         }
-        return new Offer(quest.id(), quest.kind().serializedName(), icon, name(server, quest), info,
-                Component.translatable("quest.folkhold_world.reward", quest.rewardEmeralds(),
-                        quest.rewardReputation()),
+        return new Offer(quest.id(), quest.kind().serializedName(), icon, name(server, quest), story, details,
                 progress, countdown, (int) Math.min(Integer.MAX_VALUE, quest.rewardEmeralds()), minutes, blocked);
     }
 
@@ -522,6 +668,10 @@ public final class QuestBoards {
         int secondsLeft = (int) Math.max(0, (quest.deadline() - now) / SharedConstants.TICKS_PER_SECOND);
         MutableComponent info = Component.translatable("quest.folkhold_world.active.info",
                 villageName(server, quest.settlementId()), quest.rewardEmeralds());
+        if (quest.failureReputation() > 0) {
+            info.append(UiStrings.separator())
+                    .append(Component.translatable("quest.folkhold_world.failure", quest.failureReputation()));
+        }
         int action = QuestBoardPayload.ACTION_NONE;
         Optional<Component> blocked = Optional.empty();
         boolean ready = false;
@@ -545,21 +695,38 @@ public final class QuestBoards {
                 blocked = Optional.of(Component.translatable("quest.folkhold_world.deliver_at",
                         villageName(server, quest.settlementId())));
             }
-            return new Active(quest.id(), quest.target(),
-                    Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
-                            itemName(quest.target())),
-                    info, secondsLeft, action, blocked, ready);
+            return new Active(quest.id(), quest.target(), quest.giverJob().isEmpty()
+                    ? Component.translatable("quest.folkhold_world.active.delivery", quest.count(),
+                            itemName(quest.target())) : name(server, quest),
+                    info, secondsLeft, action, blocked, ready, quest.failureReputation());
+        }
+        if (quest.kind() == QuestKind.HUNT) {
+            info.append(UiStrings.separator()).append(Component.translatable("quest.folkhold_world.active.progress",
+                    Math.min(quest.progress(), quest.count()), quest.count()).withColor(0xA89F8C));
+            return new Active(quest.id(), HUNT_ICON, name(server, quest), info, secondsLeft, action, blocked, false,
+                    quest.failureReputation());
         }
         Optional<MobileGroup> caravan = Escorts.caravan(server, quest);
-        caravan.map(QuestBoards::caravanState).ifPresent(state -> info.append(UiStrings.separator()).append(state));
+        caravan.map(group -> caravanState(group, Escorts.raiders(server.overworld(), group)))
+                .ifPresent(state -> info.append(UiStrings.separator()).append(state));
         String destination = caravan.map(MobileGroup::destinationId).orElse("");
         return new Active(quest.id(), ESCORT_ICON,
                 Component.translatable("quest.folkhold_world.active.escort", villageName(server, destination)),
-                info, secondsLeft, action, blocked, false);
+                info, secondsLeft, action, blocked, false, quest.failureReputation());
     }
 
-    /** The state of the caravan of an escort, for the screen. */
-    private static Component caravanState(MobileGroup group) {
+    /**
+     * The state of the caravan of an escort, for the screen. An attack on the caravan comes first: the merchant waits
+     * while raiders live.
+     *
+     * @param group   the caravan
+     * @param raiders the living raiders of the attack on the caravan (see {@link Escorts#raiders})
+     * @return the text of the state
+     */
+    static Component caravanState(MobileGroup group, int raiders) {
+        if (raiders > 0) {
+            return Component.translatable("quest.folkhold_world.caravan.ambush", raiders).withColor(TEXT_BAD);
+        }
         return switch (group.state()) {
             case WAITING -> Component.translatable("quest.folkhold_world.caravan.waiting").withColor(0xA89F8C);
             case TRAVELING -> Component.translatable("quest.folkhold_world.caravan.traveling",
@@ -569,16 +736,18 @@ public final class QuestBoards {
         };
     }
 
-    /** The minimum tier of an offer: a tick and the name of the tier, in green. */
-    private static Component tierMark(ReputationTier tier) {
-        return Component.literal("✓ ").append(FactionVisuals.tierName(tier)).withColor(INK_GOOD);
-    }
-
-
     /** The text of a quest: what to do. */
     public static Component name(MinecraftServer server, Quest quest) {
+        if (quest.kind() == QuestKind.DELIVERY && !quest.giverJob().isEmpty()) {
+            return Component.translatable("quest.folkhold_world.job_delivery", VillageLife.jobName(quest.giverJob()),
+                    quest.count(), itemName(quest.target()));
+        }
         if (quest.kind() == QuestKind.DELIVERY) {
             return Component.translatable("quest.folkhold_world.delivery", quest.count(), itemName(quest.target()));
+        }
+        if (quest.kind() == QuestKind.HUNT) {
+            return Component.translatable("quest.folkhold_world.hunt", quest.count(),
+                    villageName(server, quest.settlementId()));
         }
         String destination = MobileGroupData.get(server).groups().byId(quest.target())
                 .map(MobileGroup::destinationId).orElse("");
@@ -602,6 +771,28 @@ public final class QuestBoards {
         return SettlementData.get(server).registry().byId(settlementId)
                 .<Component>map(settlement -> Component.literal(settlement.name()))
                 .orElse(Component.literal("?"));
+    }
+
+    /** The texts joined with the separator of the rewards, or an empty text for no text. */
+    private static Component joined(List<Component> parts) {
+        MutableComponent text = null;
+        for (Component part : parts) {
+            text = text == null ? part.copy() : Component.translatable("quest.folkhold_world.reward.more", text, part);
+        }
+        return text == null ? Component.empty() : text;
+    }
+
+    /** Gives items to a player in stacks of their maximum size. An item that does not go in falls. */
+    private static void giveItems(ServerPlayer player, ItemStack item, int count) {
+        int remaining = count;
+        while (remaining > 0) {
+            int size = Math.min(item.getMaxStackSize(), remaining);
+            ItemStack stack = item.copyWithCount(size);
+            if (!player.getInventory().add(stack)) {
+                player.drop(stack, false);
+            }
+            remaining -= size;
+        }
     }
 
     private static void giveEmeralds(ServerPlayer player, long emeralds) {

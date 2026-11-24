@@ -15,6 +15,8 @@ import java.util.SplittableRandom;
  *   <li>The levels go from 1 to {@link #maxLevel()}. Each level has its {@link LevelTraits}.</li>
  *   <li>The tiers cover all levels, with no gap and no overlap.</li>
  *   <li>The start level is a random level from the start chances. The same seed gives the same level.</li>
+ *   <li>With 2 tiers or more, no start chance is in the last tier (the capital): only growth or a command gives
+ *       these levels.</li>
  * </ul>
  */
 public final class LevelTable {
@@ -32,6 +34,9 @@ public final class LevelTable {
             }
         }
     }
+
+    /** The salt of the seed of a start level (see {@link #startSeed}). */
+    private static final long START_SALT = 0x6F6C_6B68_6F6C_6431L;
 
     public static final LevelTable DEFAULT = defaultTable();
 
@@ -63,10 +68,16 @@ public final class LevelTable {
         if (next != levels.size() + 1) {
             throw new IllegalArgumentException("The tiers must end at the level " + levels.size());
         }
+        Tier last = tiers.get(tiers.size() - 1);
         int weight = 0;
         for (StartChance chance : startChances) {
             if (chance.maxLevel() > levels.size()) {
                 throw new IllegalArgumentException("Start chance above the last level: " + chance);
+            }
+            if (tiers.size() > 1 && chance.maxLevel() >= last.minLevel()) {
+                throw new IllegalArgumentException("Start chance in the last tier " + last.id()
+                        + ": only growth gives the levels " + last.minLevel() + " to " + last.maxLevel() + ": "
+                        + chance);
             }
             weight += chance.weight();
         }
@@ -123,22 +134,52 @@ public final class LevelTable {
         throw new IllegalStateException("No start chance for the roll");
     }
 
+    /**
+     * The start level of a village structure. The same world seed and the same start chunk give the same level, thus
+     * the structure and the settlement get the same level, also before the settlement exists.
+     *
+     * @param worldSeed the seed of the world
+     * @param chunkX    the chunk X of the structure start
+     * @param chunkZ    the chunk Z of the structure start
+     * @return the start level
+     */
+    public int startLevel(long worldSeed, int chunkX, int chunkZ) {
+        return startLevel(startSeed(worldSeed, chunkX, chunkZ));
+    }
+
+    /**
+     * The seed of the start level of a village structure, from the world seed and the start chunk.
+     *
+     * @param worldSeed the seed of the world
+     * @param chunkX    the chunk X of the structure start
+     * @param chunkZ    the chunk Z of the structure start
+     * @return the seed
+     */
+    public static long startSeed(long worldSeed, int chunkX, int chunkZ) {
+        // Two large odd numbers separate the chunks. The salt separates this seed from the other seeds of the chunk.
+        return worldSeed ^ START_SALT ^ (chunkX * 341_873_128_712L + chunkZ * 132_897_987_541L);
+    }
+
     private static LevelTable defaultTable() {
         int[] claimRadius = {9, 9, 9, 9, 13, 16, 16, 18, 20, 22, 24, 26, 27, 27, 27, 27, 30, 31, 33, 33};
         int[] cats = {1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 6, 6, 6, 6};
         List<Tier> tiers = List.of(new Tier("hamlet", 1, 4), new Tier("village", 5, 8), new Tier("town", 9, 12),
                 new Tier("city", 13, 16), new Tier("capital", 17, 20));
-        // The garrison of each tier: guards, archers, captains, healers, golems and riders, and the equipment set with
-        // the id of the tier.
-        int[][] garrisons = {{2, 2, 1, 0, 0, 0}, {3, 2, 1, 1, 0, 0}, {4, 3, 1, 1, 0, 1}, {5, 4, 1, 1, 1, 2},
+        // The garrison of each tier: guards, archers, captains, healers, golems and riders. The balance of the raids
+        // (see "Raids against the faction villages" in docs/design.md) gives a village the equipment set of a town, and
+        // a town the equipment set of a city. The other tiers have the equipment set with the id of the tier.
+        int[][] garrisons = {{2, 2, 1, 0, 0, 0}, {5, 3, 1, 1, 0, 0}, {5, 4, 1, 1, 1, 1}, {6, 5, 1, 2, 2, 2},
                 {6, 5, 1, 2, 2, 3}};
+        String[] equipment = {"hamlet", "town", "city", "city", "capital"};
+        // The extra units of the cultures from the town: they close the gap of the culture equipment in the raids.
+        Map<String, Map<String, Integer>> cultureUnits = Map.of("sunreach", Map.of("guard", 2, "healer", 1));
         List<LevelTraits> levels = new ArrayList<>();
         for (int level = 1; level <= 20; level++) {
             int tier = (level - 1) / 4;
             int[] units = garrisons[tier];
             GarrisonTraits garrison = new GarrisonTraits(Map.of("guard", units[0], "archer", units[1],
                     "captain", units[2], "healer", units[3], "golem", units[4], "rider", units[5]),
-                    tiers.get(tier).id());
+                    equipment[tier], tier >= 2 ? cultureUnits : Map.of());
             levels.add(new LevelTraits(10 + 5 * level, claimRadius[level - 1], 4 + 5 * level, 1 + level,
                     128 * level, 2 + level, cats[level - 1], garrison));
         }

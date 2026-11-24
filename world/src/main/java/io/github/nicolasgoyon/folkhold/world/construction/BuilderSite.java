@@ -9,6 +9,8 @@ import io.github.nicolasgoyon.folkhold.core.sim.construction.SiteSchedule;
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Step;
 import io.github.nicolasgoyon.folkhold.core.sim.construction.StepType;
 import io.github.nicolasgoyon.folkhold.core.sim.construction.Target;
+import io.github.nicolasgoyon.folkhold.core.sim.construction.WalkSearch;
+import io.github.nicolasgoyon.folkhold.core.sim.construction.WalkSearch.Way;
 import io.github.nicolasgoyon.folkhold.core.sim.construction.WorkZone;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.ItemCatalog;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Prices;
@@ -24,11 +26,13 @@ import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.registry.ModProfessions;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
+import io.github.nicolasgoyon.folkhold.world.village.VillageClearing;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageReference;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairData;
 import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -43,12 +47,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -63,6 +68,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -75,6 +81,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
@@ -82,6 +89,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * template block by block (see {@link BuilderWorker}).
  *
  * <ol>
+ *   <li>Clearing: the site removes the trees of its work zone, with their full trunks and their leaves (see
+ *       {@link VillageClearing#clearSite}).</li>
  *   <li>Fences: the builders put a ring of fences around the work zone (see {@link WorkZone}), with an opening on the
  *       side of the village.</li>
  *   <li>Construction: the builders apply the steps of the plan of the structure (see {@link ConstructionPlanner}), in
@@ -97,10 +106,13 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *   <li>The sites of one village come one after the other: the builders work only on the oldest site.</li>
  *   <li>The fences can go in any order: each builder takes the fence nearest to it.</li>
  *   <li>A block of the plan does not go into an entity. The entity moves out after some time.</li>
- *   <li>The site keeps its template, its position, its phase, its fences and its scaffolding. After a load, the site
- *       makes a new plan from the blocks of the level: the blocks in place give no steps.</li>
+ *   <li>The site keeps its template, its position, its phase, its fences, its scaffolding and the positions of the
+ *       blocks of its plans (see {@link #isWallTop}). After a load, the site makes a new plan from the blocks of the
+ *       level: the blocks in place give no steps. For the new plan, the blocks of the plans before it are blocks of the
+ *       plan (see {@link ConstructionPlanner#isWallTop}).</li>
  *   <li>The builders take the materials of the blocks of the plan from the stock of the village (see
- *       {@link SiteMaterials}). The fences and the scaffolding use no materials. A removed block drops no item.</li>
+ *       {@link SiteMaterials}). The fences and the scaffolding use no materials. A removed block drops no item in the
+ *       level: the village keeps its drops as items of the economy (see {@link #removedItems}).</li>
  *   <li>A repair site (see {@link VillageRepairs}) builds only some positions of the structure pieces of its village:
  *       the damaged blocks. Its box is the box of these positions.</li>
  *   <li>At the end of a construction site, the repairs of the village keep the blocks of its box (see
@@ -137,6 +149,13 @@ public final class BuilderSite {
     private static final double FLOOR_MARGIN = 0.25;
     /** A scaffolding column has this number of blocks at most. */
     private static final int MAX_COLUMN = 64;
+    /** The height of the space of an entity on the top of a column, in blocks. */
+    private static final int ENTITY_SPACE = 3;
+    /**
+     * The search of a way from the ground on the blocks of the level stays for this number of ticks at most. The site
+     * tells it about the blocks of its steps, but not about the other changes of the level.
+     */
+    private static final int WAYS_TICKS = 200;
     /** The time of the head shake of a builder that says no, in ticks. */
     private static final int UNHAPPY_TICKS = 40;
     /** The site checks the quests for its materials every this number of ticks. */
@@ -219,12 +238,18 @@ public final class BuilderSite {
     private final Set<BlockPos> repairPositions;
     private Phase phase = Phase.FENCES;
     private boolean stopping;
+    /** True after the site removed the trees of its work zone (see {@link #clearTrees}). */
+    private boolean treesCleared;
     /** The steps of the work of the builders while the chunks of the site are not loaded. */
     private double pendingSteps;
     /** The fences that the site put in the level. */
     private final Set<BlockPos> fences = new LinkedHashSet<>();
     /** The scaffolding blocks that the site put in the level. */
     private final Set<BlockPos> scaffolding = new LinkedHashSet<>();
+    /** The index of the placement step of each position of the steps, with the other part of a block of two parts. */
+    private Map<BlockPos, Integer> placements = Map.of();
+    /** The index of the removal step of each position of the steps, with the other part of a block of two parts. */
+    private Map<BlockPos, Integer> removals = Map.of();
 
     @Nullable
     private BoundingBox box;
@@ -245,6 +270,17 @@ public final class BuilderSite {
     private Settlement settlement;
     private Status status = Status.STARTING;
     private boolean dirty;
+    /** The search of a way from the ground on the blocks of the level, or null before the next search. */
+    @Nullable
+    private WalkSearch ways;
+    private long waysTime;
+    /**
+     * The positions where a step of a plan of the site places a block or a fluid, with the other part of a block of
+     * two parts. Empty before the first plan of the site. A new plan after a load adds its positions: the positions of
+     * the plans before it stay. The site keeps them. A builder does not stand on the top of a new wall (see
+     * {@link #isWallTop}).
+     */
+    private Set<BlockPos> planBlocks = Set.of();
 
     BuilderSite(int id, ResourceLocation template, BlockPos origin, Rotation rotation, Mirror mirror, BlockPos heart,
             @Nullable UUID operator) {
@@ -305,6 +341,11 @@ public final class BuilderSite {
         return origin;
     }
 
+    /** The turn of the template. */
+    public Rotation rotation() {
+        return rotation;
+    }
+
     /** The position of the heart of the village of the builders. */
     public BlockPos heart() {
         return heart;
@@ -355,6 +396,21 @@ public final class BuilderSite {
         return schedule;
     }
 
+    /**
+     * The work of a villager on this site as text, for the messages of the tests: the phase, the next step of the
+     * site, and the state of the builder.
+     *
+     * @param builder the UUID of the villager
+     * @return the text
+     */
+    public String describeBuilder(UUID builder) {
+        BuilderWorker worker = workers.get(builder);
+        SiteSchedule<UUID> current = schedule;
+        String next = current == null ? "none" : current.next() + "/" + current.total();
+        return "phase " + phase + ", next step " + next + ", "
+                + (worker == null ? "not a worker" : worker.describe());
+    }
+
     @Nullable
     BuilderWorker worker(UUID builder) {
         return workers.get(builder);
@@ -401,6 +457,10 @@ public final class BuilderSite {
         }
         if (!first) {
             pause(level, Status.QUEUED);
+            return false;
+        }
+        if (!treesCleared && !clearTrees(level, village)) {
+            pause(level, Status.NOT_LOADED);
             return false;
         }
         if (pendingSteps >= 1.0) {
@@ -484,15 +544,16 @@ public final class BuilderSite {
             if (current.isApplied(i)) {
                 continue;
             }
-            BuilderMaterials.Material material = materialOf(level, i);
-            switch (material.kind()) {
-                case RARE -> {
-                    quantities.merge(material.item(), 1.0, Double::sum);
-                    rarePrices.put(material.item(), material.price());
-                }
-                case COMMON -> material.cost().forEach((item, quantity) -> quantities.merge(item, quantity,
-                        Double::sum));
-                case FREE -> {
+            for (BuilderMaterials.Material material : materialsOf(level, i, false)) {
+                switch (material.kind()) {
+                    case RARE -> {
+                        quantities.merge(material.item(), 1.0, Double::sum);
+                        rarePrices.put(material.item(), material.price());
+                    }
+                    case COMMON -> material.cost().forEach((item, quantity) -> quantities.merge(item, quantity,
+                            Double::sum));
+                    case FREE -> {
+                    }
                 }
             }
         }
@@ -512,22 +573,46 @@ public final class BuilderSite {
         return needs;
     }
 
-    /** The material of a step: the block of a placement of the plan. The other steps use no materials. */
-    private BuilderMaterials.Material materialOf(ServerLevel level, int index) {
+    /**
+     * The materials of a step: the items of the block state of a placement of the plan (see
+     * {@link BuilderMaterials#placement}). The other steps use no materials. A repair that replants a crop with no seeds
+     * in the stock uses no materials when the setting allows it (see {@link VillageRepairs#isFreeReplant}). The block in place counts only when no
+     * removal step of the plan removes it before the placement: else the placement goes on air.
+     *
+     * @param level    the level
+     * @param index    the index of the step
+     * @param absolute true for the cost of the state on air, with no block in place
+     */
+    private List<BuilderMaterials.Material> materialsOf(ServerLevel level, int index, boolean absolute) {
         Step step = stepAt(index);
         ConstructionRun plan = run;
         if (phase != Phase.BUILD || step.type() != StepType.PLACE || plan == null
                 || (isRepair() && WorldConfig.CONSTRUCTION_FREE_REPAIRS.get())) {
-            return BuilderMaterials.Material.NONE;
+            return List.of();
         }
-        return plan.state(step.state())
-                .map(state -> BuilderMaterials.of(level.getServer(), state.getBlock().asItem()))
-                .orElse(BuilderMaterials.Material.NONE);
+        BlockPos pos = BlockKinds.toBlockPos(step.pos());
+        Integer removal = removals.get(pos);
+        boolean removed = absolute || (removal != null && removal < index && !schedule().isApplied(removal));
+        BlockState current = removed ? Blocks.AIR.defaultBlockState() : level.getBlockState(pos);
+        return plan.state(step.state()).map(state -> {
+            List<BuilderMaterials.Material> list = BuilderMaterials.placement(level, pos, state, current);
+            return isRepair() && VillageRepairs.isFreeReplant(state, materials.inStock(list, settlement))
+                    ? List.<BuilderMaterials.Material>of() : list;
+        }).orElse(List.of());
+    }
+
+    /**
+     * True if the village keeps the items of a change at a position: a village with an economy, out of the fences and
+     * the scaffolding of the site, and not a repair with free materials.
+     */
+    private boolean keepsItems(BlockPos pos) {
+        return settlement != null && !fences.contains(pos) && !scaffolding.contains(pos)
+                && !(isRepair() && WorldConfig.CONSTRUCTION_FREE_REPAIRS.get());
     }
 
     /** True if the stock of the village has the materials of a step (see {@link SiteMaterials}). */
     boolean hasMaterials(ServerLevel level, int index) {
-        return materials.has(materialOf(level, index), settlement, level.getGameTime());
+        return materials.has(materialsOf(level, index, false), settlement, level.getGameTime());
     }
 
     /** The items that the builders wait for now, by item id. */
@@ -733,6 +818,31 @@ public final class BuilderSite {
         return best;
     }
 
+    /**
+     * Removes the trees of the work zone once, before the fences: the box, the band of the builders and the ring of
+     * fences, from {@link WorkZone#BELOW} layers below the box to {@link WorkZone#ABOVE} layers above it (see
+     * {@link VillageClearing#clearSite}). The trees of a free plot stay until a site uses the plot. A repair site and a
+     * site after its fences remove no tree.
+     *
+     * @return false while a chunk of the clearing is not ready
+     */
+    private boolean clearTrees(ServerLevel level, VillageHeartBlockEntity village) {
+        WorkZone current = zone;
+        if (!isRepair() && phase == Phase.FENCES && current != null) {
+            BoundingBox ring = new BoundingBox(current.ringMinX(), current.minY() - WorkZone.BELOW, current.ringMinZ(),
+                    current.ringMaxX(), current.maxY() + WorkZone.ABOVE, current.ringMaxZ());
+            Optional<Integer> removed = VillageClearing.clearSite(level, heart,
+                    village.repairReference(level).orElse(null), ring);
+            if (removed.isEmpty()) {
+                return false;
+            }
+            FolkholdWorld.LOGGER.debug("Builder site {}: {} blocks of trees removed", id, removed.get());
+        }
+        treesCleared = true;
+        dirty = true;
+        return true;
+    }
+
     /** Makes the steps of the current phase. */
     private void prepare(ServerLevel level) {
         switch (phase) {
@@ -777,36 +887,88 @@ public final class BuilderSite {
 
     /** The plan of the structure, from the blocks of the level now. */
     private void prepareBuild(ServerLevel level) {
-        Target target;
-        if (repairReference != null) {
-            target = repairTarget(level, repairReference);
-        } else {
-            Optional<StructureTemplate> found = level.getStructureManager().get(template);
-            if (found.isEmpty()) {
-                setSteps(List.of(), true, null);
-                return;
-            }
-            target = ConstructionTargets.fromTemplate(level, found.get(), origin,
-                    GhostPlacement.settings(rotation, mirror));
+        Optional<Plan> found = plan(level);
+        if (found.isEmpty()) {
+            setSteps(List.of(), true, null);
+            return;
         }
-        Plan plan = ConstructionPlanner.plan(target, ConstructionTargets.view(level), reach);
+        Plan plan = found.get();
+        Set<BlockPos> placed = new HashSet<>(planBlocks);
+        placed.addAll(placedPositions(plan.steps()));
+        planBlocks = Set.copyOf(placed);
+        // The tops of the walls change with the blocks of the plan: the next search reads them again.
+        ways = null;
+        dirty = true;
         FolkholdWorld.LOGGER.debug("Builder site {}: plan of {} steps with {} warnings", id, plan.steps().size(),
                 plan.warnings().size());
         setSteps(plan.steps(), true, new ConstructionRun(level, plan, 1));
     }
 
     /**
+     * The plan of the structure from the blocks of the level now. The blocks of the plans of the site before it are
+     * blocks of the plan (see {@link #planBlocks}): a builder does not stand on the top of a wall that the site built
+     * before a load.
+     *
+     * @param level the level of the site
+     * @return the plan, or empty when the template of the site is not found
+     */
+    public Optional<Plan> plan(ServerLevel level) {
+        Target target;
+        if (repairReference != null) {
+            target = repairTarget(level, repairReference);
+        } else {
+            Optional<StructureTemplate> found = level.getStructureManager().get(template);
+            if (found.isEmpty()) {
+                return Optional.empty();
+            }
+            target = ConstructionTargets.fromTemplate(level, found.get(), origin,
+                    GhostPlacement.settings(rotation, mirror));
+        }
+        Set<BuildPos> placedBefore = new HashSet<>();
+        for (BlockPos pos : planBlocks) {
+            placedBefore.add(BlockKinds.toBuildPos(pos));
+        }
+        return Optional.of(ConstructionPlanner.plan(target, ConstructionTargets.view(level), reach, placedBefore));
+    }
+
+    /**
+     * The positions where the steps of a plan place a block or a fluid, with the other part of a block of two parts:
+     * the blocks that the plan put (see {@link ConstructionPlanner}).
+     */
+    private static Set<BlockPos> placedPositions(List<Step> steps) {
+        Set<BlockPos> positions = new HashSet<>();
+        for (Step step : steps) {
+            if (step.type() == StepType.PLACE || step.type() == StepType.ADD_FLUID) {
+                positions.add(BlockKinds.toBlockPos(step.pos()));
+                step.partner().ifPresent(partner -> positions.add(BlockKinds.toBlockPos(partner)));
+            }
+        }
+        return Set.copyOf(positions);
+    }
+
+    /**
      * The target of a repair site: the blocks of the structure pieces of the village at the damaged positions. A piece
-     * replaces the blocks of the pieces before it.
+     * replaces the blocks of the pieces before it. The palisades come after the template pieces, and the surface of
+     * the streets last. A crop is a young crop (see {@link VillageRepairs#replanted}).
      */
     private Target repairTarget(ServerLevel level, VillageReference reference) {
         Map<BuildPos, BuildBlock> blocks = new HashMap<>();
         for (VillageReference.Piece piece : reference.pieces()) {
             level.getStructureManager().get(piece.template()).ifPresent(found -> blocks.putAll(
                     ConstructionTargets.fromTemplate(level, found, piece.origin(),
-                            GhostPlacement.settings(piece.rotation(), Mirror.NONE), repairPositions::contains)
-                            .blocks()));
+                            GhostPlacement.settings(piece.rotation(), Mirror.NONE), repairPositions::contains,
+                            VillageRepairs::replanted).blocks()));
         }
+        reference.palisadeBlocks().forEach((pos, state) -> {
+            if (repairPositions.contains(pos)) {
+                blocks.put(BlockKinds.toBuildPos(pos), BlockKinds.describe(pos, state, Optional.empty()));
+            }
+        });
+        reference.streets().forEach((pos, state) -> {
+            if (repairPositions.contains(pos)) {
+                blocks.putIfAbsent(BlockKinds.toBuildPos(pos), BlockKinds.describe(pos, state, Optional.empty()));
+            }
+        });
         return new Target(blocks);
     }
 
@@ -846,6 +1008,20 @@ public final class BuilderSite {
         steps = List.copyOf(list);
         run = newRun;
         schedule = new SiteSchedule<>(steps.size(), ordered);
+        Map<BlockPos, Integer> found = new HashMap<>();
+        Map<BlockPos, Integer> removed = new HashMap<>();
+        for (int i = 0; i < steps.size(); i++) {
+            Step step = steps.get(i);
+            Map<BlockPos, Integer> target = step.type() == StepType.PLACE ? found
+                    : step.type() == StepType.REMOVE ? removed : null;
+            if (target != null) {
+                target.put(BlockKinds.toBlockPos(step.pos()), i);
+                int index = i;
+                step.partner().ifPresent(partner -> target.put(BlockKinds.toBlockPos(partner), index));
+            }
+        }
+        placements = Map.copyOf(found);
+        removals = Map.copyOf(removed);
     }
 
     /**
@@ -867,6 +1043,9 @@ public final class BuilderSite {
         steps = null;
         run = null;
         schedule = null;
+        placements = Map.of();
+        removals = Map.of();
+        ways = null;
         dirty = true;
         return true;
     }
@@ -938,10 +1117,10 @@ public final class BuilderSite {
     /**
      * True if a builder can work on a step from where it is. The builder stands on a floor, and the block of the step
      * is in its reach zone. The builder is not in the blocks of the step or on them, and not in the blocks of the
-     * steps before it that wait.
+     * steps before it that wait. It is not in a scaffolding block: another builder can climb the column.
      */
     boolean canWorkFrom(ServerLevel level, Villager villager, int index) {
-        if (schedule == null || !villager.onGround()) {
+        if (schedule == null || !villager.onGround() || isScaffolding(level, villager.blockPosition())) {
             return false;
         }
         BlockPos target = reachTarget(level, index);
@@ -958,40 +1137,112 @@ public final class BuilderSite {
         return true;
     }
 
+    /** The position to stand of the plan for a step, or empty: a step of the scaffolding has no such position. */
+    Optional<BlockPos> plannedStand(int index) {
+        return stepAt(index).stand().map(BlockKinds::toBlockPos);
+    }
+
     /**
      * The position where a builder stands for a step: the position of the plan if it is free. Else, the free position
-     * nearest to the builder, with the block of the step in its reach zone.
+     * nearest to the builder with the block of the step in its reach zone, and with a way from the ground (see
+     * {@link WalkSearch}). A position with a clear way comes before a position with a way over the top of a new wall.
+     * On a scaffolding column, the way goes to the bottom of the column. When the step can apply and no free position
+     * has a way, it is the nearest free position: the builder goes there directly (see {@link BuilderWorker}).
      *
-     * @return the position, or null with no free position
+     * @return the position, or null with no such position
      */
     @Nullable
     BlockPos standFor(ServerLevel level, int index, Villager villager) {
-        Optional<BlockPos> planned = stepAt(index).stand().map(BlockKinds::toBlockPos);
+        Optional<BlockPos> planned = plannedStand(index);
         if (planned.isPresent() && isStandFor(level, planned.get(), index)) {
             return planned.get();
         }
         BlockPos target = reachTarget(level, index);
-        BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
+        List<BlockPos> free = new ArrayList<>();
         int horizontal = reach.horizontal();
         for (int dy = -reach.above(); dy <= reach.below(); dy++) {
             for (int dx = -horizontal; dx <= horizontal; dx++) {
                 for (int dz = -horizontal; dz <= horizontal; dz++) {
                     BlockPos feet = target.offset(dx, dy, dz);
-                    double distance = feet.distToCenterSqr(villager.position());
-                    if (distance < bestDistance && isStandFor(level, feet, index)) {
-                        best = feet;
-                        bestDistance = distance;
+                    if (isStandFor(level, feet, index)) {
+                        free.add(feet);
                     }
                 }
             }
         }
-        return best;
+        if (free.isEmpty()) {
+            return null;
+        }
+        free.sort(Comparator.comparingDouble(feet -> feet.distToCenterSqr(villager.position())));
+        BlockPos overWall = null;
+        for (BlockPos feet : free) {
+            Way way = way(level, feet);
+            if (way == Way.CLEAR) {
+                return feet;
+            }
+            if (way == Way.OVER_WALL && overWall == null) {
+                overWall = feet;
+            }
+        }
+        if (overWall != null) {
+            return overWall;
+        }
+        return schedule().canApply(index) ? free.get(0) : null;
+    }
+
+    /**
+     * True if a builder can go from the ground to a position to stand, on a clear way or over the top of a new wall
+     * (see {@link #way}).
+     */
+    boolean hasWay(ServerLevel level, BlockPos feet) {
+        return way(level, feet) != Way.NONE;
+    }
+
+    /**
+     * The way from the ground to a position to stand, on the blocks of the level now (see {@link WalkSearch}). The
+     * search first looks for a clear way, then for a way over the top of a new wall (see {@link #isWallTop}). On a
+     * scaffolding column, the way goes to the bottom of the column.
+     */
+    Way way(ServerLevel level, BlockPos feet) {
+        return ways(level).way(BlockKinds.toBuildPos(feet));
+    }
+
+    /**
+     * The search of a way from the ground on the blocks of the level now, in the box of the site and the reach around
+     * it. The search stays for some ticks: each applied step tells it about its blocks (see {@link #apply}).
+     */
+    private WalkSearch ways(ServerLevel level) {
+        WalkSearch current = ways;
+        BoundingBox bounds = box;
+        long now = level.getGameTime();
+        if (current == null || now - waysTime > WAYS_TICKS) {
+            List<BuildPos> corners = bounds == null ? List.of()
+                    : List.of(new BuildPos(bounds.minX(), bounds.minY(), bounds.minZ()),
+                            new BuildPos(bounds.maxX(), bounds.maxY(), bounds.maxZ()));
+            current = WalkSearch.around(corners, reach,
+                    pos -> BlockKinds.walk(level.getBlockState(BlockKinds.toBlockPos(pos))),
+                    pos -> isScaffolding(level, BlockKinds.toBlockPos(pos)),
+                    pos -> isWallTop(level, BlockKinds.toBlockPos(pos)));
+            ways = current;
+            waysTime = now;
+        }
+        return current;
+    }
+
+    /**
+     * The position near which a builder waits for a step when no position to stand is free (see {@link #standFor}).
+     * For a position of the plan, it is the ground below the position: the bottom of its scaffolding column. Else, it
+     * is the block of the step, or the bottom of its column for a step of the scaffolding.
+     */
+    BlockPos waitPos(ServerLevel level, int index) {
+        return plannedStand(index).map(planned -> groundBelow(level, planned))
+                .orElseGet(() -> reachTarget(level, index));
     }
 
     /**
      * True if a builder can stand at a position for a step. The position is free (see {@link #isStandFree}) and not in
-     * the blocks of the step. The block of the step is in the reach zone.
+     * the blocks of the step. The block of the step is in the reach zone. The block below is not the top of a new wall
+     * (see {@link #isWallTop}).
      */
     boolean isStandFor(ServerLevel level, BlockPos feet, int index) {
         if (!reach.contains(BlockKinds.toBuildPos(feet), BlockKinds.toBuildPos(reachTarget(level, index)))) {
@@ -1001,7 +1252,37 @@ public final class BuilderSite {
         if (busy.contains(feet) || busy.contains(feet.above()) || busy.contains(feet.below())) {
             return false;
         }
-        return isStandFree(level, feet);
+        return isStandFree(level, feet) && !isWallTop(level, feet.below());
+    }
+
+    /**
+     * True if a block is the top of a new wall: a builder does not stand on it, and walks on it only when no other way
+     * is near (see {@link BuilderNavigation}). The rule is the rule of the plan (see
+     * {@link ConstructionPlanner#isWallTop}), with the same inputs: the blocks of the plans of the site (see
+     * {@link #planBlocks}), and the floors of the level now (see {@link #isPlanFloor}). Examples: the top of a wall of
+     * 1 block, the top of a pillar of the plan. The floor of a house on the ground and the floor of an upper storey are
+     * not the top of a wall.
+     *
+     * @param level the blocks of the level, or the blocks of a search of a path
+     * @param block the position of the block
+     */
+    public boolean isWallTop(BlockGetter level, BlockPos block) {
+        Set<BlockPos> blocks = planBlocks;
+        if (!blocks.contains(block)) {
+            return false;
+        }
+        return ConstructionPlanner.isWallTop(BlockKinds.toBuildPos(block),
+                pos -> blocks.contains(BlockKinds.toBlockPos(pos)),
+                pos -> isPlanFloor(level, BlockKinds.toBlockPos(pos)));
+    }
+
+    /**
+     * True if a builder can stand on a block for the plan: the scaffolding, or a block with a sturdy top face (see
+     * {@link BlockKinds#isFloor}).
+     */
+    private static boolean isPlanFloor(BlockGetter level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        return state.is(Blocks.SCAFFOLDING) || BlockKinds.isFloor(state);
     }
 
     /**
@@ -1028,12 +1309,15 @@ public final class BuilderSite {
         return !shape.isEmpty() && Math.abs(shape.max(Direction.Axis.Y) - 1.0) < 1.0E-6;
     }
 
-    /** True if another builder of the site is up in the column of a scaffolding block. */
+    /**
+     * True if another builder of the site climbs or goes down the column of a scaffolding block, or is 1 block or more
+     * above its bottom. Two builders at the bottom do not wait for each other: the first one climbs.
+     */
     boolean isColumnTaken(ServerLevel level, BlockPos base, BuilderWorker self) {
         for (BuilderWorker other : workers.values()) {
             Villager villager = other == self ? null : villager(level, other);
             if (villager != null && villager.getBlockX() == base.getX() && villager.getBlockZ() == base.getZ()
-                    && villager.getY() > base.getY() + 0.5) {
+                    && (other.isOnTheWay() || villager.getY() >= base.getY() + 1.0)) {
                 return true;
             }
         }
@@ -1052,17 +1336,35 @@ public final class BuilderSite {
         };
     }
 
-    /** The living entities in the blocks of a step that puts a block with a collision box. */
+    /**
+     * The living entities that block a step: the entities in the blocks of a step that puts a block with a collision
+     * box, and the entities on the column of a step that removes a scaffolding block. An entity on the column is in the
+     * removed block or in a block of the column above it, or on the top of the column: it falls when the block goes. An
+     * entity on the floor of the removed block does not fall.
+     */
     private List<LivingEntity> blockers(ServerLevel level, int index) {
+        if (stepAt(index).type() == StepType.REMOVE_SCAFFOLDING) {
+            BlockPos cell = BlockKinds.toBlockPos(stepAt(index).pos());
+            BlockPos top = cell;
+            for (int i = 0; i < MAX_COLUMN && isScaffolding(level, top.above()); i++) {
+                top = top.above();
+            }
+            return level.getEntitiesOfClass(LivingEntity.class, new AABB(cell.getX(), cell.getY(), cell.getZ(),
+                    cell.getX() + 1, top.getY() + ENTITY_SPACE, cell.getZ() + 1),
+                    entity -> canBlock(entity) && entity.getY() > cell.getY() + FLOOR_MARGIN);
+        }
         if (!placesSolidBlock(level, index)) {
             return List.of();
         }
         List<LivingEntity> found = new ArrayList<>();
         for (BlockPos cell : cells(index)) {
-            found.addAll(level.getEntitiesOfClass(LivingEntity.class, new AABB(cell),
-                    entity -> entity.isAlive() && !entity.isSpectator() && !(entity instanceof ArmorStand)));
+            found.addAll(level.getEntitiesOfClass(LivingEntity.class, new AABB(cell), BuilderSite::canBlock));
         }
         return found;
+    }
+
+    private static boolean canBlock(LivingEntity entity) {
+        return entity.isAlive() && !entity.isSpectator() && !(entity instanceof ArmorStand);
     }
 
     /** True if an entity is in the blocks of a step: the step waits. */
@@ -1072,12 +1374,19 @@ public final class BuilderSite {
 
     /**
      * Moves the entities in the blocks of a step to a free position near them. A player does not move: the builders do
-     * not work while a player is in the work zone.
+     * not work while a player is in the work zone. A builder on the column of a removed scaffolding block goes down the
+     * column.
      */
     void moveBlockersAside(ServerLevel level, int index) {
         Set<BlockPos> busy = new HashSet<>(cells(index));
+        boolean removal = stepAt(index).type() == StepType.REMOVE_SCAFFOLDING;
         for (LivingEntity entity : blockers(level, index)) {
             if (entity instanceof Player) {
+                continue;
+            }
+            BuilderWorker builder = workers.get(entity.getUUID());
+            if (removal && builder != null && entity instanceof Villager villager) {
+                builder.leaveColumn(level, villager);
                 continue;
             }
             BlockPos aside = asidePos(level, entity.blockPosition(), busy);
@@ -1085,9 +1394,8 @@ public final class BuilderSite {
                 FolkholdWorld.LOGGER.debug("Builder site {}: {} moves out of step {} to {}", id, entity, index, aside);
                 teleport(entity, aside);
             }
-            BuilderWorker worker = workers.get(entity.getUUID());
-            if (worker != null) {
-                worker.forgetPosition();
+            if (builder != null) {
+                builder.forgetPosition();
             }
         }
     }
@@ -1150,11 +1458,20 @@ public final class BuilderSite {
                     current.markApplied(index);
                     return Applied.APPLIED;
                 }
-                if (!materials.take(materialOf(level, index), settlement, level.getServer(), level.getGameTime())) {
+                if (!materials.take(materialsOf(level, index, false), settlement, level.getServer(), level.getGameTime())) {
                     return Applied.WAITING;
                 }
                 dirty = true;
+                BuilderMaterials.Removal removed = removedItems(level, step, pos);
+                Map<String, Double> surplus = step.type() == StepType.PLACE && keepsItems(pos)
+                        ? plan.state(step.state()).map(state -> BuilderMaterials.surplus(level, pos, state))
+                                .orElse(Map.of())
+                        : Map.of();
                 plan.applyNext();
+                materials.keepContents(removed.contents(), settlement, level.getServer())
+                        .forEach(content -> BuilderMaterials.drop(level, content.pos(), content.stack()));
+                materials.keep(removed.items(), settlement, level.getServer());
+                materials.keep(surplus, settlement, level.getServer());
                 if (step.type() == StepType.PLACE_SCAFFOLDING) {
                     dirty |= scaffolding.add(pos);
                 } else if (step.type() == StepType.REMOVE_SCAFFOLDING) {
@@ -1178,7 +1495,43 @@ public final class BuilderSite {
             effects(level, pos, before);
         }
         current.markApplied(index);
+        WalkSearch search = ways;
+        if (search != null) {
+            for (BlockPos cell : cells(index)) {
+                search.blockChanged(BlockKinds.toBuildPos(cell));
+            }
+        }
         return Applied.APPLIED;
+    }
+
+    /**
+     * The items of the economy that the village keeps from the block of a step, before the step applies (see
+     * {@link BuilderMaterials#removedItems}). Only a removal step gives items. The contents of a removed container go
+     * into the stock, or fall in the level.
+     *
+     * <ul>
+     *   <li>The fences and the scaffolding of the site give nothing.</li>
+     *   <li>A village with no economy and a repair with free materials keep nothing: all the contents fall.</li>
+     *   <li>A removal also keeps nothing when the block of the plan at this position uses no materials on air: a
+     *       block of the tag {@link BuilderMaterials#FREE}, or a block with no item and no stable drops. Else a block
+     *       that changes again and again at such a position gives items from nothing at each repair, because the
+     *       placement costs nothing. The other placements cost the items that the removal of the same block gives
+     *       (see {@link BuilderMaterials#itemsOf}), for example a flower pot and a plant. The test uses the cost on
+     *       air: the plan can remove a block that is equal to its target and place it again, for example a torch on
+     *       a removed support or a sign with other text.</li>
+     * </ul>
+     */
+    private BuilderMaterials.Removal removedItems(ServerLevel level, Step step, BlockPos pos) {
+        if (step.type() != StepType.REMOVE) {
+            return BuilderMaterials.Removal.NONE;
+        }
+        Integer placement = placements.get(pos);
+        boolean keep = keepsItems(pos) && (placement == null || !materialsOf(level, placement, true).isEmpty());
+        Block block = level.getBlockState(pos).getBlock();
+        List<BlockPos> positions = new ArrayList<>(List.of(pos));
+        step.partner().map(BlockKinds::toBlockPos).filter(other -> level.getBlockState(other).is(block))
+                .ifPresent(positions::add);
+        return BuilderMaterials.removedItems(level, positions, keep);
     }
 
     /** Puts a fence at a position that is still free. The fence connects to the fences next to it. */
@@ -1244,7 +1597,9 @@ public final class BuilderSite {
 
     /**
      * The end of the site. The builders leave. A site that did not finish removes its fences and its scaffolding now.
-     * The operator that placed the site gets the end of the construction: its client removes the ghost.
+     * After a finished site, the heart scans the village again: a new building can give places (see
+     * {@link VillageHeartBlockEntity#requestScan()}). The operator that placed the site gets the end of the
+     * construction: its client removes the ghost.
      */
     private void end(ServerLevel level, boolean finished) {
         for (BuilderWorker worker : workers.values()) {
@@ -1257,11 +1612,14 @@ public final class BuilderSite {
         if (!finished) {
             removeBlocks(level);
         }
-        Settlement village = ReadyChunks.isReady(level, heart)
-                && level.getBlockEntity(heart) instanceof VillageHeartBlockEntity found
-                ? economyOf(level, found) : null;
+        VillageHeartBlockEntity heartEntity = ReadyChunks.isReady(level, heart)
+                && level.getBlockEntity(heart) instanceof VillageHeartBlockEntity found ? found : null;
+        Settlement village = heartEntity != null ? economyOf(level, heartEntity) : null;
         if (village != null) {
             materials.giveBack(village, level.getServer());
+        }
+        if (finished && heartEntity != null) {
+            heartEntity.requestScan();
         }
         materials.withdrawOffers(level.getServer());
         if (repairReference != null) {
@@ -1328,17 +1686,36 @@ public final class BuilderSite {
         return feet.immutable();
     }
 
-    /** Moves an entity to a position directly, with no fall damage. */
+    /**
+     * Moves an entity to a position directly, with no fall damage. The entity stops at the position: it keeps no speed,
+     * and a mob keeps no path, no walk input and no jump (see {@link #stopMoving}). Else an entity that walks or jumps
+     * at this time moves on from the position, for example off the top of a scaffolding column.
+     */
     static void teleport(LivingEntity entity, BlockPos feet) {
         entity.teleportTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
         entity.resetFallDistance();
+        entity.setDeltaMovement(Vec3.ZERO);
         if (entity instanceof Mob mob) {
-            mob.getNavigation().stop();
+            stopMoving(mob);
         }
     }
 
+    /**
+     * Stops the walk of a mob where it is: its path, its walk input and its jump. The move control of a mob that jumps
+     * keeps the walk input until the mob is on the ground again. A builder that climbs or goes down a column is not on
+     * the ground. If nothing stops the walk, the builder walks on in the air, for example above the top of the column.
+     */
+    static void stopMoving(Mob mob) {
+        mob.getNavigation().stop();
+        // A wanted position at the mob, with no speed: the next tick of the move control sets the walk input to 0.
+        mob.getMoveControl().setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0.0);
+        mob.setJumping(false);
+        mob.setZza(0.0F);
+        mob.setXxa(0.0F);
+    }
+
     /** The data of the site in the saved data of the level. */
-    CompoundTag save() {
+    public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putInt("Id", id);
         tag.putString("Template", template.toString());
@@ -1351,23 +1728,17 @@ public final class BuilderSite {
         }
         tag.putString("Phase", phase.serializedName());
         tag.putBoolean("Stopping", stopping);
+        tag.putBoolean("TreesCleared", treesCleared);
         if (pendingSteps > 0.0) {
             tag.putDouble("PendingSteps", pendingSteps);
         }
         tag.putLongArray("Fences", fences.stream().mapToLong(BlockPos::asLong).toArray());
         tag.putLongArray("Scaffolding", scaffolding.stream().mapToLong(BlockPos::asLong).toArray());
+        // The positions go in a fixed order: the same site gives the same data.
+        tag.putLongArray("PlanBlocks", planBlocks.stream().mapToLong(BlockPos::asLong).sorted().toArray());
         tag.put("Materials", materials.save());
         if (repairReference != null) {
-            CompoundTag repair = new CompoundTag();
-            ListTag pieces = new ListTag();
-            for (VillageReference.Piece piece : repairReference.pieces()) {
-                CompoundTag pieceTag = new CompoundTag();
-                pieceTag.putString("Template", piece.template().toString());
-                pieceTag.putLong("Origin", piece.origin().asLong());
-                pieceTag.putString("Rotation", piece.rotation().name());
-                pieces.add(pieceTag);
-            }
-            repair.put("Pieces", pieces);
+            CompoundTag repair = repairReference.save();
             repair.putLongArray("Positions", repairPositions.stream().mapToLong(BlockPos::asLong).toArray());
             tag.put("Repair", repair);
         }
@@ -1380,7 +1751,7 @@ public final class BuilderSite {
      * @param tag the data of the site
      * @return the site, or empty for data that is not valid
      */
-    static Optional<BuilderSite> load(CompoundTag tag) {
+    public static Optional<BuilderSite> load(CompoundTag tag) {
         ResourceLocation template = ResourceLocation.tryParse(tag.getString("Template"));
         Optional<Rotation> rotation = enumValue(Rotation.class, tag.getString("Rotation"));
         Optional<Mirror> mirror = enumValue(Mirror.class, tag.getString("Mirror"));
@@ -1394,29 +1765,20 @@ public final class BuilderSite {
         Set<BlockPos> positions = new LinkedHashSet<>();
         if (tag.contains("Repair", Tag.TAG_COMPOUND)) {
             CompoundTag repair = tag.getCompound("Repair");
-            List<VillageReference.Piece> pieces = new ArrayList<>();
-            ListTag pieceList = repair.getList("Pieces", Tag.TAG_COMPOUND);
-            for (int i = 0; i < pieceList.size(); i++) {
-                CompoundTag pieceTag = pieceList.getCompound(i);
-                ResourceLocation pieceTemplate = ResourceLocation.tryParse(pieceTag.getString("Template"));
-                Optional<Rotation> pieceRotation = enumValue(Rotation.class, pieceTag.getString("Rotation"));
-                if (pieceTemplate != null && pieceRotation.isPresent()) {
-                    pieces.add(new VillageReference.Piece(pieceTemplate, BlockPos.of(pieceTag.getLong("Origin")),
-                            pieceRotation.get()));
-                }
-            }
             for (long pos : repair.getLongArray("Positions")) {
                 positions.add(BlockPos.of(pos));
             }
-            if (pieces.isEmpty() || positions.isEmpty()) {
+            reference = VillageReference.load(BuiltInRegistries.BLOCK.asLookup(), repair).orElse(null);
+            if (reference == null || positions.isEmpty()) {
                 return Optional.empty();
             }
-            reference = new VillageReference(pieces);
         }
         BuilderSite site = new BuilderSite(tag.getInt("Id"), template, BlockPos.of(tag.getLong("Origin")),
                 rotation.get(), mirror.get(), BlockPos.of(tag.getLong("Heart")), operator, reference, positions);
         site.phase = phase.get();
         site.stopping = tag.getBoolean("Stopping");
+        // With no flag in the data, the site clears its trees only before its fences.
+        site.treesCleared = tag.contains("TreesCleared") ? tag.getBoolean("TreesCleared") : site.phase != Phase.FENCES;
         site.pendingSteps = Math.clamp(tag.getDouble("PendingSteps"), 0.0, MAX_PENDING_STEPS);
         for (long pos : tag.getLongArray("Fences")) {
             site.fences.add(BlockPos.of(pos));
@@ -1424,6 +1786,8 @@ public final class BuilderSite {
         for (long pos : tag.getLongArray("Scaffolding")) {
             site.scaffolding.add(BlockPos.of(pos));
         }
+        site.planBlocks = Arrays.stream(tag.getLongArray("PlanBlocks")).mapToObj(BlockPos::of)
+                .collect(Collectors.toUnmodifiableSet());
         site.materials.load(tag.getCompound("Materials"));
         return Optional.of(site);
     }

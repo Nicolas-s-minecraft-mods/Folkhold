@@ -18,6 +18,8 @@ import java.util.function.ToDoubleFunction;
  *       village does not offer two deliveries of the same item.</li>
  *   <li>The emerald reward is the local price of the items, multiplied by a bonus. A quest with a large reward is
  *       only for the friend tier and the ally tier.</li>
+ *   <li>The tier of a quest comes from its base reward: the reward with the bonus of the server config. The factors
+ *       of a definition, of a special reward and of a difficulty do not change the tier (see {@link #minTier}).</li>
  * </ul>
  */
 public final class QuestGenerator {
@@ -55,6 +57,69 @@ public final class QuestGenerator {
     }
 
     /**
+     * The maximum number of the offers of a village for one need: the share of its offers, rounded, and 1 at least.
+     * Thus the list of a village with several offers has several types of quests.
+     *
+     * @param offers the number of offers of the village (see {@link #offerCount})
+     * @param share  the maximum share of one need (0 to 1)
+     * @return the maximum number of offers of one need
+     */
+    public static int needCap(int offers, double share) {
+        return Math.max(1, (int) Math.round(offers * Math.max(0.0, Math.min(1.0, share))));
+    }
+
+    /**
+     * The number of monsters of a hunt of a village: 3, plus 1 for each 5 levels, and not more than the maximum
+     * count of the settings.
+     *
+     * @param level    the level of the village
+     * @param settings the settings
+     * @return the number of monsters
+     */
+    public static int huntCount(int level, Settings settings) {
+        return Math.min(settings.maxDeliveryCount(), 3 + Math.max(0, level) / 5);
+    }
+
+    /**
+     * Makes a hunt quest: kill monsters near the village. The emerald reward is the number of monsters × the bonus of
+     * the settings.
+     *
+     * @param settlementId the id of the village
+     * @param factionId    the id of its faction
+     * @param level        the level of the village
+     * @param now          the game time
+     * @param settings     the settings
+     * @param definitionId the id of the definition of the quest
+     * @return the quest
+     */
+    public static Quest hunt(String settlementId, String factionId, int level, long now, Settings settings,
+            String definitionId) {
+        return hunt(settlementId, factionId, level, now, settings, definitionId, settings.deliveryBonus());
+    }
+
+    /**
+     * Makes a hunt quest, with the bonus of the tier (see {@link #hunt(String, String, int, long, Settings, String)}).
+     *
+     * @param settlementId the id of the village
+     * @param factionId    the id of its faction
+     * @param level        the level of the village
+     * @param now          the game time
+     * @param settings     the settings
+     * @param definitionId the id of the definition of the quest
+     * @param tierBonus    the bonus of the base reward that gives the tier: the bonus of the server config
+     * @return the quest
+     */
+    public static Quest hunt(String settlementId, String factionId, int level, long now, Settings settings,
+            String definitionId, double tierBonus) {
+        int count = huntCount(level, settings);
+        long reward = Math.max(1, Math.round(count * settings.deliveryBonus()));
+        return new Quest(UUID.randomUUID().toString(), QuestKind.HUNT, settlementId, factionId, Quest.MONSTERS, count,
+                reward, settings.deliveryReputation(), minTier(count, tierBonus, settings),
+                now + settings.offerLifetime(),
+                settings.deliveryDuration(), definitionId);
+    }
+
+    /**
      * The lowest reputation tier for a reward.
      *
      * @param rewardEmeralds the emerald reward
@@ -63,6 +128,19 @@ public final class QuestGenerator {
      */
     public static ReputationTier minTier(long rewardEmeralds, Settings settings) {
         return rewardEmeralds >= settings.friendRewardThreshold() ? ReputationTier.FRIEND : ReputationTier.NEUTRAL;
+    }
+
+    /**
+     * The lowest reputation tier for a base reward: a value multiplied by the base factor of the server config. The
+     * other factors of the reward (definition, special reward, difficulty) do not change the tier.
+     *
+     * @param value      the value of the quest, before the factors
+     * @param baseFactor the factor of the server config
+     * @param settings   the settings, with the threshold of the friends
+     * @return the tier of {@link #minTier(long, Settings)} for the base reward
+     */
+    public static ReputationTier minTier(double value, double baseFactor, Settings settings) {
+        return minTier(Math.max(1, Math.round(value * baseFactor)), settings);
     }
 
     /**
@@ -76,11 +154,53 @@ public final class QuestGenerator {
      * @param wanted        the maximum number of new quests
      * @param now           the game time
      * @param settings      the settings
-     * @return the new quests
+     * @return the new quests, with no definition id
      */
     public static List<Quest> deliveries(String settlementId, String factionId, Map<String, Integer> needs,
             ToDoubleFunction<String> price, Collection<String> offeredItems, int wanted, long now,
             Settings settings) {
+        return deliveries(settlementId, factionId, needs, price, offeredItems, wanted, now, settings, "");
+    }
+
+    /**
+     * Makes delivery quests of a definition for the needs of a village.
+     *
+     * @param settlementId  the id of the village
+     * @param factionId     the id of its faction
+     * @param needs         the needs: the missing quantity of each item
+     * @param price         the local price of one item
+     * @param offeredItems  the items of the deliveries that the village already offers
+     * @param wanted        the maximum number of new quests
+     * @param now           the game time
+     * @param settings      the settings
+     * @param definitionId  the id of the definition of the quests (see {@link QuestDefinition})
+     * @return the new quests
+     */
+    public static List<Quest> deliveries(String settlementId, String factionId, Map<String, Integer> needs,
+            ToDoubleFunction<String> price, Collection<String> offeredItems, int wanted, long now,
+            Settings settings, String definitionId) {
+        return deliveries(settlementId, factionId, needs, price, offeredItems, wanted, now, settings, definitionId,
+                settings.deliveryBonus());
+    }
+
+    /**
+     * Makes delivery quests of a definition for the needs of a village, with the bonus of the tier.
+     *
+     * @param settlementId  the id of the village
+     * @param factionId     the id of its faction
+     * @param needs         the needs: the missing quantity of each item
+     * @param price         the local price of one item
+     * @param offeredItems  the items of the deliveries that the village already offers
+     * @param wanted        the maximum number of new quests
+     * @param now           the game time
+     * @param settings      the settings
+     * @param definitionId  the id of the definition of the quests (see {@link QuestDefinition})
+     * @param tierBonus     the bonus of the base reward that gives the tier: the bonus of the server config
+     * @return the new quests
+     */
+    public static List<Quest> deliveries(String settlementId, String factionId, Map<String, Integer> needs,
+            ToDoubleFunction<String> price, Collection<String> offeredItems, int wanted, long now,
+            Settings settings, String definitionId, double tierBonus) {
         List<Map.Entry<String, Integer>> candidates = needs.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0 && !offeredItems.contains(entry.getKey()))
                 .sorted(Comparator.comparingDouble((Map.Entry<String, Integer> entry) ->
@@ -96,8 +216,8 @@ public final class QuestGenerator {
             double value = count * price.applyAsDouble(need.getKey());
             long reward = Math.max(1, Math.round(value * settings.deliveryBonus()));
             quests.add(new Quest(UUID.randomUUID().toString(), QuestKind.DELIVERY, settlementId, factionId,
-                    need.getKey(), count, reward, settings.deliveryReputation(), minTier(reward, settings),
-                    now + settings.offerLifetime(), settings.deliveryDuration()));
+                    need.getKey(), count, reward, settings.deliveryReputation(), minTier(value, tierBonus, settings),
+                    now + settings.offerLifetime(), settings.deliveryDuration(), definitionId));
         }
         return quests;
     }

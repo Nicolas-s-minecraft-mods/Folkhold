@@ -31,6 +31,10 @@ public final class ModItems {
     /** The items of the building signs, one for each kind. */
     public static final Map<BuildingSignKind, DeferredItem<BlockItem>> BUILDING_SIGNS = buildingSigns();
 
+    public static final DeferredItem<BlockItem> JOB_SIGN = ITEMS.registerSimpleBlockItem(ModBlocks.JOB_SIGN);
+
+    public static final DeferredItem<BlockItem> STABILIZER = ITEMS.registerSimpleBlockItem(ModBlocks.STABILIZER);
+
     private ModItems() {
     }
 
@@ -54,6 +58,8 @@ public final class ModItems {
             event.accept(QUEST_BOARD.get());
             event.accept(BRAZIER.get());
             BUILDING_SIGNS.values().forEach(item -> event.accept(item.get()));
+            event.accept(JOB_SIGN.get());
+            event.accept(STABILIZER.get());
         }
     }
 }

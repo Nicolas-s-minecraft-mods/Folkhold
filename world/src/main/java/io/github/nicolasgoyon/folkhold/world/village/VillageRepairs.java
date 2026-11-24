@@ -21,12 +21,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.neoforged.neoforge.common.util.BlockSnapshot;
@@ -39,8 +42,8 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *
  * <ul>
  *   <li>Reference: the structure pieces of the village at the generation (see {@link VillageReference}).</li>
- *   <li>Area: the positions of the pieces inside the palisade. The gates give the size of the palisade. The stairs
- *       of the gates are outside the area.</li>
+ *   <li>Area: the positions of the pieces inside the palisade, the palisade included (see
+ *       {@link VillageReference#area()}). The stairs of the gates are outside the area.</li>
  *   <li>A loaded village heart looks for the damaged blocks of its area at an interval (see
  *       {@link WorldConfig#CONSTRUCTION_REPAIR_CHECK_SECONDS}), when the village is calm, has builders and has no
  *       construction site. The comparison ignores the changes that come with the life of a village (see
@@ -50,8 +53,19 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *   <li>The damaged blocks make groups (see {@link Clusters}). The builders repair the largest group first, with a
  *       repair site (see {@link BuilderSite#repair}): fences around the work zone, materials of the stock, quests for
  *       the rare blocks.</li>
+ *   <li>The holes of the streets are damaged blocks too (see {@link StreetBlocks}). The first check records the
+ *       surface of the streets.</li>
  *   <li>After a repair, its positions wait {@link #RETRY_TICKS} ticks before a new repair: a block that does not stay
  *       in place does not start a repair at each check.</li>
+ *   <li>The land outside the palisade: the fields and the mills that the builders of the village built (see
+ *       {@link VillageLand} and {@link #landPieces}) are a part of the reference, outside the area. Their positions
+ *       are damaged with the same rules, except 2 rules: the box of their construction site does not keep their blocks,
+ *       and a block in the place of the air of a land piece is not damage (the heart does not know the blocks of the
+ *       players outside its area).</li>
+ *   <li>The crops: a missing crop or a trampled farmland is damage (see {@link RepairRules}). The age of a crop is
+ *       not. The repair puts back the farmland and a young crop (see {@link #replanted}). The seeds come from the stock
+ *       of the village. With no seeds in the stock, the repair replants the crop for free, or waits for the seeds (see
+ *       {@link #isFreeReplant}).</li>
  * </ul>
  */
 public final class VillageRepairs {
@@ -74,12 +88,13 @@ public final class VillageRepairs {
      */
     public static Optional<BuilderSite> check(ServerLevel level, VillageHeartBlockEntity heart) {
         BlockPos heartPos = heart.getBlockPos();
-        if (!WorldConfig.CONSTRUCTION_REPAIRS.get() || !VillageLayout.isScanAreaReady(level, heartPos)
+        if (!WorldConfig.CONSTRUCTION_REPAIRS.get() || !VillageLayout.isAreaReady(level, heart.scanArea(level))
                 || !BuilderSites.of(level, heartPos).isEmpty()
                 || VillageFolk.of(level, heartPos, ModProfessions.BUILDER.get()).isEmpty()) {
             return Optional.empty();
         }
-        Optional<VillageReference> reference = heart.repairReference(level);
+        Optional<VillageReference> reference = heart.repairReference(level).map(found -> withStreets(level, heart,
+                found).withPieces(landPieces(level, heart)));
         if (reference.isEmpty()) {
             return Optional.empty();
         }
@@ -97,6 +112,27 @@ public final class VillageRepairs {
     }
 
     /**
+     * The reference of a village with the surface blocks of its streets. The first call records the streets (see
+     * {@link StreetBlocks#record}). The heart keeps the reference with its streets.
+     */
+    private static VillageReference withStreets(ServerLevel level, VillageHeartBlockEntity heart,
+            VillageReference reference) {
+        if (!reference.streets().isEmpty() || reference.streetColumns().isEmpty()) {
+            return reference;
+        }
+        VillageRepairData data = VillageRepairData.get(level);
+        BlockPos heartPos = heart.getBlockPos();
+        Map<BlockPos, BlockState> streets = data.streets(heartPos).orElseGet(() -> {
+            Map<BlockPos, BlockState> recorded = StreetBlocks.record(level, reference);
+            data.setStreets(heartPos, recorded);
+            return recorded;
+        });
+        VillageReference result = reference.withStreets(streets);
+        heart.setRepairReference(result);
+        return result;
+    }
+
+    /**
      * The damaged positions of a village.
      *
      * @param level     the level
@@ -107,7 +143,47 @@ public final class VillageRepairs {
     public static Set<BlockPos> damaged(ServerLevel level, VillageHeartBlockEntity heart,
             VillageReference reference) {
         BlockPos heartPos = heart.getBlockPos();
-        int radius = areaRadius(heart);
+        Predicate<BlockPos> inArea = area(heart, reference);
+        Map<BlockPos, BlockState> expected = expectedBlocks(level, reference);
+        // The land pieces of the heart. The reference of a repair check has them too: the first piece stays.
+        Map<BlockPos, BlockState> land = expectedBlocks(level, new VillageReference(landPieces(level, heart)));
+        land.forEach(expected::putIfAbsent);
+        expected.keySet().removeIf(pos -> !inArea.test(pos) && !land.containsKey(pos));
+        VillageRepairData data = VillageRepairData.get(level);
+        List<WorkZone> zones = BuilderSites.all(level).stream().flatMap(site -> site.zone().stream()).toList();
+        long now = level.getGameTime();
+        Set<BlockPos> damaged = new LinkedHashSet<>();
+        for (Map.Entry<BlockPos, BlockState> entry : expected.entrySet()) {
+            BlockPos pos = entry.getKey();
+            boolean landOnly = !inArea.test(pos);
+            BlockState actual = level.getBlockState(pos);
+            boolean kept = landOnly
+                    ? data.isPlayerBlock(heartPos, pos) || (entry.getValue().isAir() && !actual.isAir())
+                    : data.keeps(heartPos, pos);
+            if (!pos.equals(heartPos) && !kept && !heart.isRecentlyRepaired(pos, now)
+                    && zones.stream().noneMatch(zone -> isInZone(zone, pos))
+                    && RepairRules.isDamaged(actual, entry.getValue())) {
+                damaged.add(pos);
+            }
+        }
+        for (BlockPos pos : StreetBlocks.holes(level, reference)) {
+            if (!expected.containsKey(pos) && !data.keeps(heartPos, pos) && !heart.isRecentlyRepaired(pos, now)
+                    && zones.stream().noneMatch(zone -> isInZone(zone, pos))) {
+                damaged.add(pos);
+            }
+        }
+        return damaged;
+    }
+
+    /**
+     * The blocks of the structure pieces of a village: the blocks of the templates, then the blocks of the palisade. A
+     * template piece replaces the blocks of the pieces before it, as at the generation.
+     *
+     * @param level     the level
+     * @param reference the structure pieces of the village
+     * @return the block state at each position
+     */
+    public static Map<BlockPos, BlockState> expectedBlocks(ServerLevel level, VillageReference reference) {
         Map<BlockPos, BlockState> expected = new HashMap<>();
         for (VillageReference.Piece piece : reference.pieces()) {
             Optional<StructureTemplate> template = level.getStructureManager().get(piece.template());
@@ -118,35 +194,27 @@ public final class VillageRepairs {
             for (ConstructionTargets.TemplateBlock block : blocks(level, template.get())) {
                 BlockPos pos = StructureTemplate.calculateRelativePosition(settings, block.pos())
                         .offset(piece.origin());
-                if (squareDistance(heartPos, pos) <= radius) {
-                    expected.put(pos, block.state().rotate(level, pos, settings.getRotation()));
-                }
+                expected.put(pos, block.state().rotate(level, pos, settings.getRotation()));
             }
         }
-        VillageRepairData data = VillageRepairData.get(level);
-        List<WorkZone> zones = BuilderSites.all(level).stream().flatMap(site -> site.zone().stream()).toList();
-        long now = level.getGameTime();
-        Set<BlockPos> damaged = new LinkedHashSet<>();
-        for (Map.Entry<BlockPos, BlockState> entry : expected.entrySet()) {
-            BlockPos pos = entry.getKey();
-            if (!pos.equals(heartPos) && !data.keeps(heartPos, pos) && !heart.isRecentlyRepaired(pos, now)
-                    && zones.stream().noneMatch(zone -> isInZone(zone, pos))
-                    && RepairRules.isDamaged(level.getBlockState(pos), entry.getValue())) {
-                damaged.add(pos);
-            }
-        }
-        return damaged;
+        expected.putAll(reference.palisadeBlocks());
+        return expected;
     }
 
     /**
-     * The size of the area of the repairs, around the heart: the distance of the farthest gate, on the square around
-     * the heart. The scan area of the heart is the limit (see {@link VillageLayout#SCAN_RADIUS}).
+     * The area of the repairs. A reference with an area gives it: the village inside its palisade, the palisade
+     * included. Else the area is a square around the heart, to the farthest gate: the scan area of the heart is the
+     * limit (see {@link VillageLayout#SCAN_RADIUS}).
      */
-    private static int areaRadius(VillageHeartBlockEntity heart) {
+    private static Predicate<BlockPos> area(VillageHeartBlockEntity heart, VillageReference reference) {
+        if (reference.area().isPresent()) {
+            return reference::isInArea;
+        }
         BlockPos heartPos = heart.getBlockPos();
         int gates = heart.getLayout().gates().stream().mapToInt(gate -> squareDistance(heartPos, gate)).max()
                 .orElse(VillageLayout.SCAN_RADIUS);
-        return Math.min(gates, VillageLayout.SCAN_RADIUS);
+        int radius = Math.min(gates, VillageLayout.SCAN_RADIUS);
+        return pos -> squareDistance(heartPos, pos) <= radius;
     }
 
     private static int squareDistance(BlockPos center, BlockPos pos) {
@@ -158,6 +226,54 @@ public final class VillageRepairs {
         return pos.getX() >= zone.ringMinX() && pos.getX() <= zone.ringMaxX() && pos.getZ() >= zone.ringMinZ()
                 && pos.getZ() <= zone.ringMaxZ() && pos.getY() >= zone.minY() - WorkZone.BELOW
                 && pos.getY() <= zone.maxY() + WorkZone.ABOVE;
+    }
+
+    /**
+     * The land pieces of a village that the repairs check: the fields and the mills of the heart (see
+     * {@link VillageHeartBlockEntity#landPieces()}) with all their chunks ready.
+     *
+     * @param level the level
+     * @param heart the village heart
+     * @return the land pieces
+     */
+    public static List<VillageReference.Piece> landPieces(ServerLevel level, VillageHeartBlockEntity heart) {
+        List<VillageReference.Piece> pieces = new ArrayList<>();
+        for (VillageReference.Piece piece : heart.landPieces()) {
+            Optional<StructureTemplate> template = level.getStructureManager().get(piece.template());
+            if (template.isEmpty()) {
+                continue;
+            }
+            BoundingBox box = GhostPlacement.box(template.get().getSize(), piece.rotation(), Mirror.NONE,
+                    piece.origin());
+            if (ReadyChunks.isAreaReady(level, box.minX(), box.minZ(), box.maxX(), box.maxZ())) {
+                pieces.add(piece);
+            }
+        }
+        return pieces;
+    }
+
+    /**
+     * The state that a repair places for a block of the reference: a crop is a young crop (age 0), the other blocks do
+     * not change. The crop then grows again.
+     *
+     * @param state the block of the reference
+     * @return the block that the repair places
+     */
+    public static BlockState replanted(BlockState state) {
+        return state.getBlock() instanceof CropBlock crop ? crop.getStateForAge(0) : state;
+    }
+
+    /**
+     * True if a repair replants a crop for free: the stock of the village has no seeds for it, and the setting
+     * {@link WorldConfig#CONSTRUCTION_FREE_REPLANT} is on. Else the repair takes the seeds from the stock, or waits
+     * for them.
+     *
+     * @param state   the block that the repair places
+     * @param inStock true if the stock has the materials of the block
+     * @return true if the repair uses no materials for the block
+     */
+    public static boolean isFreeReplant(BlockState state, boolean inStock) {
+        return state.getBlock() instanceof CropBlock && !inStock && WorldConfig.CONSTRUCTION_FREE_REPLANT.get();
     }
 
     /** The blocks of a template. The method keeps them for the next checks. */
@@ -187,7 +303,7 @@ public final class VillageRepairs {
             return;
         }
         BlockPos pos = event.getPos();
-        Optional<BlockPos> heart = VillageHearts.findNearest(level, pos, WorldConfig.VILLAGE_RADIUS.get());
+        Optional<BlockPos> heart = VillageHearts.findAt(level, pos);
         if (heart.isEmpty()) {
             return;
         }
@@ -208,7 +324,7 @@ public final class VillageRepairs {
             return;
         }
         BlockPos pos = event.getPos();
-        VillageHearts.findNearest(level, pos, WorldConfig.VILLAGE_RADIUS.get()).ifPresent(heart -> {
+        VillageHearts.findAt(level, pos).ifPresent(heart -> {
             VillageRepairData data = VillageRepairData.get(level);
             data.removePlayerBlock(heart, pos);
             BlockKinds.describe(pos, event.getState(), Optional.empty()).partner().map(BlockKinds::toBlockPos)

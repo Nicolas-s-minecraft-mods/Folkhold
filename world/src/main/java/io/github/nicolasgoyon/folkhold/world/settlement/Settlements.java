@@ -19,6 +19,7 @@ import io.github.nicolasgoyon.folkhold.world.group.CaravanRoutes;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import io.github.nicolasgoyon.folkhold.world.journal.JournalData;
 import io.github.nicolasgoyon.folkhold.world.journal.RouteViewData;
+import io.github.nicolasgoyon.folkhold.world.level.ReadyChunks;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestData;
 import io.github.nicolasgoyon.folkhold.world.village.BankChests;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
@@ -52,7 +53,9 @@ public final class Settlements {
     }
 
     /**
-     * Makes a new active settlement. The faction is the faction with the nearest territory center.
+     * Makes a new active settlement for a village structure. The faction is the faction with the nearest territory
+     * center. The start level comes from the world seed and the start chunk (see {@link #startLevel(long, ChunkPos)}),
+     * thus the structure and the settlement get the same level.
      *
      * @param server     the server
      * @param id         the id of the settlement
@@ -62,10 +65,19 @@ public final class Settlements {
      * @return the settlement, not yet in the registry
      */
     public static Settlement create(MinecraftServer server, UUID id, ChunkPos startChunk, BlockPos pos) {
+        return create(server, id, startChunk, pos, startLevel(server.overworld().getSeed(), startChunk));
+    }
+
+    /**
+     * As {@link #create(MinecraftServer, UUID, ChunkPos, BlockPos)}, with a given start level. The command
+     * {@code /folkhold village generate} uses it for a village of a chosen tier.
+     */
+    public static Settlement create(MinecraftServer server, UUID id, ChunkPos startChunk, BlockPos pos,
+            int startLevel) {
         FactionSpec faction = FactionData.get(server).ownerAt(pos);
         Settlement settlement = new Settlement(id.toString(), startChunk.x, startChunk.z, faction.id(),
                 name(faction, id), pos.getX(), pos.getZ());
-        settlement.setProgress(startLevel(settlement.id()), 0);
+        settlement.setProgress(startLevel, 0);
         settlement.setBiome(Economies.biomeAt(server.overworld(), pos.getX(), pos.getY(), pos.getZ()));
         startEconomy(server, settlement);
         return settlement;
@@ -85,7 +97,20 @@ public final class Settlements {
     }
 
     /**
-     * The start level of a settlement, from the level table. The same id gives the same level.
+     * The start level of a village structure, from the level table. The same world seed and the same start chunk give
+     * the same level. The structure can use this level before its settlement exists.
+     *
+     * @param worldSeed  the seed of the world
+     * @param startChunk the chunk of the structure start
+     * @return the start level
+     */
+    public static int startLevel(long worldSeed, ChunkPos startChunk) {
+        return LevelTables.get().startLevel(worldSeed, startChunk.x, startChunk.z);
+    }
+
+    /**
+     * The start level of a settlement with no known structure start (for example a heart that a player placed), from
+     * the level table. The same id gives the same level.
      *
      * @param id the id of the settlement
      * @return the start level
@@ -143,15 +168,26 @@ public final class Settlements {
      * @return the start chunk
      */
     public static ChunkPos startChunk(ServerLevel level, BlockPos pos) {
+        return structureStart(level, pos).orElseGet(() -> new ChunkPos(pos));
+    }
+
+    /**
+     * The start chunk of the village structure at a position, if the position is in a piece of a village structure.
+     *
+     * @param level the level
+     * @param pos   the position
+     * @return the start chunk, or empty outside a village structure
+     */
+    public static Optional<ChunkPos> structureStart(ServerLevel level, BlockPos pos) {
         Optional<Structure> structure = level.registryAccess().registryOrThrow(Registries.STRUCTURE)
                 .getOptional(VILLAGE_STRUCTURE);
         if (structure.isPresent()) {
             StructureStart start = level.structureManager().getStructureWithPieceAt(pos, structure.get());
             if (start.isValid()) {
-                return start.getChunkPos();
+                return Optional.of(start.getChunkPos());
             }
         }
-        return new ChunkPos(pos);
+        return Optional.empty();
     }
 
     /**
@@ -164,7 +200,10 @@ public final class Settlements {
      *   <li>The discovery found the settlement, and the heart has a faction: the heart is older than the
      *       settlement. The settlement gets the id, the faction and the name of the heart, because the
      *       reputations use the id of the heart.</li>
-     *   <li>No settlement: the mod makes a settlement with the id of the heart.</li>
+     *   <li>No settlement: the mod makes a settlement with the id of the heart. In a village structure, the start
+     *       level comes from the world seed and the start chunk, as for the discovery (see
+     *       {@link #startLevel(long, ChunkPos)}). Outside a village structure, no start chunk is known: the start
+     *       level comes from the id of the heart (see {@link #startLevel(String)}).</li>
      * </ul>
      *
      * @param level the level of the heart
@@ -178,7 +217,8 @@ public final class Settlements {
         String heartId = heart.getVillageId().toString();
         Settlement settlement = data.registry().byId(heartId).orElse(null);
         if (settlement == null) {
-            ChunkPos start = startChunk(level, pos);
+            Optional<ChunkPos> structureStart = structureStart(level, pos);
+            ChunkPos start = structureStart.orElseGet(() -> new ChunkPos(pos));
             Settlement discovered = data.registry().byStart(start.x, start.z).stream()
                     .filter(found -> !found.hasHeart())
                     .findFirst()
@@ -194,7 +234,9 @@ public final class Settlements {
                     settlement.setName(heartName);
                 }
             } else {
-                settlement = create(server, heart.getVillageId(), start, pos);
+                int startLevel = structureStart.map(chunk -> startLevel(level.getSeed(), chunk))
+                        .orElseGet(() -> startLevel(heartId));
+                settlement = create(server, heart.getVillageId(), start, pos, startLevel);
                 if (heart.getFactionId() != null) {
                     settlement.setFactionId(heart.getFactionId());
                     String heartName = heart.getVillageName();
@@ -286,22 +328,25 @@ public final class Settlements {
     /**
      * Makes a settlement in ruins active again:
      * <ul>
-     *   <li>the settlement goes to the state {@link SettlementState#ACTIVE};</li>
-     *   <li>if its heart is not at its position, a new heart comes there, linked to the same settlement;</li>
+     *   <li>the settlement goes to the state {@link SettlementState#ACTIVE}.</li>
+     *   <li>if its heart is not at its position, a new heart comes there, linked to the same settlement.</li>
      *   <li>the items of the bank chests go back into the stock and the treasury
      *       ({@link BankChests#recoverFromRuins}).</li>
      * </ul>
      * The garrison and the villagers come back when a player is near the heart, as in each village. The chunk of
-     * the heart loads first when it is not loaded.
+     * the heart and the chunks of the columns next to the heart must be ready (see {@link ReadyChunks}): the new heart
+     * updates its neighbors, and this method does not load chunks. The bank chests in the chunks that are not ready
+     * do not change: their items stay in the chests and do not go into the stock or the treasury.
      *
      * @param level      the level of the village
      * @param settlement the settlement
      * @return the position of the heart
+     * @throws IllegalStateException if a chunk of the heart or of a column next to the heart is not ready
      */
     public static BlockPos restore(ServerLevel level, Settlement settlement) {
-        BlockPos center = new BlockPos(settlement.x(), 0, settlement.z());
-        if (!level.isLoaded(center)) {
-            level.getChunk(center);
+        if (!ReadyChunks.isAreaReady(level, settlement.x() - 1, settlement.z() - 1, settlement.x() + 1,
+                settlement.z() + 1)) {
+            throw new IllegalStateException("The chunks around the heart of " + settlement + " are not ready");
         }
         BlockPos surface = new BlockPos(settlement.x(), level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 settlement.x(), settlement.z()), settlement.z());

@@ -92,7 +92,10 @@ public final class GroupCommandGameTests {
         helper.succeed();
     }
 
-    /** The quest commands give a delivery to a player and complete it. */
+    /**
+     * The quest commands give a delivery to a player and complete it. The command finds the player by its name: the
+     * player has a name that no other test uses.
+     */
     @GameTest(template = "arena", timeoutTicks = 20, batch = "commands_quest")
     public static void questCommandsGiveAndComplete(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -104,9 +107,12 @@ public final class GroupCommandGameTests {
         Settlement village = Settlements.of(server, heart).orElseThrow();
         village.economy().setPopulation(10);
         village.economy().setInitialized(true);
+        // The jobs of the slots come from the random id of the village. A job of level 1 with inputs: the village
+        // needs its items.
+        village.economy().setJobs(List.of("folkhold_world:carpenter"));
         // With no stock, the village needs its items: it offers deliveries.
         TestSupport.emptyStock(village);
-        ServerPlayer player = TestSupport.mockPlayer(helper);
+        ServerPlayer player = TestSupport.mockPlayer(helper, UUID.randomUUID(), "quest-player");
         BlockPos pos = helper.absolutePos(HEART.east(2));
         player.teleportTo(pos.getX(), pos.getY(), pos.getZ());
         long treasury = SettlementData.get(server).treasury(village.factionId());
@@ -118,12 +124,15 @@ public final class GroupCommandGameTests {
             run(server, "folkhold quest complete " + quest.id());
         }
 
+        String state = "village " + village.state() + ", offers " + QuestData.get(server).quests().offers(village.id())
+                + ", players " + server.getPlayerList().getPlayers().size();
         server.getPlayerList().remove(player);
         SettlementData settlements = SettlementData.get(server);
         settlements.addTreasury(village.factionId(), treasury - settlements.treasury(village.factionId()));
         QuestData.get(server).quests().removeFinished();
         helper.assertTrue(quest != null && quest.kind() == QuestKind.DELIVERY
-                && quest.settlementId().equals(village.id()), "The player must get a delivery of the village");
+                && quest.settlementId().equals(village.id()),
+                "The player must get a delivery of the village: " + quest + ", " + state);
         helper.assertTrue(quest.state() == QuestState.COMPLETED, "The complete command must complete the quest");
         helper.succeed();
     }

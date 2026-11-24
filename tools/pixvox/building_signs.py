@@ -115,6 +115,16 @@ ICONS = {
         ".bbyybb.",
         "..bbbb..",
     ],
+    "mill": [
+        "s.....s.",
+        ".s...s..",
+        "..srs...",
+        "..rhr...",
+        "..sws...",
+        ".swwws..",
+        "s.wdw.s.",
+        "..wdw...",
+    ],
 }
 
 # For each kind: the colors of the plaque, the palette of the icon, the materials of the stand (see MATERIALS) and the
@@ -167,6 +177,12 @@ KINDS = {
         "palette": {"k": "#5a3c1e", "b": "#be9664", "y": "#fad246"},
         "post": "spruce_log", "cap": "stripped_spruce", "bar": "spruce_planks",
         "en": "Market Sign", "fr": "Panneau de marché",
+    },
+    "mill": {
+        "background": "#4e7aa6", "trim": "#e8d48c",
+        "palette": {"s": "#ece4d0", "w": "#b08048", "r": "#60281e", "h": "#3c3e44", "d": "#5a3c1e"},
+        "post": "oak_log", "cap": "stripped_oak", "bar": "oak_planks",
+        "en": "Mill Sign", "fr": "Panneau de moulin",
     },
 }
 

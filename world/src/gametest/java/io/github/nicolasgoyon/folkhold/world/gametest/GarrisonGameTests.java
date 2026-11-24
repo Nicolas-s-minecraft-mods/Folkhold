@@ -5,15 +5,18 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
+import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
 import io.github.nicolasgoyon.folkhold.world.village.Garrison;
+import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -32,12 +35,20 @@ public final class GarrisonGameTests {
     private GarrisonGameTests() {
     }
 
-    /** Places a heart. Its settlement is at the level 1, so its garrison has the units of the level 1. */
+    /**
+     * Places a heart. Its settlement is at the level 1, so its garrison has the units of the level 1.
+     *
+     * <p>The culture of a settlement can add units to its garrison ({@code culture_garrison} in {@code levels.json}).
+     * The culture of a new settlement comes from the region of its position, and the GameTest server puts each test at
+     * a random position. Thus the settlement goes in a faction of Ashmark, a culture with no extra units: the counts of
+     * the tests are the same at all the positions. {@code CultureGarrisonGameTests} tests the extra units.
+     */
     private static VillageHeartBlockEntity placeHeart(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
         helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
         VillageHeartBlockEntity heart = helper.getBlockEntity(HEART);
         setLevel(helper, heart, 1);
+        RaidBalanceGameTests.joinFaction(helper, heart, Cultures.ASHMARK.id());
         return heart;
     }
 
@@ -121,6 +132,34 @@ public final class GarrisonGameTests {
         helper.succeed();
     }
 
+    /**
+     * The value {@code refillDelaySeconds} of the config sets the refill delay. With 20 seconds, a dead unit is
+     * replaced after 400 ticks, and not before. The default value (300 seconds) is longer. A listener sets the old
+     * value again when the test ends.
+     */
+    @GameTest(template = "arena", batch = "garrison_refill_config")
+    public static void refillDelayFollowsTheConfig(GameTestHelper helper) {
+        TestSupport.setConfigForTest(helper, WorldConfig.GARRISON_REFILL_DELAY_SECONDS, 20);
+        VillageHeartBlockEntity heart = placeHeart(helper);
+        try {
+            int expected = fullGarrisonSize(heart);
+            long now = helper.getLevel().getGameTime();
+            heart.ensureGarrison(now);
+            heart.getUnits().get(0).kill();
+            heart.ensureGarrison(now + 1);
+            heart.ensureGarrison(now + 399);
+            int aliveBeforeDelay = heart.getGarrison().aliveCount();
+            heart.ensureGarrison(now + 402);
+            int aliveAfterDelay = heart.getGarrison().aliveCount();
+            helper.assertTrue(aliveBeforeDelay == expected - 1,
+                    "No replacement before 20 seconds, alive: " + aliveBeforeDelay);
+            helper.assertTrue(aliveAfterDelay == expected, "Replacement after 20 seconds, alive: " + aliveAfterDelay);
+        } finally {
+            removeUnits(heart);
+        }
+        helper.succeed();
+    }
+
     /** A unit that unloads with its chunk is still alive: the heart does not create a duplicate. */
     @GameTest(template = "arena", batch = "garrison_unload")
     public static void unloadedUnitIsNotDuplicated(GameTestHelper helper) {
@@ -141,7 +180,7 @@ public final class GarrisonGameTests {
     }
 
     /**
-     * The level of the village sets the number of units of each role: a town (level 9) has 4 guards, 3 archers and
+     * The level of the village sets the number of units of each role: a town (level 9) has 5 guards, 4 archers and
      * 1 captain.
      */
     @GameTest(template = "arena", batch = "garrison_level")
@@ -155,8 +194,8 @@ public final class GarrisonGameTests {
         int captains = units(heart, GarrisonRole.CAPTAIN).size();
         removeVillage(helper, heart);
 
-        helper.assertTrue(guards == 4 && archers == 3 && captains == 1,
-                "A town must have 4 guards, 3 archers and 1 captain: " + guards + ", " + archers + ", " + captains);
+        helper.assertTrue(guards == 5 && archers == 4 && captains == 1,
+                "A town must have 5 guards, 4 archers and 1 captain: " + guards + ", " + archers + ", " + captains);
         helper.succeed();
     }
 
@@ -167,20 +206,32 @@ public final class GarrisonGameTests {
         long now = helper.getLevel().getGameTime();
         heart.ensureGarrison(now);
         FactionUnit guard = units(heart, GarrisonRole.GUARD).get(0);
-        boolean ironSword = guard.getMainHandItem().is(Items.IRON_SWORD);
+        GarrisonEquipment.Piece hamletWeapon = weapon(guard, "hamlet");
+        boolean hamletEquipped = guard.getMainHandItem().is(BuiltInRegistries.ITEM.get(
+                ResourceLocation.parse(hamletWeapon.item())));
 
         setLevel(helper, heart, 17);
         heart.ensureGarrison(now + 1);
-        boolean netheriteSword = guard.getMainHandItem().is(Items.NETHERITE_SWORD);
+        GarrisonEquipment.Piece capitalWeapon = weapon(guard, "capital");
+        boolean capitalEquipped = guard.getMainHandItem().is(BuiltInRegistries.ITEM.get(
+                ResourceLocation.parse(capitalWeapon.item())));
         boolean enchanted = guard.getItemBySlot(EquipmentSlot.HEAD).isEnchanted();
         String set = guard.getEquipmentSet();
         removeVillage(helper, heart);
 
-        helper.assertTrue(ironSword, "A guard of a hamlet must have an iron sword");
-        helper.assertTrue(netheriteSword && enchanted, "A guard of a capital must have a netherite sword and an "
-                + "enchanted helmet");
+        helper.assertTrue(hamletEquipped, "A guard of a hamlet must have the weapon of the hamlet: " + hamletWeapon);
+        helper.assertTrue(capitalEquipped && enchanted, "A guard of a capital must have the weapon of the capital ("
+                + capitalWeapon + ") and an enchanted helmet");
+        helper.assertTrue(!hamletWeapon.equals(capitalWeapon), "The weapon of a capital (" + capitalWeapon
+                + ") must be better than the weapon of a hamlet (" + hamletWeapon + "): another item or enchantments");
         helper.assertTrue("capital".equals(set), "The guard must have the set of the capital: " + set);
         helper.succeed();
+    }
+
+    /** The weapon of a guard in a set, for the culture of its faction. */
+    private static GarrisonEquipment.Piece weapon(FactionUnit guard, String set) {
+        return GarrisonEquipment.get().pieces(GarrisonEquipment.culture(guard), set, GarrisonRole.GUARD,
+                guard.getUUID()).get(EquipmentSlot.MAINHAND);
     }
 
     /**

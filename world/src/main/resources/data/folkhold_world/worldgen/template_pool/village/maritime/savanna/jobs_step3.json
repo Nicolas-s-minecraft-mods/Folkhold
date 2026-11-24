@@ -1,0 +1,122 @@
+{
+  "fallback": "minecraft:empty",
+  "elements": [
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_baker_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_pastry_cook_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_butcher_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_sawyer_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_sawyer_spruce_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_mason_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_smelter_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_gold_smelter_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_blacksmith_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_tinker_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_carpenter_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_weaver_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    },
+    {
+      "weight": 1,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "folkhold_world:village/maritime/savanna/job_papermaker_step3",
+        "projection": "rigid",
+        "processors": "folkhold_world:village/maritime/savanna/foundation"
+      }
+    }
+  ]
+}

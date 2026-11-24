@@ -6,7 +6,6 @@ import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
-import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.entity.ArcherEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.CaptainEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
@@ -15,8 +14,6 @@ import io.github.nicolasgoyon.folkhold.world.entity.VillageCat;
 import io.github.nicolasgoyon.folkhold.world.faction.Culture;
 import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionVisuals;
-import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
-import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
 import java.util.ArrayDeque;
@@ -27,7 +24,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -67,10 +63,15 @@ public final class VillageStructureGameTests {
     private VillageStructureGameTests() {
     }
 
-    /** The heart finds the posts, gates and braziers, and puts the archers on the posts. */
+    /**
+     * The heart finds the posts, gates and braziers, and puts the archers on the posts. The test sets the level 9: the
+     * start level of a new settlement comes from its random id. At the level 9, the garrison has 4 archers for the 4
+     * towers and has each role. At the levels 13 to 16, the garrison has 5 archers for the 4 towers.
+     */
     @GameTest(template = "village/center", timeoutTicks = 100, batch = "village_structure")
     public static void heartFindsLayoutAndPostsArchers(GameTestHelper helper) {
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
+        TestSupport.setLevel(helper, heart, 9);
         heart.ensureGarrison(helper.getLevel().getGameTime());
         VillageLayout layout = heart.getLayout();
         List<FactionUnit> units = heart.getUnits();
@@ -79,6 +80,7 @@ public final class VillageStructureGameTests {
         boolean archersOnPosts = !archers.isEmpty() && archers.stream()
                 .allMatch(archer -> archer.getPostPos() != null && layout.posts().contains(archer.getPostPos())
                         && archer.blockPosition().equals(archer.getPostPos()));
+        long distinctPosts = archers.stream().map(FactionUnit::getPostPos).distinct().count();
         int heartY = heart.getBlockPos().getY();
         boolean othersOnGround = units.stream()
                 .filter(unit -> unit.getPostPos() == null)
@@ -86,7 +88,6 @@ public final class VillageStructureGameTests {
                         && helper.getLevel().canSeeSky(unit.blockPosition()));
         units.forEach(Entity::discard);
         heart.getCats().forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
 
         helper.assertTrue(layout.posts().size() == TOWERS, "Expected " + TOWERS + " posts, found " + layout.posts().size());
@@ -94,6 +95,8 @@ public final class VillageStructureGameTests {
                 "Expected " + GATE_BLOCKS + " gate blocks, found " + layout.gates().size());
         helper.assertTrue(layout.braziers().size() == BRAZIERS,
                 "Expected " + BRAZIERS + " braziers, found " + layout.braziers().size());
+        helper.assertTrue(archers.size() == TOWERS, "Expected " + TOWERS + " archers, found " + archers.size());
+        helper.assertTrue(distinctPosts == archers.size(), "Each archer must have its own post");
         helper.assertTrue(archersOnPosts, "Each archer must spawn on a post of the village");
         helper.assertTrue(othersOnGround, "Each unit without a post must spawn on the ground near the heart");
         helper.succeed();
@@ -106,7 +109,6 @@ public final class VillageStructureGameTests {
         heart.ensureGarrison(helper.getLevel().getGameTime());
         heart.getUnits().forEach(Entity::discard);
         heart.getCats().forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         List<BlockPos> banners = heart.getLayout().banners();
         DyeColor expected = FactionVisuals.faction(helper.getLevel().getServer(), heart.getFactionId())
@@ -134,7 +136,6 @@ public final class VillageStructureGameTests {
         List<GuardEntity> guards = heart.getUnits().stream()
                 .filter(unit -> unit instanceof GuardEntity && !(unit instanceof CaptainEntity))
                 .map(GuardEntity.class::cast).toList();
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
 
         heart.applyDayNight(true);
@@ -154,7 +155,6 @@ public final class VillageStructureGameTests {
         boolean guardsOffWatch = guards.stream().allMatch(guard -> guard.getNightPos() == null);
         heart.getUnits().forEach(Entity::discard);
         heart.getCats().forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
 
         helper.assertTrue(gatesClosed, "At night, all gates must be closed");
@@ -191,10 +191,14 @@ public final class VillageStructureGameTests {
         helper.succeed();
     }
 
-    /** In an alert, two archers on the same tower go to two different towers. */
+    /**
+     * In an alert, two archers on the same tower go to two different towers. The test sets the level 1: the start
+     * level of a new settlement comes from its random id, and a city garrison has more archers than the 4 towers.
+     */
     @GameTest(template = "village/center", timeoutTicks = 100, batch = "village_archer_alert")
     public static void alertSendsArchersToDifferentTowers(GameTestHelper helper) {
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
+        TestSupport.setLevel(helper, heart, 1);
         heart.ensureGarrison(helper.getLevel().getGameTime());
         List<ArcherEntity> archers = heart.getUnits().stream()
                 .filter(ArcherEntity.class::isInstance).map(ArcherEntity.class::cast).toList();
@@ -211,7 +215,6 @@ public final class VillageStructureGameTests {
         boolean valid = archers.stream().allMatch(archer -> validPosts.contains(archer.getPostPos()));
         heart.getUnits().forEach(Entity::discard);
         heart.getCats().forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         helper.assertTrue(archers.size() >= 2, "The garrison must have 2 archers or more");
         helper.assertTrue(distinct == archers.size(), "Each archer must have its own tower");
@@ -224,9 +227,7 @@ public final class VillageStructureGameTests {
     public static void calmRotationMovesTheArchers(GameTestHelper helper) {
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
         // At the level 1, the garrison has 2 archers for the 4 towers: each archer has a free tower to go to.
-        MinecraftServer server = helper.getLevel().getServer();
-        heart.ensureSettlement();
-        SettlementLevels.setProgress(server, Settlements.of(server, heart).orElseThrow(), 1, 0);
+        TestSupport.setLevel(helper, heart, 1);
         heart.ensureGarrison(helper.getLevel().getGameTime());
         List<ArcherEntity> archers = heart.getUnits().stream()
                 .filter(ArcherEntity.class::isInstance).map(ArcherEntity.class::cast).toList();
@@ -242,7 +243,6 @@ public final class VillageStructureGameTests {
         long distinct = after.stream().distinct().count();
         heart.getUnits().forEach(Entity::discard);
         heart.getCats().forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         helper.assertTrue(moved, "Each archer must move to another tower: " + before + " -> " + after);
         helper.assertTrue(distinct == archers.size(), "Two archers must not share a tower");
@@ -256,7 +256,6 @@ public final class VillageStructureGameTests {
         heart.ensureGarrison(helper.getLevel().getGameTime());
         heart.getUnits().forEach(Entity::discard);
         heart.getCats().forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         List<BlockPos> bells = heart.getLayout().bells();
 
@@ -288,7 +287,6 @@ public final class VillageStructureGameTests {
         boolean anchored = cats.stream().allMatch(cat -> anchors.contains(cat.getAnchorPos()));
         int expected = heart.catCount();
         cats.forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         VillageFolk.inhabitants(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         helper.getLevel().getServer().getPlayerList().remove(player);
 
@@ -307,8 +305,7 @@ public final class VillageStructureGameTests {
      */
     @GameTest(template = "village/center", timeoutTicks = 1200, batch = "village_archer_walk")
     public static void archerWalksToANewTower(GameTestHelper helper) {
-        int rotationSeconds = WorldConfig.ARCHER_ROTATION_SECONDS.get();
-        WorldConfig.ARCHER_ROTATION_SECONDS.set(0);
+        TestSupport.setConfigForTest(helper, WorldConfig.ARCHER_ROTATION_SECONDS, 0);
         VillageHeartBlockEntity heart = TestSupport.findHeart(helper);
         heart.ensureGarrison(helper.getLevel().getGameTime());
         List<ArcherEntity> archers = heart.getUnits().stream()
@@ -317,7 +314,6 @@ public final class VillageStructureGameTests {
         ArcherEntity archer = archers.get(0);
         heart.getUnits().stream().filter(unit -> unit != archer).forEach(Entity::discard);
         heart.getCats().forEach(Entity::discard);
-        Merchants.merchantsOf(helper.getLevel(), heart.getBlockPos()).forEach(Entity::discard);
         BlockPos start = archer.getPostPos();
         // The rotation occurs when the archer stands on its post (after the first ticks).
         helper.runAfterDelay(10, () -> {
@@ -361,7 +357,6 @@ public final class VillageStructureGameTests {
         });
         helper.succeedWhen(() -> {
             if (seen[1]) {
-                WorldConfig.ARCHER_ROTATION_SECONDS.set(rotationSeconds);
                 helper.fail("The archer must walk, not move directly to the post" + jump[0]);
             }
             BlockPos post = archer.getPostPos();
@@ -370,7 +365,6 @@ public final class VillageStructureGameTests {
                     "The archer must arrive at the new post " + post.toShortString() + " ("
                             + String.join(" | ", history) + ")");
             helper.assertTrue(seen[0], "The archer must walk on the ground of the compound");
-            WorldConfig.ARCHER_ROTATION_SECONDS.set(rotationSeconds);
             archer.discard();
         });
     }
@@ -404,6 +398,30 @@ public final class VillageStructureGameTests {
     public static void houseHasItsSign(GameTestHelper helper) {
         List<BuildingSignKind> signs = signsIn(helper);
         helper.assertTrue(signs.equals(List.of(BuildingSignKind.HOUSE)), "Expected 1 house sign, found " + signs);
+        helper.succeed();
+    }
+
+    /** The small field has the farm sign. */
+    @GameTest(template = "village/field_small", timeoutTicks = 20, batch = "village_land_signs")
+    public static void smallFieldHasTheFarmSign(GameTestHelper helper) {
+        List<BuildingSignKind> signs = signsIn(helper);
+        helper.assertTrue(signs.equals(List.of(BuildingSignKind.FARM)), "Expected 1 farm sign, found " + signs);
+        helper.succeed();
+    }
+
+    /** The large field has the farm sign. */
+    @GameTest(template = "village/field_large", timeoutTicks = 20, batch = "village_land_signs")
+    public static void largeFieldHasTheFarmSign(GameTestHelper helper) {
+        List<BuildingSignKind> signs = signsIn(helper);
+        helper.assertTrue(signs.equals(List.of(BuildingSignKind.FARM)), "Expected 1 farm sign, found " + signs);
+        helper.succeed();
+    }
+
+    /** The windmill has the mill sign. */
+    @GameTest(template = "village/mill", timeoutTicks = 20, batch = "village_land_signs")
+    public static void windmillHasTheMillSign(GameTestHelper helper) {
+        List<BuildingSignKind> signs = signsIn(helper);
+        helper.assertTrue(signs.equals(List.of(BuildingSignKind.MILL)), "Expected 1 mill sign, found " + signs);
         helper.succeed();
     }
 

@@ -2,6 +2,49 @@
 // The mod projects and the dev project apply this file, because the dev project resolves
 // the dependencies of all mods.
 repositories {
+    // Cartofold (maps, required by the world mod): the jar of its GitHub Release, with no token. The group is the
+    // group of Cartofold in GitHub Packages. The repository has no metadata: the jar is the artifact.
+    // The optional property cartofoldDir gives a local folder with the same layout (see scripts/fetch-cartofold.sh).
+    def cartofoldDir = providers.gradleProperty('cartofoldDir').getOrNull()
+    exclusiveContent {
+        forRepository {
+            ivy {
+                name = 'Cartofold releases'
+                url = cartofoldDir != null ? rootProject.file(cartofoldDir).toURI()
+                        : 'https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases/download'
+                patternLayout {
+                    artifact 'v[revision]/[module]-[revision].[ext]'
+                }
+                metadataSources {
+                    artifact()
+                }
+            }
+        }
+        filter {
+            includeGroup 'io.github.nicolasgoyon.cartofold'
+        }
+    }
+    // Confee (config screens, required by the world mod and the events mod on the client): the NeoForge jar of its
+    // GitHub Release, with no token. The tag of the release (confee_release) is not the version of the mod.
+    def confeeRelease = providers.gradleProperty('confee_release').get()
+    def confeeMinecraft = providers.gradleProperty('minecraft_version').get()
+    exclusiveContent {
+        forRepository {
+            ivy {
+                name = 'Confee releases'
+                url = 'https://github.com/HeetroNoft/Confee/releases/download'
+                patternLayout {
+                    artifact "${confeeRelease}/[module]-[revision]+${confeeMinecraft}-neoforge.[ext]"
+                }
+                metadataSources {
+                    artifact()
+                }
+            }
+        }
+        filter {
+            includeGroup 'fr.heetstudio.confee'
+        }
+    }
     maven {
         name = 'GeckoLib'
         url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'

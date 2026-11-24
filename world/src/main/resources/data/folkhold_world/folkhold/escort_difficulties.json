@@ -1,0 +1,15 @@
+{
+  "levels_per_step": 5,
+  "blocks_per_step": 1000,
+  "camp_distance": 256,
+  "levels": [
+    {"guards": 0, "ambushes": [1, 1], "pillagers": [2, 3], "vindicators": 0, "ravager": false, "reward_factor": 1.0},
+    {"guards": 1, "ambushes": [1, 2], "pillagers": [2, 4], "vindicators": 1, "ravager": false, "reward_factor": 1.5},
+    {"guards": 1, "ambushes": [2, 3], "pillagers": [3, 4], "vindicators": 1, "ravager": false,
+      "helmet": "minecraft:iron_helmet", "reward_factor": 2.0},
+    {"guards": 2, "ambushes": [2, 3], "pillagers": [3, 5], "vindicators": 2, "ravager": false,
+      "helmet": "minecraft:iron_helmet", "reward_factor": 2.5},
+    {"guards": 3, "ambushes": [3, 3], "pillagers": [4, 6], "vindicators": 2, "ravager": true,
+      "helmet": "minecraft:diamond_helmet", "reward_factor": 3.5}
+  ]
+}

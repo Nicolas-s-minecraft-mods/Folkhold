@@ -24,7 +24,7 @@ public enum AlertState implements SerializedName {
     /**
      * Gives the state with an index from {@link #index()}.
      *
-     * @param index the index; an index out of range wraps around
+     * @param index the index. An index out of range wraps around
      * @return the state
      */
     public static AlertState byIndex(int index) {

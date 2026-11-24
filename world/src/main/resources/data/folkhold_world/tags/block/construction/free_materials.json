@@ -14,6 +14,8 @@
     "folkhold_blocks:building_sign_hall",
     "folkhold_blocks:building_sign_farm",
     "folkhold_blocks:building_sign_market",
+    "folkhold_blocks:building_sign_mill",
+    "folkhold_blocks:job_sign",
     "minecraft:bell"
   ]
 }

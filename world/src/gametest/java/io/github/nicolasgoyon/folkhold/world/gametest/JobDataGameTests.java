@@ -1,6 +1,5 @@
 package io.github.nicolasgoyon.folkhold.world.gametest;
 
-import io.github.nicolasgoyon.folkhold.core.sim.economy.Economy;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Job;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.Recipe;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
@@ -9,7 +8,6 @@ import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.economy.EconomyData;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionData;
 import io.github.nicolasgoyon.folkhold.world.group.TravelingMerchants;
-import io.github.nicolasgoyon.folkhold.world.settlement.LevelTables;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.ArrayList;
 import java.util.List;
@@ -108,27 +106,31 @@ public final class JobDataGameTests {
         helper.succeed();
     }
 
-    /** A hamlet with a farmer and a baker does not starve. */
+    /**
+     * A hamlet with a farmer, a baker and no food in its stock loses no experience and no inhabitant: the population
+     * eats nothing.
+     */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "job_data_hamlet")
-    public static void hamletWithAFarmerAndABakerDoesNotStarve(GameTestHelper helper) {
+    public static void hamletWithNoFoodLosesNoExperience(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         String faction = FactionData.get(server).factions().get(0).id();
         int x = 700 * GRID + GRID / 2;
         Settlement hamlet = new Settlement(UUID.randomUUID().toString(), x >> 4, 0, faction, "Breadby", x, 100);
-        hamlet.setProgress(1, 0);
+        hamlet.setProgress(1, 20);
         hamlet.setBiome("minecraft:plains");
         SettlementData.get(server).registry().add(hamlet);
         hamlet.economy().setPopulation(5);
         hamlet.economy().setJobs(List.of("folkhold_world:farmer", "folkhold_world:baker"));
-        Economy.seedStock(hamlet.economy(), Economies.jobs(hamlet), 3, LevelTables.get().traits(1).stockCapacity(),
-                EconomyData.catalog(), Economies.settings());
         hamlet.economy().setInitialized(true);
         SplittableRandom random = new SplittableRandom(5);
 
         for (int cycle = 0; cycle < CYCLES; cycle++) {
-            hamlet.setProgress(1, 0);
-            double food = Economies.runCycle(server, hamlet, random).foodCovered();
-            helper.assertTrue(food >= 0.9, "The hamlet starves at the cycle " + cycle + ": " + food);
+            int population = hamlet.economy().population();
+            Economies.runCycle(server, hamlet, random);
+            helper.assertTrue(hamlet.level() == 1 && hamlet.experience() == 20,
+                    "The hamlet loses experience at the cycle " + cycle + ": " + hamlet.experience());
+            helper.assertTrue(hamlet.economy().population() >= population,
+                    "The hamlet loses inhabitants at the cycle " + cycle);
         }
         helper.succeed();
     }

@@ -10,6 +10,8 @@ import io.github.nicolasgoyon.folkhold.world.journal.Journals;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
 import io.github.nicolasgoyon.folkhold.world.network.TerritoryStatusPayload;
 import io.github.nicolasgoyon.folkhold.world.network.TerritoryTitlePayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerFaction;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
@@ -42,16 +44,19 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
  *       title for a client with no channel) shows "Lands of" and the faction name in its color, and the reputation
  *       tier of the player with its glyph and color. This is an
  *       early warning before the villages. When a player enters unclaimed land, a title shows "Unclaimed
- *       territory".</li>
- *   <li><b>village message</b>: when a player comes near a village (see {@link WorldConfig#VILLAGE_MESSAGE_RADIUS}),
- *       the action bar shows the village name, the faction, the level and tier of the village, the reputation tier
+ *       territory". When a player enters a pillager territory (see {@link PillagerTerritories}), the banner shows
+ *       "Lands of the Pillagers" and the tier of the player with the pillagers.</li>
+ *   <li><b>village message</b>: when a player comes near a village (see {@link VillageHearts#isNear}): at
+ *       {@link WorldConfig#VILLAGE_MESSAGE_RADIUS} blocks from the heart, or at
+ *       {@link WorldConfig#VILLAGE_MESSAGE_MARGIN} blocks from the structure area of a large village, the action bar
+ *       shows the village name, the faction, the level and tier of the village, the reputation tier
  *       in this village, and what the guards do.</li>
  *   <li><b>journal</b>: the territory discovers its village, and the village message is a visit (see
  *       {@link Journals}).</li>
  *   <li><b>territory status</b>: the server sends the territory, the tier and the nearest village of the
  *       territory (also a village that the game did not generate yet) to the client when they change. Out of the
  *       territories, the village is the village near the player. The client shows them in the territory HUD (on
- *       by default, see {@link io.github.nicolasgoyon.folkhold.world.config.ClientConfig#SHOW_TERRITORY_HUD}).</li>
+ *       by default, see {@link io.github.nicolasgoyon.folkhold.world.config.ClientConfig#showTerritoryHud}).</li>
  * </ul>
  *
  * <p>The territories are in the overworld only. The settlements claim the territory chunks (see
@@ -87,9 +92,13 @@ public final class TerritoryMessages {
         Optional<FactionSpec> territory = overworld
                 ? Territories.factionAt(server, player.blockPosition())
                 : Optional.empty();
-        String territoryId = !overworld ? OUTSIDE : territory.map(FactionSpec::id).orElse(UNCLAIMED);
+        boolean pillagers = overworld && territory.isEmpty()
+                && PillagerTerritories.campAt(server, player.blockPosition()).isPresent();
+        String territoryId = !overworld ? OUTSIDE
+                : territory.map(FactionSpec::id).orElse(pillagers ? PillagerFaction.ID : UNCLAIMED);
         Optional<VillageHeartBlockEntity> village = VillageHearts
-                .findNearest(level, player.blockPosition(), WorldConfig.VILLAGE_MESSAGE_RADIUS.get())
+                .findNearForMessage(level, player.blockPosition(), WorldConfig.VILLAGE_MESSAGE_RADIUS.get(),
+                        WorldConfig.VILLAGE_MESSAGE_MARGIN.get())
                 .map(level::getBlockEntity)
                 .filter(VillageHeartBlockEntity.class::isInstance)
                 .map(VillageHeartBlockEntity.class::cast);
@@ -104,6 +113,8 @@ public final class TerritoryMessages {
         if (previous != null && !previous.territoryId().equals(territoryId) && overworld) {
             if (territory.isPresent()) {
                 showTerritoryTitle(player, territory.get());
+            } else if (pillagers) {
+                showPillagerTitle(player);
             } else {
                 showUnclaimedTitle(player);
             }
@@ -112,9 +123,9 @@ public final class TerritoryMessages {
             showVillageMessage(server, player, village.get());
         }
 
-        TerritoryStatusPayload status = overworld
-                ? status(server, player, territory, village)
-                : TerritoryStatusPayload.NONE;
+        TerritoryStatusPayload status = !overworld ? TerritoryStatusPayload.NONE
+                : pillagers ? pillagerStatus(player, village)
+                : status(server, player, territory, village);
         if (previous == null || !status.equals(previous.status())) {
             ModNetwork.send(player, status);
         }
@@ -153,6 +164,24 @@ public final class TerritoryMessages {
                 faction.name()).withColor(faction.color());
         showTitle(player, title, Component.translatable("message.folkhold_world.territory_entry", tier),
                 faction.color());
+    }
+
+    /** Shows the title of a pillager territory: "Lands of the Pillagers" and the tier of the player. */
+    private static void showPillagerTitle(ServerPlayer player) {
+        Component tier = tierLabel(PillagerFaction.tier(player.server, player.getUUID()));
+        Component title = Component.translatable("message.folkhold_world.pillager_territory_title")
+                .withColor(PillagerFaction.COLOR);
+        showTitle(player, title, Component.translatable("message.folkhold_world.territory_entry", tier),
+                PillagerFaction.COLOR);
+    }
+
+    /** The status in a pillager territory: the faction, the tier of the player, and no village of the faction. */
+    private static TerritoryStatusPayload pillagerStatus(ServerPlayer player,
+            Optional<VillageHeartBlockEntity> village) {
+        return new TerritoryStatusPayload(Optional.of(PillagerFaction.name()), PillagerFaction.COLOR,
+                Optional.of(PillagerFaction.tier(player.server, player.getUUID()).serializedName()),
+                village.map(VillageHeartBlockEntity::getVillageName).map(Component::literal),
+                village.map(VillageHeartBlockEntity::getBlockPos));
     }
 
     private static void showVillageMessage(MinecraftServer server, ServerPlayer player, VillageHeartBlockEntity heart) {

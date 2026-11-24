@@ -8,5 +8,13 @@
   ],
   "min_level": 9,
   "weight": 2,
-  "profession": "minecraft:armorer"
+  "profession": "minecraft:armorer",
+  "cultures": {"sunreach": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:gold_ingot", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:raw_gold", "count": 2}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:coal", "count": 1}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:clock", "count": 1}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:gold_ingot", "count": 4}, {"item": "minecraft:redstone", "count": 1}]},
+    {"sell": {"item": "minecraft:golden_apple", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:apple", "count": 1}, {"item": "minecraft:gold_ingot", "count": 8}]}
+  ]
 }

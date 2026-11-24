@@ -13,5 +13,19 @@
   ],
   "min_level": 1,
   "weight": 8,
-  "profession": "folkhold_world:lumberjack"
+  "profession": "folkhold_world:lumberjack",
+  "cultures": {"ashmark": 3},
+  "trades": [
+    {"sell": {"item": "minecraft:chest", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:barrel", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:oak_door", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:oak_fence", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:oak_boat", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:crafting_table", "count": 1}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:oak_planks", "count": 16}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:stick", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:bookshelf", "count": 1}, "level": 2, "volume": 2, "materials": [{"item": "minecraft:oak_planks", "count": 6}, {"item": "minecraft:book", "count": 3}]},
+    {"sell": {"item": "minecraft:lectern", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:oak_planks", "count": 8}, {"item": "minecraft:book", "count": 3}]},
+    {"sell": {"item": "minecraft:jukebox", "count": 1}, "level": 4, "volume": 1, "materials": [{"item": "minecraft:oak_planks", "count": 8}, {"item": "minecraft:diamond", "count": 1}]}
+  ]
 }

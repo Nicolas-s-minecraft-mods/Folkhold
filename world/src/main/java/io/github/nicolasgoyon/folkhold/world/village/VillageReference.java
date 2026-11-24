@@ -1,33 +1,99 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
+import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.village.PalisadeHeights;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.structure.FortifiedVillageStructure;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PalisadePiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PierPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.PortPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.RingDistrictHolds;
+import io.github.nicolasgoyon.folkhold.world.village.structure.TerrainPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillagePathPiece;
+import io.github.nicolasgoyon.folkhold.world.village.structure.VillageRings;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.HolderGetter;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.IntArrayTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 
 /**
- * The reference state of a village for the repairs (see {@link VillageRepairs}): the structure pieces of the village
- * at the generation. Each piece is a structure template at a position, with a turn. The pieces come in the order of
- * the generation: a piece replaces the blocks of the pieces before it.
+ * The reference state of a village for the repairs (see {@link VillageRepairs}) and for its growth (see
+ * {@link VillageGrowth}): the structure pieces of the village at the generation.
  *
- * @param pieces the pieces of the village
+ * <ul>
+ *   <li>A template piece is a structure template at a position, with a turn. The template pieces come in the order of
+ *       the generation: a piece replaces the blocks of the pieces before it. A piece that follows the terrain (the
+ *       streets) is not a template piece: its blocks go to the height of the terrain. The reference keeps its columns,
+ *       and the surface blocks of the streets that the heart records (see {@link StreetBlocks}).</li>
+ *   <li>A palisade is a segment of the palisade: the base block and the logs of each column (see
+ *       {@link PalisadePiece}). The point on top of a column and the foundation under it are not a part of the
+ *       reference. The logs above the logs of the segment ({@link PalisadeHeights#LOGS}, or
+ *       {@link PalisadeHeights#LOW_LOGS} on the edge of a cliff) are not a part of it too.</li>
+ *   <li>The area is the box of the village inside its palisade, the palisade included, from the lowest to the highest
+ *       template piece. The area of a cave village is the box of its pieces (see {@link #caveArea}). Another village
+ *       with no palisade pieces has no area. The pieces of the ring districts of a town, a
+ *       city or a capital (see {@link VillageRings#generatedPieces}) are a part of the reference: the area goes to
+ *       the outer ring, and the repairs keep the rings. A village with another first wall than the layout of the
+ *       current version keeps only the districts on closed walls (see {@link RingDistrictHolds}).</li>
+ *   <li>The plots are the places for a house along the streets, with and without a house (see
+ *       {@link VillagePlots}).</li>
+ *   <li>The homes are the pool of the homes that the builders build on the free plots (see {@link VillageGrowth}).</li>
+ *   <li>The piers are the boxes of the piers, the bridges and the ports at the water gates (see {@link PierPiece}
+ *       and {@link PortPiece}): the decks, the rails, the steps and the posts down to the floor of the water.</li>
+ *   <li>The paths are the boxes of the paths from the gates to the plaza and across the bands of the rings (see
+ *       {@link VillagePathPiece}). The gate fronts are the boxes of the flat terrain that clears its space in front of
+ *       and behind each gate (see {@link TerrainPiece#clears()}). The clearing of the trees uses them (see
+ *       {@link VillageClearing}). The saved data of a reference does not keep them.</li>
+ * </ul>
+ *
+ * @param pieces    the template pieces of the village
+ * @param palisades the segments of the palisade
+ * @param area      the box of the village inside its palisade, or empty
+ * @param plots     the plots of the streets
+ * @param homes     the id of the pool of the homes, or empty
+ * @param piers     the boxes of the piers
+ * @param streetColumns the columns of the streets (Y 0): the columns of the street pieces of the structure. The
+ *                  saved data of a reference does not keep them.
+ * @param streets   the surface blocks of the streets that the repairs keep (see {@link StreetBlocks})
+ * @param paths     the boxes of the paths of the gates
+ * @param gateFronts the boxes of the flat terrain of the gates
  */
-public record VillageReference(List<Piece> pieces) {
+public record VillageReference(List<Piece> pieces, List<Palisade> palisades, Optional<BoundingBox> area,
+        List<VillagePlots.Plot> plots, Optional<ResourceLocation> homes, List<BoundingBox> piers,
+        List<BlockPos> streetColumns, Map<BlockPos, BlockState> streets, List<BoundingBox> paths,
+        List<BoundingBox> gateFronts) {
     /**
      * A structure piece of a village.
      *
@@ -41,13 +107,212 @@ public record VillageReference(List<Piece> pieces) {
         }
     }
 
+    /**
+     * A segment of the palisade of a village: a straight line of columns.
+     *
+     * @param start the base of the first column
+     * @param stepX the X step from a column to the next one
+     * @param stepZ the Z step from a column to the next one
+     * @param bases the Y of the base of each column
+     * @param base  the base block
+     * @param log   the log block
+     * @param logs  the number of logs of each column, above its base
+     */
+    public record Palisade(BlockPos start, int stepX, int stepZ, List<Integer> bases, BlockState base,
+            BlockState log, int logs) {
+        public Palisade {
+            start = start.immutable();
+            bases = List.copyOf(bases);
+        }
+
+        /** A segment with {@link PalisadeHeights#LOGS} logs on each column. */
+        public Palisade(BlockPos start, int stepX, int stepZ, List<Integer> bases, BlockState base, BlockState log) {
+            this(start, stepX, stepZ, bases, base, log, PalisadeHeights.LOGS);
+        }
+
+        /** The palisade of a structure piece. */
+        public static Palisade of(PalisadePiece piece) {
+            int[] bases = piece.bases();
+            List<Integer> list = new ArrayList<>(bases.length);
+            for (int base : bases) {
+                list.add(base);
+            }
+            return new Palisade(new BlockPos(piece.startX(), bases[0], piece.startZ()), piece.stepX(), piece.stepZ(),
+                    list, piece.blocks().base(), piece.blocks().log(), piece.logs());
+        }
+
+        /** The blocks of the palisade: the base block and the logs of each column. */
+        public Map<BlockPos, BlockState> blocks() {
+            Map<BlockPos, BlockState> blocks = new LinkedHashMap<>();
+            for (int i = 0; i < bases.size(); i++) {
+                int x = start.getX() + stepX * i;
+                int z = start.getZ() + stepZ * i;
+                int y = bases.get(i);
+                blocks.put(new BlockPos(x, y, z), base);
+                for (int log = 1; log <= logs; log++) {
+                    blocks.put(new BlockPos(x, y + log, z), this.log);
+                }
+            }
+            return blocks;
+        }
+    }
+
     public VillageReference {
         pieces = List.copyOf(pieces);
+        palisades = List.copyOf(palisades);
+        plots = List.copyOf(plots);
+        piers = List.copyOf(piers);
+        streetColumns = List.copyOf(streetColumns);
+        streets = Map.copyOf(streets);
+        paths = List.copyOf(paths);
+        gateFronts = List.copyOf(gateFronts);
+    }
+
+    /** A reference with no paths and no gate fronts. */
+    public VillageReference(List<Piece> pieces, List<Palisade> palisades, Optional<BoundingBox> area,
+            List<VillagePlots.Plot> plots, Optional<ResourceLocation> homes, List<BoundingBox> piers,
+            List<BlockPos> streetColumns, Map<BlockPos, BlockState> streets) {
+        this(pieces, palisades, area, plots, homes, piers, streetColumns, streets, List.of(), List.of());
+    }
+
+    /** A reference with no streets. */
+    public VillageReference(List<Piece> pieces, List<Palisade> palisades, Optional<BoundingBox> area,
+            List<VillagePlots.Plot> plots, Optional<ResourceLocation> homes, List<BoundingBox> piers) {
+        this(pieces, palisades, area, plots, homes, piers, List.of(), Map.of());
+    }
+
+    /** A reference with no piers. */
+    public VillageReference(List<Piece> pieces, List<Palisade> palisades, Optional<BoundingBox> area,
+            List<VillagePlots.Plot> plots, Optional<ResourceLocation> homes) {
+        this(pieces, palisades, area, plots, homes, List.of());
+    }
+
+    /** A reference with no plots, no pool of homes and no piers. */
+    public VillageReference(List<Piece> pieces, List<Palisade> palisades, Optional<BoundingBox> area) {
+        this(pieces, palisades, area, List.of(), Optional.empty());
+    }
+
+    /** A reference with template pieces only: no palisade, no area, no plots and no pool of homes. */
+    public VillageReference(List<Piece> pieces) {
+        this(pieces, List.of(), Optional.empty());
+    }
+
+    /** This reference with a pool of homes. */
+    public VillageReference withHomes(ResourceLocation pool) {
+        return new VillageReference(pieces, palisades, area, plots, Optional.of(pool), piers, streetColumns, streets,
+                paths, gateFronts);
+    }
+
+    /**
+     * This reference with more template pieces after its pieces, for example the fields and the mills outside the
+     * palisade (see {@link VillageLand}).
+     *
+     * @param more the pieces to add
+     * @return the reference
+     */
+    public VillageReference withPieces(List<Piece> more) {
+        if (more.isEmpty()) {
+            return this;
+        }
+        List<Piece> all = new ArrayList<>(pieces);
+        all.addAll(more);
+        return new VillageReference(all, palisades, area, plots, homes, piers, streetColumns, streets, paths,
+                gateFronts);
+    }
+
+    /**
+     * This reference with other templates for some of its pieces: each piece with the origin and the turn of a new
+     * piece gets the template of the new piece. For example, a home that grows in place gets the piece of its step
+     * (see {@link VillageGrowth}).
+     *
+     * @param replaced the new pieces
+     * @return the reference
+     */
+    public VillageReference withReplaced(List<Piece> replaced) {
+        if (replaced.isEmpty()) {
+            return this;
+        }
+        List<Piece> all = new ArrayList<>(pieces.size());
+        for (Piece piece : pieces) {
+            all.add(replaced.stream()
+                    .filter(found -> found.origin().equals(piece.origin()) && found.rotation() == piece.rotation())
+                    .findFirst().orElse(piece));
+        }
+        return new VillageReference(all, palisades, area, plots, homes, piers, streetColumns, streets, paths,
+                gateFronts);
+    }
+
+    /**
+     * This reference with the pieces of another reference after its pieces, for example the pieces of a ring that the
+     * builders build (see {@link RingWall}): the template pieces, the palisades, the piers, the paths and the gate
+     * fronts of the two references, their plots and the columns of their streets. The area is the box around the two
+     * areas. The pool of the homes and the recorded blocks of the streets of this reference stay.
+     *
+     * @param other the other reference
+     * @return the reference
+     */
+    public VillageReference with(VillageReference other) {
+        List<Piece> allPieces = new ArrayList<>(pieces);
+        allPieces.addAll(other.pieces);
+        List<Palisade> allPalisades = new ArrayList<>(palisades);
+        allPalisades.addAll(other.palisades);
+        List<BoundingBox> allPiers = new ArrayList<>(piers);
+        allPiers.addAll(other.piers);
+        List<BoundingBox> allPaths = new ArrayList<>(paths);
+        allPaths.addAll(other.paths);
+        List<BoundingBox> allFronts = new ArrayList<>(gateFronts);
+        allFronts.addAll(other.gateFronts);
+        Optional<BoundingBox> box = area.isEmpty() ? other.area : other.area.isEmpty() ? area
+                : BoundingBox.encapsulatingBoxes(List.of(area.get(), other.area.get()));
+        List<VillagePlots.Plot> allPlots = new ArrayList<>(plots);
+        allPlots.addAll(other.plots);
+        List<BlockPos> allColumns = new ArrayList<>(streetColumns);
+        allColumns.addAll(other.streetColumns);
+        return new VillageReference(allPieces, allPalisades, box, allPlots, homes, allPiers, allColumns, streets,
+                allPaths, allFronts);
+    }
+
+    /** This reference with other segments of the palisade, for example the segments of a stone wall. */
+    public VillageReference withPalisades(List<Palisade> others) {
+        return new VillageReference(pieces, others, area, plots, homes, piers, streetColumns, streets, paths,
+                gateFronts);
+    }
+
+    /** This reference with the surface blocks of its streets. */
+    public VillageReference withStreets(Map<BlockPos, BlockState> blocks) {
+        return new VillageReference(pieces, palisades, area, plots, homes, piers, streetColumns, blocks, paths,
+                gateFronts);
+    }
+
+    /** This reference with other boxes of piers. */
+    public VillageReference withPiers(List<BoundingBox> boxes) {
+        return new VillageReference(pieces, palisades, area, plots, homes, boxes, streetColumns, streets, paths,
+                gateFronts);
+    }
+
+    /** The blocks of all the palisades, in the order of the palisades. */
+    public Map<BlockPos, BlockState> palisadeBlocks() {
+        Map<BlockPos, BlockState> blocks = new LinkedHashMap<>();
+        for (Palisade palisade : palisades) {
+            blocks.putAll(palisade.blocks());
+        }
+        return blocks;
+    }
+
+    /**
+     * True if a position is in the area of the village, on the horizontal plane.
+     *
+     * @param pos the position
+     * @return true for a position in the area, or false for a village with no area
+     */
+    public boolean isInArea(BlockPos pos) {
+        return area.map(box -> pos.getX() >= box.minX() && pos.getX() <= box.maxX() && pos.getZ() >= box.minZ()
+                && pos.getZ() <= box.maxZ()).orElse(false);
     }
 
     /**
      * The reference of the village at a position: the pieces of the Folkhold village structure that contains the
-     * position. A piece that is not a structure template does not count.
+     * position, and the pieces of its ring districts. A piece that is not a structure template on the terrain or a palisade does not count.
      *
      * @param level the level
      * @param heart the position of the village heart
@@ -63,15 +328,130 @@ public record VillageReference(List<Piece> pieces) {
         if (!start.isValid()) {
             return Optional.empty();
         }
+        Optional<FortifiedVillageStructure.Variant> variant = start.getStructure()
+                instanceof FortifiedVillageStructure village ? Optional.of(village.variantOf(level, start.getPieces()))
+                        : Optional.empty();
+        Optional<ResourceLocation> homes = variant.flatMap(found -> found.homes().unwrapKey())
+                .map(ResourceKey::location);
+        List<StructurePiece> pieces = start.getPieces();
+        if (variant.map(FortifiedVillageStructure.Variant::cave).orElse(false)) {
+            Optional<BoundingBox> box = caveArea(pieces);
+            return of(level, pieces).map(reference -> box.map(reference::withArea).orElse(reference))
+                    .map(reference -> homes.map(reference::withHomes).orElse(reference));
+        }
+        if (hasRings(level, start.getChunkPos())) {
+            pieces = new ArrayList<>(pieces);
+            pieces.addAll(RingDistrictHolds.ringPieces(level, start.getChunkPos(), start.getPieces()));
+        }
+        return of(level, pieces).map(reference -> homes.map(reference::withHomes).orElse(reference));
+    }
+
+    /**
+     * The area of a cave village: the box of all its pieces. A cave village has no palisade: the rock is its wall (see
+     * {@link io.github.nicolasgoyon.folkhold.world.village.structure.CaveVillage}). Thus the spawn protection, the
+     * scan and the repairs cover its halls, its tunnels and its rooms.
+     *
+     * @param pieces the pieces of the village structure
+     * @return the box, or empty with no piece
+     */
+    public static Optional<BoundingBox> caveArea(List<StructurePiece> pieces) {
+        return BoundingBox.encapsulatingBoxes(pieces.stream().map(StructurePiece::getBoundingBox).toList());
+    }
+
+    /** The same reference with another area. */
+    public VillageReference withArea(BoundingBox box) {
+        return new VillageReference(pieces, palisades, Optional.of(box), plots, homes, piers, streetColumns, streets,
+                paths, gateFronts);
+    }
+
+    /**
+     * True if the village of a start chunk can have ring districts in the world: the tier of its start level, or of
+     * the level of a settlement of the start chunk, has rings. The other villages do not read the anchor chunks.
+     */
+    private static boolean hasRings(ServerLevel level, ChunkPos start) {
+        int top = Settlements.startLevel(level.getSeed(), start);
+        for (Settlement settlement : SettlementData.get(level.getServer()).registry().byStart(start.x, start.z)) {
+            top = Math.max(top, settlement.level());
+        }
+        return VillageSizes.forLevel(top).rings() > 0;
+    }
+
+    /**
+     * The reference of the pieces of a village structure.
+     *
+     * @param level  the level
+     * @param pieces the pieces of the structure
+     * @return the reference, or empty if no piece counts
+     */
+    public static Optional<VillageReference> of(ServerLevel level, List<StructurePiece> pieces) {
         RegistryOps<Tag> ops = RegistryOps.create(NbtOps.INSTANCE, level.registryAccess());
-        List<Piece> pieces = new ArrayList<>();
-        for (StructurePiece piece : start.getPieces()) {
-            if (piece instanceof PoolElementStructurePiece pool) {
-                templateOf(ops, pool.getElement())
-                        .ifPresent(template -> pieces.add(new Piece(template, pool.getPosition(), pool.getRotation())));
+        List<Piece> templates = new ArrayList<>();
+        List<Palisade> palisades = new ArrayList<>();
+        List<BoundingBox> templateBoxes = new ArrayList<>();
+        List<BoundingBox> palisadeBoxes = new ArrayList<>();
+        List<BoundingBox> piers = new ArrayList<>();
+        Set<BlockPos> streetColumns = new LinkedHashSet<>();
+        List<BoundingBox> paths = new ArrayList<>();
+        List<BoundingBox> gateFronts = new ArrayList<>();
+        for (StructurePiece piece : pieces) {
+            if (piece instanceof PoolElementStructurePiece pool
+                    && pool.getElement().getProjection() == StructureTemplatePool.Projection.RIGID) {
+                Optional<ResourceLocation> template = templateOf(ops, pool.getElement());
+                if (template.isPresent()) {
+                    templates.add(new Piece(template.get(), pool.getPosition(), pool.getRotation()));
+                    templateBoxes.add(pool.getBoundingBox());
+                }
+            } else if (piece instanceof PoolElementStructurePiece pool
+                    && pool.getElement().getProjection() == StructureTemplatePool.Projection.TERRAIN_MATCHING) {
+                BoundingBox box = pool.getBoundingBox();
+                for (int x = box.minX(); x <= box.maxX(); x++) {
+                    for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                        streetColumns.add(new BlockPos(x, 0, z));
+                    }
+                }
+            } else if (piece instanceof PalisadePiece palisade) {
+                palisades.add(Palisade.of(palisade));
+                palisadeBoxes.add(palisade.getBoundingBox());
+            } else if (piece instanceof PierPiece || piece instanceof PortPiece) {
+                piers.add(piece.getBoundingBox());
+            } else if (piece instanceof VillagePathPiece path) {
+                paths.add(path.getBoundingBox());
+            } else if (piece instanceof TerrainPiece terrain && terrain.clears()) {
+                gateFronts.add(terrain.area());
             }
         }
-        return pieces.isEmpty() ? Optional.empty() : Optional.of(new VillageReference(pieces));
+        if (templates.isEmpty()) {
+            return Optional.empty();
+        }
+        BoundingBox templateBox = BoundingBox.encapsulatingBoxes(templateBoxes).orElseThrow();
+        Optional<BoundingBox> area = BoundingBox.encapsulatingBoxes(palisadeBoxes)
+                .map(box -> new BoundingBox(box.minX(), templateBox.minY(), box.minZ(), box.maxX(),
+                        templateBox.maxY(), box.maxZ()));
+        return Optional.of(new VillageReference(templates, palisades, area,
+                VillagePlots.of(level.getStructureManager(), pieces), Optional.empty(), piers,
+                List.copyOf(streetColumns), Map.of(), paths, gateFronts));
+    }
+
+    /**
+     * The id of the template of a pool element.
+     *
+     * @param level   the level
+     * @param element the pool element
+     * @return the id, or empty for an element with no single template
+     */
+    public static Optional<ResourceLocation> templateOf(ServerLevel level, StructurePoolElement element) {
+        return templateOf(RegistryOps.create(NbtOps.INSTANCE, level.registryAccess()), element);
+    }
+
+    /**
+     * The id of the template of a pool element. The world generation can use this method: it reads no level.
+     *
+     * @param registries the registries
+     * @param element    the pool element
+     * @return the id, or empty for an element with no single template
+     */
+    public static Optional<ResourceLocation> templateOf(RegistryAccess registries, StructurePoolElement element) {
+        return templateOf(RegistryOps.create(NbtOps.INSTANCE, registries), element);
     }
 
     /** The id of the template of a pool element, from the saved form of the element. */
@@ -82,5 +462,142 @@ public record VillageReference(List<Piece> pieces) {
                 .map(CompoundTag.class::cast)
                 .filter(tag -> tag.contains("location", Tag.TAG_STRING))
                 .map(tag -> ResourceLocation.tryParse(tag.getString("location")));
+    }
+
+    /** The reference as NBT data. */
+    public CompoundTag save() {
+        CompoundTag tag = new CompoundTag();
+        ListTag pieceList = new ListTag();
+        for (Piece piece : pieces) {
+            CompoundTag pieceTag = new CompoundTag();
+            pieceTag.putString("Template", piece.template().toString());
+            pieceTag.putLong("Origin", piece.origin().asLong());
+            pieceTag.putString("Rotation", piece.rotation().name());
+            pieceList.add(pieceTag);
+        }
+        tag.put("Pieces", pieceList);
+        ListTag palisadeList = new ListTag();
+        for (Palisade palisade : palisades) {
+            CompoundTag palisadeTag = new CompoundTag();
+            palisadeTag.putLong("Start", palisade.start().asLong());
+            palisadeTag.putInt("StepX", palisade.stepX());
+            palisadeTag.putInt("StepZ", palisade.stepZ());
+            palisadeTag.putIntArray("Bases", palisade.bases());
+            palisadeTag.put("Base", NbtUtils.writeBlockState(palisade.base()));
+            palisadeTag.put("Log", NbtUtils.writeBlockState(palisade.log()));
+            palisadeTag.putInt("Logs", palisade.logs());
+            palisadeList.add(palisadeTag);
+        }
+        tag.put("Palisades", palisadeList);
+        area.ifPresent(box -> tag.putIntArray("Area", boxArray(box)));
+        ListTag plotList = new ListTag();
+        for (VillagePlots.Plot plot : plots) {
+            CompoundTag plotTag = new CompoundTag();
+            plotTag.putLong("Connector", plot.connector().asLong());
+            plotTag.putString("Facing", plot.facing().getSerializedName());
+            plotTag.putString("Target", plot.target().toString());
+            plotTag.putBoolean("Built", plot.built());
+            plotList.add(plotTag);
+        }
+        tag.put("Plots", plotList);
+        homes.ifPresent(pool -> tag.putString("Homes", pool.toString()));
+        ListTag pierList = new ListTag();
+        for (BoundingBox pier : piers) {
+            pierList.add(new IntArrayTag(boxArray(pier)));
+        }
+        tag.put("Piers", pierList);
+        ListTag streetList = new ListTag();
+        streets.forEach((pos, state) -> {
+            CompoundTag streetTag = new CompoundTag();
+            streetTag.putLong("Pos", pos.asLong());
+            streetTag.put("State", NbtUtils.writeBlockState(state));
+            streetList.add(streetTag);
+        });
+        tag.put("Streets", streetList);
+        return tag;
+    }
+
+    private static int[] boxArray(BoundingBox box) {
+        return new int[] {box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()};
+    }
+
+    private static Optional<BoundingBox> box(int[] values) {
+        return values.length == 6
+                ? Optional.of(new BoundingBox(values[0], values[1], values[2], values[3], values[4], values[5]))
+                : Optional.empty();
+    }
+
+    /**
+     * The reference from NBT data (see {@link #save()}).
+     *
+     * @param blocks the blocks of the game
+     * @param tag    the data
+     * @return the reference, or empty for data with no template piece
+     */
+    public static Optional<VillageReference> load(HolderGetter<Block> blocks, CompoundTag tag) {
+        List<Piece> pieces = new ArrayList<>();
+        ListTag pieceList = tag.getList("Pieces", Tag.TAG_COMPOUND);
+        for (int i = 0; i < pieceList.size(); i++) {
+            CompoundTag pieceTag = pieceList.getCompound(i);
+            ResourceLocation template = ResourceLocation.tryParse(pieceTag.getString("Template"));
+            Optional<Rotation> rotation = rotation(pieceTag.getString("Rotation"));
+            if (template != null && rotation.isPresent()) {
+                pieces.add(new Piece(template, BlockPos.of(pieceTag.getLong("Origin")), rotation.get()));
+            }
+        }
+        List<Palisade> palisades = new ArrayList<>();
+        ListTag palisadeList = tag.getList("Palisades", Tag.TAG_COMPOUND);
+        for (int i = 0; i < palisadeList.size(); i++) {
+            CompoundTag palisadeTag = palisadeList.getCompound(i);
+            int[] bases = palisadeTag.getIntArray("Bases");
+            if (bases.length > 0) {
+                List<Integer> list = new ArrayList<>(bases.length);
+                for (int base : bases) {
+                    list.add(base);
+                }
+                palisades.add(new Palisade(BlockPos.of(palisadeTag.getLong("Start")), palisadeTag.getInt("StepX"),
+                        palisadeTag.getInt("StepZ"), list,
+                        NbtUtils.readBlockState(blocks, palisadeTag.getCompound("Base")),
+                        NbtUtils.readBlockState(blocks, palisadeTag.getCompound("Log")),
+                        palisadeTag.contains("Logs") ? palisadeTag.getInt("Logs") : PalisadeHeights.LOGS));
+            }
+        }
+        Optional<BoundingBox> area = box(tag.getIntArray("Area"));
+        List<VillagePlots.Plot> plots = new ArrayList<>();
+        ListTag plotList = tag.getList("Plots", Tag.TAG_COMPOUND);
+        for (int i = 0; i < plotList.size(); i++) {
+            CompoundTag plotTag = plotList.getCompound(i);
+            Direction facing = Direction.byName(plotTag.getString("Facing"));
+            ResourceLocation target = ResourceLocation.tryParse(plotTag.getString("Target"));
+            if (facing != null && target != null) {
+                plots.add(new VillagePlots.Plot(BlockPos.of(plotTag.getLong("Connector")), facing, target,
+                        plotTag.getBoolean("Built")));
+            }
+        }
+        Optional<ResourceLocation> homes = tag.contains("Homes", Tag.TAG_STRING)
+                ? Optional.ofNullable(ResourceLocation.tryParse(tag.getString("Homes"))) : Optional.empty();
+        List<BoundingBox> piers = new ArrayList<>();
+        ListTag pierList = tag.getList("Piers", Tag.TAG_INT_ARRAY);
+        for (int i = 0; i < pierList.size(); i++) {
+            box(pierList.getIntArray(i)).ifPresent(piers::add);
+        }
+        Map<BlockPos, BlockState> streets = new HashMap<>();
+        ListTag streetList = tag.getList("Streets", Tag.TAG_COMPOUND);
+        for (int i = 0; i < streetList.size(); i++) {
+            CompoundTag streetTag = streetList.getCompound(i);
+            streets.put(BlockPos.of(streetTag.getLong("Pos")),
+                    NbtUtils.readBlockState(blocks, streetTag.getCompound("State")));
+        }
+        return pieces.isEmpty() ? Optional.empty()
+                : Optional.of(new VillageReference(pieces, palisades, area, plots, homes, piers, List.of(), streets));
+    }
+
+    private static Optional<Rotation> rotation(String name) {
+        for (Rotation rotation : Rotation.values()) {
+            if (rotation.name().equals(name)) {
+                return Optional.of(rotation);
+            }
+        }
+        return Optional.empty();
     }
 }

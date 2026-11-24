@@ -6,6 +6,7 @@ import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.UnitStats;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.AnchorStrollGoal;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.PlatformLookoutGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.ReturnToAnchorGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitHurtByTargetGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitNavigation;
@@ -21,6 +22,7 @@ import io.github.nicolasgoyon.folkhold.world.registry.ModSounds.UnitVoice;
 import io.github.nicolasgoyon.folkhold.world.settlement.Territories;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonEquipment;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
+import io.github.nicolasgoyon.folkhold.world.village.MonsterThreats;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,6 +38,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -80,18 +83,21 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  *
  * <p>A unit has:
  * <ul>
- *   <li>a <b>home position</b>: center of the patrol;</li>
- *   <li>a <b>faction</b>: the faction of its village, or none;</li>
+ *   <li>a <b>home position</b>: center of the patrol.</li>
+ *   <li>a <b>faction</b>: the faction of its village, or none.</li>
  *   <li>a <b>village</b>: the position of its village heart, or none. The unit reports threats to the heart,
- *       and the heart alerts all units of the village;</li>
- *   <li>a <b>post</b> (optional): a tower or wall position. A unit with a post stays at its post;</li>
+ *       and the heart alerts all units of the village.</li>
+ *   <li>a <b>post</b> (optional): a tower or wall position. A unit with a post stays at its post.</li>
  *   <li>a <b>night watch position</b> (optional, set by the heart): at night, the unit stays near it
  *       instead of its home.</li>
  * </ul>
  *
- * <p>A unit chases a target only in its chase area (see {@link #isInChaseArea}). When the unit or its target
- * leaves the area, the unit stops the chase, ignores all targets for {@link #GIVE_UP_TICKS} and goes back. The unit
+ * <p>A unit chases a target only in its chase area (see {@link #isInChaseArea}). The area has no deep water: a
+ * target that swims away from an island or a coast is out of the area. When the unit or its target leaves the area,
+ * the unit stops the chase, ignores all targets for {@link #GIVE_UP_TICKS} and goes back. The unit
  * also stops the chase after {@link #UNREACHABLE_TICKS} with no path to the target and no line of sight to it.
+ * An attack stops this time when the unit and the attacker are both in the chase area (see
+ * {@link #setLastHurtByMob}): the unit then answers the attacker.
  *
  * <p>The attributes come from the config of the unit type when the unit spawns.
  */
@@ -109,6 +115,16 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     private static final RawAnimation HURT = RawAnimation.begin().thenPlay("misc.hurt");
 
     private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
+    /** The throw of the trident of the unit (see {@link TridentThrow}). */
+    private final TridentThrow tridentThrow = new TridentThrow(this);
+    /** A unit throws its spear only at a target farther than this distance, in blocks: out of melee reach. */
+    static final double SPEAR_MIN_DISTANCE = 3.0;
+    /** The largest distance of a throw of the spear, in blocks. */
+    static final double SPEAR_RANGE = 14.0;
+    /** The shortest time between two throws of the spear, in ticks. */
+    static final int SPEAR_INTERVAL = 30;
+    /** The value of {@code tickCount} at the last throw of the spear. Not saved. */
+    private int lastSpearThrow = -SPEAR_INTERVAL;
 
     /** A unit gives an alert at most once in this time, in ticks: 5 seconds. */
     private static final int ALERT_INTERVAL = 100;
@@ -117,17 +133,23 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
 
     /** Patrol radius at night, in blocks. */
     private static final int NIGHT_RADIUS = 4;
+    /** Patrol radius around the station by day, in blocks. */
+    public static final int STATION_RADIUS = 6;
     private static final String HOME_TAG = "HomePos";
     private static final String VILLAGE_TAG = "VillagePos";
     private static final String POST_TAG = "PostPos";
     private static final String ROUTED_TAG = "RoutedUntil";
     private static final String NIGHT_TAG = "NightPos";
+    private static final String STATION_TAG = "StationPos";
     private static final String FACTION_TAG = "Faction";
     private static final String EQUIPMENT_TAG = "Equipment";
-    /** Speed of a routed unit that runs back home. */
-    private static final double ROUT_SPEED = 1.3;
-    /** After the end of a chase at the limit of the chase area, the unit ignores all targets for this time. */
-    static final int GIVE_UP_TICKS = 100;
+    /**
+     * After the end of a chase at the limit of the chase area, the unit ignores all targets for this time. An attack
+     * from the chase area stops this time (see {@link #setLastHurtByMob}).
+     */
+    public static final int GIVE_UP_TICKS = 100;
+    /** Water of this depth, in blocks, or more is deep: a unit does not chase a target in it. */
+    public static final int DEEP_WATER = 3;
     /** A unit stops the chase after this time with no path to its target and no line of sight to it. */
     static final int UNREACHABLE_TICKS = 200;
     /** A path goes to the target when its end is nearer than this distance to the target, in blocks. */
@@ -165,6 +187,9 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     /** Position of the night watch (near a gate), or null. The village heart sets it. */
     @Nullable
     private BlockPos nightPos;
+    /** Position of the day station (inside a gate or at the foot of a tower), or null. The village heart sets it. */
+    @Nullable
+    private BlockPos stationPos;
     /** Game time until which the unit is routed (runs away and does not fight). */
     private long routedUntil;
     /** Game time until which the unit ignores all targets, after the end of a chase. Not saved. */
@@ -176,6 +201,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     /** Time in ticks on the way to the post. Not saved. */
     private int postTravelTicks;
     private int noPathTicks;
+    /** True while the unit holds a lookout spot on its platform (see {@link PlatformLookoutGoal}). Not saved. */
+    private boolean onLookout;
 
     protected FactionUnit(EntityType<? extends FactionUnit> type, Level level) {
         super(type, level);
@@ -271,8 +298,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     }
 
     /**
-     * The center of the area where the unit must stay now: the post, else the night watch position at night,
-     * else the home position.
+     * The center of the area where the unit must stay now: the post, else the night watch position at night, else the
+     * day station, else the home position.
      *
      * <p>The unit does not use the vanilla restriction ({@code restrictTo}): vanilla target goals ignore all
      * targets outside the restriction, and a unit on a post must see the targets below its tower.
@@ -284,6 +311,9 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (nightPos != null && level().isNight()) {
             return nightPos;
         }
+        if (stationPos != null) {
+            return stationPos;
+        }
         return getHomePos();
     }
 
@@ -292,7 +322,10 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (postPos != null) {
             return POST_RADIUS;
         }
-        return level().isNight() ? NIGHT_RADIUS : WorldConfig.PATROL_RADIUS.get();
+        if (level().isNight()) {
+            return NIGHT_RADIUS;
+        }
+        return stationPos != null ? STATION_RADIUS : WorldConfig.PATROL_RADIUS.get();
     }
 
     /** The night watch position (near a gate), or null. At night, the unit stays near it. */
@@ -303,6 +336,39 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
 
     public void setNightPos(@Nullable BlockPos pos) {
         nightPos = pos == null ? null : pos.immutable();
+    }
+
+    /**
+     * The day station (inside a gate or at the foot of a tower), or null. By day, a unit with no post stays near its
+     * station.
+     */
+    @Nullable
+    public BlockPos getStationPos() {
+        return stationPos;
+    }
+
+    public void setStationPos(@Nullable BlockPos pos) {
+        stationPos = pos == null ? null : pos.immutable();
+    }
+
+    /**
+     * True while the unit holds a lookout spot on the platform of its post (see {@link PlatformLookoutGoal}). At an
+     * edge spot, the unit leans over the drop: a hit does not push it, so it does not fall from its tower.
+     */
+    public boolean isOnLookout() {
+        return onLookout;
+    }
+
+    public void setOnLookout(boolean value) {
+        onLookout = value;
+    }
+
+    /** A unit on a lookout spot does not move back after a hit (see {@link #isOnLookout()}). */
+    @Override
+    public void knockback(double strength, double x, double z) {
+        if (!onLookout) {
+            super.knockback(strength, x, z);
+        }
     }
 
     /** True if the unit is routed: it runs back home and does not fight. */
@@ -428,15 +494,33 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
      * Tells if a position is in the chase area of the unit:
      * <ul>
      *   <li>not farther than the chase radius ({@link #chaseRadius()}) from the center of the chase area
-     *       ({@link #chaseCenter()});</li>
+     *       ({@link #chaseCenter()}).</li>
      *   <li>not in the territory of another faction, for a unit with a faction.</li>
+     *   <li>not in deep water (see {@link #isDeepWater}).</li>
      * </ul>
      *
      * @param pos the position
      * @return true if the position is in the chase area
      */
     public boolean isInChaseArea(BlockPos pos) {
-        return isInChaseRadius(pos) && isInTerritory(pos);
+        return isInChaseRadius(pos) && isInTerritory(pos) && !isDeepWater(level(), pos);
+    }
+
+    /**
+     * True if a position is in deep water: the block at the position and the {@link #DEEP_WATER} - 1 blocks under it
+     * are water. A unit does not swim after a target in deep water.
+     *
+     * @param level the level
+     * @param pos   the position
+     * @return true for deep water
+     */
+    public static boolean isDeepWater(Level level, BlockPos pos) {
+        for (int depth = 0; depth < DEEP_WATER; depth++) {
+            if (!level.getFluidState(pos.below(depth)).is(FluidTags.WATER)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** True if the position is not farther than the chase radius from the center of the chase area. */
@@ -513,6 +597,35 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         return !toTarget || !path.canReach();
     }
 
+    /**
+     * Records the attacker of the unit. If the unit and the attacker are both in the chase area, the attack stops the
+     * time in which the unit ignores all targets (see {@link #giveUpChase}). Then {@link UnitHurtByTargetGoal} can
+     * give the attacker as target. An attacker outside the chase area does not stop this time: the unit stays near
+     * its post. These attackers also do not stop this time, because {@link UnitHurtByTargetGoal} does not answer them:
+     * a friendly player, another unit, and an attacker that the unit cannot attack ({@link #canAttack(LivingEntity)}).
+     *
+     * <p>{@code LivingEntity.hurt} calls this method, and {@link FactionHorseEntity} calls it for the rider of the
+     * horse. So the rule applies to all units.
+     */
+    @Override
+    public void setLastHurtByMob(@Nullable LivingEntity attacker) {
+        super.setLastHurtByMob(attacker);
+        if (attacker != null && !level().isClientSide() && isGivingUp()
+                && !(attacker instanceof Player player && isFriendlyTo(player))
+                && !(attacker instanceof FactionUnit) && canAttack(attacker)
+                && isInChaseArea(blockPosition()) && isInChaseArea(attacker.blockPosition())) {
+            gaveUpUntil = 0;
+        }
+    }
+
+    /**
+     * True while the unit ignores all targets after it gives up a chase (see {@link #giveUpChase}). The GameTests use
+     * this method.
+     */
+    public boolean isGivingUp() {
+        return level().getGameTime() < gaveUpUntil;
+    }
+
     /** Stops the chase: the unit drops its target and ignores all targets for {@link #GIVE_UP_TICKS}. */
     private void giveUpChase() {
         super.setTarget(null);
@@ -523,8 +636,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
      * Animation controllers (GeckoLib). The animations are in
      * {@code assets/folkhold_world/animations/entity/faction_unit.animation.json}.
      * <ul>
-     *   <li>movement: walk or idle (see {@link #movementController()});</li>
-     *   <li>attack: wind-up and swing of the weapon arm, when the unit swings;</li>
+     *   <li>movement: walk or idle (see {@link #movementController()}).</li>
+     *   <li>attack: wind-up and swing of the weapon arm, when the unit swings.</li>
      *   <li>hold: shield up while the unit blocks, bow drawn while an archer has a target. With a crossbow: the
      *       charge, then the aim while the crossbow holds a bolt and the archer has a target. The shot is a triggered
      *       animation ({@link #CROSSBOW_SHOT}).</li>
@@ -568,6 +681,11 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         }));
     }
 
+    /** The throw of the trident of the unit: a unit with a trident in its main hand can throw it. */
+    public TridentThrow tridentThrow() {
+        return tridentThrow;
+    }
+
     /** True while the unit charges a crossbow. Only an archer charges a crossbow (see {@link ArcherEntity}). */
     public boolean isChargingCrossbow() {
         return false;
@@ -596,6 +714,7 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     @Override
     protected void customServerAiStep() {
         super.customServerAiStep();
+        tridentThrow.tick();
 
         if (isRouted()) {
             if (getTarget() != null) {
@@ -603,7 +722,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
             }
             if (distanceToSqr(getHomePos().getCenter()) > 9.0 && getNavigation().isDone()) {
                 BlockPos home = getHomePos();
-                getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, ROUT_SPEED);
+                getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5,
+                        WorldConfig.CAPTAIN_ROUT_SPEED.get());
             }
             unitServerAiStep(null);
             return;
@@ -619,9 +739,10 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
             setTarget(null);
             target = null;
         }
-        // The distance check is cheap: each tick. The territory check only each 10 ticks.
+        // The distance check is cheap: each tick. The territory and water checks only each 10 ticks.
         if (target != null && (!isInChaseRadius(target.blockPosition()) || !isInChaseRadius(blockPosition())
-                || (tickCount % 10 == 0 && (!isInTerritory(target.blockPosition()) || !isInTerritory(blockPosition()))))) {
+                || (tickCount % 10 == 0 && (!isInTerritory(target.blockPosition()) || !isInTerritory(blockPosition())
+                        || isDeepWater(level(), target.blockPosition()) || isDeepWater(level(), blockPosition()))))) {
             giveUpChase();
             target = null;
         }
@@ -637,7 +758,10 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (target != null) {
             LivingEntity threat = target;
             getVillageHeart().ifPresent(heart -> {
-                heart.reportThreat(null);
+                // A monster far from the villagers does not start the alert: the villagers stay in their beds.
+                if (MonsterThreats.startsAlert(threat)) {
+                    heart.reportThreat(null);
+                }
                 if (!(threat instanceof Player friend) || !isFriendlyTo(friend)) {
                     heart.shareTarget(threat);
                 }
@@ -648,7 +772,36 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         } else if (tickCount % 40 == 0 && canSpeak()) {
             greetFriendlyPlayer();
         }
+        throwSpear(target);
         unitServerAiStep(target);
+    }
+
+    /**
+     * True if the unit throws its spear: a trident with Loyalty in the main hand (see {@link #throwSpear}). The
+     * archers return false: their attack goals throw the trident.
+     */
+    protected boolean throwsSpear() {
+        return true;
+    }
+
+    /**
+     * Throws the spear of the unit at its target: a unit with a trident with Loyalty (a spear of Sunreach) throws it
+     * at a target farther than {@link #SPEAR_MIN_DISTANCE} and at {@link #SPEAR_RANGE} blocks or less, in sight, at
+     * most once in {@link #SPEAR_INTERVAL} ticks. The trident comes back to the unit (see {@link TridentThrow}). In
+     * melee reach, the unit attacks with the trident in its hand.
+     *
+     * @param target the target, or null
+     */
+    private void throwSpear(@Nullable LivingEntity target) {
+        if (target == null || !throwsSpear() || tickCount - lastSpearThrow < SPEAR_INTERVAL
+                || !tridentThrow.holdsLoyalTrident()) {
+            return;
+        }
+        double distance = distanceTo(target);
+        if (distance > SPEAR_MIN_DISTANCE && distance <= SPEAR_RANGE && getSensing().hasLineOfSight(target)) {
+            lastSpearThrow = tickCount;
+            tridentThrow.throwAt(target, 0.1);
+        }
     }
 
     private void greetFriendlyPlayer() {
@@ -683,7 +836,7 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
             setHomePos(blockPosition());
         }
         if (villagePos == null) {
-            VillageHearts.findNearest(level.getLevel(), blockPosition(), WorldConfig.VILLAGE_RADIUS.get())
+            VillageHearts.findAt(level.getLevel(), blockPosition())
                     .ifPresent(this::setVillagePos);
         }
         if (factionId == null) {
@@ -834,8 +987,12 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
             tag.put(POST_TAG, NbtUtils.writeBlockPos(postPos));
         }
         tag.putLong(ROUTED_TAG, routedUntil);
+        tridentThrow.save(tag, registryAccess());
         if (nightPos != null) {
             tag.put(NIGHT_TAG, NbtUtils.writeBlockPos(nightPos));
+        }
+        if (stationPos != null) {
+            tag.put(STATION_TAG, NbtUtils.writeBlockPos(stationPos));
         }
         if (factionId != null) {
             tag.putString(FACTION_TAG, factionId);
@@ -851,9 +1008,11 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         NbtUtils.readBlockPos(tag, POST_TAG).ifPresent(this::setPostPos);
         routedUntil = tag.getLong(ROUTED_TAG);
         NbtUtils.readBlockPos(tag, NIGHT_TAG).ifPresent(this::setNightPos);
+        NbtUtils.readBlockPos(tag, STATION_TAG).ifPresent(this::setStationPos);
         factionId = tag.contains(FACTION_TAG) ? tag.getString(FACTION_TAG) : null;
         if (tag.contains(EQUIPMENT_TAG)) {
             equipmentSet = tag.getString(EQUIPMENT_TAG);
         }
+        tridentThrow.load(tag, registryAccess());
     }
 }

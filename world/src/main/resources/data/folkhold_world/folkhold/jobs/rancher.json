@@ -15,5 +15,21 @@
   ],
   "min_level": 1,
   "weight": 10,
-  "profession": "minecraft:butcher"
+  "profession": "minecraft:butcher",
+  "trades": [
+    {"sell": {"item": "minecraft:egg", "count": 6}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:feather", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:beef", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:porkchop", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:chicken", "count": 3}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:leather", "count": 2}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:rabbit", "count": 1}, "level": 1, "volume": 4},
+    {"sell": {"item": "minecraft:rabbit_hide", "count": 1}, "level": 1, "volume": 4},
+    {"buy": {"item": "minecraft:wheat", "count": 6}, "level": 1, "volume": 7},
+    {"buy": {"item": "minecraft:wheat_seeds", "count": 4}, "level": 1, "volume": 7},
+    {"sell": {"item": "minecraft:leather_horse_armor", "count": 1}, "level": 2, "volume": 1, "materials": [{"item": "minecraft:leather", "count": 7}]},
+    {"sell": {"item": "minecraft:iron_horse_armor", "count": 1}, "level": 3, "volume": 1, "materials": [{"item": "minecraft:iron_ingot", "count": 7}, {"item": "minecraft:leather", "count": 1}]},
+    {"sell": {"item": "minecraft:golden_horse_armor", "count": 1}, "level": 4, "volume": 1, "materials": [{"item": "minecraft:gold_ingot", "count": 7}, {"item": "minecraft:leather", "count": 1}]},
+    {"sell": {"item": "minecraft:diamond_horse_armor", "count": 1}, "level": 5, "volume": 1, "materials": [{"item": "minecraft:diamond", "count": 7}, {"item": "minecraft:leather", "count": 1}]}
+  ]
 }

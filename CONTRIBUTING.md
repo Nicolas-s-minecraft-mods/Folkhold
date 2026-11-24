@@ -5,7 +5,7 @@
 - Write all code, comments, documentation, commit messages, issues and pull requests in English.
 - Use the style of ASD-STE100 (Simplified Technical English): short sentences, active voice, one instruction for each sentence, no semicolons.
 - Documentation and comments describe the current state of the code and of the project. Do not refer to earlier versions, to the origin of a document or to the reason for a change. Put this information in commit messages and pull requests.
-- The mods support English (`en_us`) and French (`fr_fr`). See [Translations](#translations).
+- The mods and the site of the project support English (`en_us`) and French (`fr_fr`). See [Translations](#translations).
 
 ## Workflow
 
@@ -24,8 +24,9 @@
    Conventional Commits and ends with a bump marker (see [Versions and releases](#versions-and-releases)):
    - `fix(world): close the gates at night [patch]`
 5. The CI must pass before the merge. The check **Title and version** refuses a title with no bump marker, and its
-   summary gives the version after the merge.
-6. Use "Squash and merge": the title of the pull request becomes the title of the commit on `develop`. Delete the
+   summary gives the version after the merge. The checks **Build** and **GameTests** of the workflow Build compile
+   and test the mods (see [Continuous integration](docs/getting-started.md#continuous-integration-and-releases)).
+6. Use "Squash and merge": the title of the pull request becomes the title of the commit on `develop`. Remove the
    branch after the merge.
 
 Do not push directly to `develop` or to `main`.
@@ -63,6 +64,64 @@ change needs the code of a pull request that is not merged. For an independent c
 - Each mod has `assets/<mod_id>/lang/en_us.json` and `assets/<mod_id>/lang/fr_fr.json`.
 - When you add a key, add it to the two files in the same commit.
 - `./gradlew checkTranslations` fails when a key is missing in one language. The CI runs this check.
+- The site of the project has its texts in `site/lang/en_us.json` and `site/lang/fr_fr.json`. The tests of
+  `scripts/pages.py` fail when a key is missing in one language. The CI runs these tests.
+
+## Changelog
+
+The changelog tells the players what changes in each version. The GitHub Release of a version starts with these
+changes, in English and in French. The CI and the release use `scripts/changelog.py`.
+
+- Add an entry when the player sees the change: a new feature, a gameplay change or a visible fix.
+- An entry compares with the last release, not with `develop`. A feature that is not in a release yet gets one
+  entry of the category `new`. A later change or fix of this feature changes this entry, or adds no entry. A
+  feature that a later pull request removes before the release gets no entry. The pull request that removes a
+  feature before the release also removes the entry of this feature.
+- A pull request with the marker `[minor]` adds an entry. If it has no player-facing change, its description tells
+  why it has no entry. The check gives a warning, not an error, for a `[minor]` pull request with no new entry.
+- Do not add an entry for a change to the CI, the build, the tests, the documentation or the structure of the code. A
+  pull request with no player-facing change has no entry.
+- An entry is one file in `changelog/`. Give the file the issue number and the short name of the branch:
+  `changelog/412-night-gates.json`. Use lowercase letters, digits and hyphens. For two changes, add two files.
+
+```json
+{
+  "category": "fixed",
+  "en_us": "The gates of the village close at night.",
+  "fr_fr": "Les portes du village ferment la nuit."
+}
+```
+
+- `category`: `new` (a new feature), `changed` (a change to a feature) or `fixed` (a fix of a problem that the
+  player sees).
+- `en_us` and `fr_fr`: one sentence for the player, of 300 characters or less. Write what the player sees in the
+  game. Use simple words. Do not use the names of classes, files or settings. Do not refer to the issue or to the
+  pull request.
+- Do not use `<`, `>`, `@`, backticks or line breaks in the texts. Save the file in UTF-8.
+- Do not rename or remove an entry file. To change a text, change the file. The check refuses a rename. The revert
+  of a pull request removes its entry files, and the check accepts this removal.
+- Do not put the version in the entry. The release gets the version from Git: the squash commit that adds the file
+  gives the pull request number, and the first release tag that contains this commit gives the version.
+- The check **Title and version** fails on an entry that is not valid or on a renamed entry, and gives the file and
+  the field.
+- `python3 scripts/changelog.py check` checks the entries. With `--base <rev> --title <title>`, it also gives the
+  warning for `[minor]`. `python3 scripts/changelog.py build --json <file>` writes the entries of all the versions
+  to a JSON file.
+
+### The "What's new" screen
+
+- The job **Build** of the workflow Build writes `build/changelog.json` before the Gradle build. The jar of core
+  contains this file as `assets/folkhold_core/changelog.json`. A local build has no such file, so its jar has no
+  changelog and the screen does not open. To test the screen locally, run `mkdir -p build && python3
+  scripts/changelog.py build --json build/changelog.json` before the build. The script uses only the committed
+  entries.
+- The screen opens one time in place of the title screen, when the newest version of the changelog is not the
+  version in `config/folkhold_core-whats-new.txt`. The client first writes the newest version to this file. When the
+  write fails, the screen does not open. The version of the mod has no effect, so a development build of the same
+  release does not open the screen again.
+- The button "Config" of Folkhold Core in the list of mods opens the screen again. Core has no config. When core
+  gets a config, its config screen gets a button that opens this screen.
+- A file that is not valid gives a warning in the log and no screen. The game does not stop.
 
 ## Code checks
 
@@ -85,7 +144,17 @@ change needs the code of a pull request that is not merged. For an independent c
 - A commit with no marker keeps the version. A commit of Dependabot counts as `[patch]`.
 - `python3 scripts/version.py version --rev <commit>` gives the version of a commit.
 - To make a release, open a pull request from `develop` to `main`, then use "Create a merge commit". The check
-  **Release preview** gives the version and the release notes. The workflow **Release** tags the commit of
-  `develop`, creates a GitHub Release with the jars and the modpack (`.mrpack`), then publishes the jars to GitHub
-  Packages.
+  **Release preview** gives the version and the release notes. The workflow **Release** builds and tests the mods
+  with the workflow **Build**. Then it tags the commit of `develop`, creates a GitHub Release with the jars and the
+  modpack (`.mrpack`) of this build, then publishes the same jars to GitHub Packages. The release notes start with
+  the player-facing changes of the version (see [Changelog](#changelog)).
+- To test a release build with no publication, use "Run workflow" on the workflow **Build** with the input
+  `release`. The run makes the jars, the `.mrpack` file and the Maven files (artifact `folkhold-maven`) with the
+  version of the release.
+- `release_type` in `gradle.properties` gives the release type: `alpha`, `beta` or `release`. An alpha or a beta is
+  a pre-release on GitHub, and CurseForge gets the same release type. The value is `beta`. It stays for each release
+  until a pull request to `develop` changes it. The check **Release preview** gives the release type. The downloads
+  of the site and the version badge show the latest release, and a pre-release is never the latest release on GitHub.
 - All mods share one version. `mod_version` in `gradle.properties` is the version of a local build.
+- The workflow **Build** gives each build a version: the version of the commit with `-dev.<commit>` for `develop`,
+  and the version after the merge with `-pr.<number>.<commit>` for a pull request.

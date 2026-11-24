@@ -75,6 +75,14 @@ public class PostRangedAttackGoal extends Goal {
         return true;
     }
 
+    /**
+     * True when the unit can shoot. The unit waits while this is false, for example while the trident of an archer
+     * flies.
+     */
+    protected boolean isReady() {
+        return true;
+    }
+
     @Override
     public void tick() {
         double distanceSqr = unit.distanceToSqr(target.getX(), target.getY(), target.getZ());
@@ -88,7 +96,7 @@ public class PostRangedAttackGoal extends Goal {
         }
         unit.getLookControl().setLookAt(target, 30.0F, 30.0F);
         if (--attackTime == 0) {
-            if (!inReach || seeTime < AIM_TICKS) {
+            if (!inReach || seeTime < AIM_TICKS || !isReady()) {
                 attackTime = 1;
                 return;
             }

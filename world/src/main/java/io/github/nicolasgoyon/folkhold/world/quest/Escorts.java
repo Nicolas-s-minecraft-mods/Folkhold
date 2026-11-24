@@ -1,28 +1,41 @@
 package io.github.nicolasgoyon.folkhold.world.quest;
 
+import io.github.nicolasgoyon.folkhold.core.sim.group.GroupMember;
 import io.github.nicolasgoyon.folkhold.core.sim.group.GroupState;
+import io.github.nicolasgoyon.folkhold.core.sim.group.MemberRole;
 import io.github.nicolasgoyon.folkhold.core.sim.group.MobileGroup;
 import io.github.nicolasgoyon.folkhold.core.sim.group.Route;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.EscortDifficulty;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.Quest;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestDefinition;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestGenerator;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestKind;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestNeed;
 import io.github.nicolasgoyon.folkhold.core.sim.quest.QuestState;
+import io.github.nicolasgoyon.folkhold.core.sim.quest.RewardRule;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
+import io.github.nicolasgoyon.folkhold.core.sim.tick.IntervalCheck;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.economy.ItemIds;
 import io.github.nicolasgoyon.folkhold.world.group.GroupMaterializer;
 import io.github.nicolasgoyon.folkhold.world.group.MobileGroupData;
 import io.github.nicolasgoyon.folkhold.world.network.QuestLogPayload;
+import io.github.nicolasgoyon.folkhold.world.pillager.PatrolEncounters;
+import io.github.nicolasgoyon.folkhold.world.pillager.PillagerTerritories;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.settlement.SimulationProfiler;
 import io.github.nicolasgoyon.folkhold.world.settlement.SimulationTicker;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SplittableRandom;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
@@ -36,10 +49,11 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.raid.Raider;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.neoforge.event.EventHooks;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -52,18 +66,35 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>The escorted caravan keeps its entities while the player is in the escort distance.</li>
  *   <li>When the player is farther than the escort distance, the caravan stops. When the player stays away longer
  *       than a delay, the quest fails and the caravan continues as an abstract group.</li>
- *   <li>Each escort has 1 to 3 ambushes of vanilla monsters at random points of the route. The length of the route
- *       and the level of the origin village set the size of an ambush.</li>
+ *   <li>Each escort has ambushes of pillagers at random points of the route. The difficulty sets their number and
+ *       their size.</li>
+ *   <li>Difficulty ({@link EscortDifficulties}): the level of the origin village, the length of the route and a
+ *       pillager camp near the origin or the destination give the difficulty of the escort. The difficulty gives the
+ *       extra guards of the caravan, the number of ambushes, the pillagers, the vindicators and the ravager of each
+ *       ambush, the helmet of the raiders and the factor of the reward.</li>
+ *   <li>An ambush at a point in a pillager territory: the patrol of the camp attacks in place of the ambush, and the
+ *       caravan gets no second attack from this camp (see {@link PatrolEncounters#replacesAmbush}).</li>
  *   <li>Success: the caravan arrives and its merchant is alive. The reward comes from the value of the cargo.</li>
  *   <li>Failure: the merchant dies, the player stays away too long, the player raids the caravan, or the deadline
  *       ends. The time of an escort comes from the length of its route ({@link #escortMinutes}).</li>
- *   <li>Each second, the player of an escort gets the state of the caravan in the quest HUD.</li>
+ *   <li>The raiders of an ambush or of a patrol appear at a position with a walk path to the merchant (see
+ *       {@link AmbushSpawns}). The merchant waits while they live. It continues when no raider is near it for a
+ *       delay (see {@link #attackers}).</li>
+ *   <li>Each raider of an attack keeps the id of its caravan ({@link #ATTACK_TAG}). When a raider loads again, for
+ *       example after a restart of the server, it joins the attack of its caravan again (see
+ *       {@link #onEntityJoin}).</li>
+ *   <li>Each second, the player of an escort gets the state of the caravan in the quest HUD, with the number of
+ *       raiders of the attack.</li>
  * </ul>
  */
 public final class Escorts {
-    /** Key in the persistent data of an ambush monster. */
+    /** Key in the persistent data of an ambush raider. */
     public static final String AMBUSH_TAG = "folkhold_world:ambush";
+    /** Key in the persistent data of a raider that attacks a caravan: the id of the caravan. */
+    public static final String ATTACK_TAG = "folkhold_world:attack";
     private static final int CHECK_INTERVAL = 20;
+    /** The check of the escorts, one time in each {@link #CHECK_INTERVAL} of game time. */
+    private static final IntervalCheck CHECK = new IntervalCheck(CHECK_INTERVAL);
     /** The minutes that the time of an escort adds to the travel: the departure, the stops, the ambushes. */
     private static final long EXTRA_MINUTES = 10L;
     /** The ambushes are between these shares of the route. */
@@ -71,13 +102,28 @@ public final class Escorts {
     private static final double AMBUSH_LAST = 0.9;
     /** Distance in blocks in front of the merchant where an ambush appears. */
     private static final double AMBUSH_AHEAD = 16.0;
-    private static final int MIN_AMBUSH = 2;
-    private static final int MAX_AMBUSH = 8;
 
     /** Game time when the player of each escort went away, by quest id. Not saved. */
     private static final Map<String, Long> AWAY_SINCE = new HashMap<>();
     /** The progress of the remaining ambushes of each escort, by quest id. Not saved. */
     private static final Map<String, Deque<Double>> AMBUSHES = new HashMap<>();
+    /**
+     * The raiders that attack each caravan with entities, by caravan id. Not saved: the raiders keep the id of their
+     * caravan, and a raider that loads joins the attack again.
+     */
+    private static final Map<String, Attack> ATTACKS = new HashMap<>();
+
+    /**
+     * The raiders that attack a caravan, and the last game time with a raider near the merchant.
+     *
+     * @param raiders  the UUIDs of the raiders
+     * @param lastNear the last game time with a raider near the merchant
+     */
+    private record Attack(Set<UUID> raiders, long lastNear) {
+    }
+
+    /** The last game time near the merchant of an attack that starts at the load of a raider: no time. */
+    private static final long NEVER_NEAR = Long.MIN_VALUE / 2;
 
     private Escorts() {
     }
@@ -89,22 +135,39 @@ public final class Escorts {
      * @param caravan    the caravan, in the state waiting
      * @param origin     the village of the caravan
      * @param tickNumber the number of the abstract tick
-     * @return the quest, or an empty value if the escort offers are off
+     * @return the quest, or an empty value if the escort offers are off or no definition of the need
+     *         {@link QuestNeed#CARAVAN} makes offers in the village (see {@link QuestDefinitions})
      */
     public static Optional<Quest> offer(MinecraftServer server, MobileGroup caravan, Settlement origin,
             long tickNumber) {
-        if (!WorldConfig.QUEST_ESCORT_OFFERS.get()) {
+        Optional<QuestDefinition> definition = QuestDefinitions.matching(QuestNeed.CARAVAN, origin.level()).stream()
+                .findFirst();
+        if (!WorldConfig.QUEST_ESCORT_OFFERS.get() || definition.isEmpty()) {
             return Optional.empty();
         }
+        QuestDefinition.Values values = definition.get().values();
+        RewardRule rule = QuestRewards.choose(definition.get());
         int wait = WorldConfig.QUEST_ESCORT_WAIT_TICKS.get();
         caravan.setDepartureTick(tickNumber + wait);
         long now = server.overworld().getGameTime();
         long offerEnd = now + (long) wait * SimulationTicker.settings().intervalTicks();
-        long reward = Math.max(1, Math.round(caravan.payment() * WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()));
+        int difficulty = difficulty(server, caravan, origin);
+        EscortDifficulty.Level level = EscortDifficulties.get().level(difficulty);
+        float guardHealth = (float) WorldConfig.GUARD.health();
+        for (int i = 0; i < level.guards(); i++) {
+            caravan.addMember(new GroupMember(UUID.randomUUID(), MemberRole.GUARD, guardHealth));
+        }
+        long reward = Math.max(1, Math.round(caravan.payment() * level.rewardFactor()
+                * rule.factor().orElse(values.rewardFactor().orElse(WorldConfig.QUEST_ESCORT_REWARD_SHARE.get()))));
+        long minutes = escortMinutes(caravan.route().length(),
+                values.durationMinutes().orElse(WorldConfig.QUEST_ESCORT_MINUTES.get()));
         Quest quest = new Quest(UUID.randomUUID().toString(), QuestKind.ESCORT, origin.id(), origin.factionId(),
-                caravan.id(), 0, reward, WorldConfig.QUEST_ESCORT_REPUTATION.get(),
-                QuestGenerator.minTier(reward, QuestSystem.settings()), offerEnd,
-                escortMinutes(caravan.route().length()) * SharedConstants.TICKS_PER_MINUTE);
+                caravan.id(), 0, reward, values.reputation().orElse(WorldConfig.QUEST_ESCORT_REPUTATION.get()),
+                QuestGenerator.minTier((double) caravan.payment(), WorldConfig.QUEST_ESCORT_REWARD_SHARE.get(),
+                        QuestSystem.settings(definition.get())), offerEnd,
+                minutes * SharedConstants.TICKS_PER_MINUTE, definition.get().id());
+        quest.setDifficulty(difficulty);
+        QuestRewards.apply(quest, definition.get(), rule, origin);
         QuestData data = QuestData.get(server);
         data.quests().add(quest);
         data.setDirty();
@@ -119,8 +182,20 @@ public final class Escorts {
      * @return the time, in minutes
      */
     public static long escortMinutes(double routeLength) {
+        return escortMinutes(routeLength, WorldConfig.QUEST_ESCORT_MINUTES.get());
+    }
+
+    /**
+     * The time of an escort with a minimum: the length of the route at
+     * {@link WorldConfig#QUEST_ESCORT_BLOCKS_PER_MINUTE}, plus {@link #EXTRA_MINUTES}, and at least the minimum.
+     *
+     * @param routeLength the length of the route, in blocks
+     * @param minimum     the minimum time, in minutes
+     * @return the time, in minutes
+     */
+    public static long escortMinutes(double routeLength, long minimum) {
         long travel = (long) Math.ceil(routeLength / WorldConfig.QUEST_ESCORT_BLOCKS_PER_MINUTE.get()) + EXTRA_MINUTES;
-        return Math.max(WorldConfig.QUEST_ESCORT_MINUTES.get(), travel);
+        return Math.max(minimum, travel);
     }
 
     /** The accepted escort quests. */
@@ -158,6 +233,7 @@ public final class Escorts {
         AWAY_SINCE.remove(quest.id());
         AMBUSHES.remove(quest.id());
         caravan(server, quest).ifPresent(group -> {
+            ATTACKS.remove(group.id());
             GroupMaterializer.keep(group.id(), false);
             if (group.state() == GroupState.STOPPED) {
                 group.setState(GroupState.TRAVELING);
@@ -205,14 +281,16 @@ public final class Escorts {
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
         long now = server.overworld().getGameTime();
-        if (now % CHECK_INTERVAL == 0) {
+        if (CHECK.isDue(now)) {
             SimulationProfiler.time("escorts (each second)", () -> update(server, now));
         }
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
+        CHECK.reset();
         AWAY_SINCE.clear();
         AMBUSHES.clear();
+        ATTACKS.clear();
     }
 
     /**
@@ -225,6 +303,7 @@ public final class Escorts {
     public static void update(MinecraftServer server, long now) {
         ServerLevel level = server.overworld();
         QuestData data = QuestData.get(server);
+        ATTACKS.keySet().removeIf(id -> MobileGroupData.get(server).groups().byId(id).isEmpty());
         for (Quest quest : List.copyOf(data.quests().all())) {
             if (quest.kind() == QuestKind.ESCORT && quest.state() == QuestState.OFFERED
                     && caravan(server, quest).filter(group -> group.state() == GroupState.WAITING).isEmpty()) {
@@ -252,7 +331,11 @@ public final class Escorts {
             if (player != null && player.level() == level
                     && distance(level, player, group) <= WorldConfig.QUEST_ESCORT_DISTANCE.get()) {
                 AWAY_SINCE.remove(quest.id());
-                if (group.state() == GroupState.STOPPED) {
+                if (attackers(level, group, now) > 0) {
+                    if (group.state() == GroupState.TRAVELING) {
+                        group.setState(GroupState.STOPPED);
+                    }
+                } else if (group.state() == GroupState.STOPPED) {
                     group.setState(GroupState.TRAVELING);
                 }
                 GroupMaterializer.keep(group.id(), true);
@@ -302,7 +385,21 @@ public final class Escorts {
                 WorldConfig.QUEST_ESCORT_AWAY_SECONDS.get() - (level.getGameTime() - since) / 20L);
         return Optional.of(new QuestLogPayload.Escort((int) Math.round(group.progress()),
                 (int) Math.round(group.route().length()), health, maxHealth, Math.min(distance, 99_999),
-                WorldConfig.QUEST_ESCORT_DISTANCE.get(), awaySeconds));
+                WorldConfig.QUEST_ESCORT_DISTANCE.get(), awaySeconds, raiders(level, group)));
+    }
+
+    /**
+     * The living raiders of the attack on a caravan: an ambush or a patrol. The merchant waits while this number is
+     * above 0.
+     *
+     * @param level the level of the caravan
+     * @param group the caravan
+     * @return the number of living raiders, or 0 with no attack
+     */
+    public static int raiders(ServerLevel level, MobileGroup group) {
+        Attack attack = ATTACKS.get(group.id());
+        return attack == null ? 0 : (int) attack.raiders().stream().map(level::getEntity)
+                .filter(entity -> entity != null && entity.isAlive()).count();
     }
 
     /**
@@ -340,57 +437,95 @@ public final class Escorts {
     }
 
     /**
-     * Makes an ambush of vanilla monsters in front of the merchant of a caravan with entities. The monsters attack
-     * the merchant.
+     * Makes an ambush of pillagers in front of the merchant of a caravan with entities: the pillagers, the
+     * vindicators and the ravager of a difficulty level. The raiders attack the merchant. They do not join a raid,
+     * and they wear the helmet of the level. The raiders appear at a position with a walk path to the merchant (see
+     * {@link AmbushSpawns}). With no such position, the ambush does not occur. The merchant waits for the end of the
+     * ambush (see {@link #track}).
      *
-     * @param level the level
-     * @param group the caravan
-     * @param size  the number of monsters
-     * @return the monsters
+     * @param level  the level
+     * @param group  the caravan
+     * @param spec   the difficulty level
+     * @param seed   the seed of the number of pillagers and of the positions
+     * @return the raiders
      */
-    public static List<Mob> spawnAmbush(ServerLevel level, MobileGroup group, int size) {
-        List<Mob> monsters = new ArrayList<>();
+    public static List<Mob> spawnAmbush(ServerLevel level, MobileGroup group, EscortDifficulty.Level spec,
+            long seed) {
+        List<Mob> raiders = new ArrayList<>();
         Optional<Entity> merchant = group.merchant().map(member -> level.getEntity(member.id()));
         if (merchant.isEmpty() || !(merchant.get() instanceof LivingEntity target)) {
-            return monsters;
+            return raiders;
         }
         Route route = group.route();
-        Route.Position ahead = route.positionAt(route.progressNear(target.getX(), target.getZ()) + AMBUSH_AHEAD);
-        SplittableRandom random = new SplittableRandom(level.getGameTime() ^ group.id().hashCode());
-        for (int i = 0; i < size; i++) {
-            EntityType<? extends Mob> type = switch (i % 3) {
-                case 0 -> EntityType.ZOMBIE;
-                case 1 -> EntityType.SKELETON;
-                default -> EntityType.SPIDER;
-            };
-            int x = (int) Math.floor(ahead.x()) + random.nextInt(-3, 4);
-            int z = (int) Math.floor(ahead.z()) + random.nextInt(-3, 4);
-            if (!level.hasChunk(x >> 4, z >> 4)) {
-                continue;
-            }
-            BlockPos pos = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
+        double point = Math.min(route.length(), route.progressNear(target.getX(), target.getZ()) + AMBUSH_AHEAD);
+        Optional<BlockPos> spawn = AmbushSpawns.find(level, route, point, target.blockPosition(), spec.ravager());
+        if (spawn.isEmpty()) {
+            return raiders;
+        }
+        SplittableRandom random = new SplittableRandom(seed);
+        List<EntityType<? extends Mob>> types = new ArrayList<>();
+        int pillagers = spec.pillagers(random);
+        for (int i = 0; i < pillagers; i++) {
+            types.add(EntityType.PILLAGER);
+        }
+        for (int i = 0; i < spec.vindicators(); i++) {
+            types.add(EntityType.VINDICATOR);
+        }
+        if (spec.ravager()) {
+            types.add(EntityType.RAVAGER);
+        }
+        Optional<Item> helmet = spec.helmet().isEmpty() ? Optional.empty()
+                : ItemIds.item(spec.helmet());
+        for (EntityType<? extends Mob> type : types) {
+            // Each raider appears near the good position, on a position with the same checks and nearly the same
+            // level. Else it appears at the good position.
+            BlockPos near = AmbushSpawns.surface(level, spawn.get().getX() + random.nextInt(-2, 3),
+                    spawn.get().getZ() + random.nextInt(-2, 3));
+            BlockPos pos = Math.abs(near.getY() - spawn.get().getY()) <= 1
+                    && AmbushSpawns.check(level, near, type == EntityType.RAVAGER) == AmbushSpawns.Check.GOOD
+                    ? near : spawn.get();
             Mob mob = type.create(level);
             if (mob == null) {
                 continue;
             }
             mob.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, random.nextFloat() * 360.0F, 0.0F);
             EventHooks.finalizeMobSpawn(mob, level, level.getCurrentDifficultyAt(pos), MobSpawnType.EVENT, null);
-            if (type != EntityType.SPIDER) {
-                // A helmet protects the monster from the sun, so the ambush also works in the day.
-                mob.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+            if (mob instanceof Raider raider) {
+                raider.setCanJoinRaid(false);
+                raider.setPatrolLeader(false);
+            }
+            if (helmet.isPresent() && type != EntityType.RAVAGER) {
+                mob.setItemSlot(EquipmentSlot.HEAD, new ItemStack(helmet.get()));
                 mob.setDropChance(EquipmentSlot.HEAD, 0.0F);
             }
             mob.getPersistentData().putBoolean(AMBUSH_TAG, true);
             mob.setTarget(target);
             level.addFreshEntity(mob);
-            monsters.add(mob);
+            raiders.add(mob);
         }
-        return monsters;
+        track(level, group, raiders);
+        return raiders;
     }
 
-    /** The number of monsters of an ambush: 2, plus 1 for each 500 blocks of route and for each 5 levels, up to 8. */
-    public static int ambushSize(double routeLength, int originLevel) {
-        return Math.max(MIN_AMBUSH, Math.min(MAX_AMBUSH, MIN_AMBUSH + (int) (routeLength / 500) + originLevel / 5));
+    /**
+     * The difficulty of the escort of a caravan (see {@link EscortDifficulty#difficulty}): the level of the origin, the
+     * length of the route, and a pillager camp near the origin or the destination.
+     *
+     * @param server  the server
+     * @param caravan the caravan
+     * @param origin  the origin village
+     * @return the difficulty, 1 or more
+     */
+    public static int difficulty(MinecraftServer server, MobileGroup caravan, Settlement origin) {
+        EscortDifficulty difficulties = EscortDifficulties.get();
+        int distance = difficulties.campDistance();
+        boolean nearCamp = distance > 0 && (PillagerTerritories.nearestCamp(server,
+                new BlockPos(origin.x(), 0, origin.z()), distance).isPresent()
+                || SettlementData.get(server).registry().byId(caravan.destinationId())
+                        .filter(destination -> PillagerTerritories.nearestCamp(server,
+                                new BlockPos(destination.x(), 0, destination.z()), distance).isPresent())
+                        .isPresent());
+        return difficulties.difficulty(origin.level(), caravan.route().length(), nearCamp);
     }
 
     /** The caravan of an escort quest. */
@@ -398,28 +533,37 @@ public final class Escorts {
         return MobileGroupData.get(server).groups().byId(quest.target());
     }
 
-    /** The ambushes of a caravan with entities, when it passes their points of the route. */
-    private static void ambushes(ServerLevel level, Quest quest, MobileGroup group) {
+    /**
+     * The ambushes of a caravan with entities, when it passes their points of the route. In a pillager territory, the
+     * patrol of the camp replaces the ambush (see {@link PatrolEncounters#replacesAmbush}).
+     *
+     * @param level the Overworld
+     * @param quest the escort quest
+     * @param group the caravan
+     */
+    public static void ambushes(ServerLevel level, Quest quest, MobileGroup group) {
         if (!GroupMaterializer.isMaterialized(group)) {
             return;
         }
         Deque<Double> plan = AMBUSHES.computeIfAbsent(quest.id(), id -> plan(quest, group));
-        int originLevel = SettlementData.get(level.getServer()).registry().byId(group.originId())
-                .map(Settlement::level).orElse(1);
+        EscortDifficulty.Level spec = EscortDifficulties.get().level(quest.difficulty());
         while (!plan.isEmpty() && group.progress() >= plan.peekFirst()) {
-            plan.pollFirst();
-            spawnAmbush(level, group, ambushSize(group.route().length(), originLevel));
+            double point = plan.pollFirst();
+            if (PatrolEncounters.replacesAmbush(level, group)) {
+                continue;
+            }
+            spawnAmbush(level, group, spec, quest.id().hashCode() ^ Double.doubleToLongBits(point));
         }
     }
 
     /**
-     * The progress of the ambushes of an escort: 1 to 3 random points between 20 % and 90 % of the route. The id of
-     * the quest selects them, so the plan is the same after a restart. The points behind the caravan are not in the
-     * plan.
+     * The progress of the ambushes of an escort: the number of ambushes of its difficulty, at random points between
+     * 20 % and 90 % of the route. The id of the quest selects them, so the plan is the same after a restart. The points
+     * behind the caravan are not in the plan.
      */
     public static Deque<Double> plan(Quest quest, MobileGroup group) {
         SplittableRandom random = new SplittableRandom(quest.id().hashCode());
-        int count = 1 + random.nextInt(3);
+        int count = EscortDifficulties.get().level(quest.difficulty()).ambushes(random);
         double length = group.route().length();
         List<Double> points = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -433,6 +577,98 @@ public final class Escorts {
             }
         }
         return plan;
+    }
+
+    /**
+     * Records the raiders that attack a caravan with entities: an ambush or a patrol of a camp. The merchant of an
+     * escort waits while they live (see {@link #attackers}).
+     *
+     * @param level   the level
+     * @param group   the caravan
+     * @param raiders the raiders
+     */
+    public static void track(ServerLevel level, MobileGroup group, Collection<? extends Entity> raiders) {
+        if (raiders.isEmpty()) {
+            return;
+        }
+        Attack old = ATTACKS.get(group.id());
+        Set<UUID> ids = new HashSet<>(old == null ? Set.of() : old.raiders());
+        raiders.forEach(raider -> {
+            ids.add(raider.getUUID());
+            raider.getPersistentData().putString(ATTACK_TAG, group.id());
+        });
+        ATTACKS.put(group.id(), new Attack(ids, level.getGameTime()));
+    }
+
+    /**
+     * A raider of an attack that loads in the Overworld joins the attack of its caravan again: after a restart of the
+     * server, or when its chunk loads again. The caravan must have an accepted escort. An attack that starts at the
+     * load has no time near the merchant: the merchant waits only when a raider is near it (see {@link #attackers}).
+     *
+     * @param event the event. The listener does not receive a canceled event.
+     */
+    public static void onEntityJoin(EntityJoinLevelEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !(event.getEntity() instanceof Mob raider)
+                || level != level.getServer().overworld()) {
+            return;
+        }
+        String groupId = raider.getPersistentData().getString(ATTACK_TAG);
+        if (groupId.isEmpty() || active(level.getServer()).stream().noneMatch(quest -> quest.target().equals(groupId))) {
+            return;
+        }
+        Attack old = ATTACKS.get(groupId);
+        Set<UUID> ids = new HashSet<>(old == null ? Set.of() : old.raiders());
+        ids.add(raider.getUUID());
+        ATTACKS.put(groupId, new Attack(ids, old == null ? NEVER_NEAR : old.lastNear()));
+    }
+
+    /**
+     * The number of living raiders that attack a caravan, for the wait of the merchant. The attack ends when all its
+     * raiders are dead or unloaded, or when no raider is at {@link WorldConfig#QUEST_ESCORT_AMBUSH_DISTANCE} blocks
+     * or less from the merchant for {@link WorldConfig#QUEST_ESCORT_AMBUSH_SECONDS}. Then the method gives 0. With no
+     * merchant entity, the method gives 0 and the attack stays: after a restart, the raiders can load before the
+     * merchant. A living raider with no target attacks the merchant: a raider that loads again has no target.
+     *
+     * @param level the level
+     * @param group the caravan
+     * @param now   the game time
+     * @return the number of living raiders of the attack, or 0 with no attack
+     */
+    public static int attackers(ServerLevel level, MobileGroup group, long now) {
+        Attack attack = ATTACKS.get(group.id());
+        if (attack == null) {
+            return 0;
+        }
+        Optional<Entity> merchant = group.merchant().map(member -> level.getEntity(member.id()));
+        List<Entity> living = new ArrayList<>();
+        for (UUID id : attack.raiders()) {
+            Entity raider = level.getEntity(id);
+            if (raider != null && raider.isAlive()) {
+                living.add(raider);
+                if (raider instanceof Mob mob && mob.getTarget() == null && merchant.isPresent()
+                        && merchant.get() instanceof LivingEntity target && target.isAlive()) {
+                    mob.setTarget(target);
+                }
+            }
+        }
+        if (living.isEmpty()) {
+            ATTACKS.remove(group.id());
+            return 0;
+        }
+        if (merchant.isEmpty()) {
+            return 0;
+        }
+        double distance = WorldConfig.QUEST_ESCORT_AMBUSH_DISTANCE.get();
+        boolean near = living.stream().anyMatch(raider -> raider.distanceToSqr(merchant.get()) <= distance * distance);
+        long lastNear = near ? now : attack.lastNear();
+        if (now - lastNear >= WorldConfig.QUEST_ESCORT_AMBUSH_SECONDS.get() * 20L) {
+            ATTACKS.remove(group.id());
+            return 0;
+        }
+        Set<UUID> ids = new HashSet<>();
+        living.forEach(raider -> ids.add(raider.getUUID()));
+        ATTACKS.put(group.id(), new Attack(ids, lastNear));
+        return living.size();
     }
 
     /** Horizontal distance from a player to a caravan: to its merchant if it has entities. */

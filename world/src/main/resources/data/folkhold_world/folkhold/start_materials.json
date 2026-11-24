@@ -1,0 +1,50 @@
+{
+  "cultures": {
+    "default": {
+      "hamlet": {"minecraft:spruce_planks": 72, "minecraft:spruce_log": 72, "minecraft:dark_oak_log": 16, "minecraft:cobblestone": 48, "minecraft:stick": 8, "minecraft:vine": 8},
+      "village": {"minecraft:spruce_planks": 136, "minecraft:spruce_log": 104, "minecraft:dark_oak_log": 24, "minecraft:cobblestone": 88, "minecraft:stick": 16, "minecraft:vine": 16},
+      "town": {"minecraft:spruce_planks": 200, "minecraft:spruce_log": 144, "minecraft:dark_oak_log": 40, "minecraft:cobblestone": 128, "minecraft:stick": 24, "minecraft:vine": 24},
+      "city": {"minecraft:spruce_planks": 256, "minecraft:spruce_log": 168, "minecraft:dark_oak_log": 48, "minecraft:cobblestone": 152, "minecraft:stick": 32, "minecraft:vine": 24},
+      "capital": {"minecraft:spruce_planks": 312, "minecraft:spruce_log": 192, "minecraft:dark_oak_log": 56, "minecraft:cobblestone": 184, "minecraft:stick": 40, "minecraft:vine": 32}
+    },
+    "ashmark": {
+      "hamlet": {"minecraft:spruce_planks": 72, "minecraft:spruce_log": 72, "minecraft:dark_oak_log": 16, "minecraft:cobblestone": 48, "minecraft:stick": 8, "minecraft:vine": 8},
+      "village": {"minecraft:spruce_planks": 136, "minecraft:spruce_log": 104, "minecraft:dark_oak_log": 24, "minecraft:cobblestone": 88, "minecraft:stick": 16, "minecraft:vine": 16},
+      "town": {"minecraft:spruce_planks": 200, "minecraft:spruce_log": 144, "minecraft:dark_oak_log": 40, "minecraft:cobblestone": 128, "minecraft:stick": 24, "minecraft:vine": 24},
+      "city": {"minecraft:spruce_planks": 256, "minecraft:spruce_log": 168, "minecraft:dark_oak_log": 48, "minecraft:cobblestone": 152, "minecraft:stick": 32, "minecraft:vine": 24},
+      "capital": {"minecraft:spruce_planks": 312, "minecraft:spruce_log": 192, "minecraft:dark_oak_log": 56, "minecraft:cobblestone": 184, "minecraft:stick": 40, "minecraft:vine": 32}
+    },
+    "valeholm": {
+      "hamlet": {"minecraft:spruce_planks": 104, "minecraft:spruce_log": 96, "minecraft:dark_oak_log": 40, "minecraft:cobblestone": 56, "minecraft:stick": 16, "minecraft:vine": 16},
+      "village": {"minecraft:spruce_planks": 208, "minecraft:spruce_log": 144, "minecraft:dark_oak_log": 72, "minecraft:cobblestone": 104, "minecraft:stick": 24, "minecraft:vine": 24},
+      "town": {"minecraft:spruce_planks": 304, "minecraft:spruce_log": 200, "minecraft:dark_oak_log": 112, "minecraft:cobblestone": 152, "minecraft:stick": 40, "minecraft:vine": 32},
+      "city": {"minecraft:spruce_planks": 384, "minecraft:spruce_log": 240, "minecraft:dark_oak_log": 136, "minecraft:cobblestone": 192, "minecraft:stick": 48, "minecraft:vine": 40},
+      "capital": {"minecraft:spruce_planks": 480, "minecraft:spruce_log": 288, "minecraft:dark_oak_log": 176, "minecraft:cobblestone": 232, "minecraft:stick": 56, "minecraft:vine": 48}
+    },
+    "sunreach": {
+      "hamlet": {"minecraft:sandstone": 128, "minecraft:terracotta": 16, "minecraft:spruce_planks": 16, "minecraft:spruce_log": 56, "minecraft:cobblestone": 16, "minecraft:stick": 8},
+      "village": {"minecraft:sandstone": 288, "minecraft:terracotta": 32, "minecraft:spruce_planks": 32, "minecraft:spruce_log": 64, "minecraft:cobblestone": 24, "minecraft:stick": 8},
+      "town": {"minecraft:sandstone": 424, "minecraft:terracotta": 48, "minecraft:spruce_planks": 40, "minecraft:spruce_log": 80, "minecraft:cobblestone": 32, "minecraft:stick": 16},
+      "city": {"minecraft:sandstone": 536, "minecraft:terracotta": 64, "minecraft:spruce_planks": 56, "minecraft:spruce_log": 88, "minecraft:cobblestone": 40, "minecraft:stick": 16},
+      "capital": {"minecraft:sandstone": 664, "minecraft:terracotta": 80, "minecraft:spruce_planks": 64, "minecraft:spruce_log": 96, "minecraft:cobblestone": 40, "minecraft:stick": 16}
+    }
+  },
+  "biomes": [
+    {"biomes": ["minecraft:plains", "minecraft:sunflower_plains", "minecraft:meadow", "minecraft:cherry_grove",
+                "minecraft:forest"],
+     "replace": {"minecraft:spruce_log": "minecraft:oak_log", "minecraft:spruce_planks": "minecraft:oak_planks"}},
+    {"biomes": ["minecraft:birch_forest"],
+     "replace": {"minecraft:spruce_log": "minecraft:birch_log",
+                 "minecraft:spruce_planks": {"item": "minecraft:birch_log", "factor": 0.25}}},
+    {"biomes": ["minecraft:savanna"],
+     "replace": {"minecraft:spruce_log": "minecraft:acacia_log",
+                 "minecraft:spruce_planks": {"item": "minecraft:acacia_log", "factor": 0.25}}},
+    {"biomes": ["minecraft:desert"],
+     "replace": {"minecraft:spruce_log": "minecraft:sandstone", "minecraft:spruce_planks": "minecraft:sandstone",
+                 "minecraft:cobblestone": "minecraft:sandstone", "minecraft:stick": "", "minecraft:vine": ""}},
+    {"biomes": ["minecraft:swamp", "minecraft:mangrove_swamp"],
+     "replace": {"minecraft:spruce_log": "minecraft:mangrove_log",
+                 "minecraft:spruce_planks": {"item": "minecraft:mangrove_log", "factor": 0.25},
+                 "minecraft:cobblestone": "", "minecraft:vine": ""}}
+  ]
+}

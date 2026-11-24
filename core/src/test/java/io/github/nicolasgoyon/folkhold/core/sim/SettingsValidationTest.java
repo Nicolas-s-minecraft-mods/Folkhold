@@ -30,22 +30,21 @@ class SettingsValidationTest {
     void economySettings() {
         assertDoesNotThrow(() -> EconomySettings.DEFAULT);
         assertThrows(IllegalArgumentException.class,
-                () -> new EconomySettings(0, 4, 0.02, 0.1, 0.5, 0.5, 3.0, 1.15, 0.85), "workersPerJob");
+                () -> new EconomySettings(0, 0.02, 0.1, 0.5, 0.5, 3.0, 1.15, 0.85), "workersPerJob");
         assertThrows(IllegalArgumentException.class,
-                () -> new EconomySettings(2, 4, 1.5, 0.1, 0.5, 0.5, 3.0, 1.15, 0.85), "decayRate");
+                () -> new EconomySettings(2, 1.5, 0.1, 0.5, 0.5, 3.0, 1.15, 0.85), "decayRate");
         assertThrows(IllegalArgumentException.class,
-                () -> new EconomySettings(2, 4, 0.02, 0.1, 0.5, 0.0, 3.0, 1.15, 0.85), "minPriceFactor");
+                () -> new EconomySettings(2, 0.02, 0.1, 0.5, 0.0, 3.0, 1.15, 0.85), "minPriceFactor");
         assertThrows(IllegalArgumentException.class,
-                () -> new EconomySettings(2, 4, 0.02, 0.1, 0.5, 2.0, 1.0, 1.15, 0.85), "maxPriceFactor");
+                () -> new EconomySettings(2, 0.02, 0.1, 0.5, 2.0, 1.0, 1.15, 0.85), "maxPriceFactor");
     }
 
     @Test
     void itemInfo() {
-        assertDoesNotThrow(() -> new ItemInfo("bread", 1.0, 5, 32));
-        assertThrows(IllegalArgumentException.class, () -> new ItemInfo(" ", 1.0, 5, 32));
-        assertThrows(IllegalArgumentException.class, () -> new ItemInfo("bread", 0.0, 5, 32));
-        assertThrows(IllegalArgumentException.class, () -> new ItemInfo("bread", 1.0, -1, 32));
-        assertThrows(IllegalArgumentException.class, () -> new ItemInfo("bread", 1.0, 5, 0));
+        assertDoesNotThrow(() -> new ItemInfo("bread", 1.0, 32));
+        assertThrows(IllegalArgumentException.class, () -> new ItemInfo(" ", 1.0, 32));
+        assertThrows(IllegalArgumentException.class, () -> new ItemInfo("bread", 0.0, 32));
+        assertThrows(IllegalArgumentException.class, () -> new ItemInfo("bread", 1.0, 0));
     }
 
     @Test

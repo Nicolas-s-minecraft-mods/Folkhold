@@ -10,8 +10,11 @@ import io.github.nicolasgoyon.folkhold.world.faction.Reputations;
 import io.github.nicolasgoyon.folkhold.world.journal.JournalData.Visit;
 import io.github.nicolasgoyon.folkhold.world.network.JournalPayload;
 import io.github.nicolasgoyon.folkhold.world.network.ModNetwork;
+import io.github.nicolasgoyon.folkhold.world.quest.QuestBoards;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
+import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
+import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -33,6 +36,7 @@ import net.minecraft.server.level.ServerPlayer;
  *   <li>The player discovers a faction with its first discovered village.</li>
  *   <li>The server keeps the journals in {@link JournalData}. The key of the journal (default J) asks for the journal
  *       of the player ({@link #request}).</li>
+ *   <li>After a discovery, the maps of the player show the new territory (see {@link TerritoryMaps}).</li>
  * </ul>
  */
 public final class Journals {
@@ -57,22 +61,37 @@ public final class Journals {
         MinecraftServer server = player.server;
         JournalData data = JournalData.get(server);
         long day = day(server);
-        territory.ifPresent(settlement -> data.discover(player.getUUID(), settlement.id(), day));
-        village.ifPresent(id -> data.visit(player.getUUID(), id, day));
+        boolean discovered = territory.map(settlement -> data.discover(player.getUUID(), settlement.id(), day))
+                .orElse(false);
+        boolean visited = village.map(id -> data.visit(player.getUUID(), id, day)).orElse(false);
+        if (discovered || visited) {
+            TerritoryMaps.update(player);
+        }
     }
 
     /** Sends the journal to a player. */
     public static void request(ServerPlayer player) {
-        ModNetwork.send(player, payload(player));
+        ModNetwork.send(player, payload(player, ""));
+    }
+
+    /**
+     * Opens the journal of a player at a village of the journal.
+     *
+     * @param player    the player
+     * @param villageId the settlement id of the village
+     */
+    public static void open(ServerPlayer player, String villageId) {
+        ModNetwork.send(player, payload(player, villageId));
     }
 
     /**
      * The journal of a player.
      *
      * @param player the player
+     * @param focus  the settlement id of the village that the journal shows, or an empty string
      * @return the payload: the villages that the server knows, nearest first, and their factions
      */
-    public static JournalPayload payload(ServerPlayer player) {
+    public static JournalPayload payload(ServerPlayer player, String focus) {
         MinecraftServer server = player.server;
         SettlementData settlements = SettlementData.get(server);
         FactionData factionData = FactionData.get(server);
@@ -94,7 +113,7 @@ public final class Journals {
             villages.add(new JournalPayload.Village(settlement.id(), settlement.name(), settlement.factionId(),
                     factionName, settlement.level(), SettlementLevels.tierName(settlement.level()),
                     settlement.isActive(), settlement.x(), settlement.z(), distance, tier, visit.discovered(),
-                    visit.lastVisit()));
+                    visit.lastVisit(), VillageFolk.inhabitantCount(settlement), VillageBeds.places(settlement)));
             villageCounts.merge(settlement.factionId(), 1, Integer::sum);
         }
         villages.sort(Comparator.comparingInt(JournalPayload.Village::distance));
@@ -111,6 +130,8 @@ public final class Journals {
                         ReputationTier.of(value), value, entry.getValue()));
             });
         }
-        return new JournalPayload(villages, factions, day(server));
+        List<String> visited = villages.stream().filter(JournalPayload.Village::visited)
+                .map(JournalPayload.Village::id).toList();
+        return new JournalPayload(villages, factions, day(server), focus, QuestBoards.journal(player, visited));
     }
 }

@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.entity;
 
 import io.github.nicolasgoyon.folkhold.world.config.UnitStats;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.WideMobMeleeAttackGoal;
 import io.github.nicolasgoyon.folkhold.world.registry.ModEntities;
 import io.github.nicolasgoyon.folkhold.world.registry.ModSounds;
 import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
@@ -23,7 +24,6 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -50,8 +50,6 @@ public class FactionGolemEntity extends FactionUnit {
     private static final byte ATTACK_EVENT = 4;
     /** The duration of the attack animation, in ticks. */
     public static final int ATTACK_ANIMATION_TICKS = 10;
-    /** The upward speed of a target that the golem hits, for a target with no knockback resistance. */
-    private static final double THROW_UP_SPEED = 0.4;
     /** Above this horizontal speed (squared), the golem shows dust under its feet. */
     private static final double DUST_SPEED_SQR = 2.5E-7;
 
@@ -103,7 +101,7 @@ public class FactionGolemEntity extends FactionUnit {
 
     @Override
     protected void registerAttackGoals() {
-        goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, true));
+        goalSelector.addGoal(2, new WideMobMeleeAttackGoal(this, 1.0));
     }
 
     /** The chase area of a golem is around its anchor: its post at a gate, or its home. */
@@ -178,7 +176,7 @@ public class FactionGolemEntity extends FactionUnit {
                     ? living.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE)
                     : 0.0;
             target.setDeltaMovement(target.getDeltaMovement()
-                    .add(0.0, THROW_UP_SPEED * Math.max(0.0, 1.0 - resistance), 0.0));
+                    .add(0.0, WorldConfig.GOLEM_THROW_UP_SPEED.get() * Math.max(0.0, 1.0 - resistance), 0.0));
             if (level() instanceof ServerLevel serverLevel) {
                 EnchantmentHelper.doPostAttackEffects(serverLevel, target, source);
             }

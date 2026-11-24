@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "folkhold_world:village_ring",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "folkhold_world:village_ring",
+    "salt": 50193781,
+    "villages": "folkhold_world:villages"
+  }
+}

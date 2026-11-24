@@ -1,18 +1,26 @@
 package io.github.nicolasgoyon.folkhold.world.settlement;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.EconomyState;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTradeUses;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementRegistry;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.SettlementState;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims;
 import io.github.nicolasgoyon.folkhold.core.sim.territory.TerritoryClaims.Claimant;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
+import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import javax.annotation.Nullable;
 import net.minecraft.core.HolderLookup;
@@ -35,8 +43,13 @@ public final class SettlementData extends SavedData {
     /**
      * The version of the saved format. {@code load} reads the tag of an earlier version (a tag with no version is
      * version 0) and the data saves with the current version. A tag of a later version loads with a warning.
+     * Version 3 adds the job posts ({@code JobPosts}, see {@link JobPosts}) and the mark {@code LegacyJobs}. A
+     * settlement with no posts has unknown posts: it has the job slots of its level until the next scan of its heart.
+     * A settlement of format version 2 or lower with an initialized economy is a legacy village: it gets the mark.
      */
-    static final int VERSION = 1;
+    static final int VERSION = 3;
+    /** The first format version with the job posts. A save of a lower version has no list of posts. */
+    static final int POSTS_VERSION = 3;
 
     private final SettlementRegistry registry = new SettlementRegistry();
     private final Set<Long> checkedRegions = new HashSet<>();
@@ -48,7 +61,8 @@ public final class SettlementData extends SavedData {
     private List<Claimant> claimants = List.of();
     private final Map<String, Long> treasuries = new HashMap<>();
 
-    private SettlementData() {
+    /** An empty data. Package-private for the unit tests. The game uses {@link #get}. */
+    SettlementData() {
     }
 
     public static SettlementData get(MinecraftServer server) {
@@ -90,15 +104,14 @@ public final class SettlementData extends SavedData {
     }
 
     /**
-     * The territory chunks that the active settlements claim. The claim radius comes from the level, and it is never
-     * smaller than {@link TerritoryClaims#minimumRadius} of the village radius ({@link WorldConfig#VILLAGE_RADIUS}).
+     * The territory chunks that the active settlements claim, with the claim radius of the level of each settlement
+     * (see {@link #claimRadius(int)}).
      */
     public TerritoryClaims claims() {
-        int minimumRadius = TerritoryClaims.minimumRadius(WorldConfig.VILLAGE_RADIUS.get());
         List<Claimant> current = new ArrayList<>();
         for (Settlement settlement : registry.all()) {
             if (settlement.isActive()) {
-                int radius = Math.max(minimumRadius, LevelTables.get().traits(settlement.level()).claimRadius());
+                int radius = claimRadius(settlement.level());
                 current.add(new Claimant(settlement.id(), settlement.x(), settlement.z(), settlement.level(),
                         radius));
             }
@@ -108,6 +121,31 @@ public final class SettlementData extends SavedData {
             claimants = current;
         }
         return claims;
+    }
+
+    /**
+     * The claim radius of a settlement of a level, in chunks: the largest of these radii.
+     * <ul>
+     *   <li>The claim radius of the level ({@code claim_radius} in the level table).</li>
+     *   <li>The minimum territory radius of the tier of the level ({@code min_territory_radius} in the village sizes,
+     *       see {@link VillageSizes#find}). It contains the maximum radius of the village structure of the tier. A tier
+     *       with no village size (for example a tier of a data pack) has no minimum.</li>
+     *   <li>{@link TerritoryClaims#minimumRadius} of the village radius ({@link WorldConfig#VILLAGE_RADIUS}).</li>
+     * </ul>
+     *
+     * @param level the level of the settlement
+     * @return the radius in chunks
+     */
+    public static int claimRadius(int level) {
+        int tierMinimum = VillageSizes.find(level).map(VillageSize::minTerritoryRadius).orElse(0);
+        return Math.max(Math.max(TerritoryClaims.minimumRadius(WorldConfig.VILLAGE_RADIUS.get()), tierMinimum),
+                LevelTables.get().traits(level).claimRadius());
+    }
+
+    /** The settlements that claim chunks now: the claimants of {@link #claims()}. */
+    public List<Claimant> claimants() {
+        claims();
+        return Collections.unmodifiableList(claimants);
     }
 
     /** True if the discovery checked this placement region. */
@@ -177,6 +215,35 @@ public final class SettlementData extends SavedData {
                 }
                 entry.putIntArray("Gates", gates);
             }
+            entry.putInt("Beds", settlement.beds());
+            settlement.buildings().ifPresent(counts -> {
+                CompoundTag buildings = new CompoundTag();
+                counts.forEach(buildings::putInt);
+                entry.put("Buildings", buildings);
+            });
+            settlement.jobPosts().ifPresent(posts -> {
+                ListTag jobPosts = new ListTag();
+                for (JobPosts.Post post : posts) {
+                    CompoundTag postTag = new CompoundTag();
+                    postTag.putString("Job", post.jobId());
+                    postTag.putIntArray("Sign", new int[] {post.x(), post.y(), post.z()});
+                    postTag.putInt("Beds", post.homeBeds());
+                    jobPosts.add(postTag);
+                }
+                entry.put("JobPosts", jobPosts);
+            });
+            if (settlement.legacyJobs()) {
+                entry.putBoolean("LegacyJobs", true);
+            }
+            if (!settlement.jobSkills().isEmpty()) {
+                entry.put("JobSkills", saveSkills(settlement.jobSkills()));
+            }
+            if (!settlement.jobTradeUses().isEmpty()) {
+                entry.put("JobTradeUses", saveTradeUses(settlement.jobTradeUses()));
+            }
+            if (settlement.lastFallPenalty() != Settlement.NO_FALL_PENALTY) {
+                entry.putLong("LastFallPenalty", settlement.lastFallPenalty());
+            }
             entry.put("Economy", saveEconomy(settlement.economy()));
             list.add(entry);
         }
@@ -190,7 +257,8 @@ public final class SettlementData extends SavedData {
         return tag;
     }
 
-    private static SettlementData load(CompoundTag tag, HolderLookup.Provider registries) {
+    /** Reads the data from a saved tag. Package-private for the unit tests. */
+    static SettlementData load(CompoundTag tag, HolderLookup.Provider registries) {
         SettlementData data = new SettlementData();
         int version = tag.getInt("Version");
         if (version > VERSION) {
@@ -223,7 +291,24 @@ public final class SettlementData extends SavedData {
                 loadedGates.add(new Settlement.Gate(gates[g], gates[g + 1], gates[g + 2], gates[g + 3]));
             }
             settlement.setGates(loadedGates);
+            settlement.setBeds(entry.contains("Beds") ? entry.getInt("Beds") : VillagePlaces.UNKNOWN);
+            if (entry.contains("Buildings", Tag.TAG_COMPOUND)) {
+                CompoundTag buildings = entry.getCompound("Buildings");
+                Map<String, Integer> counts = new HashMap<>();
+                buildings.getAllKeys().forEach(kind -> counts.put(kind, Math.max(0, buildings.getInt(kind))));
+                settlement.setBuildings(Optional.of(counts));
+            }
+            boolean hasPosts = entry.contains("JobPosts", Tag.TAG_LIST);
+            if (hasPosts) {
+                settlement.setJobPosts(Optional.of(loadPosts(entry.getList("JobPosts", Tag.TAG_COMPOUND))));
+            }
+            loadSkills(settlement.jobSkills(), entry.getCompound("JobSkills"));
+            loadTradeUses(settlement.jobTradeUses(), entry.getList("JobTradeUses", Tag.TAG_COMPOUND));
+            settlement.setLastFallPenalty(entry.contains("LastFallPenalty") ? entry.getLong("LastFallPenalty")
+                    : Settlement.NO_FALL_PENALTY);
             loadEconomy(settlement.economy(), entry.getCompound("Economy"));
+            settlement.setLegacyJobs(entry.getBoolean("LegacyJobs")
+                    || (version < POSTS_VERSION && !hasPosts && settlement.economy().isInitialized()));
             if (data.registry.byId(settlement.id()).isEmpty()) {
                 data.registry.add(settlement);
             }
@@ -250,12 +335,101 @@ public final class SettlementData extends SavedData {
         CompoundTag stock = new CompoundTag();
         economy.stock().asMap().forEach(stock::putInt);
         tag.put("Stock", stock);
-        tag.putDouble("FoodCovered", economy.foodCovered());
         tag.putDouble("JobsWorking", economy.jobsWorking());
         tag.putInt("Cycles", economy.cycles());
         return tag;
     }
 
+    /**
+     * Writes the skill of the job posts: {@code Posts} (a list of {@code Sign}, {@code Job} and {@code Experience})
+     * and {@code Slots} (the experience of the job slots with no post, by job id).
+     */
+    private static CompoundTag saveSkills(JobSkills skills) {
+        ListTag posts = new ListTag();
+        skills.posts().forEach((place, skill) -> {
+            CompoundTag postTag = new CompoundTag();
+            postTag.putIntArray("Sign", new int[] {place.x(), place.y(), place.z()});
+            postTag.putString("Job", skill.jobId());
+            postTag.putInt("Experience", skill.experience());
+            posts.add(postTag);
+        });
+        CompoundTag slots = new CompoundTag();
+        skills.slots().forEach(slots::putInt);
+        CompoundTag tag = new CompoundTag();
+        tag.put("Posts", posts);
+        tag.put("Slots", slots);
+        return tag;
+    }
+
+    /**
+     * Reads the skill of the job posts. A settlement with no key {@code JobSkills} (a save of an older version) has
+     * no skill: each post starts at Novice.
+     */
+    private static void loadSkills(JobSkills skills, CompoundTag tag) {
+        ListTag posts = tag.getList("Posts", Tag.TAG_COMPOUND);
+        for (int i = 0; i < posts.size(); i++) {
+            CompoundTag postTag = posts.getCompound(i);
+            int[] sign = postTag.getIntArray("Sign");
+            String job = postTag.getString("Job");
+            if (sign.length == 3 && !job.isEmpty()) {
+                skills.set(new JobSkills.Place(sign[0], sign[1], sign[2]), job, postTag.getInt("Experience"));
+            }
+        }
+        CompoundTag slots = tag.getCompound("Slots");
+        slots.getAllKeys().forEach(job -> skills.setSlot(job, slots.getInt(job)));
+    }
+
+    /**
+     * Writes the uses of the job trades of the week: a list of {@code Source} (see {@link JobTradeUses}), {@code Job},
+     * {@code Week} and {@code Uses} (the uses by trade key).
+     */
+    private static ListTag saveTradeUses(JobTradeUses uses) {
+        ListTag list = new ListTag();
+        uses.sources().forEach((source, week) -> {
+            CompoundTag sourceTag = new CompoundTag();
+            sourceTag.putString("Source", source);
+            sourceTag.putString("Job", week.jobId());
+            sourceTag.putLong("Week", week.week());
+            CompoundTag counts = new CompoundTag();
+            week.uses().forEach(counts::putInt);
+            sourceTag.put("Uses", counts);
+            list.add(sourceTag);
+        });
+        return list;
+    }
+
+    /** Reads the uses of the job trades of the week. A save with no key has no uses. */
+    private static void loadTradeUses(JobTradeUses uses, ListTag list) {
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag sourceTag = list.getCompound(i);
+            CompoundTag counts = sourceTag.getCompound("Uses");
+            Map<String, Integer> values = new HashMap<>();
+            counts.getAllKeys().forEach(key -> values.put(key, Math.max(0, counts.getInt(key))));
+            String source = sourceTag.getString("Source");
+            if (!source.isEmpty()) {
+                uses.set(source, new JobTradeUses.Week(sourceTag.getString("Job"), sourceTag.getLong("Week"), values));
+            }
+        }
+    }
+
+    /** Reads the job posts of a settlement. A post with no sign position or no job is skipped. */
+    private static List<JobPosts.Post> loadPosts(ListTag list) {
+        List<JobPosts.Post> posts = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag postTag = list.getCompound(i);
+            int[] sign = postTag.getIntArray("Sign");
+            String job = postTag.getString("Job");
+            if (sign.length == 3 && !job.isEmpty()) {
+                posts.add(new JobPosts.Post(job, sign[0], sign[1], sign[2], Math.max(1, postTag.getInt("Beds"))));
+            }
+        }
+        return posts;
+    }
+
+    /**
+     * Reads the economy of a settlement. The load ignores the keys that it does not know, for example the key
+     * {@code FoodCovered} of the saves of an older version: the economy has no food need.
+     */
     private static void loadEconomy(EconomyState economy, CompoundTag tag) {
         economy.setInitialized(tag.getBoolean("Initialized"));
         economy.setPopulation(tag.getInt("Population"));
@@ -269,9 +443,7 @@ public final class SettlementData extends SavedData {
         for (String item : stock.getAllKeys()) {
             economy.stock().set(item, stock.getInt(item));
         }
-        double food = tag.contains("FoodCovered") ? tag.getDouble("FoodCovered") : 1.0;
-        double jobsWorking = tag.contains("JobsWorking") ? tag.getDouble("JobsWorking") : 1.0;
-        economy.setLastCycle(food, jobsWorking);
+        economy.setLastCycle(tag.contains("JobsWorking") ? tag.getDouble("JobsWorking") : 1.0);
         economy.setCycles(tag.getInt("Cycles"));
     }
 }

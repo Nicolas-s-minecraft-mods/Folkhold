@@ -1,0 +1,8 @@
+name = "Cartofold"
+filename = "cartofold-0.43.6.jar"
+side = "both"
+
+[download]
+url = "https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases/download/v0.43.6/cartofold-0.43.6.jar"
+hash-format = "sha256"
+hash = "519cccc455e7119f8ae270b928a1a4d517e56c007495daed9a402b8e59340600"

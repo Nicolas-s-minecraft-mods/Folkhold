@@ -1,6 +1,7 @@
 package io.github.nicolasgoyon.folkhold.core.sim.construction;
 
 import io.github.nicolasgoyon.folkhold.core.sim.construction.PlanWarning.Problem;
+import io.github.nicolasgoyon.folkhold.core.sim.construction.WalkSearch.Way;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,15 +15,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Predicate;
 
 /**
  * Makes the plan of a construction: the steps that change the blocks of the level into the blocks of a target.
  *
  * <p>Rules:
  * <ul>
- *   <li>A block of the level that is equal to the block of the target stays. A block with another state is an
- *       obstacle: the plan removes it, and places the block of the target. A block that needs an obstacle as its
- *       support also goes, and comes back if it is in the target.</li>
+ *   <li>A block of the level that is equal to the block of the target stays. The same block with only other
+ *       properties gets the state of the target with no removal: thus a block of more than one part keeps its other
+ *       parts. Another block is an obstacle: the plan removes it, and places the block of the target. A block that
+ *       needs an obstacle as its support also goes, and comes back if it is in the target.</li>
  *   <li>The removals come first: the attached blocks first, then from the top to the bottom.</li>
  *   <li>The placements go from the bottom to the top. A block comes after the block below it, and after its support.
  *       For example, a falling block comes after the block below it, and an attached block after its support. A
@@ -33,11 +37,20 @@ import java.util.Set;
  *       builder (see {@link Reach}). This position has space for the builder and a floor below it. The floor is a
  *       block of the level or of the scaffolding. It can also be a block of the plan on a block of the level, for
  *       example the floor of a house. A block of the plan in a square of 2 × 2 floor blocks is a floor too, for
- *       example an upper floor. A builder does not stand on the top of a new wall, which is 1 block wide.</li>
+ *       example an upper floor. A builder does not stand on the top of a new wall, which is 1 block wide (see
+ *       {@link #isWallTop}). The blocks of the plan are the blocks that the steps place, and the blocks that the site
+ *       placed before the plan, for example before a load of the level.</li>
+ *   <li>The plan selects a position where a villager can walk from the ground, or a position on a scaffolding
+ *       column (see {@link WalkSearch}). A position with a clear way comes before a position with a way over the top
+ *       of a new wall. Of two positions with the same way, the plan selects the position with the block nearer to the
+ *       eyes of the builder.</li>
  *   <li>When there is no such position, the plan adds a column of scaffolding next to the block, on positions that
  *       the target does not fill. A column on the ground comes before a column on a block of the plan, then the
  *       column with the fewest new blocks: a column on top of an existing column makes it higher. The plan removes
- *       all the scaffolding at the end, from the top.</li>
+ *       each column after the last step that uses it, from the top. Thus the columns do not close a way for the next
+ *       steps, for example the way from a door to the rest of a room.</li>
+ *   <li>With no way from the ground to a column, the builder goes directly to the nearest position to stand. With
+ *       no position to stand, the plan adds a column with no way to it.</li>
  *   <li>The plan reports the problems of the target (see {@link PlanWarning}). Examples: a falling block above air,
  *       an attached block with no support.</li>
  * </ul>
@@ -54,9 +67,14 @@ public final class ConstructionPlanner {
     private final Target target;
     private final LevelView level;
     private final Reach reach;
+    /** The search of a way from the ground to a position to stand, in the box of the target and the reach around it. */
+    private final WalkSearch walks;
     /** The blocks of the level that the steps change, during the plan. */
     private final Map<BuildPos, BuildBlock> changes = new HashMap<>();
-    /** The positions where a step of the plan put a block of the target. The scaffolding is not in this set. */
+    /**
+     * The positions where a step of the plan put a block of the target, and the positions of the blocks that the site
+     * placed before the plan. The scaffolding is not in this set.
+     */
     private final Set<BuildPos> placed = new HashSet<>();
     /** The target positions that a later step fills: no scaffolding there. */
     private final Set<BuildPos> toFill = new HashSet<>();
@@ -66,14 +84,17 @@ public final class ConstructionPlanner {
     private final Set<BuildPos> pendingRemovals = new HashSet<>();
     private final List<PlanWarning> warnings = new ArrayList<>();
 
-    private ConstructionPlanner(Target target, LevelView level, Reach reach) {
+    private ConstructionPlanner(Target target, LevelView level, Reach reach, Set<BuildPos> placedBefore) {
         this.target = target;
         this.level = level;
         this.reach = reach;
+        this.placed.addAll(placedBefore);
+        this.walks = WalkSearch.around(target.blocks().keySet(), reach, pos -> current(pos).walk(),
+                this::isScaffolding, this::isWallTop);
     }
 
     /**
-     * Makes the plan of a construction.
+     * Makes the plan of a construction with no blocks of the site in the level.
      *
      * @param target the target
      * @param level  the blocks of the level before the construction
@@ -81,7 +102,21 @@ public final class ConstructionPlanner {
      * @return the plan
      */
     public static Plan plan(Target target, LevelView level, Reach reach) {
-        return new ConstructionPlanner(target, level, reach).run();
+        return plan(target, level, reach, Set.of());
+    }
+
+    /**
+     * Makes the plan of a construction. The site placed some blocks of the level, for example before a load of the
+     * level: for the plan, these blocks are blocks of the plan (see {@link #isWallTop}).
+     *
+     * @param target       the target
+     * @param level        the blocks of the level before the construction
+     * @param reach        the zone where a builder places and removes blocks (see {@link Reach#DEFAULT})
+     * @param placedBefore the positions of the blocks that the site placed before the plan
+     * @return the plan
+     */
+    public static Plan plan(Target target, LevelView level, Reach reach, Set<BuildPos> placedBefore) {
+        return new ConstructionPlanner(target, level, reach, placedBefore).run();
     }
 
     private Plan run() {
@@ -94,7 +129,7 @@ public final class ConstructionPlanner {
             if (have.sameBlock(entry.getValue())) {
                 continue;
             }
-            if (have.kind() != BlockKind.AIR) {
+            if (have.kind() != BlockKind.AIR && !have.sameBlockOtherState(entry.getValue())) {
                 remove.add(pos);
             }
             markToPlace(pos, place, fluids);
@@ -116,8 +151,8 @@ public final class ConstructionPlanner {
             block.partner().ifPresent(pendingRemovals::remove);
             steps.add(new Step(StepType.REMOVE, pos, BuildBlock.AIR_STATE, block.partner(),
                     block.partner().map(partner -> BuildBlock.AIR_STATE), Optional.empty(), stand));
-            changes.put(pos, BuildBlock.AIR);
-            block.partner().ifPresent(partner -> changes.put(partner, BuildBlock.AIR));
+            change(pos, BuildBlock.AIR);
+            block.partner().ifPresent(partner -> change(partner, BuildBlock.AIR));
         }
         for (BuildPos pos : placementOrder(place)) {
             BuildBlock block = target.at(pos);
@@ -127,10 +162,10 @@ public final class ConstructionPlanner {
             Optional<BuildPos> stand = standFor(pos, partner);
             steps.add(new Step(StepType.PLACE, pos, block.dryState().orElse(block.state()), partner,
                     partner.map(other -> target.at(other).state()), block.data(), stand));
-            changes.put(pos, block);
+            change(pos, block);
             placed.add(pos);
             partner.ifPresent(other -> {
-                changes.put(other, target.at(other));
+                change(other, target.at(other));
                 placed.add(other);
             });
         }
@@ -142,19 +177,64 @@ public final class ConstructionPlanner {
             Optional<BuildPos> stand = standFor(pos, Optional.empty());
             steps.add(new Step(StepType.ADD_FLUID, pos, block.state(), Optional.empty(), Optional.empty(), block.data(),
                     stand));
-            changes.put(pos, block);
+            change(pos, block);
             placed.add(pos);
         }
-        for (int i = columns.size() - 1; i >= 0; i--) {
-            List<BuildPos> column = columns.get(i);
-            for (int j = column.size() - 1; j >= 0; j--) {
-                BuildPos cell = column.get(j);
-                steps.add(new Step(StepType.REMOVE_SCAFFOLDING, cell, BuildBlock.AIR_STATE, Optional.empty(),
-                        Optional.empty(), Optional.empty(), Optional.empty()));
-                changes.put(cell, BuildBlock.AIR);
+        return new Plan(withColumnRemovals(), warnings);
+    }
+
+    /**
+     * The steps of the plan with the removal of the scaffolding. The columns at one position on the X axis and on the
+     * Z axis go together: a column on top of another column stands on it. They go after the last step that stands on
+     * them or that adds them, from the top. The steps after this step do not use these columns: the columns are not
+     * necessary for them, and the removal only opens ways.
+     */
+    private List<Step> withColumnRemovals() {
+        Map<Long, List<BuildPos>> stacks = new HashMap<>();
+        Map<BuildPos, Long> stackOf = new HashMap<>();
+        for (List<BuildPos> column : columns) {
+            for (BuildPos cell : column) {
+                long key = columnKey(cell);
+                stacks.computeIfAbsent(key, k -> new ArrayList<>()).add(cell);
+                stackOf.put(cell, key);
             }
         }
-        return new Plan(steps, warnings);
+        Map<Long, Integer> lastUse = new HashMap<>();
+        for (int i = 0; i < steps.size(); i++) {
+            Step step = steps.get(i);
+            Long stack = step.type() == StepType.PLACE_SCAFFOLDING ? stackOf.get(step.pos())
+                    : step.stand().map(stand -> stackOf.get(stand.below())).orElse(null);
+            if (stack != null) {
+                lastUse.merge(stack, i, Math::max);
+            }
+        }
+        // The stacks that go after each step, in a fixed order.
+        Map<Integer, Set<Long>> removalsAfter = new HashMap<>();
+        lastUse.forEach((stack, step) -> removalsAfter.computeIfAbsent(step, k -> new TreeSet<>()).add(stack));
+        List<Step> all = new ArrayList<>(steps.size() + stackOf.size());
+        for (int i = 0; i < steps.size(); i++) {
+            all.add(steps.get(i));
+            for (long stack : removalsAfter.getOrDefault(i, Set.of())) {
+                List<BuildPos> cells = new ArrayList<>(stacks.get(stack));
+                cells.sort(Comparator.comparingInt(BuildPos::y).reversed());
+                for (BuildPos cell : cells) {
+                    all.add(new Step(StepType.REMOVE_SCAFFOLDING, cell, BuildBlock.AIR_STATE, Optional.empty(),
+                            Optional.empty(), Optional.empty(), Optional.empty()));
+                }
+            }
+        }
+        return all;
+    }
+
+    /** The key of the column of a position: its position on the X axis and on the Z axis. */
+    private static long columnKey(BuildPos pos) {
+        return ((long) pos.x() << 32) | (pos.z() & 0xFFFFFFFFL);
+    }
+
+    /** Changes the block of a position for the next steps of the plan. */
+    private void change(BuildPos pos, BuildBlock block) {
+        changes.put(pos, block);
+        walks.blockChanged(pos);
     }
 
     /** The current block of a position: after the steps of the plan so far. */
@@ -345,17 +425,51 @@ public final class ConstructionPlanner {
     }
 
     /**
-     * The position where the builder stands for a step. With no such position, the plan adds a scaffolding column.
+     * The position where the builder stands for a step. The plan selects the first possible position in this order:
+     * <ol>
+     *   <li>The nearest position to stand with a clear way from the ground (see {@link WalkSearch}).</li>
+     *   <li>The nearest position to stand with a way over the top of a new wall.</li>
+     *   <li>A new scaffolding column with a clear way from the ground to its bottom.</li>
+     *   <li>A new scaffolding column with a way over the top of a new wall to its bottom.</li>
+     *   <li>The nearest position to stand with no way from the ground. The builder goes there directly.</li>
+     *   <li>A new scaffolding column with no way from the ground to its bottom.</li>
+     * </ol>
+     * With no position, the plan reports the problem.
      */
     private Optional<BuildPos> standFor(BuildPos pos, Optional<BuildPos> partner) {
-        Optional<BuildPos> stand = findStand(pos, partner);
+        List<BuildPos> stands = findStands(pos, partner);
+        Optional<BuildPos> stand = Optional.empty();
+        for (BuildPos candidate : stands) {
+            Way way = walks.way(candidate);
+            if (way == Way.CLEAR) {
+                stand = Optional.of(candidate);
+                break;
+            }
+            if (way == Way.OVER_WALL && stand.isEmpty()) {
+                stand = Optional.of(candidate);
+            }
+        }
         if (stand.isEmpty()) {
-            stand = buildScaffolding(pos, partner);
+            stand = buildScaffolding(pos, partner, bottom -> walks.climbWay(bottom) == Way.CLEAR);
+        }
+        if (stand.isEmpty()) {
+            stand = buildScaffolding(pos, partner, bottom -> walks.climbWay(bottom) != Way.NONE);
+        }
+        if (stand.isEmpty() && !stands.isEmpty()) {
+            stand = Optional.of(stands.get(0));
+        }
+        if (stand.isEmpty()) {
+            stand = buildScaffolding(pos, partner, bottom -> true);
         }
         if (stand.isEmpty()) {
             warnings.add(new PlanWarning(Problem.NO_STAND, pos));
         }
         return stand;
+    }
+
+    /** True if a position has a scaffolding block of the plan now. */
+    private boolean isScaffolding(BuildPos pos) {
+        return BuildBlock.SCAFFOLDING.equals(changes.get(pos));
     }
 
     /** The squared distance from the eyes of a builder that stands at a position to the center of a block. */
@@ -367,27 +481,27 @@ public final class ConstructionPlanner {
     }
 
     /**
-     * The position in the reach zone of a block where a builder can stand now, if there is one. Of two positions, the
-     * plan selects the position with the block nearer to the eyes of the builder.
+     * The positions in the reach zone of a block where a builder can stand now. The position with the block nearest to
+     * the eyes of the builder comes first. Of two positions at the same distance, the first position of the search
+     * comes first.
      */
-    private Optional<BuildPos> findStand(BuildPos pos, Optional<BuildPos> partner) {
-        BuildPos best = null;
-        double bestDistance = Double.MAX_VALUE;
+    private List<BuildPos> findStands(BuildPos pos, Optional<BuildPos> partner) {
+        List<BuildPos> stands = new ArrayList<>();
         int horizontal = reach.horizontal();
         // The feet are at most reach.above() layers below the block, and at most reach.below() layers above it.
         for (int dy = -reach.above(); dy <= reach.below(); dy++) {
             for (int dx = -horizontal; dx <= horizontal; dx++) {
                 for (int dz = -horizontal; dz <= horizontal; dz++) {
                     BuildPos stand = pos.offset(dx, dy, dz);
-                    double distance = eyeDistanceSquared(stand, pos);
-                    if (distance < bestDistance && canStand(stand, pos, partner)) {
-                        best = stand;
-                        bestDistance = distance;
+                    if (canStand(stand, pos, partner)) {
+                        stands.add(stand);
                     }
                 }
             }
         }
-        return Optional.ofNullable(best);
+        // The sort keeps the order of the search for two equal distances.
+        stands.sort(Comparator.comparingDouble(stand -> eyeDistanceSquared(stand, pos)));
+        return stands;
     }
 
     /**
@@ -404,40 +518,52 @@ public final class ConstructionPlanner {
     }
 
     /**
-     * True if a builder can stand on a block now. The block is a floor, and it is one of these blocks:
-     * <ul>
-     *   <li>a block of the level, or the scaffolding of the plan</li>
-     *   <li>a block that the plan put directly on a floor of the level</li>
-     *   <li>a block of the plan in a square of 2 × 2 floor blocks now (see {@link #inWideFloor})</li>
-     * </ul>
-     * A builder does not climb on the other blocks of the plan, for example on the top of a new wall.
+     * True if a builder can stand on a block now: the block is a floor, and it is not the top of a new wall (see
+     * {@link #isWallTop(BuildPos, Predicate, Predicate)}). A builder does not climb on the top of a new wall.
      */
     private boolean standsOn(BuildPos floor) {
-        if (!current(floor).floor()) {
-            return false;
-        }
-        if (!placed.contains(floor)) {
-            return true;
-        }
-        BuildPos below = floor.below();
-        return (!placed.contains(below) && current(below).floor()) || inWideFloor(floor);
+        return current(floor).floor() && !isWallTop(floor);
+    }
+
+    /** True if a block is the top of a new wall now (see {@link #isWallTop(BuildPos, Predicate, Predicate)}). */
+    private boolean isWallTop(BuildPos block) {
+        return isWallTop(block, placed::contains, pos -> current(pos).floor());
     }
 
     /**
-     * True if a floor block is in a square of 2 × 2 floor blocks now, at the same height. A floor of a house on its
-     * foundation, the floor of an upper storey or the top of a platform is in such a square. The top of a wall of 1
-     * block is not.
+     * True if a block is the top of a new wall: a builder does not stand on it, and walks on it only when no clear way
+     * is found (see {@link WalkSearch}). The plan and the construction site use this rule. The block is a floor, and
+     * a block of the plan. It is not one of these blocks:
+     * <ul>
+     *   <li>a block on a floor that is not a block of the plan, for example the floor of a house on the ground</li>
+     *   <li>a block in a square of 2 × 2 floor blocks at the same height, for example the floor of an upper storey or
+     *       the top of a platform</li>
+     * </ul>
+     * Examples: the top of a wall of 1 block, the top of a pillar of the plan.
+     *
+     * @param block  the position of the block
+     * @param placed true for a block of the plan: a block that a step places, or that the site placed before
+     * @param floor  true for a block that a builder can stand on now: a block with a sturdy top face, or the
+     *               scaffolding
+     * @return true for the top of a new wall
      */
-    private boolean inWideFloor(BuildPos floor) {
+    public static boolean isWallTop(BuildPos block, Predicate<BuildPos> placed, Predicate<BuildPos> floor) {
+        if (!placed.test(block) || !floor.test(block)) {
+            return false;
+        }
+        BuildPos below = block.below();
+        if (!placed.test(below) && floor.test(below)) {
+            return false;
+        }
         for (int dx = -1; dx <= 1; dx += 2) {
             for (int dz = -1; dz <= 1; dz += 2) {
-                if (current(floor.offset(dx, 0, 0)).floor() && current(floor.offset(0, 0, dz)).floor()
-                        && current(floor.offset(dx, 0, dz)).floor()) {
-                    return true;
+                if (floor.test(block.offset(dx, 0, 0)) && floor.test(block.offset(0, 0, dz))
+                        && floor.test(block.offset(dx, 0, dz))) {
+                    return false;
                 }
             }
         }
-        return false;
+        return true;
     }
 
     /**
@@ -447,14 +573,17 @@ public final class ConstructionPlanner {
      * later step fills. Of the possible columns at one height, the plan selects:
      * <ol>
      *   <li>a column on a block of the level or on scaffolding before a column on a block of the plan. Thus the columns
-     *       stand around a new house, and not on its floor, when possible;</li>
+     *       stand around a new house, and not on its floor, when possible.</li>
      *   <li>then the column with the fewest new blocks. Thus a column on top of an existing column makes it
      *       higher.</li>
      * </ol>
      *
+     * @param climbable true if a builder can go to the bottom of a column, to climb it. The bottom of a column on top
+     *                  of an existing column is the bottom of the existing column.
      * @return the position where the builder stands, on the column, or empty if no column is possible
      */
-    private Optional<BuildPos> buildScaffolding(BuildPos pos, Optional<BuildPos> partner) {
+    private Optional<BuildPos> buildScaffolding(BuildPos pos, Optional<BuildPos> partner,
+            Predicate<BuildPos> climbable) {
         BuildPos bestStand = null;
         List<BuildPos> bestCells = List.of();
         boolean bestOnPlan = false;
@@ -479,10 +608,11 @@ public final class ConstructionPlanner {
                             continue;
                         }
                         // The cells go from the top down: the floor of the column is below the last cell.
-                        boolean onPlan = placed.contains(cells.get(cells.size() - 1).below());
+                        BuildPos lowest = cells.get(cells.size() - 1);
+                        boolean onPlan = placed.contains(lowest.below());
                         boolean better = bestStand == null || (!onPlan && bestOnPlan)
                                 || (onPlan == bestOnPlan && cells.size() < bestCells.size());
-                        if (better) {
+                        if (better && climbable.test(columnBottom(lowest))) {
                             bestStand = stand;
                             bestCells = cells;
                             bestOnPlan = onPlan;
@@ -499,7 +629,7 @@ public final class ConstructionPlanner {
         for (BuildPos cell : column) {
             steps.add(new Step(StepType.PLACE_SCAFFOLDING, cell, BuildBlock.SCAFFOLDING_STATE, Optional.empty(),
                     Optional.empty(), Optional.empty(), Optional.empty()));
-            changes.put(cell, BuildBlock.SCAFFOLDING);
+            change(cell, BuildBlock.SCAFFOLDING);
         }
         columns.add(column);
         return Optional.of(bestStand);
@@ -521,6 +651,15 @@ public final class ConstructionPlanner {
             cell = cell.below();
         }
         return pendingRemovals.contains(cell) || !standsOn(cell) ? List.of() : cells;
+    }
+
+    /** The bottom of a column: the lowest new cell, or the bottom of the scaffolding of the plan below it. */
+    private BuildPos columnBottom(BuildPos lowest) {
+        BuildPos bottom = lowest;
+        while (isScaffolding(bottom.below())) {
+            bottom = bottom.below();
+        }
+        return bottom;
     }
 
     /** True if a position is empty now and no later step fills it. */

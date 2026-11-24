@@ -40,6 +40,9 @@ add small-ships                 # beta
 # Terrain shape: continents, oceans, mountain ranges
 add tectonic
 
+# Sleep
+add slumbermod                  # the world runs extra ticks while all the players sleep, in place of the night skip
+
 # Light
 add lambdynamiclights           # client only, NeoForge build of the 1.21.1 line
 
@@ -50,6 +53,11 @@ add geckolib                    # unit models and animations of folkhold_world
 add jei
 add jade
 add spark
+add inventory-tweaks-refoxed    # client only: sort, refill of the stacks, new tools
+add default-options             # client only: default keys of the pack (config/defaultoptions). Adds Balm
+
+# Only Default Options uses Balm, on the client.
+sed -i 's/^side = "both"$/side = "client"/' mods/balm.pw.toml
 
 # Pin the beta and unofficial mods. 'packwiz update --all' does not change pinned mods.
 pin_project() {
@@ -72,6 +80,7 @@ pin_project small-ships
 pin_project serene-seasons
 pin_project c2me-neoforge
 pin_project scalablelux
+pin_project slumbermod
 
 packwiz refresh
 echo

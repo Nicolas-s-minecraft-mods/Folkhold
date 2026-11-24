@@ -10,7 +10,6 @@ public final class EconomyState {
     private int population;
     private final List<String> jobs = new ArrayList<>();
     private final Stock stock = new Stock();
-    private double foodCovered = 1.0;
     private double jobsWorking = 1.0;
     private boolean initialized;
     private int cycles;
@@ -37,11 +36,6 @@ public final class EconomyState {
         return stock;
     }
 
-    /** Share of the food need that the population ate in the last cycle (0 to 1). */
-    public double foodCovered() {
-        return foodCovered;
-    }
-
     /** Share of the active jobs that had their inputs in the last cycle (0 to 1). */
     public double jobsWorking() {
         return jobsWorking;
@@ -50,11 +44,9 @@ public final class EconomyState {
     /**
      * Records the result of the last cycle.
      *
-     * @param foodCovered the share of the food need that the population ate
      * @param jobsWorking the share of the active jobs that had their inputs
      */
-    public void setLastCycle(double foodCovered, double jobsWorking) {
-        this.foodCovered = clamp(foodCovered);
+    public void setLastCycle(double jobsWorking) {
         this.jobsWorking = clamp(jobsWorking);
     }
 

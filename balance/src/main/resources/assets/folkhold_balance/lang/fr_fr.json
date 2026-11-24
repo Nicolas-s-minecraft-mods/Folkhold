@@ -1,3 +1,8 @@
 {
-  "fml.menu.mods.info.description.folkhold_balance": "Limites pour les fermes et les villageois, et chargement de chunks avec un coût."
+  "fml.menu.mods.info.description.folkhold_balance": "Une limite pour les nuits rapides du mod optionnel Slumber.",
+  "folkhold_balance.configuration.title": "Configuration de Folkhold Balance",
+  "folkhold_balance.configuration.sleep": "Sommeil (Slumber)",
+  "folkhold_balance.configuration.maxExtraTicks": "Ticks supplémentaires maximum par tick serveur",
+  "folkhold_balance.configuration.extraTickBudget": "Budget de temps des ticks supplémentaires (ms)",
+  "folkhold_balance.configuration.nightSeconds": "Durée visée d'une nuit (s)"
 }
