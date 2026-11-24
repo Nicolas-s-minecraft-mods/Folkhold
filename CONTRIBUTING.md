@@ -148,6 +148,9 @@ changes, in English and in French. The CI and the release use `scripts/changelog
   with the workflow **Build**. Then it tags the commit of `develop`, creates a GitHub Release with the jars and the
   modpack (`.mrpack`) of this build, then publishes the same jars to GitHub Packages. The release notes start with
   the player-facing changes of the version (see [Changelog](#changelog)).
+- The workflow **Release** also uploads the jars to CurseForge. When CurseForge refuses some modules, use "Run
+  workflow" on the workflow **CurseForge** with the version and the refused modules (see
+  [docs/curseforge/README.md](docs/curseforge/README.md#upload-of-some-modules-of-an-existing-release)).
 - To test a release build with no publication, use "Run workflow" on the workflow **Build** with the input
   `release`. The run makes the jars, the `.mrpack` file and the Maven files (artifact `folkhold-maven`) with the
   version of the release.

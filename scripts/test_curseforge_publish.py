@@ -1,7 +1,12 @@
 """Tests of scripts/curseforge_publish.py. Run: python3 -m unittest discover -s scripts -p "test_*.py" """
+import contextlib
+import io
 import json
 import os
+import sys
+import tempfile
 import unittest
+from unittest import mock
 
 import curseforge_publish
 import version
@@ -15,8 +20,9 @@ VERSIONS = [{"id": 10, "gameVersionTypeID": 1, "name": "1.21.1"}, {"id": 11, "ga
 
 
 class FakeApi:
-    def __init__(self):
+    def __init__(self, refused=()):
         self.uploads = []
+        self.refused = set(refused)
 
     def versions(self):
         return VERSIONS
@@ -25,6 +31,8 @@ class FakeApi:
         return TYPES
 
     def upload(self, project_id, data, file_name, content):
+        if project_id in self.refused:
+            raise RuntimeError(f"CurseForge refused /projects/{project_id}/upload-file: HTTP 400 error 1018")
         self.uploads.append((project_id, data, file_name, content))
         return 1000 + len(self.uploads)
 
@@ -52,6 +60,10 @@ class MetadataTest(unittest.TestCase):
             with self.subTest(module=module):
                 data = curseforge_publish.metadata(project, "0.35.0", "notes", [10])
                 self.assertEqual(data["releaseType"], expected)
+
+    def test_given_release_type(self):
+        data = curseforge_publish.metadata(projects()["core"], "0.35.0", "notes", [10], "alpha")
+        self.assertEqual(data["releaseType"], "alpha")
 
     def test_relations(self):
         data = curseforge_publish.metadata(projects()["world"], "0.35.0", "notes", [10])
@@ -99,8 +111,9 @@ class ProjectsTest(unittest.TestCase):
 class PublishTest(unittest.TestCase):
     def test_all_the_jars_are_uploaded(self):
         api = FakeApi()
-        files = curseforge_publish.publish(api, projects(), "0.35.0", "notes", read=lambda path: path.encode())
-        self.assertEqual(list(files), ["core", "blocks", "world", "balance", "events"])
+        result = curseforge_publish.publish(api, projects(), "0.35.0", "notes", read=lambda path: path.encode())
+        self.assertEqual(list(result.files), ["core", "blocks", "world", "balance", "events"])
+        self.assertEqual(result.refused, {})
         self.assertEqual([u[0] for u in api.uploads], [1821089, 1821098, 1821107, 1821102, 1821115])
         self.assertEqual(api.uploads[0][2], "folkhold_core-0.35.0.jar")
         self.assertEqual(api.uploads[0][1]["gameVersions"], [10, 20, 30, 40, 41])
@@ -117,6 +130,93 @@ class PublishTest(unittest.TestCase):
             curseforge_publish.publish(api, projects(), "0.35.0", "notes", read=read)
         self.assertEqual(api.uploads, [])
 
+    def test_a_refused_module_does_not_stop_the_next_modules(self):
+        api = FakeApi(refused={1821107})
+        with contextlib.redirect_stderr(io.StringIO()) as errors:
+            result = curseforge_publish.publish(api, projects(), "0.35.0", "notes", read=lambda path: b"")
+        self.assertEqual(list(result.files), ["core", "blocks", "balance", "events"])
+        self.assertEqual(list(result.refused), ["world"])
+        self.assertIn("1018", result.refused["world"])
+        self.assertIn("folkhold_world-0.35.0.jar", errors.getvalue())
+        self.assertEqual([u[0] for u in api.uploads], [1821089, 1821098, 1821102, 1821115])
+
+    def test_each_refused_module_is_in_the_result(self):
+        api = FakeApi(refused={1821107, 1821115})
+        with contextlib.redirect_stderr(io.StringIO()):
+            result = curseforge_publish.publish(api, projects(), "0.35.0", "notes", read=lambda path: b"")
+        self.assertEqual(list(result.refused), ["world", "events"])
+        self.assertEqual(list(result.files), ["core", "blocks", "balance"])
+
+    def test_the_jars_come_from_the_given_folder(self):
+        api = FakeApi()
+        paths = []
+
+        def read(path):
+            paths.append(path)
+            return b""
+
+        selection = curseforge_publish.selected(projects(), ["balance"])
+        curseforge_publish.publish(api, selection, "0.221.2", "notes", read=read, folder="/tmp/jars", kind="beta")
+        self.assertEqual(paths, [os.path.join("/tmp/jars", "folkhold_balance-0.221.2.jar")])
+        self.assertEqual(api.uploads[0][0], 1821102)
+        self.assertEqual(api.uploads[0][1]["releaseType"], "beta")
+
+    def test_the_annotations_give_the_file_and_the_refused_module(self):
+        api = FakeApi(refused={1821107})
+        selection = curseforge_publish.selected(projects(), ["world,balance"])
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
+                contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+            curseforge_publish.publish(api, selection, "0.35.0", "notes", read=lambda path: b"")
+        lines = out.getvalue().splitlines()
+        self.assertIn("::notice title=CurseForge::balance: folkhold_balance-0.35.0.jar is the file 1001 of the "
+                      "project folkhold-balance", lines)
+        self.assertTrue(any(line.startswith("::error title=CurseForge::world: ") for line in lines))
+
+
+class SelectedTest(unittest.TestCase):
+    def test_no_selection_gives_all_the_modules(self):
+        self.assertEqual(list(curseforge_publish.selected(projects(), None)), list(projects()))
+
+    def test_lists_with_commas_and_spaces_keep_the_order_of_the_file(self):
+        selection = curseforge_publish.selected(projects(), ["events, world", "balance"])
+        self.assertEqual(list(selection), ["world", "balance", "events"])
+
+    def test_an_unknown_module_is_an_error(self):
+        with self.assertRaisesRegex(ValueError, "Unknown module: worlds"):
+            curseforge_publish.selected(projects(), ["balance,worlds"])
+
+    def test_an_empty_list_is_an_error(self):
+        with self.assertRaises(ValueError):
+            curseforge_publish.selected(projects(), [" , "])
+
+
+class MainTest(unittest.TestCase):
+    def test_a_refused_module_fails_and_names_the_module(self):
+        result = curseforge_publish.Result()
+        result.files["balance"] = 1001
+        result.refused["world"] = "HTTP 400"
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as notes:
+            notes.write("notes")
+        self.addCleanup(os.remove, notes.name)
+        argv = ["curseforge_publish.py", "0.35.0", notes.name, "--only", "world,balance"]
+        with mock.patch.object(sys, "argv", argv), mock.patch.dict(os.environ, {"CURSEFORGE_TOKEN": "x"}), \
+                mock.patch.object(curseforge_publish, "publish", return_value=result):
+            with self.assertRaises(SystemExit) as stop:
+                curseforge_publish.main()
+        self.assertEqual(str(stop.exception), "CurseForge refused the modules: world. Uploaded modules: balance.")
+
+    def test_all_the_modules_sent_is_a_success(self):
+        result = curseforge_publish.Result()
+        result.files["balance"] = 1001
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as notes:
+            notes.write("notes")
+        self.addCleanup(os.remove, notes.name)
+        argv = ["curseforge_publish.py", "0.35.0", notes.name, "--only", "balance", "--release-type", "beta"]
+        with mock.patch.object(sys, "argv", argv), mock.patch.dict(os.environ, {"CURSEFORGE_TOKEN": "x"}), \
+                mock.patch.object(curseforge_publish, "publish", return_value=result) as publish:
+            curseforge_publish.main()
+        self.assertEqual(list(publish.call_args.args[1]), ["balance"])
+        self.assertEqual(publish.call_args.kwargs["kind"], "beta")
 
 if __name__ == "__main__":
     unittest.main()
