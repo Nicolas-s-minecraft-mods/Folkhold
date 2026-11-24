@@ -6,6 +6,7 @@
   "mixins": [
     "EntityMixin",
     "LevelChunkMixin",
+    "LivingEntityMixin",
     "MoveControlMixin",
     "StructureCheckAccessor",
     "StructureManagerAccessor",
