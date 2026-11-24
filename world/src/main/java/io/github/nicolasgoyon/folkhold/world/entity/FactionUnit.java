@@ -620,12 +620,13 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     }
 
     /**
-     * True if the unit cannot reach its target: no line of sight, and no complete path to the target. These count
-     * as "no complete path to the target": no path (the attack goal stops its path at the end of a partial path),
-     * a partial path, and a path to another position (for example a stroll near the home).
+     * True if the unit cannot reach its target: no line of fire ({@link #hasLineOfFire}), and no complete path to the
+     * target. These count as "no complete path to the target": no path (the attack goal stops its path at the end of a
+     * partial path), a partial path, and a path to another position (for example a stroll near the home). For an
+     * archer on its tower, a spot of the platform with a line of fire to the target makes the target reachable.
      */
     private boolean isUnreachable(LivingEntity target) {
-        if (getSensing().hasLineOfSight(target)) {
+        if (hasLineOfFire(target)) {
             return false;
         }
         Path path = getNavigation().getPath();

@@ -75,8 +75,15 @@ public final class VillagerSleepGameTests {
     private static final long NIGHT = 14000L;
     /** The extra ticks of the level in each server tick of the fast night. */
     private static final int FAST_TICKS = 9;
-    /** The monster is at this distance from the heart: in the chase area of the units, in blocks. */
-    private static final int MONSTER_RADIUS = 56;
+    /** The monster is at these horizontal distances from the post of an archer on its tower, in blocks. */
+    private static final int[] MONSTER_TOWER_DISTANCES = {6, 9, 12};
+    /**
+     * The monster is farther than this distance from all the villagers, in blocks: more than the distance of the alert
+     * of a monster (16 blocks).
+     */
+    private static final double MONSTER_VILLAGER_DISTANCE = 20.0;
+    /** An archer at this horizontal distance or less from its post is on the platform of its tower, in blocks. */
+    private static final double TOWER_PLATFORM = 3.5;
     /** The number of positions on the circle of the monster. */
     private static final int MONSTER_DIRECTIONS = 16;
     /** The units fight the monster for this time, in ticks. */
@@ -115,6 +122,10 @@ public final class VillagerSleepGameTests {
     /**
      * At night, the units of the village fight a monster far from the villagers. The village stays calm, and each
      * villager with a bed stays in it. A monster near a villager starts the alert.
+     *
+     * <p>The monster stands in the range of an archer on its tower, with a line of fire from the platform of the tower.
+     * Thus the fight is real: the unit that fights the monster can shoot it. An archer with no line of fire to the
+     * monster from its tower does not keep the monster as target.
      */
     @GameTest(template = "empty", timeoutTicks = 3000, batch = "villager_sleep_monster")
     public static void villagersSleepWhenTheUnitsFightAMonsterFarFromThem(GameTestHelper helper) {
@@ -301,8 +312,10 @@ public final class VillagerSleepGameTests {
         }
         Zombie[] zombie = {null};
         // The heart rings the bells each 5 seconds in an alert: the wait covers some rings.
-        sequence.thenExecute(() -> {
-                    zombie[0] = monsterAwayFromTheVillagers(level, heart);
+        sequence.thenWaitUntil(() -> helper.assertTrue(heart.getUnits().stream().anyMatch(
+                        VillagerSleepGameTests::isOnTower), "An archer must be on its tower"))
+                .thenExecute(() -> {
+                    zombie[0] = monsterNearATower(helper, level, heart);
                     monsters.add(zombie[0]);
                 })
                 .thenExecuteFor(MONSTER_TICKS, () -> {
@@ -311,8 +324,17 @@ public final class VillagerSleepGameTests {
                             + "must not start the alert: monster at " + zombie[0].blockPosition().toShortString());
                 })
                 .thenExecute(() -> {
-                    helper.assertTrue(heart.getUnits().stream().anyMatch(unit -> unit.getTarget() == zombie[0]),
-                            "A unit must fight the monster");
+                    List<FactionUnit> units = heart.getUnits();
+                    helper.assertTrue(units.stream().anyMatch(unit -> unit.getTarget() == zombie[0]
+                            && unit.hasLineOfFire(zombie[0])), "A unit must fight the monster: a unit that can shoot "
+                            + "or reach it must have it as target: " + describeUnits(units, zombie[0]));
+                    for (FactionUnit unit : units) {
+                        if (isOnTower(unit) && !unit.hasLineOfFire(zombie[0])) {
+                            unit.setTarget(zombie[0]);
+                            helper.assertFalse(unit.getTarget() == zombie[0], "An archer with no firing position "
+                                    + "must not keep the monster: " + describeUnits(units, zombie[0]));
+                        }
+                    }
                     assertAllSleep(helper, level, heart, "with a monster far from the villagers");
                     // A monster near a villager is a threat for the villagers: it starts the alert.
                     Villager villager = VillageFolk.inhabitants(level, heartPos).get(0);
@@ -383,30 +405,66 @@ public final class VillagerSleepGameTests {
         }
     }
 
+    /** True if the unit is an archer on the platform of its tower: at 3.5 blocks or less from its post. */
+    private static boolean isOnTower(FactionUnit unit) {
+        BlockPos post = unit.getPostPos();
+        return unit.shootsFromPost() && post != null
+                && Math.max(Math.abs(unit.getX() - post.getX() - 0.5), Math.abs(unit.getZ() - post.getZ() - 0.5))
+                        <= TOWER_PLATFORM && Math.abs(unit.getY() - post.getY()) <= 1.5;
+    }
+
+    /** The units, their distance to the monster, their target and their line of fire, for the messages. */
+    private static List<String> describeUnits(List<FactionUnit> units, Zombie zombie) {
+        return units.stream().map(unit -> unit.getType().toShortString() + " " + Math.round(unit.distanceTo(zombie))
+                + " blocks, on its tower " + isOnTower(unit) + ", target " + (unit.getTarget() == null ? "none"
+                : unit.getTarget().getType().toShortString()) + ", line of fire " + unit.hasLineOfFire(zombie) + ", giving up "
+                + unit.isGivingUp() + ", line of sight " + unit.hasLineOfSight(zombie))
+                .toList();
+    }
+
     /**
-     * Puts a monster in the chase area of the units, at the position of a circle around the heart that is farthest
-     * from the villagers. The monster does not move and does not die: the units fight it during the test.
+     * Puts a monster on the ground in the range of an archer on its tower, with a line of fire from the platform of
+     * the tower. The candidates are on circles around the post of each archer on its tower. The monster goes to the
+     * candidate in the chase area of the archer that is farthest from the villagers, and at more than
+     * {@link #MONSTER_VILLAGER_DISTANCE} blocks from them. The monster does not move and does not die: the units fight it during the test.
      */
-    private static Zombie monsterAwayFromTheVillagers(ServerLevel level, VillageHeartBlockEntity heart) {
+    private static Zombie monsterNearATower(GameTestHelper helper, ServerLevel level, VillageHeartBlockEntity heart) {
         List<Villager> villagers = VillageFolk.inhabitants(level, heart.getBlockPos());
-        BlockPos best = null;
+        Vec3 best = null;
         double bestDistance = -1.0;
-        for (int i = 0; i < MONSTER_DIRECTIONS; i++) {
-            double angle = 2.0 * Math.PI * i / MONSTER_DIRECTIONS;
-            int x = heart.getBlockPos().getX() + (int) Math.round(Math.cos(angle) * MONSTER_RADIUS);
-            int z = heart.getBlockPos().getZ() + (int) Math.round(Math.sin(angle) * MONSTER_RADIUS);
-            BlockPos pos = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
-            double distance = villagers.stream().mapToDouble(villager -> Math.sqrt(villager.distanceToSqr(
-                    pos.getCenter()))).min().orElse(Double.MAX_VALUE);
-            if (distance > bestDistance) {
-                best = pos;
-                bestDistance = distance;
+        for (FactionUnit archer : heart.getUnits()) {
+            if (!isOnTower(archer)) {
+                continue;
+            }
+            BlockPos post = archer.getPostPos();
+            for (int radius : MONSTER_TOWER_DISTANCES) {
+                for (int i = 0; i < MONSTER_DIRECTIONS; i++) {
+                    double angle = 2.0 * Math.PI * i / MONSTER_DIRECTIONS;
+                    int x = post.getX() + (int) Math.round(Math.cos(angle) * radius);
+                    int z = post.getZ() + (int) Math.round(Math.sin(angle) * radius);
+                    Vec3 pos = new Vec3(x + 0.5, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z),
+                            z + 0.5);
+                    double distance = villagers.stream().mapToDouble(villager -> Math.sqrt(villager.distanceToSqr(
+                            pos))).min().orElse(Double.MAX_VALUE);
+                    if (distance <= bestDistance || distance <= MONSTER_VILLAGER_DISTANCE
+                            || !archer.isInChaseArea(BlockPos.containing(pos))) {
+                        continue;
+                    }
+                    Zombie probe = EntityType.ZOMBIE.create(level);
+                    probe.moveTo(pos.x, pos.y, pos.z);
+                    if (archer.hasLineOfFire(probe)) {
+                        best = pos;
+                        bestDistance = distance;
+                    }
+                    probe.discard();
+                }
             }
         }
+        helper.assertTrue(best != null, "A tower must have a line of fire to a place far from the villagers");
         FolkholdWorld.LOGGER.info("Villager sleep: monster at {}, {} blocks from the nearest villager", best,
                 Math.round(bestDistance));
         Zombie zombie = EntityType.ZOMBIE.create(level);
-        zombie.moveTo(best.getX() + 0.5, best.getY(), best.getZ() + 0.5);
+        zombie.moveTo(best.x, best.y, best.z);
         zombie.setNoAi(true);
         // An invulnerable mob is not a target: the effect keeps the monster alive.
         zombie.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, MobEffectInstance.INFINITE_DURATION, 4));
