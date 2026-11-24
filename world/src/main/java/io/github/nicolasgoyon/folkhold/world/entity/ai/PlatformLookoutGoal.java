@@ -20,12 +20,13 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * Lookout of a ranged unit on its post: the unit moves on the platform of its post to see its target. The goal does
- * not use the weapon of the unit: the attack goals of the weapon shoot when the unit sees the target.
+ * Lookout of a ranged unit on its post: the unit moves on the platform of its post to a firing position with a line of
+ * fire to its target. The goal does not use the weapon of the unit: the attack goals of the weapon shoot when the unit
+ * sees the target.
  *
  * <ul>
  *   <li>The goal starts when the unit is at its post, has a target, and has no line of sight to the target for
- *       {@link #BLIND_TICKS}. For example, the parapet of a tower hides a target at the foot of the tower.</li>
+ *       {@link #BLIND_TICKS}. For example, the parapet of a tower hides a target near the foot of the tower.</li>
  *   <li>The platform is the set of positions where the unit can stand, connected to the post with steps of
  *       {@link #MAX_STEP} blocks or less, at {@link #PLATFORM_RADIUS} blocks or less from the post and at
  *       {@link #MAX_LEVEL_DIFFERENCE} block or less above or below the post. The parapet slabs of a tower are a part
@@ -33,18 +34,21 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *   <li>The lookout spots are the middle of each position of the platform, and the outer edge of each position at
  *       the border of the platform. At an edge spot, the unit leans over the drop: it sees and shoots the targets
  *       near the foot of its tower.</li>
- *   <li>The unit goes to the spot with a line of sight to the target that is nearest to the post. It does not jump
- *       and does not leave the platform. While the unit holds a spot, a hit does not push it (see
- *       {@link FactionUnit#isOnLookout()}).</li>
+ *   <li>The unit goes to the spot that {@link FiringPositions#select} gives: the spot with a line of fire to the target
+ *       that is nearest to the unit. It does not jump and does not leave the platform. While the unit holds a spot, a
+ *       hit does not push it (see {@link FactionUnit#isOnLookout()}).</li>
  *   <li>When the unit loses the line of sight at the spot for {@link #BLIND_TICKS}, it looks for a new spot. When no
- *       spot gives a line of sight, the unit goes back to its post. The attack goal then drops the target, and the
- *       unit selects a target that it can see.</li>
- *   <li>When the unit has no target, it goes back to its post.</li>
+ *       spot gives a line of fire, the unit goes back to its post. The target goals then drop the target, and the
+ *       unit selects a target that it can shoot.</li>
+ *   <li>When the unit has no target for {@link #NO_TARGET_TICKS}, it goes back to its post. A new target in this time
+ *       starts the search for a spot from the current spot.</li>
  * </ul>
  */
 public class PlatformLookoutGoal extends Goal {
     /** The unit looks for a lookout spot after this time with no line of sight to its target, in ticks. */
-    static final int BLIND_TICKS = 20;
+    static final int BLIND_TICKS = 10;
+    /** The unit goes back to its post after this time with no target, in ticks. */
+    static final int NO_TARGET_TICKS = 40;
     /** The largest horizontal distance from the post to a position of the platform, in blocks. */
     static final int PLATFORM_RADIUS = 3;
     /** The largest difference of height from the post to a position of the platform, in blocks. */
@@ -67,16 +71,22 @@ public class PlatformLookoutGoal extends Goal {
     private enum Phase { MOVE, HOLD, RETURN }
 
     private final FactionUnit unit;
+    private final FiringPositions positions;
     @Nullable
     private Vec3 spot;
     private Phase phase = Phase.MOVE;
     private int moveTicks;
     private long blindSince = -1;
     private long nextSearch;
+    private int noTargetTicks;
 
-    /** @param unit the unit, with the attack goals of its weapon */
-    public PlatformLookoutGoal(FactionUnit unit) {
+    /**
+     * @param unit      the unit, with the attack goals of its weapon
+     * @param positions the firing positions of the unit
+     */
+    public PlatformLookoutGoal(FactionUnit unit, FiringPositions positions) {
         this.unit = unit;
+        this.positions = positions;
         setFlags(EnumSet.of(Flag.MOVE, Flag.JUMP));
     }
 
@@ -92,7 +102,7 @@ public class PlatformLookoutGoal extends Goal {
             return false;
         }
         nextSearch = unit.level().getGameTime() + SEARCH_INTERVAL;
-        spot = findSpot(unit, post, target);
+        spot = positions.select(target);
         return spot != null;
     }
 
@@ -106,6 +116,7 @@ public class PlatformLookoutGoal extends Goal {
         phase = Phase.MOVE;
         moveTicks = 0;
         blindSince = -1;
+        noTargetTicks = 0;
         unit.getNavigation().stop();
     }
 
@@ -129,13 +140,18 @@ public class PlatformLookoutGoal extends Goal {
             spot = null;
             return;
         }
-        if (target == null && phase != Phase.RETURN) {
+        noTargetTicks = target == null ? noTargetTicks + 1 : 0;
+        if (noTargetTicks > NO_TARGET_TICKS && phase != Phase.RETURN) {
             goBack(post);
         }
-        if (phase == Phase.HOLD && target != null && isBlind(target)) {
-            Vec3 next = findSpot(unit, post, target);
+        long now = unit.level().getGameTime();
+        if (phase != Phase.MOVE && target != null && isBlind(target) && now >= nextSearch) {
+            nextSearch = now + SEARCH_INTERVAL;
+            Vec3 next = positions.select(target);
             if (next == null) {
-                goBack(post);
+                if (phase != Phase.RETURN) {
+                    goBack(post);
+                }
             } else if (next.distanceToSqr(spot) > 1.0E-4) {
                 spot = next;
                 phase = Phase.MOVE;
@@ -220,30 +236,6 @@ public class PlatformLookoutGoal extends Goal {
         double dx = unit.getX() - pos.x;
         double dz = unit.getZ() - pos.z;
         return Math.sqrt(dx * dx + dz * dz);
-    }
-
-    /**
-     * The lookout spot nearest to the post with a line of sight from the eyes of the unit to the eyes of the target.
-     *
-     * @param unit   the unit
-     * @param post   the post of the unit
-     * @param target the target
-     * @return the position of the feet of the unit at the spot, or null if no spot gives a line of sight
-     */
-    @Nullable
-    static Vec3 findSpot(FactionUnit unit, BlockPos post, LivingEntity target) {
-        Vec3 postCenter = Vec3.atBottomCenterOf(post);
-        Vec3 eyes = target.getEyePosition();
-        Vec3 best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (Vec3 candidate : spots(unit, post)) {
-            double distance = candidate.distanceToSqr(postCenter);
-            if (distance < bestDistance && canSee(unit, candidate, eyes)) {
-                best = candidate;
-                bestDistance = distance;
-            }
-        }
-        return best;
     }
 
     /**
@@ -348,8 +340,8 @@ public class PlatformLookoutGoal extends Goal {
         return unit.level().noCollision(unit, box);
     }
 
-    /** True if no block hides the eyes of the target from the eyes of the unit at a spot. */
-    private static boolean canSee(FactionUnit unit, Vec3 feet, Vec3 targetEyes) {
+    /** True if no block hides a point from the eyes of the unit at a spot. */
+    static boolean canSee(FactionUnit unit, Vec3 feet, Vec3 targetEyes) {
         Vec3 eyes = feet.add(0.0, unit.getEyeHeight(), 0.0);
         return unit.level().clip(new ClipContext(eyes, targetEyes, ClipContext.Block.COLLIDER,
                 ClipContext.Fluid.NONE, unit)).getType() == HitResult.Type.MISS;
