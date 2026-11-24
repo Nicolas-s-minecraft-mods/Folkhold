@@ -170,8 +170,7 @@ public final class DebugBuildings {
     private int loaded;
     private int nextCell;
     private BoundingBox box;
-    private int groundTop;
-    private int nextX;
+    private int nextColumn;
     private boolean tickets;
     private long deadline;
     private int ticks;
@@ -486,7 +485,6 @@ public final class DebugBuildings {
         box = new BoundingBox(origin.getX() - 1, origin.getY() - 1, origin.getZ() - 1,
                 origin.getX() + Math.max(layout.size().getX(), 2), origin.getY() + layout.size().getY() + CLEAR_ABOVE,
                 origin.getZ() + Math.max(layout.size().getZ(), 1));
-        groundTop = box.maxY();
         for (int x = box.minX() >> 4; x <= box.maxX() >> 4; x++) {
             for (int z = box.minZ() >> 4; z <= box.maxZ() >> 4; z++) {
                 ChunkPos pos = new ChunkPos(x, z);
@@ -512,7 +510,6 @@ public final class DebugBuildings {
             }
         }
         if (ready == chunks.size()) {
-            nextX = box.minX();
             phase = Phase.GROUND;
             return;
         }
@@ -526,34 +523,33 @@ public final class DebugBuildings {
         }
     }
 
-    /** Makes the ground flat: a layer of grass blocks, and air above it. */
+    /** Makes the ground flat: a layer of grass blocks, and air above it. Each column of blocks is one step. */
     private void ground(long startNanos) {
         BlockState grass = Blocks.GRASS_BLOCK.defaultBlockState();
         BlockState air = Blocks.AIR.defaultBlockState();
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int flags = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
-        while (nextX <= box.maxX()) {
-            for (int z = box.minZ(); z <= box.maxZ(); z++) {
-                pos.set(nextX, box.minY(), z);
-                if (!level.getBlockState(pos).is(Blocks.GRASS_BLOCK)) {
-                    level.setBlock(pos, grass, flags);
-                }
-                for (int y = box.minY() + 1; y <= groundTop; y++) {
-                    pos.setY(y);
-                    if (!level.getBlockState(pos).isAir()) {
-                        level.setBlock(pos, air, flags);
-                    }
+        int columns = box.getXSpan() * box.getZSpan();
+        while (nextColumn < columns) {
+            pos.set(box.minX() + nextColumn / box.getZSpan(), box.minY(), box.minZ() + nextColumn % box.getZSpan());
+            if (!level.getBlockState(pos).is(Blocks.GRASS_BLOCK)) {
+                level.setBlock(pos, grass, flags);
+            }
+            for (int y = box.minY() + 1; y <= box.maxY(); y++) {
+                pos.setY(y);
+                if (!level.getBlockState(pos).isAir()) {
+                    level.setBlock(pos, air, flags);
                 }
             }
-            nextX++;
+            nextColumn++;
             if (!hasTime(startNanos)) {
                 break;
             }
         }
-        if (nextX > box.maxX()) {
+        if (nextColumn >= columns) {
             phase = Phase.PLACE;
         } else if (progressTick()) {
-            int percent = (nextX - box.minX()) * 100 / box.getXSpan();
+            long percent = nextColumn * 100L / columns;
             progress.accept(Component.translatable(KEY + "ground", percent));
         }
     }
