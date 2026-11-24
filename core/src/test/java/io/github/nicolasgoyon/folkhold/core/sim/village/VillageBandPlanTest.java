@@ -97,6 +97,52 @@ class VillageBandPlanTest {
                 || piece.kind() == VillagePlan.Kind.END), name);
     }
 
+    /**
+     * A path across the band off the axis: the gate of the inner wall is 7 blocks east of the axis on the north side.
+     * With the axes only, the plan puts a piece or a plot on the rows of the path. With the path, no piece and no plot
+     * touches its rows, and the ring street starts at the 2 sides of the path.
+     */
+    @Test
+    void pathOffTheAxisKeepsItsRowsFree() {
+        VillageSize town = size("town");
+        int band = VillagePlan.bandWidth(StreetStyle.BASE);
+        WallLayout inner = rectangle(CORE_WALL);
+        WallLayout ring = rectangle(new Box(CORE_WALL.minX() - band, CORE_WALL.minZ() - band, CORE_WALL.maxX() + band,
+                CORE_WALL.maxZ() + band));
+        int pathX = 7;
+        Box path = new Box(pathX - 2, CORE_WALL.minZ() - band + 2, pathX + 2, CORE_WALL.minZ() - 8);
+        Box rows = new Box(pathX - 2, CORE_WALL.minZ() - band, pathX + 2, CORE_WALL.minZ());
+        VillagePlan axes = VillagePlan.band(town, town.bandPlots().get(0), StreetStyle.BASE, inner, ring, box -> true,
+                box -> false, VillagePlan.Ground.ANY, 3);
+        assertTrue(boxes(axes).stream().anyMatch(rows::overlaps), "With the axes only, the plan must use the rows of"
+                + " the path");
+        VillagePlan plan = VillagePlan.band(town, town.bandPlots().get(0), StreetStyle.BASE, inner, ring, box -> true,
+                box -> false, VillagePlan.Ground.ANY, 3, List.of(path));
+        for (Box box : boxes(plan)) {
+            assertFalse(rows.overlaps(box), box + " on the rows of the path " + rows);
+        }
+        assertTrue(plan.plots().stream().anyMatch(plot -> plot.area().maxZ() < CORE_WALL.minZ()), "north");
+        assertTrue(plan.pieces().stream().anyMatch(piece -> piece.parent() < 0 && piece.x() == pathX + 3),
+                "The ring street must start east of the path");
+        assertTrue(plan.pieces().stream().anyMatch(piece -> piece.parent() < 0 && piece.x() == pathX - 3),
+                "The ring street must start west of the path");
+    }
+
+    /** The boxes of the pieces and of the plots of a plan. */
+    private static List<Box> boxes(VillagePlan plan) {
+        List<Box> boxes = new ArrayList<>();
+        plan.pieces().forEach(piece -> boxes.add(piece.box()));
+        plan.plots().forEach(plot -> boxes.add(plot.area()));
+        return boxes;
+    }
+
+    /** The outline of a rectangle of the plan. */
+    private static WallLayout rectangle(Box box) {
+        return WallLayout.outline(List.of(new WallLayout.Cell(box.minX(), box.minZ()),
+                new WallLayout.Cell(box.maxX(), box.minZ()), new WallLayout.Cell(box.maxX(), box.maxZ()),
+                new WallLayout.Cell(box.minX(), box.maxZ())));
+    }
+
     /** The ring street of a band has homes on its 2 sides, near each of the 4 paths across the band. */
     @Test
     void bandHasHomesOnEachSideOfTheWall() {

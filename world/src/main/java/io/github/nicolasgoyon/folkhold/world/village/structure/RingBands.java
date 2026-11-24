@@ -70,7 +70,7 @@ public final class RingBands {
                 FortifiedVillageStructure.planOutline(planned.inner().layout(), center, turn),
                 FortifiedVillageStructure.planOutline(planned.ring().layout(), center, turn),
                 plots.plan(center, turn), plots.foundation(center, turn), plots.band(center, turn),
-                seed + planned.index() + 1);
+                seed + planned.index() + 1, FortifiedVillageStructure.bandPaths(planned.ring().pieces(), center, turn));
         VillagePlanPieces.Builder pieces = VillagePlanPieces.builder(context, terrain, plaza, center,
                 variant.homes(), Set.of());
         pieces.start(new VillagePlanPieces.Posts(List.of(), 0, seed), 0);
