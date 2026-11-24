@@ -62,8 +62,25 @@ requires. A test compares these requirements with `neoforge.mods.toml`.
 - Each file has the game versions 1.21.1, NeoForge, Java 21, Client and Server, and the notes of the release as its
   changelog.
 - The release type is the value of `release_type` in `gradle.properties`: `alpha`, `beta` or `release`.
+- When CurseForge refuses the file of a module, the script continues with the next module. Then the job fails,
+  and its annotations name each refused module. Each uploaded file gets a notice with its file id.
 - To see the metadata of the files and send nothing:
   `python3 scripts/curseforge_publish.py <version> <notes file> --dry-run`.
+
+### Upload of some modules of an existing release
+
+The workflow **CurseForge** (`.github/workflows/curseforge.yml`) uploads the jars of an existing GitHub Release for
+the selected modules. Use it when the job CurseForge of the release did not upload all the modules.
+
+1. Open the tab Actions, select the workflow **CurseForge**, then click "Run workflow" on `develop`.
+2. Type the version with no `v` (for example `0.221.2`).
+3. Type the modules, with commas or spaces (for example `world,balance,events`). Select only the modules that have
+   no file of this version on CurseForge. CurseForge accepts a second file of the same version.
+
+The workflow uses the jars and the notes of the GitHub Release. The release type is the value of `release_type` in
+`gradle.properties` at the tag of the release. A refused module makes the job fail, and the other modules get their
+files. The command line does the same upload:
+`python3 scripts/curseforge_publish.py <version> <notes file> --only <modules> --jars <folder> --release-type <type>`.
 
 ## Screenshots
 

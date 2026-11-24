@@ -12,7 +12,8 @@ name: Release
 # "Run workflow" on main.
 # After the release, the job CurseForge uploads the jars of the release to the CurseForge project of each mod
 # (scripts/curseforge_publish.py, docs/curseforge/). It needs the secret CURSEFORGE_TOKEN: with no secret,
-# the job uploads nothing. A failure of this job does not change the release: run the job again from the run page.
+# the job uploads nothing. A refused module does not stop the upload of the next modules, and the job then fails.
+# A failure of this job does not change the release. To upload the refused modules, use the workflow CurseForge.
 # After the release, the workflow starts the workflow Pages on develop. Pages publishes the site of the project with
 # the downloads and the notes of the releases, and version.json for the version badge of the README.
 

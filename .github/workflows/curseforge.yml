@@ -1,0 +1,78 @@
+name: CurseForge
+
+# Uploads the jars of an existing GitHub Release to CurseForge, for the selected modules. Use it when the job
+# CurseForge of the workflow Release did not upload all the modules: "Run workflow" with the version (for example
+# 0.221.2) and the modules (for example "world,balance,events").
+# The jars and the changelog are the jars and the notes of the GitHub Release. The release type is the value of
+# release_type in gradle.properties at the tag of the release. The script is scripts/curseforge_publish.py of the
+# branch of the run.
+# When CurseForge refuses the file of a module, the script continues with the next module. Then the job fails, and its
+# annotations name each refused module. Each uploaded file gets a notice with its file id.
+# A module that has a file of this version on CurseForge gets a second file. Select only the modules with no file.
+# The secret CURSEFORGE_TOKEN is the API token of CurseForge.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version of the GitHub Release, with no "v" (for example 0.221.2)
+        required: true
+        type: string
+      modules:
+        description: The modules to upload, with commas or spaces (core, blocks, world, balance, events)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curseforge
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Upload to CurseForge
+    if: github.repository_owner == 'Nicolas-s-minecraft-mods'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The tags, for the release type of the release.
+          fetch-depth: 0
+
+      - name: Download the jars and the notes of the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The version must be X.Y.Z with no \"v\", not \"${VERSION}\"."
+            exit 1
+          fi
+          mkdir -p build/jars
+          gh release download "v${VERSION}" --repo "$GITHUB_REPOSITORY" --pattern "folkhold_*-${VERSION}.jar" \
+            --dir build/jars
+          gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" --json body --jq .body > build/release-notes.md
+          git show "v${VERSION}:gradle.properties" > build/release.properties
+          type=$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import version; print(version.release_type(sys.argv[1]))' build/release.properties)
+          echo "RELEASE_TYPE=${type}" >> "$GITHUB_ENV"
+          echo "Release type: ${type}."
+
+      - name: Upload the jars to CurseForge
+        env:
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          MODULES: ${{ inputs.modules }}
+        shell: bash
+        run: |
+          if [ -z "$CURSEFORGE_TOKEN" ]; then
+            echo "::error::The secret CURSEFORGE_TOKEN is not set."
+            exit 1
+          fi
+          python3 scripts/curseforge_publish.py "$VERSION" build/release-notes.md --only "$MODULES" \
+            --jars build/jars --release-type "$RELEASE_TYPE"
