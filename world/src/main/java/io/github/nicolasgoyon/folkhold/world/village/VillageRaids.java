@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.MarchOnVillageGoal;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,6 +25,10 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  * <ul>
  *   <li>A raid is at a faction village when a loaded village heart is {@link WorldConfig#RAID_HEART_RADIUS} blocks
  *       or less from the center of the raid.</li>
+ *   <li>Village of the raid: the village of the start position of the raid (see {@link #heartOf}). The start position
+ *       is the position of the Raid Omen of the player. The vanilla center is the middle of the claimed points of
+ *       interest near this position. With two villages near each other, this center can be nearer to the other
+ *       village.</li>
  *   <li>Spawn: the raiders of a new wave of such a raid spawn at a position of {@link RaidSpawns}: on natural ground,
  *       on land, under the open sky, not in a hole or a ravine, with a path to the village. All the raiders of a wave
  *       spawn at the same position. When no position is good, the raiders keep the vanilla position.</li>
@@ -58,6 +63,14 @@ public final class VillageRaids {
     private record WaveSpawn(int wave, Optional<BlockPos> pos) {
     }
 
+    /** The start position of each raid, for the {@value #MAX_RAIDS} last raids. */
+    private static final Map<RaidKey, BlockPos> STARTS = new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<RaidKey, BlockPos> eldest) {
+            return size() > MAX_RAIDS;
+        }
+    };
+
     /** The waves that have their extra raiders, by raid. */
     private static final Map<RaidKey, Integer> REINFORCED_WAVES = new HashMap<>();
 
@@ -71,15 +84,35 @@ public final class VillageRaids {
     }
 
     /**
-     * The heart of the village of a raid.
+     * The heart of the village of a raid. A raid is at a faction village when a loaded heart has the center of the raid
+     * in its raid radius or in its structure area (see {@link VillageHearts#findNear}). The village of such a raid is
+     * the village of its start position (see {@link VillageHearts#findAt}). With no known start position, or with a
+     * start position in no village, it is the nearest heart to the center. The start positions stay in memory only:
+     * after a restart of the server, a raid gets the nearest heart to its center.
      *
      * @param raid  the raid
      * @param level the level of the raid
-     * @return the position of the nearest loaded heart with the center of the raid in its raid radius or in its
-     *         structure area (see {@link VillageHearts#findNear}), or empty if the raid is not at a faction village
+     * @return the position of the heart, or empty if the raid is not at a faction village
      */
     public static Optional<BlockPos> heartOf(Raid raid, Level level) {
-        return VillageHearts.findNear(level, raid.getCenter(), WorldConfig.RAID_HEART_RADIUS.get(), 0);
+        Optional<BlockPos> nearest = VillageHearts.findNear(level, raid.getCenter(),
+                WorldConfig.RAID_HEART_RADIUS.get(), 0);
+        BlockPos start = STARTS.get(new RaidKey(level.dimension(), raid.getId()));
+        if (nearest.isEmpty() || start == null) {
+            return nearest;
+        }
+        return VillageHearts.findAt(level, start).or(() -> nearest);
+    }
+
+    /**
+     * Records the start position of a raid: the position of the Raid Omen of the player (see {@link #heartOf}). An
+     * extension of the raid keeps the first position.
+     *
+     * @param raid the new or extended raid
+     * @param pos  the position of the start
+     */
+    public static void recordStart(Raid raid, BlockPos pos) {
+        STARTS.putIfAbsent(new RaidKey(raid.getLevel().dimension(), raid.getId()), pos.immutable());
     }
 
     /**
@@ -210,5 +243,6 @@ public final class VillageRaids {
         WAVE_SPAWNS.clear();
         APPROACHES.clear();
         REINFORCED_WAVES.clear();
+        STARTS.clear();
     }
 }
