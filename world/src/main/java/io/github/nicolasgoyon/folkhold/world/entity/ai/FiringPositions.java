@@ -27,6 +27,8 @@ import net.minecraft.world.phys.Vec3;
  *       nearer to the post wins.</li>
  *   <li>The result of the test of a target stays valid for {@link #CACHE_TICKS}. A target goal tests all the
  *       monsters near the unit, so the cache limits the ray tests.</li>
+ *   <li>The spots count only when the unit is on the platform of its post. On the way to its post, the unit has a
+ *       line of fire only to the targets that it sees.</li>
  * </ul>
  */
 public final class FiringPositions {
@@ -72,7 +74,7 @@ public final class FiringPositions {
             return true;
         }
         BlockPos post = unit.getPostPos();
-        if (post == null || !isInReach(Vec3.atBottomCenterOf(post), target, PLATFORM_REACH)) {
+        if (post == null || !isOnPlatform(post) || !isInReach(Vec3.atBottomCenterOf(post), target, PLATFORM_REACH)) {
             return false;
         }
         long now = unit.level().getGameTime();
@@ -128,6 +130,14 @@ public final class FiringPositions {
             spotsTime = now;
         }
         return spots;
+    }
+
+    /** True if the unit is on the platform of its post: near the post, at the level of the post. */
+    private boolean isOnPlatform(BlockPos post) {
+        double dx = unit.getX() - (post.getX() + 0.5);
+        double dz = unit.getZ() - (post.getZ() + 0.5);
+        return Math.max(Math.abs(dx), Math.abs(dz)) <= PlatformLookoutGoal.PLATFORM_RADIUS + 0.5
+                && Math.abs(unit.getY() - post.getY()) <= PlatformLookoutGoal.MAX_LEVEL_DIFFERENCE + 0.5;
     }
 
     /**
