@@ -105,4 +105,29 @@ class JobSkillsTest {
         assertEquals(List.of(), noScan.posts());
         assertEquals(List.of(BAKER), noScan.slotJobs());
     }
+
+    /** The start experience of a village of an old world: the start of the skill level of its wealth tier. */
+    @Test
+    void startExperienceFollowsTheWealthTier() {
+        assertEquals(List.of(0, 10, 70, 150, 250), List.of(JobSkills.startExperience(1), JobSkills.startExperience(2),
+                JobSkills.startExperience(3), JobSkills.startExperience(4), JobSkills.startExperience(5)));
+        assertEquals(3, JobSkills.level(JobSkills.startExperience(3)));
+    }
+
+    /**
+     * The start skill goes to each known post and to each job id. A post or a job id with more experience keeps it. A
+     * new post after the start skill starts at 0.
+     */
+    @Test
+    void startSkillGoesToThePostsAndTheJobIds() {
+        JobSkills skills = new JobSkills();
+        skills.add(QUARRY, 100);
+        skills.giveStart(List.of(FARM, QUARRY), List.of(FARMER, BAKER), 70);
+        assertEquals(70, skills.experience(FARM));
+        assertEquals(100, skills.experience(QUARRY));
+        assertEquals(70, skills.slotExperience(FARMER));
+        assertEquals(70, skills.slotExperience(BAKER));
+        assertEquals(0, skills.slotExperience(MASON));
+        assertEquals(0, skills.experience(new JobPosts.Post(BAKER, 21, 64, 2, 2)));
+    }
 }

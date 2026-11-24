@@ -13,6 +13,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.village.VillagePlaces;
 import io.github.nicolasgoyon.folkhold.core.sim.village.VillageSize;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.economy.Economies;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,10 +47,18 @@ public final class SettlementData extends SavedData {
      * Version 3 adds the job posts ({@code JobPosts}, see {@link JobPosts}) and the mark {@code LegacyJobs}. A
      * settlement with no posts has unknown posts: it has the job slots of its level until the next scan of its heart.
      * A settlement of format version 2 or lower with an initialized economy is a legacy village: it gets the mark.
+     * Version 4 marks the saves with the job skills: a settlement of a lower version with an initialized economy and
+     * no skill gets a start skill (see {@link #SKILLS_VERSION}).
      */
-    static final int VERSION = 3;
+    static final int VERSION = 4;
     /** The first format version with the job posts. A save of a lower version has no list of posts. */
     static final int POSTS_VERSION = 3;
+    /**
+     * The first format version of the job skills. A settlement of a lower version with an initialized economy and no
+     * key {@code JobSkills} is a village of a world from before the job skills. Its posts and its job ids get the start
+     * experience of its wealth tier (see {@link JobSkills#startExperience}).
+     */
+    static final int SKILLS_VERSION = 4;
 
     private final SettlementRegistry registry = new SettlementRegistry();
     private final Set<Long> checkedRegions = new HashSet<>();
@@ -307,6 +316,10 @@ public final class SettlementData extends SavedData {
             settlement.setLastFallPenalty(entry.contains("LastFallPenalty") ? entry.getLong("LastFallPenalty")
                     : Settlement.NO_FALL_PENALTY);
             loadEconomy(settlement.economy(), entry.getCompound("Economy"));
+            if (version < SKILLS_VERSION && !entry.contains("JobSkills") && settlement.economy().isInitialized()) {
+                settlement.jobSkills().giveStart(settlement.jobPosts().orElse(List.of()), settlement.economy().jobs(),
+                        JobSkills.startExperience(Economies.wealthTier(settlement)));
+            }
             settlement.setLegacyJobs(entry.getBoolean("LegacyJobs")
                     || (version < POSTS_VERSION && !hasPosts && settlement.economy().isInitialized()));
             if (data.registry.byId(settlement.id()).isEmpty()) {
@@ -362,8 +375,8 @@ public final class SettlementData extends SavedData {
     }
 
     /**
-     * Reads the skill of the job posts. A settlement with no key {@code JobSkills} (a save of an older version) has
-     * no skill: each post starts at Novice.
+     * Reads the skill of the job posts. A settlement with no key {@code JobSkills} has no skill: each post starts at
+     * Novice. A village of a save from before the job skills then gets a start skill (see {@link #SKILLS_VERSION}).
      */
     private static void loadSkills(JobSkills skills, CompoundTag tag) {
         ListTag posts = tag.getList("Posts", Tag.TAG_COMPOUND);

@@ -384,9 +384,10 @@ public final class JobPostGameTests {
     }
 
     /**
-     * The farmer post gets the experience of a production cycle and of a trade of a player with a farmer. The save
-     * keeps the experience. The farmers show the skill level of the post as their vanilla level: Novice, then
-     * Apprentice at 10 experience. The inhabitants with no post keep the level 1.
+     * With the default config, a production cycle gives no experience. With {@code skillCycleExperience} at 2, the
+     * farmer post gets the experience of a production cycle. It also gets the experience of a trade of a player with a
+     * farmer. The save keeps the experience. The farmers show the skill level of the post as their vanilla level:
+     * Novice, then Apprentice at 10 experience. The inhabitants with no post keep the level 1.
      */
     @GameTest(template = "arena_large", timeoutTicks = 40, batch = "job_posts_skill", skyAccess = true)
     public static void postGetsExperienceFromCyclesAndTrades(GameTestHelper helper) {
@@ -416,6 +417,13 @@ public final class JobPostGameTests {
                     .map(WorkerSkills.Source::post).filter(farm::equals).isPresent()),
                     "The farmers must have the skill of the farmer post");
 
+            TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_SKILL_CYCLE_EXPERIENCE,
+                    WorldConfig.ECONOMY_SKILL_CYCLE_EXPERIENCE.getDefault());
+            Economies.runCycle(server, settlement, new SplittableRandom(1));
+            helper.assertTrue(settlement.jobSkills().experience(farm) == 0,
+                    "With the default config, a cycle must give no experience: "
+                            + settlement.jobSkills().experience(farm));
+            TestSupport.setConfigForTest(helper, WorldConfig.ECONOMY_SKILL_CYCLE_EXPERIENCE, 2);
             Economies.runCycle(server, settlement, new SplittableRandom(1));
             helper.assertTrue(settlement.jobSkills().experience(farm) == 2,
                     "Expected 2 experience after a cycle: " + settlement.jobSkills().experience(farm));
