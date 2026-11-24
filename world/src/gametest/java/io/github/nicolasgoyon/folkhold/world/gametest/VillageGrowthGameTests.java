@@ -648,6 +648,38 @@ public final class VillageGrowthGameTests {
     }
 
     /**
+     * A Sunreach plaza, a street and a street end. A growth building that is larger than a home reaches past its plot.
+     * A space with one column of the street end has no room for it. A space next to the street end has room.
+     */
+    @GameTest(template = "empty", timeoutTicks = 20, batch = "village_growth_street_end")
+    public static void growthBuildingDoesNotStandOnAStreetEnd(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        StructureTemplateManager templates = level.getStructureManager();
+        Registry<StructureTemplatePool> pools = level.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL);
+        BlockPos origin = new BlockPos(WALL_TEST_X, 64, WALL_TEST_Z + 4 * 16);
+        PoolElementStructurePiece plaza = piece(templates, element(level, pools, SUNREACH + "plaza",
+                SUNREACH + "plaza"), origin);
+        PoolElementStructurePiece street = piece(templates, element(level, pools, SUNREACH + "streets_first",
+                SUNREACH + "street"), origin.east(PLAZA_SIZE));
+        BoundingBox streetBox = street.getBoundingBox();
+        PoolElementStructurePiece end = piece(templates, element(level, pools, SUNREACH + "street_ends",
+                SUNREACH + "street_end"), new BlockPos(streetBox.minX(), origin.getY(), streetBox.maxZ() + 1));
+        VillageReference village = VillageReference.of(level, List.of(plaza, street, end)).orElseThrow();
+        BoundingBox endBox = end.getBoundingBox();
+        // A building of 9 x 13 blocks east of the street end, with its west column on the east edge of the end.
+        BoundingBox onTheEnd = new BoundingBox(endBox.maxX(), endBox.minY(), endBox.minZ(), endBox.maxX() + 8,
+                endBox.maxY(), endBox.minZ() + 12);
+        BoundingBox nextToTheEnd = onTheEnd.moved(1, 0, 0);
+        helper.assertTrue(village.pieces().stream().noneMatch(piece -> piece.template().getPath()
+                .endsWith("street_end")), "The street end must not be a template piece of the reference");
+        helper.assertFalse(VillageGrowth.hasRoom(templates, village, onTheEnd),
+                "A growth building must not stand on the street end " + endBox + ": " + onTheEnd);
+        helper.assertTrue(VillageGrowth.hasRoom(templates, village, nextToTheEnd),
+                "A growth building next to the street end must have room: " + nextToTheEnd);
+        helper.succeed();
+    }
+
+    /**
      * The pool of the homes of each variant of the village structure, and of its base variant, has a pool
      * {@code jobs} in its folder: the space of a free plot holds the house-workshops of the variant (see
      * {@link VillagePlots#homePools}).
