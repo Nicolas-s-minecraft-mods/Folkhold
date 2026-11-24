@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -20,6 +21,10 @@ import net.minecraft.world.level.block.state.BlockState;
  *       not go {@value #ESCAPE_HEIGHT} blocks higher than the position. A villager in a pit cannot walk out of it with
  *       no help (see {@link BlockedVillagers}).</li>
  *   <li>The walk goes through the doors, the fence gates and the trapdoors: a room with a door is not a pit.</li>
+ *   <li>The walk goes through the climbable blocks (block tag {@code minecraft:climbable}), for example the ladders,
+ *       but it does not climb them. The path finder of the villagers does not climb a ladder. Thus a pit with a
+ *       ladder, for example the column of a rescue (see
+ *       {@link io.github.nicolasgoyon.folkhold.world.construction.VillageRescues}), stays a pit.</li>
  *   <li>A position is at the edge of a drop when a position next to it has no floor in the {@value #EDGE_DROP} blocks
  *       below the floor of the position. It is at the edge of a pit when the floor below this position is in a
  *       pit.</li>
@@ -135,10 +140,13 @@ public final class Pits {
                 && !isPassage(floor);
     }
 
-    /** True if a villager walks through a position: no collision, or a door, a fence gate or a trapdoor. */
+    /**
+     * True if a villager walks through a position: no collision, a door, a fence gate, a trapdoor or a climbable
+     * block.
+     */
     private static boolean isFree(BlockGetter level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
-        return isPassage(state) || state.getCollisionShape(level, pos).isEmpty();
+        return isPassage(state) || state.is(BlockTags.CLIMBABLE) || state.getCollisionShape(level, pos).isEmpty();
     }
 
     private static boolean isPassage(BlockState state) {

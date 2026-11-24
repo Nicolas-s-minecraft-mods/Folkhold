@@ -55,9 +55,10 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *       {@link BuilderMaterials}). With no ladder in the stock, the rescue waits, and the heart screen says it. The
  *       scaffolding uses no materials, as the scaffolding of a site.</li>
  *   <li>The blocked villager walks to the bottom of the column and climbs to the exit.</li>
- *   <li>The villager walks to the heart. When it is {@value #LEAVE_DISTANCE} blocks from the exit, or after
- *       {@value #LEAVE_TICKS} ticks, the builder removes the blocks of the column from the top. A removed ladder goes
- *       back to the stock.</li>
+ *   <li>The villager walks to the heart. Its walks do not go back into the hole: a hole with the column stays a pit
+ *       (see {@link io.github.nicolasgoyon.folkhold.world.village.Pits}). When it is {@value #LEAVE_DISTANCE}
+ *       blocks from the exit, or after {@value #LEAVE_TICKS} ticks, the builder removes the blocks of the column
+ *       from the top. A removed ladder goes back to the stock.</li>
  *   <li>When the villager still has no way to the heart (a ledge in a deep hole), the next check starts a new rescue
  *       for it at once.</li>
  *   <li>A rescue removes its blocks {@value #TIME_LIMIT} ticks after the end of the column, also with no builder. The
