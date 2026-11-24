@@ -812,10 +812,11 @@ public final class WorldConfig {
                 .translation(KEY_PREFIX + "economyTreasuryMinimum")
                 .defineInRange("treasuryMinimum", 100, 0, 1_000_000);
         ECONOMY_SKILL_CYCLE_EXPERIENCE = builder
-                .comment("Experience that each active job post gets in its job at each cycle.",
+                .comment("Experience that each active job post gets in its job at each cycle. 0: a post gets experience",
+                        "only from the trades.",
                         "The skill levels: Novice 0, Apprentice 10, Journeyman 70, Expert 150, Master 250.")
                 .translation(KEY_PREFIX + "economySkillCycleExperience")
-                .defineInRange("skillCycleExperience", 2, 0, 1000);
+                .defineInRange("skillCycleExperience", 0, 0, 1000);
         ECONOMY_SKILL_NEED_TRADE_EXPERIENCE = builder
                 .comment("Experience that a job post gets for each trade of a player with a worker of the post.")
                 .translation(KEY_PREFIX + "economySkillNeedTradeExperience")

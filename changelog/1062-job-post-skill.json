@@ -1,5 +1,5 @@
 {
   "category": "new",
-  "en_us": "The workers of a village get skill in their job, from Novice to Master. Each day of work and each trade gives experience. The trade screen shows the level and the experience bar of the worker. The heart of the village shows the skill of each job.",
-  "fr_fr": "Les travailleurs d'un village gagnent de l'expérience dans leur métier, de Novice à Maître. Chaque jour de travail et chaque échange donne de l'expérience. L'écran d'échange montre le niveau et la barre d'expérience du travailleur. Le cœur du village montre la compétence de chaque métier."
+  "en_us": "The workers of a village get skill in their job, from Novice to Master. Each trade gives experience. The villages of an older world start with a skill from their size. The trade screen and the heart of the village show the skill.",
+  "fr_fr": "Les travailleurs d'un village gagnent de l'expérience dans leur métier, de Novice à Maître. Chaque échange donne de l'expérience. Les villages d'un monde plus ancien commencent avec une compétence selon leur taille. L'écran d'échange et le cœur du village montrent la compétence."
 }

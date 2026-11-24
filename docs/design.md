@@ -1429,10 +1429,11 @@ The trades of each job (start values to tune). The column of the level 1 gives t
 
   | Option | Default | Gain |
   | --- | --- | --- |
-  | `skillCycleExperience` | 2 | For each active post at each cycle (`Economies.runCycle`). |
+  | `skillCycleExperience` | 0 | For each active post at each cycle (`Economies.runCycle`). With the default 0, a post gets experience only from the trades. |
   | `skillNeedTradeExperience` | 1 | For the post of the worker, at each trade that the village pays (`Merchants.onTrade`). A trade that the stock or the treasury cannot pay gives no experience. |
   | `skillJobTradeExperience` | 2 | For each use of a job trade (see "Trade screen"). |
 
+- Start skill of the villages of an old world (`SettlementData.SKILLS_VERSION`, `JobSkills.giveStart`). The settlement data has the format version 4 from the job skills. A settlement of a save of a lower version with an initialized economy and no skill gets a start skill. Each known post and each job id of the village gets the start experience of its wealth tier (`JobSkills.startExperience`). The start skill is Novice (0) for a hamlet, Apprentice (10) for a village and Journeyman (70) for a town. It is Expert (150) for a city and Master (250) for a capital. A post or a job id with more experience keeps it. A new post after the load starts at 0. A settlement with no economy (a village that no player visited) and a settlement of a save with the job skills get no start skill. The JUnit test `SettlementDataTest.villageOfAnOldWorldGetsAStartSkill` checks it.
 - A job slot with no post has the skill of its job id. Examples: a legacy job slot (see "Job posts"), or a job slot of a village with no scan. All the slots of a job id share one experience. Each job id gets the gain of a cycle one time, also with 2 slots of the job.
 - The skill of a worker (`WorkerSkills.sourceOf`) is the skill of the post of its job sign (memory `JOB_SITE`). The job of this post must have the profession of the worker. A worker with no such post has the skill of the first active job slot with no post and with its profession. The builders, the handymen and the inhabitants with no job have no skill.
 - At each check of the heart, each loaded worker gets the skill level of its post as its vanilla villager level (`WorkerSkills.apply`). It also gets the experience of its post as its vanilla experience. After a trade, the worker and its open trade screen get the new level at once. Thus the trade screen shows the vanilla name of the level (Novice to Master) and the experience bar. The vanilla experience is 1 or more, as for each villager of the village (`VillageFolk`). Thus a Novice post with 0 experience shows 1 experience.
@@ -1506,7 +1507,7 @@ Training of a low skill (reputation and wealth, with a low skill):
 
 - The worker shows its need trades first, then its job trades. A job trade with the same item and the same direction as a need trade does not show. The need trade gives the better price.
 - The offer count of the level (see "Trade with the player") limits the need trades only. The job trades come in addition.
-- The market rule and the market hours apply to the job trades. The extra offers of the market day stay need trades.
+- The market rule and the market hours apply to the job trades. The extra offers of the market day stay need trades. The market day gives no extra job trade (`MarketTradeGameTests.marketDayGivesExtraOffers`).
 - The workers of a profession show the same need trades. Each post shows its own job trades: they follow its skill.
 - Code (`Merchants.workerOffers`, `JobTradeOffers.offers`): the job trades of a worker come from the source of its skill (see "Skill of the workers"). A trade with no use now does not show.
 - A price below 1 emerald gives more items for 1 emerald, as for the need trades. The count of one use is then `1 / price` times the count of the trade, rounded down to sell and up to buy. It is not above the stack size of the item.

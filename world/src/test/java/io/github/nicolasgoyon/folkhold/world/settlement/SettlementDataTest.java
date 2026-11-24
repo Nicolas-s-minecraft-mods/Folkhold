@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobPosts;
+import io.github.nicolasgoyon.folkhold.core.sim.economy.JobSkills;
 import io.github.nicolasgoyon.folkhold.core.sim.economy.JobTrade;
 import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import java.util.List;
@@ -16,6 +17,9 @@ import org.junit.jupiter.api.Test;
 
 /** The save and the load of the settlement data ({@link SettlementData}). */
 class SettlementDataTest {
+    /** The first level of the tier town: the wealth tier 3. */
+    private static final int TOWN_LEVEL = 9;
+
     @Test
     void lastFallPenaltySurvivesSaveAndLoad() {
         SettlementData data = new SettlementData();
@@ -131,6 +135,50 @@ class SettlementDataTest {
         assertEquals(scanned.jobSkills().posts(), again.jobSkills().posts());
         assertTrue(loaded.registry().byId("old").orElseThrow().jobSkills().isEmpty(),
                 "An old settlement must start at Novice");
+    }
+
+    /**
+     * A village of a save from before the job skills (format version 3, an initialized economy, no skill) gets the
+     * start skill of its wealth tier: Journeyman for a town. A village with a skill, a village with no economy and a
+     * village of a save with the job skills get no start skill.
+     */
+    @Test
+    void villageOfAnOldWorldGetsAStartSkill() {
+        SettlementData data = new SettlementData();
+        JobPosts.Post farm = new JobPosts.Post("folkhold_world:farmer", 1, 64, 2, 2);
+        Settlement old = settlement("old");
+        old.setProgress(TOWN_LEVEL, 0);
+        old.economy().setInitialized(true);
+        old.economy().setJobs(List.of("folkhold_world:farmer", "folkhold_world:baker"));
+        old.setJobPosts(Optional.of(List.of(farm)));
+        data.registry().add(old);
+        Settlement trained = settlement("trained");
+        trained.setProgress(TOWN_LEVEL, 0);
+        trained.economy().setInitialized(true);
+        trained.setJobPosts(Optional.of(List.of(farm)));
+        trained.jobSkills().add(farm, 5);
+        data.registry().add(trained);
+        Settlement unvisited = settlement("unvisited");
+        unvisited.setProgress(TOWN_LEVEL, 0);
+        data.registry().add(unvisited);
+
+        CompoundTag tag = data.save(new CompoundTag(), null);
+        SettlementData current = SettlementData.load(tag, null);
+        tag.putInt("Version", SettlementData.SKILLS_VERSION - 1);
+        SettlementData loaded = SettlementData.load(tag, null);
+
+        Settlement village = loaded.registry().byId("old").orElseThrow();
+        int start = JobSkills.startExperience(3);
+        assertEquals(70, start);
+        assertEquals(start, village.jobSkills().experience(farm));
+        assertEquals(start, village.jobSkills().slotExperience("folkhold_world:baker"));
+        assertEquals(5, loaded.registry().byId("trained").orElseThrow().jobSkills().experience(farm));
+        assertTrue(loaded.registry().byId("unvisited").orElseThrow().jobSkills().isEmpty());
+        assertTrue(current.registry().byId("old").orElseThrow().jobSkills().isEmpty(),
+                "A save with the job skills must give no start skill");
+        SettlementData again = SettlementData.load(loaded.save(new CompoundTag(), null), null);
+        assertEquals(start, again.registry().byId("old").orElseThrow().jobSkills().experience(farm),
+                "The start skill must survive the save");
     }
 
     /** The uses of the job trades of the week survive the save. */

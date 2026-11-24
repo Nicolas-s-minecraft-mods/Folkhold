@@ -172,6 +172,39 @@ public final class JobSkills {
         slots.slotJobs().stream().distinct().forEach(job -> addSlot(job, amount));
     }
 
+    /**
+     * The start experience of the posts of a village of a world from before the job skills: the start of the skill
+     * level with the rank of the wealth tier of the village. A hamlet starts at Novice, a village at Apprentice, a town
+     * at Journeyman, a city at Expert and a capital at Master.
+     *
+     * @param wealth the wealth tier of the village, from 1 (hamlet) to 5 (capital)
+     * @return the start experience
+     */
+    public static int startExperience(int wealth) {
+        return threshold(wealth);
+    }
+
+    /**
+     * Gives a start skill to a village of a world from before the job skills: each known post and each job id of the
+     * village gets the start experience. A post or a job id with more experience keeps its experience.
+     *
+     * @param known      the known posts of the village, or no post if the heart did not scan the village
+     * @param jobIds     the job ids of the village: the job slots with no post use them
+     * @param experience the start experience (see {@link #startExperience})
+     */
+    public void giveStart(List<JobPosts.Post> known, List<String> jobIds, int experience) {
+        for (JobPosts.Post post : known) {
+            if (experience(post) < experience) {
+                set(Place.of(post), post.jobId(), experience);
+            }
+        }
+        for (String jobId : jobIds) {
+            if (slotExperience(jobId) < experience) {
+                setSlot(jobId, experience);
+            }
+        }
+    }
+
     /** The skills of the posts, by position of the job sign. */
     public Map<Place, Skill> posts() {
         return Collections.unmodifiableMap(posts);

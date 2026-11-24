@@ -25,8 +25,8 @@ import net.minecraft.world.inventory.MerchantMenu;
  *       post has the job of the profession of the worker. A worker with no such post (a worker of a legacy job slot,
  *       or of a village with no scan) has the skill of the first active job slot with no post and with its
  *       profession.</li>
- *   <li>Gains: each active post gets {@code skillCycleExperience} at each cycle (see {@link Economies#runCycle}). The
- *       post of a worker gets {@code skillNeedTradeExperience} for each need trade of a player with this worker, and
+ *   <li>Gains: each active post gets {@code skillCycleExperience} at each cycle (see {@link Economies#runCycle}),
+ *       0 by default: a post gets experience only from the trades. The post of a worker gets {@code skillNeedTradeExperience} for each need trade of a player with this worker, and
  *       {@code skillJobTradeExperience} for each job trade (see {@link Merchants#onTrade}). A Friend or an Ally gives
  *       more experience to a post with a low skill in a rich village (see {@link JobTradeRules#lowSkillFactor}).</li>
  *   <li>A worker gets the skill level of its post as its vanilla villager level, and the experience of its post as
