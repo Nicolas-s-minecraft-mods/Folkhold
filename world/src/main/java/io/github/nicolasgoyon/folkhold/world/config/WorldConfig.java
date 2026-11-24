@@ -23,6 +23,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.DoubleValue DAMAGE_MULTIPLIER;
 
     public static final ModConfigSpec.IntValue PATROL_RADIUS;
+    public static final ModConfigSpec.BooleanValue GUARD_STATIONS;
     public static final ModConfigSpec.IntValue CHASE_RADIUS;
     public static final ModConfigSpec.IntValue ALERT_RADIUS;
     public static final ModConfigSpec.IntValue MONSTER_ALERT_DISTANCE;
@@ -257,6 +258,12 @@ public final class WorldConfig {
                 .comment("Radius in blocks of the patrol area around the home position.")
                 .translation(KEY_PREFIX + "patrolRadius")
                 .defineInRange("patrolRadius", 16, 2, 128);
+        GUARD_STATIONS = builder
+                .comment("By day, each guard with no post keeps a station inside a gate or at the foot of a tower. The",
+                        "guards share the stations in turn, the gates first. False: the guards stay near their home,",
+                        "near the heart.")
+                .translation(KEY_PREFIX + "guardStations")
+                .define("guardStations", true);
         CHASE_RADIUS = builder
                 .comment("Radius in blocks of the chase area around the village heart (around the home position for a",
                         "unit without a village). A unit chases a target only in this area, and not in the territory of",

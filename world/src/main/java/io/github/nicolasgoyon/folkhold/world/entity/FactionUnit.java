@@ -133,11 +133,14 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
 
     /** Patrol radius at night, in blocks. */
     private static final int NIGHT_RADIUS = 4;
+    /** Patrol radius around the station by day, in blocks. */
+    public static final int STATION_RADIUS = 6;
     private static final String HOME_TAG = "HomePos";
     private static final String VILLAGE_TAG = "VillagePos";
     private static final String POST_TAG = "PostPos";
     private static final String ROUTED_TAG = "RoutedUntil";
     private static final String NIGHT_TAG = "NightPos";
+    private static final String STATION_TAG = "StationPos";
     private static final String FACTION_TAG = "Faction";
     private static final String EQUIPMENT_TAG = "Equipment";
     /**
@@ -184,6 +187,9 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     /** Position of the night watch (near a gate), or null. The village heart sets it. */
     @Nullable
     private BlockPos nightPos;
+    /** Position of the day station (inside a gate or at the foot of a tower), or null. The village heart sets it. */
+    @Nullable
+    private BlockPos stationPos;
     /** Game time until which the unit is routed (runs away and does not fight). */
     private long routedUntil;
     /** Game time until which the unit ignores all targets, after the end of a chase. Not saved. */
@@ -292,8 +298,8 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     }
 
     /**
-     * The center of the area where the unit must stay now: the post, else the night watch position at night,
-     * else the home position.
+     * The center of the area where the unit must stay now: the post, else the night watch position at night, else the
+     * day station, else the home position.
      *
      * <p>The unit does not use the vanilla restriction ({@code restrictTo}): vanilla target goals ignore all
      * targets outside the restriction, and a unit on a post must see the targets below its tower.
@@ -305,6 +311,9 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (nightPos != null && level().isNight()) {
             return nightPos;
         }
+        if (stationPos != null) {
+            return stationPos;
+        }
         return getHomePos();
     }
 
@@ -313,7 +322,10 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (postPos != null) {
             return POST_RADIUS;
         }
-        return level().isNight() ? NIGHT_RADIUS : WorldConfig.PATROL_RADIUS.get();
+        if (level().isNight()) {
+            return NIGHT_RADIUS;
+        }
+        return stationPos != null ? STATION_RADIUS : WorldConfig.PATROL_RADIUS.get();
     }
 
     /** The night watch position (near a gate), or null. At night, the unit stays near it. */
@@ -324,6 +336,19 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
 
     public void setNightPos(@Nullable BlockPos pos) {
         nightPos = pos == null ? null : pos.immutable();
+    }
+
+    /**
+     * The day station (inside a gate or at the foot of a tower), or null. By day, a unit with no post stays near its
+     * station.
+     */
+    @Nullable
+    public BlockPos getStationPos() {
+        return stationPos;
+    }
+
+    public void setStationPos(@Nullable BlockPos pos) {
+        stationPos = pos == null ? null : pos.immutable();
     }
 
     /**
@@ -966,6 +991,9 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         if (nightPos != null) {
             tag.put(NIGHT_TAG, NbtUtils.writeBlockPos(nightPos));
         }
+        if (stationPos != null) {
+            tag.put(STATION_TAG, NbtUtils.writeBlockPos(stationPos));
+        }
         if (factionId != null) {
             tag.putString(FACTION_TAG, factionId);
         }
@@ -980,6 +1008,7 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         NbtUtils.readBlockPos(tag, POST_TAG).ifPresent(this::setPostPos);
         routedUntil = tag.getLong(ROUTED_TAG);
         NbtUtils.readBlockPos(tag, NIGHT_TAG).ifPresent(this::setNightPos);
+        NbtUtils.readBlockPos(tag, STATION_TAG).ifPresent(this::setStationPos);
         factionId = tag.contains(FACTION_TAG) ? tag.getString(FACTION_TAG) : null;
         if (tag.contains(EQUIPMENT_TAG)) {
             equipmentSet = tag.getString(EQUIPMENT_TAG);
