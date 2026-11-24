@@ -82,8 +82,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>The village has builders and no construction site. The heart looks for a free plot after the check of the
  *       repairs: a repair comes first.</li>
  *   <li>A free plot has no building of the generation. The space of the piece has no piece of the village structure,
- *       no palisade (see {@link #hasRoom}), no earlier construction site and no block of a player. The nearest free
- *       plot to the heart comes first: the spare plots of the plan, in the core first, then in the bands. The wall keeps the space of each house-workshop of the variant on a free plot
+ *       no street, no palisade (see {@link #hasRoom}), no earlier construction site and no block of a player. The
+ *       nearest free plot to the heart comes first: the spare plots of the plan, in the core first, then in the bands. The wall keeps the space of each house-workshop of the variant on a free plot
  *       (see {@link VillagePlots#reserved}).</li>
  *   <li>The connector of the building goes in front of the connector of the plot, on the ground of the street.</li>
  *   <li>The construction uses the stock of the village and the delivery quests, as the other sites (see
@@ -616,13 +616,14 @@ public final class VillageGrowth {
     }
 
     /**
-     * True if a space of a village has room for a new building: it has no piece of the village structure and no
-     * palisade. This check reads no block of the level.
+     * True if a space of a village has room for a new building: it has no template piece of the village structure, no
+     * column of a street piece (a street end included) and no palisade. A building that is larger than a home can
+     * reach past its plot. This check reads no block of the level.
      *
      * @param templates the structure templates of the server
      * @param reference the reference of the village structure
      * @param box       the space
-     * @return true if no piece and no column of the palisade is in the space
+     * @return true if no piece, no column of a street and no column of the palisade is in the space
      */
     public static boolean hasRoom(StructureTemplateManager templates, VillageReference reference, BoundingBox box) {
         for (VillageReference.Piece piece : reference.pieces()) {
@@ -631,6 +632,12 @@ public final class VillageGrowth {
                     .filter(box::intersects)
                     .isPresent();
             if (taken) {
+                return false;
+            }
+        }
+        for (BlockPos column : reference.streetColumns()) {
+            if (column.getX() >= box.minX() && column.getX() <= box.maxX() && column.getZ() >= box.minZ()
+                    && column.getZ() <= box.maxZ()) {
                 return false;
             }
         }
