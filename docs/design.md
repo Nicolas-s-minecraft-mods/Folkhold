@@ -724,6 +724,79 @@ Growth is gradual. Each settlement has a **level** from 1 to 20. The tiers are n
   - Limit: the bands between the rings of a town or a city are in the area of the village structure. The land pieces go around the outer ring only. The bands hold homes and streets, and no field and no mill.
 - **Planned**: larger walls and new streets when no plot is free. Each building, wall section and defense has a minimum level.
 
+#### Building tiers
+
+**Planned work.** This section gives the design of the building tiers (epic #970). The code does not have the tiers yet. The step pieces of "Homes that grow in place" are the first tier pieces.
+
+- **Fixed footprint**: each home and each workshop has a fixed footprint. The footprint is the width and the depth of the piece of tier 1. A piece of a higher tier has the same footprint and the same origin. It keeps the blocks of the tier below, except the roof and the blocks of the new stair. It adds a storey. Thus the builders change a building in place, as for the steps.
+- **Tiers of a home**: a home has 3 tiers.
+
+  | Tier | Beds | Storeys |
+  | --- | --- | --- |
+  | 1 | 2 | 1 |
+  | 2 | 4 | 2 |
+  | 3 | 6 | 3 |
+
+- **Tiers of a workshop**: a tier of a workshop gives more job posts. A house-workshop (`job_<id>`) is a home and a workshop: each tier gives 2 beds and 1 job post. Tier 1 has 1 post, tier 2 has 2 posts, and tier 3 has 3 posts. Each new storey has 1 job sign and 1 work block of the job, and the 2 beds of the household of the new post.
+- **No upgrade**: the plaza, the well, the gates and the walls (palisade, stone wall, towers) have one form only. The streets also have no tier. The market, the bank, the fields, the mill, the barracks, the storehouse and the forge have no tier pieces in this plan.
+- **Level limit**: the tier of the village gives the highest tier of its buildings. A hamlet and a village have tier 1. A town has tier 2. A city and a capital have tier 3. This is the rule of the steps (`HomeSteps.maxStep`).
+- **House-workshop with a yard** (#939): the stair to the new storey goes in a corner of the yard. A fence closes this corner, and the corner is not a part of a pen. The animals of a pen do not reach the stair. The shed and the footprint do not change.
+- **Cliff houses**: `cliff_house_2` (4 beds) and `cliff_house_3` (6 beds) are homes of tier 2 and tier 3 for a plot in front of a rock face. The storeys come from the height of the face, so a cliff house has no tier 1 piece. A cliff house of tier 2 changes to tier 3 only if `cliff_house_3` keeps the blocks of `cliff_house_2`. This is not checked.
+- **Old worlds**: a home that grew in place keeps its step piece (`GrownHomes`). The step piece is the tier piece, so the saved data does not change. The rebuild of old villages to the current plan is #971.
+- **Debug grid**: the command `/folkhold debug buildings <style> [variant]` puts the steps 1, 2 and 3 of each building in its columns. The step of a piece is its tier, thus the columns show the tiers. When a building gets its tier pieces, the grid shows them with no change of the command. The command `/folkhold debug buildings compare <building>` shows one tier piece in all the styles and the biome variants.
+
+**Pieces of each style** (folder of the taiga variant, footprint as width × depth in blocks). The structure script makes the 5 other biome variants from the same builders. "Tiers 2 and 3" means that the step pieces exist.
+
+| Style | Pieces | Footprint | Tiers 2 and 3 |
+| --- | --- | --- | --- |
+| Base | 13 house-workshops in a full house. Food and wood: baker, pastry cook, butcher, sawyer, sawyer (spruce). Craft: mason, smelter, gold smelter, blacksmith, tinker, carpenter, weaver, papermaker | 9 × 9 | Yes, with 1 job post at each tier |
+| Base | 21 house-workshops with a shed and a yard. Land: beekeeper, farmer, forager, gardener, gardener (jungle), rancher, shepherd. Wood and stone: 8 lumberjacks (oak, acacia, birch, cherry, dark oak, jungle, mangrove, spruce), miner, digger. Craft: dyer, fisher, fletcher, tanner | 9 × 9 | No |
+| Base | Cottage (`house_cottage`, 3 beds) | 9 × 9 | No |
+| Base | Cliff houses (`cliff_house_2`, `cliff_house_3`) | 9 × 9 | Tiers 2 and 3 only |
+| Base | No tier: bank 9 × 9, market 15 × 9, mill 9 × 8, small field 11 × 12, large field 17 × 12. Also no tier: barracks, storehouse and forge, 9 × 9 each | | |
+| Maritime | The pieces of the base style, with the same footprints and the same step pieces | 9 × 9 | As in the base style |
+| Maritime | Fishing hut (`house_fishing_hut`, 2 beds) | 9 × 9 | No |
+| Maritime | No tier: fish market 9 × 9, smokehouse 9 × 9 | | |
+| Valeholm | 34 house-workshops (the same jobs as the base style) | 9 × 17 | Yes, with 1 job post at each tier |
+| Valeholm | Cottages (`house_cottage` 9 × 17, `house_cottage_side` 17 × 10, 3 beds each) | | No |
+| Valeholm | Cliff houses | 9 × 9 | Tiers 2 and 3 only |
+| Valeholm | No tier: bank 9 × 9, market 9 × 15, mill 9 × 8, fields. Also no tier: barracks 9 × 17, storehouses 9 × 17 and 17 × 10, forge 9 × 17 | | |
+| Sunreach | 34 house-workshops | 9 × 13 | Yes, with 1 job post at each tier |
+| Sunreach | Cottages (`house_cottage` 9 × 11, `house_cottage_courtyard` 13 × 13, 3 beds each) | | No |
+| Sunreach | Cliff houses | 9 × 9 | Tiers 2 and 3 only |
+| Sunreach | No tier: bank 9 × 9, market 15 × 9, mill 9 × 8, fields. Also no tier: barracks 13 × 13, storehouse 13 × 13, forge 9 × 11 | | |
+| Cave | 34 house-workshops and a cottage, no tier pieces (empty step pools) | 9 × 9 | No, out of this plan |
+
+**Pieces to make**:
+
+- Job posts of the tiers: a job sign and a work block on each new storey. This change is for the 81 house-workshops with steps (13 base, 34 Valeholm, 34 Sunreach), in all the biome variants.
+- Base and maritime: tiers 2 and 3 of the 21 house-workshops with a yard, with the stair in a fenced corner of the yard.
+- Cottages: a tier 1 with 2 beds, and tiers 2 and 3. Base and maritime (1 piece), Valeholm (2 pieces), Sunreach (2 pieces).
+- Maritime: tiers 2 and 3 of the fishing hut.
+
+**Issues** (6 hours at most each, to open after the merge of this section):
+
+| Issue | Content | Estimate |
+| --- | --- | --- |
+| Tier rules in core | `BuildingTiers`: the tier of a piece from its name, the highest tier of a level, the beds and the posts of a tier. JUnit tests. `HomeSteps` uses it. | 3h |
+| Job posts of the tiers in the script | A job sign and a work block on each new storey (`add_storey`), the walk checks (`TemplateReach`), all the styles and biome variants | 6h |
+| Job posts of the tiers in the game | The scan counts the new posts, the household of each post, the economy of the new posts, GameTests | 5h |
+| Yard stair, house-workshops with no pen | Tiers 2 and 3 of the 19 base house-workshops with a yard and no pen (#939) | 6h |
+| Yard stair, pens | Tiers 2 and 3 of the rancher and the shepherd, with a fence between the pen and the stair | 3h |
+| Cottages, base and maritime | Tier 1 with 2 beds, tiers 2 and 3 | 4h |
+| Cottages, Valeholm | Tier 1 with 2 beds, tiers 2 and 3 of the 2 cottages | 5h |
+| Cottages, Sunreach | Tier 1 with 2 beds, tiers 2 and 3 of the 2 cottages | 5h |
+| Fishing hut | Tiers 2 and 3 of the maritime fishing hut | 3h |
+| Growth of the new tiers | The growth in place for the cottages, the yard houses and the fishing hut, the saved tier of each home | 5h |
+| Cliff houses | Check that `cliff_house_3` keeps the blocks of `cliff_house_2`, else no upgrade | 2h |
+| Debug grid | The info sign of the grid gives the tier and the lowest village tier of the piece | 2h |
+
+**Questions for the owner**:
+
+1. The cottages have 3 beds. A tier 1 with 2 beds gives fewer places in each village. Keep 3 beds for the tier 1 of a cottage, or use 2 beds?
+2. A house-workshop of tier 3 has 3 job posts and 6 beds. Is 1 more post for each tier the right value?
+3. The cave villages have no step pieces. Do they get tiers?
+
 ### Construction
 
 The construction system changes the blocks of the level into the blocks of a **target**. A target is a set of block states at positions, for example a building of the village. The repair of the village (J5) and the physical growth (J6) use it.
