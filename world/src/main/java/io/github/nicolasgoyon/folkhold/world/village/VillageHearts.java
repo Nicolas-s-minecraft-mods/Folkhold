@@ -275,6 +275,17 @@ public final class VillageHearts {
                 && Math.abs(pos.getY() - heart.getY()) <= AREA_HEIGHT).isPresent();
     }
 
+    /**
+     * The registered hearts of a level.
+     *
+     * @param level the level
+     * @return a copy of the positions of the hearts
+     */
+    public static List<BlockPos> registered(Level level) {
+        Map<BlockPos, Optional<BoundingBox>> hearts = LOADED.get(level.dimension());
+        return hearts == null ? List.of() : List.copyOf(hearts.keySet());
+    }
+
     /** Removes all entries. The mod calls this when the server stops. */
     public static void clear() {
         LOADED.clear();

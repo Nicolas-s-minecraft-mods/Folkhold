@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiConsumer;
+import java.util.random.RandomGenerator;
 import java.util.stream.Collectors;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.MinecraftServer;
@@ -267,6 +268,21 @@ public final class QuestSystem {
      * @return the new quests
      */
     public static List<Quest> offerDeliveries(MinecraftServer server, Settlement settlement, long now) {
+        return offerDeliveries(server, settlement, now, ThreadLocalRandom.current());
+    }
+
+    /**
+     * Makes the delivery offers of a village with a given random source for the reward rules (see
+     * {@link QuestRewards#choose(QuestDefinition, RandomGenerator)}).
+     *
+     * @param server     the server
+     * @param settlement the village
+     * @param now        the game time
+     * @param random     the random source of the reward rules
+     * @return the new quests
+     */
+    public static List<Quest> offerDeliveries(MinecraftServer server, Settlement settlement, long now,
+            RandomGenerator random) {
         if (!EconomyData.isActive() || !settlement.economy().isInitialized()) {
             return List.of();
         }
@@ -292,7 +308,7 @@ public final class QuestSystem {
                 if (created.size() >= wanted) {
                     break;
                 }
-                RewardRule rule = QuestRewards.choose(definition);
+                RewardRule rule = QuestRewards.choose(definition, random);
                 for (Quest quest : QuestGenerator.deliveries(settlement.id(), settlement.factionId(), needs,
                         item -> Prices.price(catalog.info(item), settlement.economy().stock().count(item),
                                 population, Economies.settings()), offered, 1, now,

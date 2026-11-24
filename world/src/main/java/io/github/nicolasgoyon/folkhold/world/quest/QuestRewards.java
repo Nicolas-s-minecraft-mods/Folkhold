@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.random.RandomGenerator;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
@@ -49,7 +50,19 @@ public final class QuestRewards {
      * @return the special rule with its chance, else the base rule
      */
     public static RewardRule choose(QuestDefinition definition) {
-        return definition.rewards().choose(ThreadLocalRandom.current());
+        return choose(definition, ThreadLocalRandom.current());
+    }
+
+    /**
+     * Chooses the reward rule of a new quest of a definition with a given random source. A test gives a source with a
+     * fixed seed, and thus gets the same rules on each run.
+     *
+     * @param definition the definition
+     * @param random     the random source
+     * @return the special rule with its chance, else the base rule
+     */
+    public static RewardRule choose(QuestDefinition definition, RandomGenerator random) {
+        return definition.rewards().choose(random);
     }
 
     /**

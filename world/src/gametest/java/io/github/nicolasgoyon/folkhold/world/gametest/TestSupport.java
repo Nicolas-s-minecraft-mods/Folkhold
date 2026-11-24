@@ -17,6 +17,7 @@ import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementDiscovery;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementLevels;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
+import io.github.nicolasgoyon.folkhold.world.village.VillageHearts;
 import io.netty.channel.embedded.EmbeddedChannel;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -359,6 +360,40 @@ final class TestSupport {
         if (changed) {
             data.setDirty();
         }
+    }
+
+    /**
+     * Removes the village hearts of earlier tests near a position: the registered hearts outside the test area and
+     * outside the areas of the other running tests (see {@link #otherRunningAreas}), at a horizontal distance of
+     * {@code radius} blocks or less. The test removes the block of a loaded heart, and also removes the registry
+     * entry of a heart with no block. A heart of an earlier test stays in the registry, and a search of the village
+     * at a position can find it in place of the heart of the test.
+     *
+     * @param helper the test
+     * @param center the center of the search, in absolute positions
+     * @param radius the horizontal radius of the search, in blocks
+     * @return the positions of the removed hearts
+     */
+    static List<BlockPos> removeEarlierHearts(GameTestHelper helper, BlockPos center, double radius) {
+        ServerLevel level = helper.getLevel();
+        AABB bounds = helper.getBounds();
+        List<AABB> running = otherRunningAreas(helper);
+        List<BlockPos> removed = new ArrayList<>();
+        for (BlockPos heart : VillageHearts.registered(level)) {
+            double dx = heart.getX() - center.getX();
+            double dz = heart.getZ() - center.getZ();
+            Vec3 middle = Vec3.atCenterOf(heart);
+            if (dx * dx + dz * dz > radius * radius || bounds.contains(middle)
+                    || running.stream().anyMatch(area -> area.contains(middle))) {
+                continue;
+            }
+            if (level.isLoaded(heart) && level.getBlockEntity(heart) instanceof VillageHeartBlockEntity) {
+                level.setBlock(heart, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            }
+            VillageHearts.unregister(level, heart);
+            removed.add(heart);
+        }
+        return removed;
     }
 
     /**
