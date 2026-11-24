@@ -8,6 +8,7 @@
   "folkhold_world.configuration.damageMultiplier": "Damage multiplier",
   "folkhold_world.configuration.ai": "Defender behavior",
   "folkhold_world.configuration.patrolRadius": "Patrol radius",
+  "folkhold_world.configuration.guardStations": "Guard stations at the gates and the towers",
   "folkhold_world.configuration.chaseRadius": "Chase radius",
   "folkhold_world.configuration.alertRadius": "Alert radius",
   "folkhold_world.configuration.monsterAlertDistance": "Monster alert distance",

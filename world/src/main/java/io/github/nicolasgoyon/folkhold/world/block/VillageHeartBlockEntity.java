@@ -62,6 +62,7 @@ import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -74,6 +75,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -175,6 +177,16 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final int GATE_WATCH_DISTANCE = 2;
     /** A faction golem guards a gate at this distance from the middle of the gate, toward the heart. */
     private static final int GOLEM_GATE_DISTANCE = 4;
+    /** The first distance of a guard station from a gate or a tower post, toward the heart, in blocks. */
+    private static final int STATION_MIN_DISTANCE = 3;
+    /** The last distance of a guard station from a gate or a tower post, toward the heart, in blocks. */
+    private static final int STATION_MAX_DISTANCE = 8;
+    /** A station is on the ground at this number of blocks above the gate or the post or less. */
+    private static final int STATION_RISE = 2;
+    /** A station is on the ground at this number of blocks under the gate or the post or less. */
+    private static final int STATION_DROP = 16;
+    /** Two stations are this number of blocks apart or more (horizontal distance). */
+    private static final int STATION_SPACING = 4;
     /** True after the heart closed the gates and lit the braziers for the night. */
     private boolean nightMode;
     /** The period of the day of the last check of the braziers, or null before the first check. Not saved. */
@@ -840,6 +852,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 garrisonTraits())) {
             setChanged();
         }
+        assignStations();
     }
 
     /**
@@ -1405,7 +1418,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
      * <ul>
      *   <li>Night: the gates close, the braziers burn, and the guards (not the captain, not the units with a
      *       post) watch the gates.</li>
-     *   <li>Day: the gates open, and the guards patrol around their home again. In a village with no handymen, the
+     *   <li>Day: the gates open, and the guards go back to their day stations (see {@link #assignStations()}). In a village with no handymen, the
      *       braziers go out. In a village with handymen, the braziers burn until the handymen put them out in the
      *       morning (see {@link VillageBraziers}).</li>
      *   <li>A campfire of the layout becomes a brazier of the block library, which does not burn the entities.</li>
@@ -1435,6 +1448,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
             setBraziers(night);
         }
         assignGateWatch(night);
+        assignStations();
     }
 
     /** Lights all the braziers of the village, or puts them all out. */
@@ -1482,6 +1496,102 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 unit.setNightPos(null);
             }
         }
+    }
+
+    /**
+     * Gives a day station to each loaded guard with no post (not the captain), see {@link #guardStations()}. The
+     * guards share the stations in turn, in the order of their UUIDs: each station gets a guard before a station gets a
+     * second guard. With the option {@code guardStations} off, or with no station, the guards have no station and stay
+     * near their home.
+     */
+    private void assignStations() {
+        List<BlockPos> stations = WorldConfig.GUARD_STATIONS.get() ? guardStations() : List.of();
+        List<FactionUnit> guards = getUnits().stream()
+                .filter(unit -> unit instanceof GuardEntity && !(unit instanceof CaptainEntity)
+                        && unit.getPostPos() == null)
+                .sorted(Comparator.comparing(FactionUnit::getUUID))
+                .toList();
+        for (int i = 0; i < guards.size(); i++) {
+            guards.get(i).setStationPos(stations.isEmpty() ? null : stations.get(i % stations.size()));
+        }
+    }
+
+    /**
+     * The day stations of the guards: one position inside each gate, then one position at the foot of each tower with
+     * a valid post, inside the wall. A station is on the ground under the open sky, at
+     * {@link #STATION_MIN_DISTANCE} to {@link #STATION_MAX_DISTANCE} blocks from the gate or the post, toward the
+     * heart. A gate or a tower with no such position gives no station. A tower station near another station is not a
+     * station.
+     *
+     * @return the stations, the gates first
+     */
+    public List<BlockPos> guardStations() {
+        List<BlockPos> stations = new ArrayList<>();
+        if (level == null) {
+            return stations;
+        }
+        for (List<BlockPos> gate : gateGroups()) {
+            BlockPos middle = gate.get(gate.size() / 2);
+            int bottom = gate.stream().mapToInt(BlockPos::getY).min().orElse(middle.getY());
+            station(middle.atY(bottom)).filter(pos -> isFreeStation(stations, pos)).ifPresent(stations::add);
+        }
+        for (BlockPos post : layout.validPosts()) {
+            station(post).filter(pos -> isFreeStation(stations, pos)).ifPresent(stations::add);
+        }
+        return stations;
+    }
+
+    /**
+     * The first station position toward the heart from a gate or a post, see {@link #guardStations()}. The search
+     * follows the main axis toward the heart first, then the other axis. A tower in a corner of the wall can have its
+     * stair on one axis.
+     */
+    private Optional<BlockPos> station(BlockPos from) {
+        int dx = Integer.signum(worldPosition.getX() - from.getX());
+        int dz = Integer.signum(worldPosition.getZ() - from.getZ());
+        List<BlockPos> steps = new ArrayList<>();
+        BlockPos alongX = new BlockPos(dx, 0, 0);
+        BlockPos alongZ = new BlockPos(0, 0, dz);
+        boolean xFirst = Math.abs(worldPosition.getX() - from.getX()) >= Math.abs(worldPosition.getZ() - from.getZ());
+        for (BlockPos step : xFirst ? List.of(alongX, alongZ) : List.of(alongZ, alongX)) {
+            if (!step.equals(BlockPos.ZERO)) {
+                steps.add(step);
+            }
+        }
+        for (BlockPos step : steps) {
+            for (int distance = STATION_MIN_DISTANCE; distance <= STATION_MAX_DISTANCE; distance++) {
+                BlockPos column = from.offset(step.getX() * distance, 0, step.getZ() * distance);
+                for (int dy = STATION_RISE; dy >= -STATION_DROP; dy--) {
+                    BlockPos pos = column.above(dy);
+                    if (isStationGround(pos)) {
+                        return Optional.of(pos);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** True if a guard can stand at a position under the open sky, in a ready chunk, out of a fluid. */
+    private boolean isStationGround(BlockPos pos) {
+        if (level == null || !ReadyChunks.isReady(level, pos)) {
+            return false;
+        }
+        BlockPos below = pos.below();
+        return level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)
+                && level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
+                && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
+                && level.getFluidState(pos).isEmpty()
+                && level.canSeeSky(pos);
+    }
+
+    /** True if a position is {@link #STATION_SPACING} blocks or more from each station (horizontal distance). */
+    private static boolean isFreeStation(List<BlockPos> stations, BlockPos pos) {
+        return stations.stream().noneMatch(other -> {
+            int dx = other.getX() - pos.getX();
+            int dz = other.getZ() - pos.getZ();
+            return dx * dx + dz * dz < STATION_SPACING * STATION_SPACING;
+        });
     }
 
     /**
