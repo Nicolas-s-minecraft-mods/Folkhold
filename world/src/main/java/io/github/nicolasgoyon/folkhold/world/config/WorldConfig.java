@@ -194,6 +194,7 @@ public final class WorldConfig {
     public static final ModConfigSpec.IntValue SCHEDULE_MARKET_DAY_OFFERS;
     public static final ModConfigSpec.BooleanValue SCHEDULE_VILLAGE_MARKET_DAYS;
     public static final ModConfigSpec.IntValue SCHEDULE_WORKER_SPREAD_TICKS;
+    public static final ModConfigSpec.BooleanValue SCHEDULE_NEAR_HOME;
     public static final ModConfigSpec.IntValue BANK_PILLAGE_VALUE;
     public static final ModConfigSpec.IntValue BANK_PILLAGE_LOSS;
     public static final ModConfigSpec.DoubleValue BANK_TREASURY_SHARE;
@@ -1099,6 +1100,12 @@ public final class WorldConfig {
                         "so that the workers of a village do not all start to walk in the same tick.")
                 .translation(KEY_PREFIX + "scheduleWorkerSpreadTicks")
                 .defineInRange("workerSpreadTicks", DaySchedule.DEFAULT.workerSpreadTicks(), 0, 2000);
+        SCHEDULE_NEAR_HOME = builder
+                .comment("An idle villager of a faction village stays near its home. An inhabitant with no job has no",
+                        "meeting at the bell: it stays near its home by day and sleeps at night. The workers keep",
+                        "their market. False: the vanilla meeting at the bell and the vanilla walks.")
+                .translation(KEY_PREFIX + "scheduleNearHome")
+                .define("villagersNearHome", true);
         builder.pop();
 
         builder.comment("Bank of the faction villages.")

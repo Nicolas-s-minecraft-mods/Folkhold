@@ -498,6 +498,7 @@
   "folkhold_world.configuration.scheduleMarketDayOffers": "Extra offers on a market day",
   "folkhold_world.configuration.scheduleVillageMarketDays": "Market day for each village",
   "folkhold_world.configuration.scheduleWorkerSpreadTicks": "Spread of the workers (ticks)",
+  "folkhold_world.configuration.scheduleNearHome": "Idle villagers near their homes",
   "entity.minecraft.villager.folkhold_world.inhabitant": "Inhabitant",
   "folkhold_world.configuration.inhabitantLimit": "Inhabitant limit for each village (0: no limit)",
   "folkhold_world.configuration.detachment": "Detachments",
