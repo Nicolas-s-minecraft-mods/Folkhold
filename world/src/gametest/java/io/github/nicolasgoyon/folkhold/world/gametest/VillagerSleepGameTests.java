@@ -5,6 +5,7 @@ import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
+import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
@@ -363,12 +364,23 @@ public final class VillagerSleepGameTests {
     }
 
     /**
-     * The nearest unit of the village fights a monster: the test gives the monster to the unit as its target, as an
-     * archer that sees a monster in the night.
+     * The nearest unit of the village that can take the monster fights it: the test gives the monster to the unit as
+     * its target, as an archer that sees a monster in the night. An archer on its tower does not take a monster with no
+     * line of fire, so the test tries the units from the nearest to the farthest.
      */
     private static void fight(VillageHeartBlockEntity heart, Zombie zombie) {
-        heart.getUnits().stream().min(Comparator.comparingDouble(unit -> unit.distanceToSqr(zombie)))
-                .filter(unit -> unit.getTarget() == null).ifPresent(unit -> unit.setTarget(zombie));
+        List<FactionUnit> units = heart.getUnits();
+        if (units.stream().anyMatch(unit -> unit.getTarget() == zombie)) {
+            return;
+        }
+        List<FactionUnit> free = units.stream().filter(unit -> unit.getTarget() == null)
+                .sorted(Comparator.comparingDouble(unit -> unit.distanceToSqr(zombie))).toList();
+        for (FactionUnit unit : free) {
+            unit.setTarget(zombie);
+            if (unit.getTarget() == zombie) {
+                return;
+            }
+        }
     }
 
     /**
