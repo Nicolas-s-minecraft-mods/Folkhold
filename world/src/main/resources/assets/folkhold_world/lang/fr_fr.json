@@ -9,7 +9,7 @@
   "folkhold_world.configuration.ai": "Comportement des défenseurs",
   "folkhold_world.configuration.patrolRadius": "Rayon de patrouille",
   "folkhold_world.configuration.guardStations": "Postes des gardes aux portes et aux tours",
-  "folkhold_world.configuration.roundGuardsPerRing": "Gardes en ronde pour chaque anneau",
+  "folkhold_world.configuration.roundGuardShare": "Part des gardes en ronde",
   "folkhold_world.configuration.chaseRadius": "Rayon de poursuite",
   "folkhold_world.configuration.alertRadius": "Rayon d'alerte",
   "folkhold_world.configuration.monsterAlertDistance": "Distance d'alerte des monstres",

@@ -42,6 +42,7 @@ import io.github.nicolasgoyon.folkhold.world.village.GarrisonRole;
 import io.github.nicolasgoyon.folkhold.world.village.Handymen;
 import io.github.nicolasgoyon.folkhold.world.village.RaidShelters;
 import io.github.nicolasgoyon.folkhold.world.village.RingWall;
+import io.github.nicolasgoyon.folkhold.world.village.RoundGuards;
 import io.github.nicolasgoyon.folkhold.world.village.StoneWall;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBeds;
 import io.github.nicolasgoyon.folkhold.world.village.VillageBraziers;
@@ -1512,7 +1513,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
      * Gives a day station to each loaded guard with no post (not the captain), see {@link #guardStations()}.
      *
      * <ul>
-     *   <li>Rounds: in a village with rings, {@code roundGuardsPerRing} guards for each ring walk rounds. Their
+     *   <li>Rounds: in a village with rings, a share of the guards walks rounds (see {@link RoundGuards}). Their
      *       route is the list of the stations in the order of their angle around the heart (see
      *       {@link #advanceRounds()}). At least one guard keeps a station, and a route has 3 stations or more. A guard
      *       on a round keeps its station of the route, else it starts at its own part of the route.</li>
@@ -1530,7 +1531,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
                 .sorted(Comparator.comparing(FactionUnit::getUUID))
                 .toList();
         int rounds = stations.size() >= 3
-                ? Math.max(0, Math.min(rings() * WorldConfig.ROUND_GUARDS_PER_RING.get(), guards.size() - 1)) : 0;
+                ? RoundGuards.count(guards.size(), rings(), WorldConfig.ROUND_GUARD_SHARE.get()) : 0;
         roundRoute = rounds > 0 ? byAngle(stations) : List.of();
         Set<UUID> onRounds = new HashSet<>();
         for (int i = 0; i < rounds; i++) {
