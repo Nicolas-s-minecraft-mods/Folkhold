@@ -25,9 +25,12 @@ import java.util.List;
  *                      the tuning of the village sizes (#788) sets them
  * @param endOverflow   the number of blocks that a wide home can go past the end of its piece when a piece with plots
  *                      comes after it
+ * @param shortSegment  the length of the short segment {@code street_short} for small ground, or 0 for a style with
+ *                      no short segment. The plan of the core puts it where the segment does not fit
+ * @param shortPlots    the z of the plots of the short segment, on each side
  */
 public record StreetStyle(String name, int segment, List<Integer> segmentPlots, int crossArm, List<Integer> crossPlots,
-        int side, Home home, List<Home> wide, int endOverflow) {
+        int side, Home home, List<Home> wide, int endOverflow, int shortSegment, List<Integer> shortPlots) {
     /** The width of a street piece, in blocks. */
     public static final int WIDTH = 5;
     /** The length of the piece {@code street_end}: the end of a street, with no plot. */
@@ -46,18 +49,35 @@ public record StreetStyle(String name, int segment, List<Integer> segmentPlots, 
     /**
      * The Valeholm pieces: the long houses are 9 x 17 (the market of 9 x 15 fits), the side long houses 17 x 10. A side
      * long house on the last plot of a segment goes 4 blocks past the end of the segment: only a street end can come
-     * after it.
+     * after it. The short segment of 13 blocks has 1 plot on each side, for small ground.
      */
     public static final StreetStyle VALEHOLM = new StreetStyle("valeholm", 21, List.of(6, 16), 19, List.of(10, 32),
-            19, new Home("long_house", 9, 17, 0), List.of(new Home("side_long_house", 17, 10, 2)), 0);
+            19, new Home("long_house", 9, 17, 0), List.of(new Home("side_long_house", 17, 10, 2)), 0, 13, List.of(8));
 
     /** The styles of the village structure. */
     public static final List<StreetStyle> ALL = List.of(BASE, MARITIME, SUNREACH, VALEHOLM);
 
+    /** A style with no short segment. */
+    public StreetStyle(String name, int segment, List<Integer> segmentPlots, int crossArm, List<Integer> crossPlots,
+            int side, Home home, List<Home> wide, int endOverflow) {
+        this(name, segment, segmentPlots, crossArm, crossPlots, side, home, wide, endOverflow, 0, List.of());
+    }
+
     public StreetStyle {
+        shortPlots = List.copyOf(shortPlots);
         segmentPlots = List.copyOf(segmentPlots);
         crossPlots = List.copyOf(crossPlots);
         wide = List.copyOf(wide);
+    }
+
+    /** True if the style has a short segment for small ground. */
+    public boolean hasShort() {
+        return shortSegment > 0;
+    }
+
+    /** This style with no short segment: the style of a world of an earlier plan version. */
+    public StreetStyle withoutShort() {
+        return new StreetStyle(name, segment, segmentPlots, crossArm, crossPlots, side, home, wide, endOverflow);
     }
 
     /** The length of the piece {@code street_cross}: 2 arms and the crossing. */

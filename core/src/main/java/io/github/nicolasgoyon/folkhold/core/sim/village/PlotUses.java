@@ -102,7 +102,8 @@ public final class PlotUses {
             return needed > home.count() ? new Home(home.name(), home.frontage(), home.depth(), needed) : home;
         }).toList();
         return new StreetStyle(style.name(), style.segment(), style.segmentPlots(), style.crossArm(),
-                style.crossPlots(), style.side(), style.home(), wide, style.endOverflow());
+                style.crossPlots(), style.side(), style.home(), wide, style.endOverflow(), style.shortSegment(),
+                style.shortPlots());
     }
 
     /**

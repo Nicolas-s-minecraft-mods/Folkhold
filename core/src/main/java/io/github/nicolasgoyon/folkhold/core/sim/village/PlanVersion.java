@@ -27,6 +27,7 @@ import java.util.OptionalInt;
  *       street or of a gate also fills the open holes on its 2 sides.</li>
  *   <li>{@link #BAND_PATHS}: the plan of a ring band keeps the rows of its real paths across the band free, also off
  *       the axes. The ring street starts at the 2 sides of each path.</li>
+ *   <li>{@link #SHORT_SEGMENT}: the core of a Valeholm village puts a short segment where a segment does not fit.</li>
  * </ol>
  */
 public final class PlanVersion {
@@ -42,8 +43,10 @@ public final class PlanVersion {
     public static final int STREET_FILL = 5;
     /** The version of the band plans that keep the rows of their paths across the band free. */
     public static final int BAND_PATHS = 6;
+    /** The version of the short segment of the Valeholm streets on small ground (see {@link StreetStyle}). */
+    public static final int SHORT_SEGMENT = 7;
     /** The version of a new world: the version of the last rule. */
-    public static final int LATEST = BAND_PATHS;
+    public static final int LATEST = SHORT_SEGMENT;
 
     private PlanVersion() {
     }

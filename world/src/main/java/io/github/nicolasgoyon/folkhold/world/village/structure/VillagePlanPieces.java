@@ -423,7 +423,7 @@ final class VillagePlanPieces {
          */
         private PoolElementStructurePiece street(Piece piece, PoolElementStructurePiece parent, boolean band) {
             String name = switch (piece.kind()) {
-                case SEGMENT, CROSS -> piece.parent() >= 0 || band ? "streets_next" : switch (piece.dir()) {
+                case SEGMENT, CROSS, SHORT -> piece.parent() >= 0 || band ? "streets_next" : switch (piece.dir()) {
                     case NORTH -> "streets_bank";
                     case SOUTH, EAST, WEST -> "streets_first";
                 };
