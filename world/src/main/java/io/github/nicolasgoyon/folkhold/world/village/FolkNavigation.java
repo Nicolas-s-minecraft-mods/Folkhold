@@ -59,6 +59,11 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *   <li>The zones come from the heart of the village of the villager (see
  *       {@link VillageHeartBlockEntity#wallZones}). With the chunk of the heart not loaded, the villager has no
  *       zone.</li>
+ *   <li>The path finder of a villager of a faction village walks {@value #PATH_RANGE} blocks at most, and visits
+ *       the vanilla number of nodes for each block of this range. The vanilla limit is the follow range of the
+ *       villager (48 blocks). A bed behind the back wall of a deep house can be 3 blocks away in a straight line and
+ *       more than 48 blocks away on foot, through the door. With the vanilla limit, the path stops behind the wall,
+ *       and the villager does not get to its bed.</li>
  *   <li>A builder at work gets the navigation of a builder (see
  *       {@link io.github.nicolasgoyon.folkhold.world.construction.BuilderNavigation}). This navigation has no zone: a
  *       builder repairs the towers and the palisade. After the work, the builder gets this navigation again.</li>
@@ -73,6 +78,8 @@ public final class FolkNavigation extends GroundPathNavigation {
     public static final int FALL = 2;
     /** A position at the edge of a drop costs this number of blocks of walk more (see {@link Pits#isEdge}). */
     public static final float EDGE_COST = 4.0F;
+    /** A path of a villager of a faction village walks this number of blocks at most. */
+    public static final float PATH_RANGE = 96.0F;
     /** The search of a way (see {@link #hasWay}) goes this number of blocks farther than the target. */
     static final int WAY_MARGIN = 16;
     /** The search of a way goes this number of blocks from the villager at least. */
@@ -108,7 +115,17 @@ public final class FolkNavigation extends GroundPathNavigation {
         if (allowed.isEmpty()) {
             return null;
         }
-        Path path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
+        Path path;
+        if (folk && followRange < PATH_RANGE) {
+            setMaxVisitedNodesMultiplier(PATH_RANGE / followRange);
+            try {
+                path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, PATH_RANGE);
+            } finally {
+                resetMaxVisitedNodesMultiplier();
+            }
+        } else {
+            path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
+        }
         if (path != null && !zones.isEmpty()) {
             skipStepsUp(path, zones, mob.blockPosition().getY());
         }
