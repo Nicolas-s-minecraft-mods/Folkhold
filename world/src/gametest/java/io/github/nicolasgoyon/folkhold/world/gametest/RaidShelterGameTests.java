@@ -52,6 +52,8 @@ public final class RaidShelterGameTests {
     private static final double FAR_DISTANCE = 24.0;
     /** The raiders stay at this position, far from the villagers and the beds. */
     private static final BlockPos PARK = new BlockPos(54, 1, 2);
+    /** The vanilla raid center is the middle of the claimed points of interest in this radius, in blocks. */
+    private static final int RAID_POI_RADIUS = 64;
     /** A villager this near a bed is in its shelter, in blocks. */
     private static final double SHELTERED = 3.0;
     /** The villagers stay in their shelter for this time, in ticks. */
@@ -78,6 +80,11 @@ public final class RaidShelterGameTests {
         List<BoundingBox> boxes = new ArrayList<>();
         VillageHeartBlockEntity heart = village(helper, boxes, List.of("market", "job_farmer"),
                 List.of(MARKET_ORIGIN, WORKSHOP_ORIGIN));
+        // The raid is at the village of the nearest heart to the raid center (see VillageRaids#heartOf). The vanilla
+        // center is the middle of the claimed points of interest near the heart, also the points of earlier tests.
+        // Thus a heart of an earlier test near the center can take the raid, and the villagers get no shelter.
+        TestSupport.removeEarlierHearts(helper, heart.getBlockPos(),
+                RAID_POI_RADIUS + WorldConfig.RAID_HEART_RADIUS.get());
         List<Villager> villagers = new ArrayList<>();
         Raid[] raid = new Raid[1];
         TestSupport.atTestEnd(helper, () -> {
