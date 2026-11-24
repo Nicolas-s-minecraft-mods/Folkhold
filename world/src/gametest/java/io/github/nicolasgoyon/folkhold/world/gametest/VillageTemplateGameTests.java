@@ -56,6 +56,12 @@ public final class VillageTemplateGameTests {
      */
     private static final int STREET_PIECES = 6;
     /**
+     * The number of the short street pieces: the piece {@code street_short} of the Valeholm style, in each biome
+     * variant. The other styles have no short segment (see
+     * {@link io.github.nicolasgoyon.folkhold.core.sim.village.StreetStyle#shortSegment()}).
+     */
+    private static final int SHORT_STREET_PIECES = JobBuildingTemplateGameTests.VARIANTS.size();
+    /**
      * The number of the pieces of the cave village that are not homes: a room for each job, the main hall, the bank,
      * the market, the 6 pieces of the tunnels of the streets, and the tunnel and the gate of the entrance. All the cave
      * pieces are rigid.
@@ -74,8 +80,11 @@ public final class VillageTemplateGameTests {
      */
     private static final int PLAN_PIECES = (JOBS + OTHER_PIECES) * VARIANTS + HomeTemplateGameTests.HOME_PIECES
             + CAVE_PIECES + HOME_STEP_PIECES;
-    /** The number of the pieces that the plan test does not check: the streets of all the variants. */
-    private static final int SKIPPED_PIECES = STREET_PIECES * VARIANTS;
+    /**
+     * The number of the pieces that the plan test does not check: the streets of all the variants, and the short
+     * Valeholm streets.
+     */
+    private static final int SKIPPED_PIECES = STREET_PIECES * VARIANTS + SHORT_STREET_PIECES;
     /**
      * The size of the floor of the plan test, in blocks: the crossroad of the cave village (27 blocks long, a rigid
      * piece) and a margin around it.
