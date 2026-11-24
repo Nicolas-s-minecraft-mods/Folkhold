@@ -472,7 +472,9 @@ public final class FortifiedVillageStructure extends Structure {
      *                 band plots (see {@link VillageSize#hasBands()})
      * @param rings    the rings of the village, each with the streets and the buildings of its band (see
      *                 {@link VillageWall.Wall#band()}): all the rings of the tier, before the rule of the near
-     *                 villages (see {@link VillageRings})
+     *                 villages (see {@link VillageRings}). From the plan version {@link PlanVersion#STREET_FILL}, the
+     *                 band of a ring also has the ramp profiles of its streets (see {@link StreetRamps}). Else it has
+     *                 the stairs of its streets (see {@link StreetStepsPiece})
      * @param streets  the ramp profiles of the streets of the core, after the first wall (see {@link StreetRamps}):
      *                 empty in a world of an earlier plan version, where the stairs of the streets are a part of the
      *                 wall pieces
@@ -698,10 +700,8 @@ public final class FortifiedVillageStructure extends Structure {
         if (VillagePlanVersion.atLeast(PlanVersion.STREET_RAMP)) {
             // The ramp profile of the streets, after the paths of the gates: an axis street follows its gate path.
             StreetRamps.Result ramps = StreetRamps.of(plan, start.center(), turn,
-                    start.plaza().getBoundingBox().minY(), VillageWall.heights(start.terrain()),
-                    wall.pieces().stream().filter(VillagePathPiece.class::isInstance)
-                            .map(VillagePathPiece.class::cast).toList(),
-                    streetCutFill(), start.variant().wall().streetStairs());
+                    OptionalInt.of(start.plaza().getBoundingBox().minY()), VillageWall.heights(start.terrain()),
+                    pathsOf(wall.pieces()), streetCutFill(), streetSides(), start.variant().wall().streetStairs());
             StreetRamps.junctions(core.pieces(), ramps);
             if (VillagePlanVersion.atLeast(PlanVersion.HOUSE_LEVEL)) {
                 StreetRamps.moveHouses(context.structureTemplateManager(), core.pieces(), ramps);
@@ -744,8 +744,18 @@ public final class FortifiedVillageStructure extends Structure {
                 reserved.addAll(stage.reserved());
                 bandPlans.add(bandPlan);
                 List<StructurePiece> bandPieces = new ArrayList<>(stage.pieces());
-                bandPieces.addAll(StreetStepsPiece.of(bandPlan, start.center(), turn, start.terrain(),
-                        paths(walls.get(ring).pieces()), start.variant().wall().streetStairs()));
+                if (VillagePlanVersion.atLeast(PlanVersion.STREET_FILL)) {
+                    // The ramp profile of the band streets, after the paths across the band.
+                    StreetRamps.Result ramps = StreetRamps.of(bandPlan, start.center(), turn, OptionalInt.empty(),
+                            VillageWall.heights(start.terrain()), pathsOf(walls.get(ring).pieces()),
+                            streetCutFill(), streetSides(), start.variant().wall().streetStairs());
+                    StreetRamps.junctions(stage.pieces(), ramps);
+                    StreetRamps.moveHouses(context.structureTemplateManager(), stage.pieces(), ramps);
+                    bandPieces.addAll(ramps.paths());
+                } else {
+                    bandPieces.addAll(StreetStepsPiece.of(bandPlan, start.center(), turn, start.terrain(),
+                            paths(walls.get(ring).pieces()), start.variant().wall().streetStairs()));
+                }
                 rings.add(walls.get(ring).withBand(bandPieces));
             }
         }
@@ -816,6 +826,19 @@ public final class FortifiedVillageStructure extends Structure {
      */
     private static int streetCutFill() {
         return WorldConfig.SPEC.isLoaded() ? WorldConfig.STREET_CUT_FILL.get() : STREET_CUT_FILL;
+    }
+
+    /**
+     * The blocks on each side of a street or a path of a gate that fill the open holes: {@link VillagePathPiece#SIDES}
+     * from the plan version {@link PlanVersion#STREET_FILL}, else 0.
+     */
+    static int streetSides() {
+        return VillagePlanVersion.atLeast(PlanVersion.STREET_FILL) ? VillagePathPiece.SIDES : 0;
+    }
+
+    /** The paths from the gates in some pieces of a wall. */
+    private static List<VillagePathPiece> pathsOf(List<StructurePiece> pieces) {
+        return pieces.stream().filter(VillagePathPiece.class::isInstance).map(VillagePathPiece.class::cast).toList();
     }
 
     /** The boxes of the paths from the gates in some pieces of a wall. */

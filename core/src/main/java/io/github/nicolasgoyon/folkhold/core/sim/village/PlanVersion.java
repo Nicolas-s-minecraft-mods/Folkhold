@@ -23,6 +23,8 @@ import java.util.OptionalInt;
  *   <li>{@link #HOUSE_LEVEL}: each house on a street of the core stands at the level of the profile at its plot.</li>
  *   <li>{@link #ARM_WIDTH}: the path from a gate to the plaza stops at the first row with a building in its width,
  *       not only on its middle. A gate off the axis of its street gives a path off this axis.</li>
+ *   <li>{@link #STREET_FILL}: each street of a ring band has a ramp profile, as a street of the core. Each path of a
+ *       street or of a gate also fills the open holes on its 2 sides.</li>
  * </ol>
  */
 public final class PlanVersion {
@@ -34,8 +36,10 @@ public final class PlanVersion {
     public static final int HOUSE_LEVEL = 3;
     /** The version of the paths of the gates that stop at a building in their width. */
     public static final int ARM_WIDTH = 4;
+    /** The version of the ramp profile of the streets of the bands and of the fill on the sides of the paths. */
+    public static final int STREET_FILL = 5;
     /** The version of a new world: the version of the last rule. */
-    public static final int LATEST = ARM_WIDTH;
+    public static final int LATEST = STREET_FILL;
 
     private PlanVersion() {
     }

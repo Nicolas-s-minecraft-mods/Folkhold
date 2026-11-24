@@ -29,9 +29,13 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *   <li>The rows of a path from a gate (see {@link VillagePathPiece}) are fixed rows: an axis street follows the path
  *       of its gate on the rows that they share.</li>
  *   <li>Each run of free rows of a street piece gets a {@link VillagePathPiece} with the width of a street, the stairs
- *       of the streets and a margin. The path keeps the lights of its street that stand on a row. The margin is the cut and the fill on each side of the street (option
- *       {@code streetCutFill}). The path of a piece that continues the piece before it also covers the last row of
- *       this piece: the stair between the 2 pieces is a part of the path.</li>
+ *       of the streets and a margin. The path keeps the lights of its street that stand on a row. The margin is the
+ *       cut and the fill on each side of the street (option {@code streetCutFill}). The path of a piece that continues
+ *       the piece before it also covers the last row of this piece: the stair between the 2 pieces is a part of the
+ *       path.</li>
+ *   <li>From the plan version {@link PlanVersion#STREET_FILL}, each path also has sides: it fills the open holes next
+ *       to the street (see {@link VillagePathPiece}). The streets of the ring bands get a profile too. A band has no
+ *       plaza: its first pieces start at the height of the terrain, or at a path across the band.</li>
  *   <li>The junctions between 2 street pieces go to the level of the profile at their block. Thus the terrain
  *       adaptation of the junctions follows the profile.</li>
  *   <li>From the plan version {@link PlanVersion#HOUSE_LEVEL}, each house on a plot of a street stands at the level
@@ -65,15 +69,16 @@ final class StreetRamps {
      * @param plan     the plan
      * @param center   the middle of the plaza
      * @param rotation the rotation of the plaza
-     * @param plaza    the level of the plaza: the Y of its floor
+     * @param plaza    the level of the plaza: the Y of its floor, or empty for the plan of a band
      * @param height   the height of the terrain at a position of the world: the Y of its top block
      * @param fixed    the paths of the gates
      * @param margin   the blocks of cut and fill on each side of a street
+     * @param sides    the blocks on each side of a street, out of the margin, that fill the open holes
      * @param stairs   the stair of the streets
      * @return the levels and the paths
      */
-    static Result of(VillagePlan plan, BlockPos center, Rotation rotation, int plaza, IntBinaryOperator height,
-            List<VillagePathPiece> fixed, int margin, BlockState stairs) {
+    static Result of(VillagePlan plan, BlockPos center, Rotation rotation, OptionalInt plaza, IntBinaryOperator height,
+            List<VillagePathPiece> fixed, int margin, int sides, BlockState stairs) {
         StreetRamp.Fixed fixedRows = (x, z) -> {
             BlockPos at = world(center, rotation, x, z);
             for (VillagePathPiece path : fixed) {
@@ -125,7 +130,7 @@ final class StreetRamps {
                 }
                 BlockPos start = world(center, rotation, StreetRamp.x(piece, first), StreetRamp.z(piece, first));
                 paths.add(new VillagePathPiece(start.getX(), start.getZ(), step.getX(), step.getZ(), run, true,
-                        Optional.of(stairs), margin, true));
+                        Optional.of(stairs), margin, true, sides));
                 row = end + 1;
             }
         }

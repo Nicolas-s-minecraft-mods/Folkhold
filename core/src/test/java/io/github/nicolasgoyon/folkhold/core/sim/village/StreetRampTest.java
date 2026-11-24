@@ -35,6 +35,17 @@ class StreetRampTest {
     }
 
     @Test
+    void planWithNoPlazaStartsAtTheTerrain() {
+        // A band street: no plaza, the terrain is 6 blocks under the level of the plaza.
+        List<int[]> levels = StreetRamp.levels(eastStreet(), OptionalInt.empty(), (x, z) -> PLAZA - 6, FREE);
+        for (int[] rows : levels) {
+            for (int level : rows) {
+                assertEquals(PLAZA - 6, level);
+            }
+        }
+    }
+
+    @Test
     void steepSlopeGetsStepsOfOneBlock() {
         // 3 blocks up for each block to the east, from the plaza.
         List<int[]> levels = StreetRamp.levels(eastStreet(), PLAZA, (x, z) -> PLAZA + 3 * (x - 7), FREE);

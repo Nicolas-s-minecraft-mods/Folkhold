@@ -75,7 +75,10 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  *       the level of the gate to the level of the plaza (see {@link PathRamp}). The houses on the plots of an arm move
  *       up or down to the level of the arm at their plot. A gate off the axis of its street gives an arm off this
  *       axis. From the plan version {@link PlanVersion#ARM_WIDTH}, the arm stops at the first row with a piece that is
- *       not a street in its width: thus it does not go on the plots along the street.</li>
+ *       not a street in its width: thus it does not go on the plots along the street. From the plan version
+ *       {@link PlanVersion#STREET_FILL}, each arm and each path across a band also fills the open holes on its 2 sides
+ *       (see {@link VillagePathPiece}). The flat terrain in front of and behind a gate does the same around its area
+ *       (see {@link TerrainPiece}).</li>
  *   <li>{@link TerrainPiece}s make the terrain flat near the wall: along the palisade, in sections of
  *       {@link #SECTION} columns at their highest base, and in front of the gates, at the level of the gate. The flat
  *       terrain of a gate also clears its space: no terrain above the level of the gate.</li>
@@ -291,7 +294,7 @@ public final class VillageWall {
             if (arm != null) {
                 int[] levels = levels(arm, gateLevels.get(gate), terrain);
                 pieces.add(new VillagePathPiece(arm.startX(), arm.startZ(), arm.stepX(), arm.stepZ(), levels, true,
-                        Optional.of(settings.streetStairs())));
+                        Optional.of(settings.streetStairs()), 0, false, FortifiedVillageStructure.streetSides()));
                 moveHouses(templates, village, arm, levels);
             }
             if (waterGates.contains(gate)) {
@@ -416,7 +419,8 @@ public final class VillageWall {
                 Arm arm = arms.get(gate);
                 if (arm != null) {
                     pieces.add(new VillagePathPiece(arm.startX(), arm.startZ(), arm.stepX(), arm.stepZ(),
-                            levels(arm, gateLevels.get(gate), terrain), true, Optional.of(settings.streetStairs())));
+                            levels(arm, gateLevels.get(gate), terrain), true, Optional.of(settings.streetStairs()), 0,
+                            false, FortifiedVillageStructure.streetSides()));
                 }
                 if (isWaterGate(layout, gate, terrain::height, seaLevel)) {
                     waterGates.add(gate);
@@ -525,7 +529,7 @@ public final class VillageWall {
     /** The boxes of the terrain pieces that clear their space. */
     private static List<BoundingBox> cleared(List<StructurePiece> pieces) {
         return pieces.stream().filter(piece -> piece instanceof TerrainPiece terrain && terrain.clears())
-                .map(StructurePiece::getBoundingBox).toList();
+                .map(piece -> ((TerrainPiece) piece).area()).toList();
     }
 
     /** The ground fills of the towers and the gates of some pieces, with the cleared boxes of a larger list. */
@@ -874,7 +878,7 @@ public final class VillageWall {
                 }
                 if (!onWater) {
                     pieces.add(across(layout.cell(edge, from), layout.cell(edge, to), side, FLAT_WIDTH, FLAT_WIDTH,
-                            ground, false));
+                            ground, false, 0));
                 }
             }
         }
@@ -890,7 +894,8 @@ public final class VillageWall {
             int middle = layout.along(gate);
             pieces.add(across(layout.cell(gate.edge(), middle - WallLayout.GATE / 2),
                     layout.cell(gate.edge(), middle + WallLayout.GATE / 2), gate.side(),
-                    waterGates.contains(gate) ? 0 : APPROACH, ENTRANCE, gateLevels.get(gate), true));
+                    waterGates.contains(gate) ? 0 : APPROACH, ENTRANCE, gateLevels.get(gate), true,
+                    FortifiedVillageStructure.streetSides()));
         }
         return pieces;
     }
@@ -900,7 +905,7 @@ public final class VillageWall {
      * a number of blocks inside.
      */
     private static TerrainPiece across(Cell first, Cell last, Side side, int outside, int inside, int ground,
-            boolean clear) {
+            boolean clear, int sides) {
         int minX = Math.min(first.x(), last.x());
         int maxX = Math.max(first.x(), last.x());
         int minZ = Math.min(first.z(), last.z());
@@ -910,7 +915,7 @@ public final class VillageWall {
         int inX = side.insideX() * inside;
         int inZ = side.insideZ() * inside;
         return new TerrainPiece(minX + Math.min(outX, inX), minZ + Math.min(outZ, inZ), maxX + Math.max(outX, inX),
-                maxZ + Math.max(outZ, inZ), ground, clear);
+                maxZ + Math.max(outZ, inZ), ground, clear, sides);
     }
 
     /** The box of a structure piece on the horizontal plane. */
