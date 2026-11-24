@@ -19,6 +19,7 @@ import io.github.nicolasgoyon.folkhold.world.quest.QuestDefinitions;
 import io.github.nicolasgoyon.folkhold.world.quest.QuestSystem;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -34,6 +35,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class QuestRewardGameTests {
     private static final int FAR_X = 27_000_000;
+    /** The seed of the reward rules of the sample of offers. */
+    private static final long RULE_SEED = 1162L;
+    /** The rounds of offers of the sample. */
+    private static final int ROUNDS = 400;
 
     private QuestRewardGameTests() {
     }
@@ -140,7 +145,8 @@ public final class QuestRewardGameTests {
     /**
      * The deliveries of the inputs of the jobs follow the reward rule of their type: emeralds, reputation and the
      * experience of the definition. A special reward replaces a part of the emeralds with goods of the village. In
-     * a sample of offers, the share of the rule of the type is near the share of the design (75 %).
+     * a sample of offers, the share of the rule of the type is near the share of the design (75 %). The reward rules
+     * come from a random source with the fixed seed {@link #RULE_SEED}: the sample is the same on each run.
      */
     @GameTest(template = "empty", timeoutTicks = 20, batch = "quest_reward_rules")
     public static void mostDeliveriesFollowTheRuleOfTheirType(GameTestHelper helper) {
@@ -155,9 +161,11 @@ public final class QuestRewardGameTests {
         int base = 0;
         int special = 0;
         int total = 0;
+        Random random = new Random(RULE_SEED);
         try {
-            for (int round = 0; round < 100; round++) {
-                for (Quest quest : QuestSystem.offerDeliveries(server, village, helper.getLevel().getGameTime())) {
+            for (int round = 0; round < ROUNDS; round++) {
+                for (Quest quest : QuestSystem.offerDeliveries(server, village, helper.getLevel().getGameTime(),
+                        random)) {
                     total++;
                     if (quest.rewardExperience() == specialExperience) {
                         special++;
@@ -174,11 +182,11 @@ public final class QuestRewardGameTests {
             clear(server, village);
         }
         double share = total == 0 ? 0 : (double) base / total;
-        helper.assertTrue(total >= 100, "The sample must have 100 offers or more: " + total);
+        helper.assertTrue(total >= ROUNDS, "The sample must have " + ROUNDS + " offers or more: " + total);
         helper.assertTrue(base + special == total, "Each reward must follow the base rule or the special rule");
         helper.assertTrue(baseExperience > 0 && specialExperience != baseExperience,
                 "The rule of the type must give experience, and the special rule an other quantity");
-        helper.assertTrue(Math.abs(share - expected) < 0.12,
+        helper.assertTrue(Math.abs(share - expected) < 0.05,
                 "The share of the rule of the type must be near " + expected + ": " + share + " of " + total);
         helper.succeed();
     }

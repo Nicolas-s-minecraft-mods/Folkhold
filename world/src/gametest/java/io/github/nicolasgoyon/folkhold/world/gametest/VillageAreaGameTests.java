@@ -23,7 +23,9 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 /**
  * In-game tests for the area of a village (see {@link VillageHearts}): the area of a large village follows the area
  * of its structure. The tests remove the heart before its first tick: the heart does not clear the trees of the large
- * area.
+ * area. Each test first removes the hearts of earlier tests near its positions (see
+ * {@link TestSupport#removeEarlierHearts}): the checked positions are out of the test area, and a heart of an earlier
+ * test can own them.
  */
 @GameTestHolder(FolkholdWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -86,6 +88,7 @@ public final class VillageAreaGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos city = helper.absolutePos(BlockPos.ZERO);
         BlockPos second = city.offset(100, 0, 0);
+        removeEarlierHearts(helper, city);
         VillageHearts.register(level, city, Optional.of(cityArea(city)));
         VillageHearts.register(level, second, Optional.empty());
         // 70 blocks from the city heart and 30 blocks from the second heart.
@@ -150,11 +153,24 @@ public final class VillageAreaGameTests {
 
     /** Places a heart in the arena and registers it. */
     private static VillageHeartBlockEntity placeHeart(GameTestHelper helper) {
+        removeEarlierHearts(helper, helper.absolutePos(HEART));
         TestSupport.buildFloor(helper, ARENA_SIZE);
         helper.setBlock(HEART, ModBlocks.VILLAGE_HEART.get());
         BlockPos heartPos = helper.absolutePos(HEART);
         VillageHearts.register(helper.getLevel(), heartPos);
         return (VillageHeartBlockEntity) helper.getLevel().getBlockEntity(heartPos);
+    }
+
+    /** Removes the hearts of earlier tests near a position, and writes their positions in the log. */
+    private static void removeEarlierHearts(GameTestHelper helper, BlockPos center) {
+        // A checked position is at one city radius and one block from the heart or nearer. An earlier heart owns a
+        // position in its village radius or in its city area, with a corner at 1.5 city radii from it.
+        double radius = 3 * cityRadius() + WorldConfig.VILLAGE_RADIUS.get() + ARENA_SIZE;
+        List<BlockPos> removed = TestSupport.removeEarlierHearts(helper, center, radius);
+        if (!removed.isEmpty()) {
+            FolkholdWorld.LOGGER.info("Village area test: removed {} hearts of earlier tests near {}: {}",
+                    removed.size(), center, removed);
+        }
     }
 
     private static void removeHeart(GameTestHelper helper, BlockPos heartPos) {

@@ -112,8 +112,9 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * {@value #MATRIX_VARIABLE} adds the optional trials of the matrix {@link #MATRIX_RAIDS} × {@link #MATRIX_LEVELS},
  * and the trials of the {@link #PALISADE_CELLS} with a palisade: its value is the number of runs of each pair.
  *
- * <p>The time of an exit test: 3 to 5 trials of 5 to 20 s each. The worst time is {@link #EXIT_TRIALS} × (60 s for
- * the chunks + 60 s for the setup + {@link #TRIAL_SECONDS} s for the raid) = 3600 s. When the test ends, also after a failure, a listener
+ * <p>The time of an exit test: 3 to 5 trials of 5 to 20 s each, and 6 to {@link #CITY_TRIALS} trials for the city.
+ * One trial takes 720 s at most: 60 s for the chunks, 60 s for the setup and {@link #TRIAL_SECONDS} s for the raid.
+ * When the test ends, also after a failure, a listener
  * releases the tickets of the chunks and removes the raiders and the units of the trial.
  */
 @GameTestHolder(FolkholdWorld.MOD_ID)
@@ -136,6 +137,11 @@ public final class RaidBalanceGameTests {
     static final int EXIT_TRIALS = 5;
     /** The number of trials with the same result that decides an exit test. */
     static final int EXIT_MAJORITY = EXIT_TRIALS / 2 + 1;
+    /**
+     * The maximum number of trials of the exit test "City holds". The hold rate of this cell is near 0.85, and more
+     * trials make a wrong majority less probable (see {@link #largeVillageResistsARaid}).
+     */
+    static final int CITY_TRIALS = 11;
     static final String MATRIX_VARIABLE = "FOLKHOLD_RAID_MATRIX";
     /**
      * The environment variable that selects the cells of the matrix: a list of {@code raid:level} pairs, separated by
@@ -239,14 +245,15 @@ public final class RaidBalanceGameTests {
     /**
      * Exit criterion of version 1: a city (level 13) holds against a raid of level 5, with the extra ravagers of
      * {@code VillageRaids.extraRavagers}. Cell "raid level 5, city" of the targets. Measured with the culture
-     * {@link #CULTURE}: holds in 98 of 122 trials, thus a wrong majority in about 5.5 % of the runs at this rate and in
-     * about 13 % at the low end of the 95 % interval (0.72). The test is optional until a wrong majority is below 1 % at
-     * the low end of the 95 % interval of the hold rate.
+     * {@link #CULTURE} in the trials of this test in 61 CI runs: holds in 179 of 206 trials (0.87). The 95 % interval of
+     * the hold rate is 0.82 to 0.91. With {@link #CITY_TRIALS} trials, a wrong majority occurs in about 0.1 % of the
+     * runs at 0.87 and in about 0.7 % at 0.82. With 5 trials, these values are 1.8 % and 4.4 %. The test is optional
+     * until a wrong majority is below 1 % at the low end of the 95 % interval of the hold rate.
      */
     @GameTest(template = "arena_huge", timeoutTicks = TestSupport.WORKER_TICKS, batch = "raid_balance_city",
             required = false)
     public static void largeVillageResistsARaid(GameTestHelper helper) {
-        majority(helper, 5, 13, Outcome.HOLDS, "A city must hold against a raid of level 5");
+        majority(helper, 5, 13, Outcome.HOLDS, "A city must hold against a raid of level 5", CITY_TRIALS);
     }
 
     /** The optional trials of the matrix. With no environment variable {@value #MATRIX_VARIABLE}, no trials. */
@@ -344,8 +351,8 @@ public final class RaidBalanceGameTests {
     }
 
     /**
-     * Runs up to {@link #EXIT_TRIALS} trials and checks the result of the majority. The test stops the trials when
-     * {@link #EXIT_MAJORITY} trials give the same side: the expected result, or another result.
+     * Runs up to {@link #EXIT_TRIALS} trials and checks the result of the majority. See
+     * {@link #majority(GameTestHelper, int, int, Outcome, String, int)}.
      *
      * @param helper       the helper of the test
      * @param raidLevel    the level of the raid, 1 to 5
@@ -354,19 +361,36 @@ public final class RaidBalanceGameTests {
      * @param message      the message of the failure
      */
     static void majority(GameTestHelper helper, int raidLevel, int villageLevel, Outcome expected, String message) {
+        majority(helper, raidLevel, villageLevel, expected, message, EXIT_TRIALS);
+    }
+
+    /**
+     * Runs up to {@code trials} trials and checks the result of the majority. The test stops the trials when more
+     * than half of the trials give the same side: the expected result, or another result.
+     *
+     * @param helper       the helper of the test
+     * @param raidLevel    the level of the raid, 1 to 5
+     * @param villageLevel the level of the village, 1 to 20
+     * @param expected     the result of the target
+     * @param message      the message of the failure
+     * @param trials       the maximum number of trials, an odd number
+     */
+    static void majority(GameTestHelper helper, int raidLevel, int villageLevel, Outcome expected, String message,
+            int trials) {
+        int needed = trials / 2 + 1;
         List<Outcome> outcomes = new ArrayList<>();
         BooleanSupplier decided = () -> {
             long hits = outcomes.stream().filter(outcome -> outcome == expected).count();
-            return hits >= EXIT_MAJORITY || outcomes.size() - hits >= EXIT_MAJORITY;
+            return hits >= needed || outcomes.size() - hits >= needed;
         };
         GameTestSequence sequence = helper.startSequence();
-        for (int i = 0; i < EXIT_TRIALS; i++) {
+        for (int i = 0; i < trials; i++) {
             sequence = thenTrial(helper, sequence, raidLevel, villageLevel, false, CULTURE, decided,
                     result -> outcomes.add(result.outcome()));
         }
         sequence.thenExecute(() -> helper.assertTrue(
-                outcomes.stream().filter(outcome -> outcome == expected).count() >= EXIT_MAJORITY,
-                message + " in " + EXIT_MAJORITY + " of " + EXIT_TRIALS + " trials: " + outcomes))
+                outcomes.stream().filter(outcome -> outcome == expected).count() >= needed,
+                message + " in " + needed + " of " + trials + " trials: " + outcomes))
                 .thenSucceed();
     }
 
