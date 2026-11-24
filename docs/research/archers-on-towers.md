@@ -123,7 +123,7 @@ target is also in the attack radius from the position of the archer.
 | Directly at its position | 18 of 20 | 0 | 18 |
 | Directly at its position, given by an alert | 18 of 20 | 18 | 18 |
 
-- The first hit comes 35 to 84 ticks after the start of a case.
+- The first hit comes 35 to 96 ticks after the start of a case (2 local runs).
 - The archer never leaves the platform.
 - A husk in a closed box at the foot of the tower is in a true dead zone. The archer does not take it, also from an
   alert. It takes a farther husk and hits it (`towerArcherTakesATargetOutOfTheDeadZone`).
