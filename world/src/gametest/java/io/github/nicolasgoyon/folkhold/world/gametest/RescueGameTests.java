@@ -23,6 +23,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.item.Items;
@@ -113,6 +114,57 @@ public final class RescueGameTests {
         BoundingBox scene = box(helper, new BlockPos(INSIDE.getX() - 2, 0, INSIDE.getZ() - 2),
                 new BlockPos(GROUND_MIN_X + 1, SHAFT_DEPTH + 3, INSIDE.getZ() + INSIDE_SIZE + 1));
         rescue(helper, heart, penned, scene, 2);
+    }
+
+    /**
+     * After the climb, the rescued villager walks to the heart. At the end of the climb, the villager is not on the
+     * ground, and the path finder gives it no path: the walk starts on the ground. The builder near the exit does not
+     * stop the walk with a vanilla interaction. The leave step ends before {@value VillageRescues#LEAVE_TICKS} ticks.
+     * At its end, the villager walks to the heart and is nearer to the heart than the exit.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = PIT_TICKS, batch = "rescue_walk", skyAccess = true)
+    public static void rescuedVillagerWalksToTheHeart(GameTestHelper helper) {
+        TestSupport.buildFloor(helper, ARENA);
+        walls(helper, PIT_DEPTH);
+        VillageHeartBlockEntity heart = heart(helper, PIT_HEART);
+        Villager penned = villager(helper, heart, INSIDE, ModProfessions.INHABITANT.get());
+        villager(helper, heart, PIT_BUILDER, ModProfessions.BUILDER.get());
+        ServerLevel level = helper.getLevel();
+        VillageRescues rescues = heart.rescues();
+        BlockPos heartPos = heart.getBlockPos();
+        Vec3 heartCenter = Vec3.atBottomCenterOf(heartPos);
+        long[] leaveAt = {-1};
+        double[] exitDistance = {0.0};
+        List<String> end = new ArrayList<>();
+        helper.onEachTick(() -> {
+            boolean leaves = rescues.state().filter("LEAVE"::equals).isPresent();
+            if (leaveAt[0] < 0 && leaves) {
+                leaveAt[0] = level.getGameTime();
+                exitDistance[0] = rescues.plan()
+                        .map(plan -> Vec3.atBottomCenterOf(plan.exit()).distanceTo(heartCenter)).orElse(0.0);
+            } else if (leaveAt[0] >= 0 && !leaves && end.isEmpty()) {
+                long ticks = level.getGameTime() - leaveAt[0];
+                boolean walks = penned.getBrain().getMemory(MemoryModuleType.WALK_TARGET)
+                        .filter(walk -> walk.getTarget().currentBlockPosition().equals(heartPos)).isPresent();
+                double distance = penned.position().distanceTo(heartCenter);
+                String state = "after " + ticks + " ticks, walk to the heart " + walks + ", distance " + distance
+                        + ", exit distance " + exitDistance[0];
+                if (ticks >= VillageRescues.LEAVE_TICKS) {
+                    end.add("The leave step must end before " + VillageRescues.LEAVE_TICKS + " ticks: " + state);
+                } else if (!walks || distance >= exitDistance[0]) {
+                    end.add("The villager must walk to the heart: " + state);
+                } else {
+                    end.add("");
+                }
+            }
+        });
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(penned.onGround(), "The villager must land"))
+                .thenExecute(() -> rescues.update(level, heartPos, List.of(penned.getUUID()), level.getGameTime()))
+                .thenWaitUntil(() -> helper.assertFalse(end.isEmpty(), "The villager must climb out and leave the "
+                        + "exit: " + rescues.state()))
+                .thenExecute(() -> helper.assertTrue(end.get(0).isEmpty(), end.get(0)))
+                .thenSucceed();
     }
 
     /**
