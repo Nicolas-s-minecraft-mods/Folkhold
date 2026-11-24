@@ -39,8 +39,10 @@ import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -94,6 +96,8 @@ public final class VillagerSleepGameTests {
     private static final double SLEEP_MIN_HEIGHT = 0.4;
     /** {@code SleepInBed} wakes a villager at this distance from the middle of its bed or more, in blocks. */
     private static final double SLEEP_MAX_DISTANCE = 1.14;
+    /** The size of the arena of the deep room test, in blocks. */
+    private static final int DEEP_ARENA = 32;
     /** A population target that is more than the places of each test village: all the beds get a villager. */
     private static final int FULL_POPULATION = 1000;
 
@@ -158,6 +162,101 @@ public final class VillagerSleepGameTests {
                 .isPresent(), "The villager at the foot of its bed must sleep in it: " + near.getSleepingPos());
         helper.assertFalse(far.isSleeping(), "A villager 5 blocks from its bed must not lie down");
         helper.succeed();
+    }
+
+    /**
+     * A villager behind a wall, near the head of its bed, does not lie down (see {@link VillageHomes#lieDown}): the
+     * wall stops the line to the bed. A villager at the same distance with no wall between it and the bed lies down.
+     */
+    @GameTest(template = "arena", timeoutTicks = 100, batch = "villager_sleep_lie_down_wall")
+    public static void villagerBehindAWallDoesNotLieDown(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ServerLevel level = helper.getLevel();
+        // A bed along the X axis with its head to the east, and a wall of 2 blocks high on its south side.
+        BlockPos head = new BlockPos(5, 1, 5);
+        helper.setBlock(head.west(), Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
+                .setValue(BedBlock.PART, BedPart.FOOT));
+        helper.setBlock(head, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
+                .setValue(BedBlock.PART, BedPart.HEAD));
+        for (int x = 2; x <= 8; x++) {
+            helper.setBlock(new BlockPos(x, 1, 6), Blocks.STONE);
+            helper.setBlock(new BlockPos(x, 2, 6), Blocks.STONE);
+        }
+        // 2 blocks from the head of the bed: one behind the wall, one on the open side.
+        Villager behind = helper.spawn(EntityType.VILLAGER, head.south(2));
+        Villager open = helper.spawn(EntityType.VILLAGER, head.north(2));
+        TestSupport.atTestEnd(helper, () -> {
+            behind.discard();
+            open.discard();
+        });
+        for (Villager villager : List.of(behind, open)) {
+            villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(),
+                    helper.absolutePos(head)));
+            villager.getBrain().setActiveActivityIfPossible(Activity.REST);
+        }
+        helper.assertTrue(VillageHomes.lieDown(level, List.of(behind, open)) == 1, "One villager must lie down");
+        helper.assertFalse(behind.isSleeping(), "A villager behind a wall must not lie down");
+        helper.assertTrue(open.isSleeping() && open.getSleepingPos().filter(helper.absolutePos(head)::equals)
+                .isPresent(), "The villager on the open side must sleep in the bed: " + open.getSleepingPos());
+        helper.succeed();
+    }
+
+    /**
+     * At night, a villager of a faction village walks to its bed in a deep room. The villager stands behind the back
+     * wall of the room, 3 blocks from the head of its bed. The walk to the bed goes around the room and through its
+     * door: about 60 blocks. This is more than the vanilla limit of a path (48 blocks, the follow range of a villager),
+     * and less than {@link io.github.nicolasgoyon.folkhold.world.village.FolkNavigation#PATH_RANGE}. An outer wall
+     * around the room keeps the search of the path in a corridor of 1 block.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 1600, batch = "villager_sleep_deep_room")
+    public static void villagerWalksAroundADeepRoomToItsBed(GameTestHelper helper) {
+        TestSupport.buildFloor(helper, DEEP_ARENA);
+        TestSupport.setDayTimeForTest(helper, NIGHT);
+        ServerLevel level = helper.getLevel();
+        // The room: walls at x = 10 and x = 16, z = 4 and z = 29. The outer wall: x = 8 and x = 18, z = 1 and z = 31.
+        for (int y = 1; y <= 3; y++) {
+            for (int x = 8; x <= 18; x++) {
+                helper.setBlock(new BlockPos(x, y, 1), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, y, 31), Blocks.STONE);
+            }
+            for (int z = 1; z <= 31; z++) {
+                helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(18, y, z), Blocks.STONE);
+            }
+            for (int x = 10; x <= 16; x++) {
+                helper.setBlock(new BlockPos(x, y, 4), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, y, 29), Blocks.STONE);
+            }
+            for (int z = 4; z <= 29; z++) {
+                helper.setBlock(new BlockPos(10, y, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(16, y, z), Blocks.STONE);
+            }
+        }
+        BlockPos door = new BlockPos(13, 1, 29);
+        helper.setBlock(door, Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.SOUTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
+        helper.setBlock(door.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.SOUTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+        // The bed against the back wall of the room, with its head to the north.
+        BlockPos head = new BlockPos(12, 1, 5);
+        helper.setBlock(head.south(), Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.NORTH)
+                .setValue(BedBlock.PART, BedPart.FOOT));
+        helper.setBlock(head, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.NORTH)
+                .setValue(BedBlock.PART, BedPart.HEAD));
+        BlockPos bed = helper.absolutePos(head);
+        Villager villager = helper.spawn(EntityType.VILLAGER, new BlockPos(12, 1, 2));
+        long added = level.getGameTime();
+        TestSupport.atTestEnd(helper, villager::discard);
+        villager.getPersistentData().putLong(Merchants.VILLAGE_TAG, helper.absolutePos(new BlockPos(0, 1, 0)).asLong());
+        claimBed(level, villager, bed);
+        helper.startSequence()
+                .thenWaitUntil(() -> {
+                    TestSupport.assertTicks(helper, villager, added);
+                    helper.assertTrue(villager.isSleeping() && villager.getSleepingPos().filter(bed::equals)
+                            .isPresent(), "The villager must walk around the room and sleep in its bed at "
+                                    + bed.toShortString() + ": " + describe(level, villager));
+                })
+                .thenSucceed();
     }
 
     /**

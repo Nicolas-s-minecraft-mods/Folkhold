@@ -21,8 +21,12 @@ import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.schedule.Activity;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * The beds of the inhabitants: the household of a home sleeps in the home. The vanilla memory {@code HOME} of a
@@ -49,6 +53,8 @@ public final class VillageHomes {
     public static final double LIE_DOWN_DISTANCE = 3.0;
     /** A villager that woke up this number of ticks ago or less does not lie down, as in {@code SleepInBed}. */
     private static final long WOKEN_TICKS = 100L;
+    /** The line from a villager to its bed (see {@link #clearLine}) is at this height above the bottom of the bed. */
+    private static final double LINE_HEIGHT = 0.75;
 
     private VillageHomes() {
     }
@@ -141,8 +147,10 @@ public final class VillageHomes {
      * {@code SleepInBed} needs the villager at less than 2 blocks from the head of the bed. In a small house, the
      * only free places at this distance can be between two beds or on the foot of the bed, and a villager can stay
      * at the foot of its bed with no path to them. A villager at {@value #LIE_DOWN_DISTANCE} blocks or less from the
-     * head of its bed (horizontal distance, and 1 block or less up or down) lies down when the bed is free. A
-     * villager that woke up less than {@value #WOKEN_TICKS} ticks ago stays awake, as with the vanilla behavior.
+     * head of its bed (horizontal distance, and 1 block or less up or down) lies down when the bed is free. A wall
+     * between the villager and the head of its bed stops this rule: a villager behind the wall of its house does not
+     * lie down (see {@link #clearLine}). A villager that woke up less than {@value #WOKEN_TICKS} ticks ago stays
+     * awake, as with the vanilla behavior.
      *
      * @param level       the level
      * @param inhabitants the loaded inhabitants of the village
@@ -166,7 +174,7 @@ public final class VillageHomes {
             BlockState state = level.getBlockState(pos);
             if (dx * dx + dz * dz > LIE_DOWN_DISTANCE * LIE_DOWN_DISTANCE
                     || Math.abs(villager.getBlockY() - pos.getY()) > 1 || !state.is(BlockTags.BEDS)
-                    || state.getValue(BedBlock.OCCUPIED)) {
+                    || state.getValue(BedBlock.OCCUPIED) || !clearLine(level, villager, pos)) {
                 continue;
             }
             villager.getNavigation().stop();
@@ -174,6 +182,25 @@ public final class VillageHomes {
             count++;
         }
         return count;
+    }
+
+    /**
+     * True if no block stops a line from the villager to the head of its bed, at {@value #LINE_HEIGHT} blocks above
+     * the bottom of the bed. The line goes above the top of a bed: the foot of the bed and the beds next to it do not
+     * stop it. A wall or a closed door stops it.
+     *
+     * @param level    the level
+     * @param villager the villager
+     * @param bed      the head of the bed
+     * @return true with no block on the line
+     */
+    static boolean clearLine(ServerLevel level, Villager villager, BlockPos bed) {
+        double y = bed.getY() + LINE_HEIGHT;
+        Vec3 from = new Vec3(villager.getX(), y, villager.getZ());
+        Vec3 to = new Vec3(bed.getX() + 0.5, y, bed.getZ() + 0.5);
+        BlockHitResult hit = level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                villager));
+        return hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(bed);
     }
 
     /**
