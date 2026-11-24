@@ -13,7 +13,7 @@ project. Change the page on CurseForge only through a change of this folder.
 | `core` | Folkhold Core | 1821089 | Mods | API and Library |
 | `blocks` | Folkhold Blocks | 1821098 | Mods | API and Library, Cosmetic |
 | `world` | Folkhold World | 1821107 | Mods | Adventure and RPG, World Gen (Structures), Mobs |
-| `balance` | Folkhold Balance | 1821102 | Mods | Technology (Player Transport), Redstone, Utility & QoL |
+| `balance` | Folkhold Balance | 1821102 | Mods | Utility & QoL |
 | `events` | Folkhold Events | 1821115 | Mods | World Gen, Adventure and RPG |
 
 All the projects have these values:
@@ -57,7 +57,7 @@ The workflow Release uploads the 5 jars of a release with `scripts/curseforge_pu
 [projects.json](projects.json) gives the id and the slug of each project and the slugs of the projects that it
 requires. A test compares these requirements with `neoforge.mods.toml`.
 
-- The repository secret `CURSEFORGE_TOKEN` has the API token of the CurseForge account of the owner. With no secret,
+- The organization secret `CURSEFORGE_TOKEN` has the API token of the CurseForge account of the owner. With no secret,
   the workflow uploads nothing.
 - Each file has the game versions 1.21.1, NeoForge, Java 21, Client and Server, and the notes of the release as its
   changelog.

@@ -22,6 +22,12 @@ Natural events: earthquakes that shake and crack the buildings, and storms with 
 - The wind tears blocks from the wind side of wooden buildings. Stone holds.
 - Lightning strikes in the area of the storm. A lightning rod takes the strikes.
 
+### Stabilizer
+
+- A stabilizer is a block of reinforced foundations from Folkhold Blocks. Its recipe has 5 copper ingots and 4 stone blocks.
+- No event changes a block at 16 blocks or nearer from a stabilizer. A stabilizer in the floor protects a house of 2 or 3 floors.
+- The stabilizer does not stop the falling blocks, the flying blocks, the lightning or the wind.
+
 ### Control
 
 - A natural earthquake or storm comes near a player, in loaded chunks only. Each type of event has its own time between 2 events.
@@ -34,6 +40,7 @@ Natural events: earthquakes that shake and crack the buildings, and storms with 
 
 - Minecraft 1.21.1, NeoForge 21.1.259 or later, Java 21.
 - Required mod: Folkhold Core. The client also needs Confee: it shows the options screen.
+- Optional mod: Folkhold Blocks (the stabilizer).
 - Client and server.
 
 ### License and links

@@ -8,8 +8,8 @@ Goal: a single-player Minecraft (NeoForge 1.21.1) where the world changes withou
 The project has a base modpack (existing mods) and three mods to develop:
 
 - **World**: factions, villages, economy, quests.
-- **Balance**: farms, villagers, chunk loading, trains.
-- **Events**: earthquakes, collapses.
+- **Balance**: farms, villagers, chunk loading.
+- **Events**: earthquakes, storms.
 
 Design principles:
 
@@ -106,7 +106,7 @@ The three mods use a shared library, `core`. The library separates two layers:
 flowchart TB
     subgraph mods["Gameplay mods"]
         world["world<br/>factions, villages, economy, quests"]
-        events["events<br/>earthquakes, collapses"]
+        events["events<br/>earthquakes, storms"]
         balance["balance<br/>farms, villagers, chunk loading"]
     end
     subgraph core["core (shared library)"]
