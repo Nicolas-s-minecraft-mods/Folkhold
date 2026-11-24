@@ -69,13 +69,11 @@ public final class IdleVillagerGameTests {
             helper.assertTrue(walks == 1 && brain.getMemory(MemoryModuleType.WALK_TARGET)
                     .filter(target -> target.getTarget().currentBlockPosition().equals(home)).isPresent(),
                     "The idle inhabitant far from its home must get a walk target to its home");
-            // The heart checks its villagers each 40 ticks.
-            helper.onEachTick(() -> {
+            helper.succeedWhen(() -> {
+                // The heart checks its villagers each 40 ticks.
                 if (helper.getLevel().getGameTime() % CHECK_TICKS == 0) {
                     IdleVillagers.update(helper.getLevel(), List.of(villager));
                 }
-            });
-            helper.succeedWhen(() -> {
                 TestSupport.assertTicks(helper, villager, added);
                 double dx = villager.getX() - (home.getX() + 0.5);
                 double dz = villager.getZ() - (home.getZ() + 0.5);
