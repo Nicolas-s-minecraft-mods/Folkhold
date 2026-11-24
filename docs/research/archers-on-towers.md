@@ -112,18 +112,29 @@ Options A and B, in one change. Reasons:
 - A target with no line of fire from any spot is in a true dead zone. The archer does not take it, and it selects
   another target. The guards on the ground handle the target in the dead zone.
 
+## Result of the selected option
+
+The same measure after the change (`ArcherTowerGameTests.towerArcherFiringPositions`). A line of fire counts when the
+target is also in the attack radius from the position of the archer.
+
+| How the target comes | Line of fire in range from the platform | Hits before | Hits after |
+| --- | --- | --- | --- |
+| From 17 blocks away, then to its position | 18 of 20 | 0 | 18 |
+| Directly at its position | 18 of 20 | 0 | 18 |
+| Directly at its position, given by an alert | 18 of 20 | 18 | 18 |
+
+- The first hit comes 35 to 84 ticks after the start of a case.
+- The archer never leaves the platform.
+- A husk in a closed box at the foot of the tower is in a true dead zone. The archer does not take it, also from an
+  alert. It takes a farther husk and hits it (`towerArcherTakesATargetOutOfTheDeadZone`).
+
 ## Sources
 
-1. Straatman, van der Sterren, Beij. Killzone's AI: dynamic procedural combat tactics. GDC Europe 2005.
-   https://www.guerrilla-games.com/media/News/Files/gdce05_killzone_ai.pdf
-2. Guerrilla Games. Killzone's AI: dynamic procedural tactics (summary page).
-   https://www.guerrilla-games.com/read/killzones-ai-dynamic-procedural-tactics
-3. Crytek. Tactical Point System, CryEngine 3 documentation.
-   https://www.cryengine.com/docs/static/engines/cryengine-3/categories/1638401/pages/1605720
-4. Isla. Handling Complexity in the Halo 2 AI. GDC 2005.
-   https://gamedeveloper.com/programming/gdc-2005-proceeding-handling-complexity-in-the-i-halo-2-i-ai
-5. Orkin. Three States and a Plan: the AI of F.E.A.R. GDC 2006.
-   https://pages.cs.wisc.edu/~dyer/cs540/handouts/gdc2006_orkin_jeff_fear.pdf
+1. Straatman, van der Sterren, Beij. Killzone's AI: dynamic procedural combat tactics. GDC Europe 2005. https://www.guerrilla-games.com/media/News/Files/gdce05_killzone_ai.pdf
+2. Guerrilla Games. Killzone's AI: dynamic procedural tactics (summary page). https://www.guerrilla-games.com/read/killzones-ai-dynamic-procedural-tactics
+3. Crytek. Tactical Point System, CryEngine 3 documentation. https://www.cryengine.com/docs/static/engines/cryengine-3/categories/1638401/pages/1605720
+4. Isla. Handling Complexity in the Halo 2 AI. GDC 2005. https://gamedeveloper.com/programming/gdc-2005-proceeding-handling-complexity-in-the-i-halo-2-i-ai
+5. Orkin. Three States and a Plan: the AI of F.E.A.R. GDC 2006. https://pages.cs.wisc.edu/~dyer/cs540/handouts/gdc2006_orkin_jeff_fear.pdf
 6. Epic Games. EQS node reference: tests. https://dev.epicgames.com/documentation/unreal-engine/eqs-node-reference-tests-in-unreal-engine
 7. Machicolation. Wikipedia. https://en.wikipedia.org/wiki/Machicolation
 8. Hoarding (castle). Wikipedia. https://en.wikipedia.org/wiki/Hoarding_(castle)
@@ -131,9 +142,6 @@ Options A and B, in one change. Reasons:
 10. Battlement. Wikipedia. https://en.wikipedia.org/wiki/Battlement
 11. Utility system. Wikipedia. https://en.wikipedia.org/wiki/Utility_system
 12. van der Sterren. Terrain reasoning for 3D action games. https://gamedeveloper.com/programming/terrain-reasoning-for-3d-action-games
-13. Jack. Tactical Position Selection: an architecture and query language. Game AI Pro, chapter 26 (not verified).
-    http://www.gameaipro.com/GameAIPro/GameAIPro_Chapter26_Tactical_Position_Selection.pdf
-14. Johnson. Taming spatial queries: tips for natural position selection. Game AI Pro Online Edition 2021, chapter 5
-    (not verified). http://www.gameaipro.com/GameAIProOnlineEdition2021/GameAIProOnlineEdition2021_Chapter05_Taming_Spatial_Queries_Tips_for_Natural_Position_Selection.pdf
-15. Minecraft 1.21.1 code: `TargetGoal` (60 ticks of memory) and `NearestAttackableTargetGoal` (search box of 4 blocks
-    up and down), read in the decompiled sources of NeoForge 21.1.259.
+13. Jack. Tactical Position Selection: an architecture and query language. Game AI Pro, chapter 26 (not verified). http://www.gameaipro.com/GameAIPro/GameAIPro_Chapter26_Tactical_Position_Selection.pdf
+14. Johnson. Taming spatial queries: tips for natural position selection. Game AI Pro Online Edition 2021, chapter 5 (not verified). http://www.gameaipro.com/GameAIProOnlineEdition2021/GameAIProOnlineEdition2021_Chapter05_Taming_Spatial_Queries_Tips_for_Natural_Position_Selection.pdf
+15. Minecraft 1.21.1 code: `TargetGoal` (60 ticks of memory) and `NearestAttackableTargetGoal` (search box of 4 blocks up and down), read in the decompiled sources of NeoForge 21.1.259.
