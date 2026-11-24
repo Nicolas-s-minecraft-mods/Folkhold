@@ -61,7 +61,7 @@ Other IDEs: IntelliJ IDEA can also open a dev container. The support depends on 
    ./gradlew :dev:runGameTestServer
    ```
 
-   The server starts, runs all GameTests, then stops. The result is in the console. The GameTest server uses the folder `dev/run-gametest`, with a new world for each run. It does not change the world of the dev server, `dev/run/world`.
+   The server starts, runs all GameTests, then stops. The result is in the console. The GameTest server uses the folder `dev/run-gametest`, with a new world for each run. It does not change the world of the dev server, `dev/run/world`. Each run also starts with the default options. The GameTest server does not watch the options files (`disableConfigWatcher = true` in `dev/run-gametest/config/fml.toml`). A GameTest sets an option in memory, and a reload of the file does not change this value.
 
    To run one shard of the GameTests, as a job of the CI does, give the shard: `./gradlew :dev:runGameTestServer -PgametestShard=2/4`. See "GameTest shards" in "Continuous integration and releases".
 

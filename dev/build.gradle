@@ -93,6 +93,9 @@ tasks.named('jar') {
 
 // Each GameTest run starts in a new world with the default configuration: the tests do not see the saved data or
 // the configuration files of an earlier run.
+//
+// The GameTests set the options in memory. A reload of an options file sets the values of the file again, at a random
+// time. Thus the GameTest server does not watch the options files (disableConfigWatcher in config/fml.toml).
 def gameTestWorld = project.file('run-gametest/world')
 def gameTestConfig = project.file('run-gametest/config')
 def gameTestReport = project.file('run-gametest/shard-report')
@@ -101,5 +104,7 @@ tasks.named('runGameTestServer') {
         gameTestWorld.deleteDir()
         gameTestConfig.deleteDir()
         gameTestReport.deleteDir()
+        gameTestConfig.mkdirs()
+        new File(gameTestConfig, 'fml.toml').text = 'disableConfigWatcher = true\n'
     }
 }
