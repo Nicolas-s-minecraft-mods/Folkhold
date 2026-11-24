@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.core.sim.settlement.Settlement;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
+import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
@@ -43,6 +44,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -78,6 +80,18 @@ public final class VillagerSleepGameTests {
     private static final int MONSTER_DIRECTIONS = 16;
     /** The units fight the monster for this time, in ticks. */
     private static final int MONSTER_TICKS = 400;
+    /** The walker stands against the sleeper for this time, in ticks. */
+    private static final int PUSH_TICKS = 60;
+    /** The height of the top of a bed, in blocks. */
+    private static final double BED_TOP = 0.5625;
+    /** The distance between the walker and the sleeper on the Z axis: their boxes touch, in blocks. */
+    private static final double WALKER_OFFSET = 0.3;
+    /** A move of the sleeper of more than this distance off the middle of its bed goes in the message, in blocks. */
+    private static final double MOVE_LIMIT = 0.05;
+    /** {@code SleepInBed} wakes a villager at this height above its bed or lower, in blocks. */
+    private static final double SLEEP_MIN_HEIGHT = 0.4;
+    /** {@code SleepInBed} wakes a villager at this distance from the middle of its bed or more, in blocks. */
+    private static final double SLEEP_MAX_DISTANCE = 1.14;
     /** A population target that is more than the places of each test village: all the beds get a villager. */
     private static final int FULL_POPULATION = 1000;
 
@@ -142,6 +156,62 @@ public final class VillagerSleepGameTests {
                 .isPresent(), "The villager at the foot of its bed must sleep in it: " + near.getSleepingPos());
         helper.assertFalse(far.isSleeping(), "A villager 5 blocks from its bed must not lie down");
         helper.succeed();
+    }
+
+    /**
+     * A villager of a faction village in its bed stays on its bed when an other villager stands against it (see
+     * {@link VillageHomes#staysInBed}). The vanilla behavior {@code SleepInBed} wakes a villager that is lower than 0.4
+     * blocks above its bed, or farther than 1.14 blocks from the middle of the bed.
+     */
+    @GameTest(template = "arena", timeoutTicks = 200, batch = "villager_sleep_push")
+    public static void villagerInItsBedStaysWhenAnOtherVillagerTouchesIt(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        TestSupport.setDayTimeForTest(helper, NIGHT);
+        ServerLevel level = helper.getLevel();
+        // 2 beds side by side along the X axis, with their heads to the east.
+        BlockPos head = new BlockPos(5, 1, 5);
+        BlockPos nextHead = head.south();
+        for (BlockPos bedHead : List.of(head, nextHead)) {
+            helper.setBlock(bedHead.west(), Blocks.RED_BED.defaultBlockState()
+                    .setValue(BedBlock.FACING, Direction.EAST).setValue(BedBlock.PART, BedPart.FOOT));
+            helper.setBlock(bedHead, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
+                    .setValue(BedBlock.PART, BedPart.HEAD));
+        }
+        Villager sleeper = helper.spawn(EntityType.VILLAGER, head.west(2));
+        Villager walker = helper.spawn(EntityType.VILLAGER, nextHead.west(2));
+        TestSupport.atTestEnd(helper, () -> {
+            sleeper.discard();
+            walker.discard();
+        });
+        sleeper.getPersistentData().putLong(Merchants.VILLAGE_TAG, helper.absolutePos(head).asLong());
+        BlockPos bed = helper.absolutePos(head);
+        sleeper.startSleeping(bed);
+        Vec3 middle = Vec3.atCenterOf(bed);
+        // The first move of the sleeper off the middle of its bed, for the message of a failure.
+        String[] moved = {null};
+        // On each tick, the walker stands against the side of the sleeper, on the side of the next bed.
+        helper.onEachTick(() -> {
+            if (sleeper.isSleeping()) {
+                walker.setPos(sleeper.getX(), bed.getY() + BED_TOP, sleeper.getZ() + WALKER_OFFSET);
+            }
+            Vec3 position = sleeper.position();
+            if (moved[0] == null && Math.abs(position.x - middle.x) + Math.abs(position.z - middle.z) > MOVE_LIMIT) {
+                moved[0] = "tick " + helper.getTick() + " at " + position + ", sleeping " + sleeper.isSleeping()
+                        + ", pushable " + sleeper.isPushable() + ", motion " + sleeper.getDeltaMovement()
+                        + ", near " + level.getEntities(sleeper, sleeper.getBoundingBox().inflate(1.0)).stream()
+                                .map(entity -> entity.getType().toShortString() + " at " + entity.position()).toList();
+            }
+        });
+        helper.startSequence()
+                .thenIdle(PUSH_TICKS)
+                .thenExecute(() -> {
+                    helper.assertTrue(sleeper.isSleeping(), "The villager must stay asleep");
+                    helper.assertTrue(sleeper.getY() > bed.getY() + SLEEP_MIN_HEIGHT
+                            && sleeper.position().distanceTo(middle) < SLEEP_MAX_DISTANCE,
+                            "The villager must stay on its bed at " + bed.toShortString() + ": "
+                                    + sleeper.position() + ", first move: " + moved[0]);
+                })
+                .thenSucceed();
     }
 
     /**

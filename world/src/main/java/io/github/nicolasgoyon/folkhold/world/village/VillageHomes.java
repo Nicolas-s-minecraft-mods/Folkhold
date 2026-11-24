@@ -41,6 +41,7 @@ import net.minecraft.world.level.block.state.BlockState;
  *       claims a free bed) loses this bed. A bed with no villager of its place stays with its holder.</li>
  *   <li>The memory {@code HOME} stays in the save of the villager: it is the persistent home of the villager.</li>
  *   <li>At night, a villager near its free bed lies down in it (see {@link #lieDown}).</li>
+ *   <li>A villager in its bed is not pushable (see {@link #staysInBed}).</li>
  * </ul>
  */
 public final class VillageHomes {
@@ -173,6 +174,18 @@ public final class VillageHomes {
             count++;
         }
         return count;
+    }
+
+    /**
+     * True if the villager stays in its bed when an other entity touches it. The vanilla behavior {@code SleepInBed}
+     * wakes a villager that is not on its bed. Two beds can be side by side, and a villager that walks on the next bed
+     * can push the sleeper off its bed. Thus a villager of a faction village in its bed is not pushable.
+     *
+     * @param villager the villager
+     * @return true for a sleeping villager of a faction village
+     */
+    public static boolean staysInBed(Villager villager) {
+        return villager.isSleeping() && VillageFolk.isVillageFolk(villager);
     }
 
     /** The bed of a villager in this level, from its memory {@code HOME}. */
