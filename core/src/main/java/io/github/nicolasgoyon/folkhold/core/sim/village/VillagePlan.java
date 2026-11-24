@@ -617,13 +617,42 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
      */
     public static VillagePlan band(VillageSize size, int target, StreetStyle style, WallLayout inner, WallLayout ring,
             Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed) {
+        return band(size, target, style, inner, ring, terrain, foundation, ground, seed, List.of());
+    }
+
+    /**
+     * As {@link #band(VillageSize, int, StreetStyle, WallLayout, WallLayout, Predicate, Predicate, Ground, long)}, with
+     * the paths across the band.
+     *
+     * <ul>
+     *   <li>Each path keeps its rows free, with the half width of a street on each side of its middle. The free rows go
+     *       from the middle of the plan to the outside, on the side of the path.</li>
+     *   <li>The ring street on an edge that a path crosses starts at the 2 sides of this path.</li>
+     *   <li>A side with no path keeps its axis free (x = 0 or z = 0), as a band with no paths.</li>
+     * </ul>
+     *
+     * @param paths the boxes of the paths across the band in the frame of the plan, or no box for the axes
+     */
+    public static VillagePlan band(VillageSize size, int target, StreetStyle style, WallLayout inner, WallLayout ring,
+            Predicate<Box> terrain, Predicate<Box> foundation, Ground ground, long seed, List<Box> paths) {
         StreetStyle plain = new StreetStyle(style.name(), style.segment(), style.segmentPlots(), style.crossArm(),
                 style.crossPlots(), style.side(), style.home(), List.of(), style.endOverflow());
         Predicate<Box> region = box -> ring.holds(layoutBox(box.grow(BAND_OUTER - 1)))
                 && !inner.touches(layoutBox(box.grow(BAND_INNER - 1)));
         int wide = Integer.MAX_VALUE / 4;
-        List<Box> axes = List.of(new Box(-AXIS_HALF_WIDTH, -wide, AXIS_HALF_WIDTH, wide),
-                new Box(-wide, -AXIS_HALF_WIDTH, wide, AXIS_HALF_WIDTH));
+        // The middle of the free rows of each half axis: north, south, west and east.
+        int[] crossing = new int[4];
+        for (Box path : paths) {
+            boolean alongZ = path.maxZ() - path.minZ() > path.maxX() - path.minX();
+            int middle = alongZ ? Math.floorDiv(path.minX() + path.maxX(), 2) : Math.floorDiv(path.minZ() + path.maxZ(),
+                    2);
+            int center = alongZ ? path.minZ() + path.maxZ() : path.minX() + path.maxX();
+            crossing[alongZ ? (center < 0 ? 0 : 1) : (center < 0 ? 2 : 3)] = middle;
+        }
+        List<Box> axes = List.of(new Box(crossing[0] - AXIS_HALF_WIDTH, -wide, crossing[0] + AXIS_HALF_WIDTH, 0),
+                new Box(crossing[1] - AXIS_HALF_WIDTH, 0, crossing[1] + AXIS_HALF_WIDTH, wide),
+                new Box(-wide, crossing[2] - AXIS_HALF_WIDTH, 0, crossing[2] + AXIS_HALF_WIDTH),
+                new Box(0, crossing[3] - AXIS_HALF_WIDTH, wide, crossing[3] + AXIS_HALF_WIDTH));
         int middle = BAND_INNER + style.home().depth() + StreetStyle.WIDTH / 2;
         int first = AXIS_HALF_WIDTH + 1;
         List<Start> starts = new ArrayList<>();
@@ -635,9 +664,10 @@ public record VillagePlan(List<Piece> pieces, List<Plot> plots, int target, int 
             boolean alongX = side.insideX() == 0;
             int low = alongX ? Math.min(from.x(), to.x()) : Math.min(from.z(), to.z());
             int high = alongX ? Math.max(from.x(), to.x()) : Math.max(from.z(), to.z());
-            boolean axis = low < 0 && high > 0;
-            int center = axis ? 0 : Math.floorDiv(low + high, 2);
             int line = alongX ? from.z() - side.insideZ() * middle : from.x() - side.insideX() * middle;
+            int path = crossing[alongX ? (line < 0 ? 0 : 1) : (line < 0 ? 2 : 3)];
+            boolean axis = low < path && high > path;
+            int center = axis ? path : Math.floorDiv(low + high, 2);
             List<Start> pair = alongX
                     ? List.of(new Start(center + first, line, Dir.EAST), new Start(center - first, line, Dir.WEST))
                     : List.of(new Start(line, center + first, Dir.SOUTH), new Start(line, center - first, Dir.NORTH));

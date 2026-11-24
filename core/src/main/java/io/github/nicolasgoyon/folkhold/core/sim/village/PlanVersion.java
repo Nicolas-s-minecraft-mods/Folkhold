@@ -25,6 +25,8 @@ import java.util.OptionalInt;
  *       not only on its middle. A gate off the axis of its street gives a path off this axis.</li>
  *   <li>{@link #STREET_FILL}: each street of a ring band has a ramp profile, as a street of the core. Each path of a
  *       street or of a gate also fills the open holes on its 2 sides.</li>
+ *   <li>{@link #BAND_PATHS}: the plan of a ring band keeps the rows of its real paths across the band free, also off
+ *       the axes. The ring street starts at the 2 sides of each path.</li>
  * </ol>
  */
 public final class PlanVersion {
@@ -38,8 +40,10 @@ public final class PlanVersion {
     public static final int ARM_WIDTH = 4;
     /** The version of the ramp profile of the streets of the bands and of the fill on the sides of the paths. */
     public static final int STREET_FILL = 5;
+    /** The version of the band plans that keep the rows of their paths across the band free. */
+    public static final int BAND_PATHS = 6;
     /** The version of a new world: the version of the last rule. */
-    public static final int LATEST = STREET_FILL;
+    public static final int LATEST = BAND_PATHS;
 
     private PlanVersion() {
     }

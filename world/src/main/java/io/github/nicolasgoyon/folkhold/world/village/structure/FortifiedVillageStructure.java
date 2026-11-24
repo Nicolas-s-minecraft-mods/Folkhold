@@ -732,7 +732,8 @@ public final class FortifiedVillageStructure extends Structure {
                         planOutline(inner.layout(), start.center(), turn),
                         planOutline(walls.get(ring).layout(), start.center(), turn),
                         plots.plan(start.center(), turn), plots.foundation(start.center(), turn),
-                        plots.band(start.center(), turn), seed + ring + 1);
+                        plots.band(start.center(), turn), seed + ring + 1,
+                        bandPaths(walls.get(ring).pieces(), start.center(), turn));
                 PlotUses.Result bandUses = PlotUses.assign(bandPlan, missing, posts.count() - placedPosts);
                 laterHomes -= (int) bandUses.uses().stream().filter(use -> use.type() == PlotUses.Type.HOME).count();
                 VillagePlanPieces.Builder.Stage stage = pieces.plots(plain, bandPlan, bandUses, random, true,
@@ -856,6 +857,38 @@ public final class FortifiedVillageStructure extends Structure {
             }
         }
         return missing;
+    }
+
+    /**
+     * The boxes of the paths across the band of a ring in the frame of the plan (see {@link VillagePlan#band}): the
+     * paths of the pieces of the ring from the plan version {@link PlanVersion#BAND_PATHS}, else no box. With no box,
+     * the band plan keeps its axes free.
+     *
+     * @param ring     the pieces of the ring
+     * @param center   the middle of the plaza
+     * @param rotation the rotation of the plaza
+     * @return the boxes, in the frame of the plan
+     */
+    static List<VillagePlan.Box> bandPaths(List<StructurePiece> ring, BlockPos center, Rotation rotation) {
+        if (!VillagePlanVersion.atLeast(PlanVersion.BAND_PATHS)) {
+            return List.of();
+        }
+        Rotation back = switch (rotation) {
+            case CLOCKWISE_90 -> Rotation.COUNTERCLOCKWISE_90;
+            case COUNTERCLOCKWISE_90 -> Rotation.CLOCKWISE_90;
+            default -> rotation;
+        };
+        List<VillagePlan.Box> boxes = new ArrayList<>();
+        for (StructurePiece piece : ring) {
+            if (piece instanceof VillagePathPiece path) {
+                BoundingBox box = path.getBoundingBox();
+                BlockPos min = new BlockPos(box.minX() - center.getX(), 0, box.minZ() - center.getZ()).rotate(back);
+                BlockPos max = new BlockPos(box.maxX() - center.getX(), 0, box.maxZ() - center.getZ()).rotate(back);
+                boxes.add(new VillagePlan.Box(Math.min(min.getX(), max.getX()), Math.min(min.getZ(), max.getZ()),
+                        Math.max(min.getX(), max.getX()), Math.max(min.getZ(), max.getZ())));
+            }
+        }
+        return boxes;
     }
 
     /** The outline of a wall in the frame of the plan: (0, 0) is the middle of the plaza. */
