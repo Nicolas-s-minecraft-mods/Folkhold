@@ -6,6 +6,8 @@ import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.config.UnitStats;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.AnchorStrollGoal;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.FiringPositions;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.LineOfFireTargetGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.PlatformLookoutGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.ReturnToAnchorGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitHurtByTargetGoal;
@@ -55,7 +57,6 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
@@ -253,9 +254,9 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         goalSelector.addGoal(9, new RandomLookAroundGoal(this));
 
         targetSelector.addGoal(1, new UnitHurtByTargetGoal(this).setAlertOthers());
-        targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false,
+        targetSelector.addGoal(2, new LineOfFireTargetGoal<>(this, Player.class, 10,
                 target -> target instanceof Player player && canTargetFromHome(player) && isHostileTo(player)));
-        targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Mob.class, 5, true, false,
+        targetSelector.addGoal(3, new LineOfFireTargetGoal<>(this, Mob.class, 5,
                 target -> target instanceof Enemy && !(target instanceof Creeper) && canTargetFromHome(target)));
     }
 
@@ -363,6 +364,36 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
         onLookout = value;
     }
 
+    /**
+     * The firing positions of the unit on the platform of its post, or null for a unit that does not shoot from a
+     * post. A ranged unit gives its firing positions (see {@link FiringPositions}).
+     */
+    @Nullable
+    protected FiringPositions firingPositions() {
+        return null;
+    }
+
+    /** True if the unit has a post and shoots from it: it has firing positions on the platform of its post. */
+    public boolean shootsFromPost() {
+        return postPos != null && firingPositions() != null;
+    }
+
+    /**
+     * True if the unit can shoot or reach the target from where it stands. For most units, this is the line of sight
+     * from the current position. A unit that shoots from its post ({@link #shootsFromPost()}) also has a line of fire
+     * when a spot of the platform of its post has a line of fire to the target (see {@link FiringPositions}).
+     *
+     * @param target the target
+     * @return true if the unit has a line of fire to the target
+     */
+    public boolean hasLineOfFire(LivingEntity target) {
+        FiringPositions positions = firingPositions();
+        if (postPos != null && positions != null) {
+            return positions.hasLineOfFire(target);
+        }
+        return getSensing().hasLineOfSight(target);
+    }
+
     /** A unit on a lookout spot does not move back after a hit (see {@link #isOnLookout()}). */
     @Override
     public void knockback(double strength, double x, double z) {
@@ -389,12 +420,17 @@ public abstract class FactionUnit extends PathfinderMob implements GeoEntity {
     /**
      * A routed unit, or a unit that stopped a chase, does not accept a target. A unit also does not accept a target
      * that it cannot attack ({@link #canAttack(LivingEntity)}): a player in creative or spectator mode, or a player
-     * in the Peaceful difficulty. The other units and the village heart give targets with this method, so the rule
+     * in the Peaceful difficulty. A unit that shoots from its post does not accept a new target with no line of fire
+     * ({@link #hasLineOfFire}): a target in the dead zone of its tower, or out of its range. The guards on the ground
+     * handle these targets. The other units and the village heart give targets with this method, so the rule
      * applies to all targets.
      */
     @Override
     public void setTarget(@Nullable LivingEntity target) {
         if (target != null && (isRouted() || level().getGameTime() < gaveUpUntil || !canAttack(target))) {
+            return;
+        }
+        if (target != null && target != getTarget() && shootsFromPost() && !hasLineOfFire(target)) {
             return;
         }
         LivingEntity previous = getTarget();

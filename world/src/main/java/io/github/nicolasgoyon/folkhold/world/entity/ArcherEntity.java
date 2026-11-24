@@ -3,6 +3,7 @@ package io.github.nicolasgoyon.folkhold.world.entity;
 import io.github.nicolasgoyon.folkhold.world.config.UnitStats;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.CrossbowAttackGoal;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.FiringPositions;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.PlatformLookoutGoal;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.PostRangedAttackGoal;
 import io.github.nicolasgoyon.folkhold.world.registry.ModSounds.UnitVoice;
@@ -40,9 +41,13 @@ import net.minecraft.world.level.Level;
  *   <li>When the archer has a post (a tower or a wall), it stays there: it shoots from the post and does not go to
  *       a target (see {@link PostRangedAttackGoal}). An archer with no post, for example in a caravan, goes to its
  *       target as a vanilla ranged mob.</li>
- *   <li>When the archer on its post does not see its target, it goes to a spot of its platform with a line of sight,
- *       for example the edge of its tower above a target at the foot of the tower (see {@link PlatformLookoutGoal}).
- *       The rule is the same for all the weapons.</li>
+ *   <li>The archer on its post selects its targets and its firing positions with one query on the platform of its
+ *       post (see {@link FiringPositions}). It takes a target when a spot of the platform has a line of fire to it,
+ *       also a target that the parapet hides from the post. It does not take a target in the dead zone of its tower:
+ *       the guards on the ground handle it.</li>
+ *   <li>When the archer on its post does not see its target, it goes to the spot of its platform with a line of fire
+ *       that is nearest to it, for example the edge of its tower above a target at the foot of the tower (see
+ *       {@link PlatformLookoutGoal}). The rule is the same for all the weapons.</li>
  *   <li>With a crossbow, the archer charges the crossbow, aims, and shoots a bolt (see {@link CrossbowAttackGoal}).
  *       The bolt is faster than an arrow of the bow, so it does more damage.</li>
  *   <li>With a trident, the archer throws the trident (see {@link TridentThrow}). Its hand is empty while the
@@ -56,6 +61,10 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
     /** True while the archer charges its crossbow. The clients use it for the animation. */
     private static final EntityDataAccessor<Boolean> CHARGING_CROSSBOW =
             SynchedEntityData.defineId(ArcherEntity.class, EntityDataSerializers.BOOLEAN);
+    /** The firing positions on the platform of the post. The goals get it in the constructor of the entity. */
+    @Nullable
+    private FiringPositions firingPositions;
+
     public ArcherEntity(EntityType<? extends ArcherEntity> type, Level level) {
         super(type, level);
     }
@@ -85,7 +94,7 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
     protected void registerAttackGoals() {
         int interval = WorldConfig.ARCHER_ATTACK_INTERVAL_TICKS.get();
         float radius = WorldConfig.ARCHER_ATTACK_RADIUS.get().floatValue();
-        goalSelector.addGoal(2, new PlatformLookoutGoal(this));
+        goalSelector.addGoal(2, new PlatformLookoutGoal(this, firingPositions()));
         goalSelector.addGoal(2, new PostRangedAttackGoal(this, interval, radius) {
             // The goal continues while the trident flies: the time between two throws starts at the throw.
             @Override
@@ -113,6 +122,14 @@ public class ArcherEntity extends FactionUnit implements RangedAttackMob {
             }
         });
         goalSelector.addGoal(3, new CrossbowAttackGoal(this, false, radius, 1.0));
+    }
+
+    @Override
+    protected FiringPositions firingPositions() {
+        if (firingPositions == null) {
+            firingPositions = new FiringPositions(this, () -> WorldConfig.ARCHER_ATTACK_RADIUS.get());
+        }
+        return firingPositions;
     }
 
     @Override

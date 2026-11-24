@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.gametest;
 
 import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
+import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ArcherEntity;
 import io.github.nicolasgoyon.folkhold.world.registry.ModEntities;
 import java.util.ArrayList;
@@ -130,8 +131,11 @@ public final class ArcherTowerGameTests {
     /**
      * The measure of the firing positions: for each target position of {@link #cases()} and each {@link Mode}, the
      * log has a line {@code Archer tower measure |} with the name of the case, the mode, a line of fire from the post,
-     * a line of fire from a position of the platform, the target of the archer, the time to the first hit, and a step
-     * off the platform. The test does not check the results.
+     * a line of fire in range from a position of the platform, the target of the archer, the time to the first hit,
+     * and a step off the platform.
+     *
+     * <p>The test checks that the archer hits the husk in each case with a line of fire in range from a position of
+     * the platform, and that the archer never leaves the platform.
      */
     @GameTest(template = "arena_large", timeoutTicks = 30000, batch = "archer_tower_measure", skyAccess = true)
     public static void towerArcherFiringPositions(GameTestHelper helper) {
@@ -146,6 +150,17 @@ public final class ArcherTowerGameTests {
             helper.assertTrue(measure.done(), "The measure is not complete");
             archer.discard();
             measure.results.forEach(result -> FolkholdWorld.LOGGER.info(result.line()));
+            List<String> problems = new ArrayList<>();
+            for (Result result : measure.results) {
+                String name = result.target().name() + " (" + result.mode() + ")";
+                if (result.fromPlatform() && !result.hit()) {
+                    problems.add(name + ": no hit");
+                }
+                if (result.offPlatform()) {
+                    problems.add(name + ": off the platform");
+                }
+            }
+            helper.assertTrue(problems.isEmpty(), "Problems of the archer on the tower: " + problems);
         });
     }
 
@@ -225,7 +240,7 @@ public final class ArcherTowerGameTests {
             }
             if (mode == Mode.ALERT) {
                 archer.setTarget(husk);
-                acquired = true;
+                acquired = archer.getTarget() == husk;
             }
         }
 
@@ -233,7 +248,7 @@ public final class ArcherTowerGameTests {
             BlockPos pos = helper.absolutePos(target.pos());
             husk.teleportTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
             fromPost = canSee(archer, Vec3.atBottomCenterOf(post), husk.getEyePosition());
-            fromPlatform = hasPlatformLine(archer, helper.absolutePos(ORIGIN), post, husk.getEyePosition());
+            fromPlatform = hasPlatformLine(archer, helper.absolutePos(ORIGIN), post, husk);
             acquired |= archer.getTarget() == husk;
             placed = true;
             phaseTick = 0;
@@ -247,6 +262,52 @@ public final class ArcherTowerGameTests {
             index++;
             rest = REST_TICKS;
         }
+    }
+
+    /**
+     * A husk in a closed box at the foot of the tower is in the dead zone: no position of the platform has a line of
+     * fire to it. A second husk is farther from the archer, and the parapet hides it from the post. The archer does not
+     * take the husk in the box, also from an alert. It takes the second husk, and hits it from a spot of the platform.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 600, batch = "archer_tower_dead_zone", skyAccess = true)
+    public static void towerArcherTakesATargetOutOfTheDeadZone(GameTestHelper helper) {
+        BlockPos post = placeTower(helper);
+        ArcherEntity archer = TestSupport.spawnUnit(helper, ModEntities.ARCHER.get(), POST);
+        archer.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+        archer.setPostPos(post);
+        archer.setHomePos(post);
+        BlockPos foot = ORIGIN.offset(-1, 1, 2);
+        for (BlockPos pos : List.of(foot.west(), foot.north(), foot.south(), foot.above(2))) {
+            helper.setBlock(pos, Blocks.STONE);
+            helper.setBlock(pos.above(), Blocks.STONE);
+        }
+        Husk hidden = helper.spawn(EntityType.HUSK, foot);
+        hidden.setNoAi(true);
+        Husk open = helper.spawn(EntityType.HUSK, ORIGIN.offset(2, 1, -6));
+        open.setNoAi(true);
+        helper.assertTrue(archer.distanceToSqr(hidden) < archer.distanceToSqr(open),
+                "The husk in the box must be nearer to the archer");
+        archer.setTarget(hidden);
+        boolean[] tookHidden = {archer.getTarget() == hidden};
+        boolean[] offPlatform = {false};
+        helper.onEachTick(() -> {
+            tookHidden[0] |= archer.getTarget() == hidden;
+            offPlatform[0] |= !isOnPlatform(archer, post);
+        });
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(open.getLastHurtByMob() == archer,
+                        "The archer must hit the husk out of the dead zone"))
+                .thenExecute(() -> {
+                    archer.discard();
+                    hidden.discard();
+                    open.discard();
+                    helper.assertFalse(tookHidden[0], "The archer must not take the husk in the dead zone");
+                    helper.assertTrue(hidden.getHealth() == hidden.getMaxHealth(),
+                            "The husk in the dead zone must not get a hit");
+                    helper.assertFalse(offPlatform[0], "The archer must stay on the platform");
+                })
+                .thenSucceed();
     }
 
     /** A position on the line from the middle of the tower through the target, at {@link #APPROACH_DISTANCE}. */
@@ -263,18 +324,22 @@ public final class ArcherTowerGameTests {
 
     /**
      * The reference test of a line of fire from the platform: true if a position of the feet of the archer on the
-     * square of the tower, on a grid of {@link #GRID}, has a line from the eyes to the eyes of the target. A position
-     * counts when the body of the archer fits there and stands on a block, at the level of the post or of the parapet.
+     * square of the tower, on a grid of {@link #GRID}, has a line from the eyes to the eyes of the target, with the
+     * target in the attack radius. A position counts when the body of the archer fits there and stands on a block, at
+     * the level of the post or of the parapet.
      */
-    static boolean hasPlatformLine(ArcherEntity archer, BlockPos origin, BlockPos post, Vec3 targetEyes) {
+    static boolean hasPlatformLine(ArcherEntity archer, BlockPos origin, BlockPos post, Husk target) {
         ServerLevel level = (ServerLevel) archer.level();
+        Vec3 targetEyes = target.getEyePosition();
+        double radius = WorldConfig.ARCHER_ATTACK_RADIUS.get();
         int steps = (int) Math.round(TOWER / GRID);
         for (double floor : new double[] {post.getY(), post.getY() + 0.5}) {
             for (int i = 0; i <= steps; i++) {
                 for (int j = 0; j <= steps; j++) {
                     Vec3 feet = new Vec3(origin.getX() + i * GRID, floor, origin.getZ() + j * GRID);
                     AABB box = archer.getDimensions(archer.getPose()).makeBoundingBox(feet);
-                    if (level.noCollision(archer, box) && !level.noCollision(archer, box.move(0.0, -0.01, 0.0))
+                    if (feet.distanceToSqr(target.position()) <= radius * radius && level.noCollision(archer, box)
+                            && !level.noCollision(archer, box.move(0.0, -0.01, 0.0))
                             && canSee(archer, feet, targetEyes)) {
                         return true;
                     }
