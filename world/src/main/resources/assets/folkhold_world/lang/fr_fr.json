@@ -498,6 +498,7 @@
   "folkhold_world.configuration.scheduleMarketDayOffers": "Offres en plus le jour de marché",
   "folkhold_world.configuration.scheduleVillageMarketDays": "Jour de marché propre à chaque village",
   "folkhold_world.configuration.scheduleWorkerSpreadTicks": "Décalage des travailleurs (ticks)",
+  "folkhold_world.configuration.scheduleNearHome": "Villageois oisifs près de leur maison",
   "entity.minecraft.villager.folkhold_world.inhabitant": "Habitant",
   "folkhold_world.configuration.inhabitantLimit": "Limite d'habitants par village (0 : aucune limite)",
   "folkhold_world.configuration.detachment": "Détachements",

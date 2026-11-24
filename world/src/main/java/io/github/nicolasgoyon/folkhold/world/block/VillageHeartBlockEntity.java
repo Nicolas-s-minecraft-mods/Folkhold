@@ -61,6 +61,7 @@ import io.github.nicolasgoyon.folkhold.world.village.VillageRepairs;
 import io.github.nicolasgoyon.folkhold.world.village.VillageSizes;
 import io.github.nicolasgoyon.folkhold.world.village.WallZones;
 import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
+import io.github.nicolasgoyon.folkhold.world.village.schedule.IdleVillagers;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -985,6 +986,7 @@ public class VillageHeartBlockEntity extends BlockEntity {
         List<BlockPos> beds = homeBeds(settlement.get(), seats);
         VillageHomes.claim(serverLevel, worldPosition, inhabitants, seats, beds);
         VillageHomes.lieDown(serverLevel, inhabitants);
+        IdleVillagers.update(serverLevel, inhabitants);
         workers.update(serverLevel, this, inhabitants, seats, beds, settlement.get().jobPosts().orElse(List.of()));
         WorkerSkills.applyAll(settlement.get(), inhabitants);
         FolkNavigation.leaveWall(worldPosition, wallZones(serverLevel), inhabitants);

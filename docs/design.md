@@ -1063,6 +1063,14 @@ A worker is an adult villager of a faction village with the profession of a job.
 | Home | `IDLE` | Near the home |
 | Sleep | `REST` | A bed of the home of the worker (memory `HOME`, see "Households") |
 
+**Idle villagers near their homes** (`IdleVillagers`, option `villagersNearHome` in the section `schedule`, default true). The heart applies these rules at each check of its villagers.
+
+- An adult inhabitant with no job has no profession, or the profession inhabitant, or is a nitwit. It gets the inhabitant schedule: `IDLE` by day and `REST` in the sleep phase. Thus it has no meeting at the bell of the plaza.
+- An adult villager with the activity `IDLE` and a home (memory `HOME`) at more than 16 blocks walks back to its home. A vanilla walk to a place far from the home stops. The walk stops at 4 blocks from the bed. This rule applies to the workers in their phase at home, and to the inhabitants with no job. The builders, the handymen and the merchants keep their own work.
+- The workers keep the market phase at the market sign. The trade with the player uses it.
+- With the option off, an inhabitant with no job gets the vanilla schedule again, and no villager walks back to its home.
+- The GameTests `IdleVillagerGameTests` check the rules.
+
 - **Schedule**: `DaySchedule.transitions(step)` gives the phase changes of a delay step, sorted by time. Two bounds at the same time make an empty phase: only the later phase of the day stays. Each delay step has one vanilla `Schedule`. The vanilla villager sets its default schedule each time that it builds its brain goals. This occurs at the creation, at the load, and at `refreshBrain` after a change of profession or at the adult age. The mixin `VillagerMixin` gives the worker schedule at the end of `registerBrainGoals`, so all these paths keep it. A change of profession at night wakes the worker, and the activity `REST` puts it in its bed again.
 - **Job model**: each home with a job sign is one post, and the whole household of the home does its job. The job site of a worker is the job sign of the home of its bed. A worker with no bed in the home of a post (a worker of a legacy job slot) has no job sign. Thus it has no activity `WORK`: it goes to the market and to its bed.
 - **Other inhabitants**: the inhabitants with no job, the builders and the handymen keep the vanilla schedule. The builders and the handymen keep their work.
