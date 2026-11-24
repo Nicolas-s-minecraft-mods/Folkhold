@@ -4,6 +4,7 @@ import os
 import unittest
 
 import curseforge_publish
+import version
 
 TYPES = [{"id": 1, "slug": "minecraft-1-21"}, {"id": 2, "slug": "modloader"}, {"id": 3, "slug": "java"},
          {"id": 4, "slug": "environment"}, {"id": 5, "slug": "bukkit"}]
@@ -44,8 +45,13 @@ class GameVersionTest(unittest.TestCase):
 
 class MetadataTest(unittest.TestCase):
     def test_release_type(self):
-        self.assertEqual(curseforge_publish.release_type("0.35.2"), "beta")
-        self.assertEqual(curseforge_publish.release_type("1.0.0"), "release")
+        """The release type of each file is the value of release_type in gradle.properties."""
+        expected = version.release_type()
+        self.assertIn(expected, ("alpha", "beta", "release"))
+        for module, project in projects().items():
+            with self.subTest(module=module):
+                data = curseforge_publish.metadata(project, "0.35.0", "notes", [10])
+                self.assertEqual(data["releaseType"], expected)
 
     def test_relations(self):
         data = curseforge_publish.metadata(projects()["world"], "0.35.0", "notes", [10])

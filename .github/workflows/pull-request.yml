@@ -137,6 +137,13 @@ jobs:
               echo "The tag \`v${VERSION}\` exists: the merge makes no release."
             else
               echo "The merge makes the release **v${VERSION}**."
+              type=$(python3 scripts/version.py release-type)
+              if [ "$type" = release ]; then
+                echo "Release type: **release** (\`release_type\` in \`gradle.properties\`)."
+              else
+                echo "Release type: **${type}** (\`release_type\` in \`gradle.properties\`)." \
+                  "The GitHub Release is a pre-release."
+              fi
             fi
             echo
             cat "$NOTES"
