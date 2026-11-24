@@ -55,10 +55,13 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *       {@link BuilderMaterials}). With no ladder in the stock, the rescue waits, and the heart screen says it. The
  *       scaffolding uses no materials, as the scaffolding of a site.</li>
  *   <li>The blocked villager walks to the bottom of the column and climbs to the exit.</li>
- *   <li>The villager walks to the heart. Its walks do not go back into the hole: a hole with the column stays a pit
- *       (see {@link io.github.nicolasgoyon.folkhold.world.village.Pits}). When it is {@value #LEAVE_DISTANCE}
- *       blocks from the exit, or after {@value #LEAVE_TICKS} ticks, the builder removes the blocks of the column
- *       from the top. A removed ladder goes back to the stock.</li>
+ *   <li>The villager walks to the heart. The walk starts when the villager is on the ground at the exit. A villager
+ *       with no walk target gets the walk again each {@value #WALK_REFRESH} ticks. The villager and the builder do not
+ *       interact during the walk: a vanilla interaction gives the villager a walk to the builder. The walks of the
+ *       villager do not go back into the hole: a hole with the column stays a pit (see
+ *       {@link io.github.nicolasgoyon.folkhold.world.village.Pits}). When it is {@value #LEAVE_DISTANCE} blocks from
+ *       the exit, or after {@value #LEAVE_TICKS} ticks, the builder removes the blocks of the column from the top. A
+ *       removed ladder goes back to the stock.</li>
  *   <li>When the villager still has no way to the heart (a ledge in a deep hole), the next check starts a new rescue
  *       for it at once.</li>
  *   <li>A rescue removes its blocks {@value #TIME_LIMIT} ticks after the end of the column, also with no builder. The
@@ -96,8 +99,8 @@ public final class VillageRescues {
     static final float WALK_SPEED = 0.6F;
     /** A villager at the bottom of the column is this near the middle of the column, in blocks. */
     private static final double AT_BASE = 0.3;
-    /** The builder gets a new walk target each this number of ticks. */
-    private static final int WALK_REFRESH = 20;
+    /** The builder and the villager of a rescue get a new walk target each this number of ticks. */
+    static final int WALK_REFRESH = 20;
     private static final String BLOCKS_TAG = "Blocks";
     private static final String POS_TAG = "Pos";
     private static final String PREVIOUS_TAG = "Previous";
@@ -313,6 +316,8 @@ public final class VillageRescues {
         /** True when the villager has no way after the climb: it needs a new rescue. */
         private boolean again;
         private boolean climbing;
+        /** The tick of the leave step with the last walk to the heart, or -1 before. */
+        private int walkAt = -1;
 
         Rescue(UUID target, RescuePlan plan) {
             this.target = target;
@@ -337,7 +342,7 @@ public final class VillageRescues {
                 case MOVE -> move(worker);
                 case PLACE -> place(level, heart, worker);
                 case CLIMB -> climb(mob);
-                case LEAVE -> leave(heart.getBlockPos(), mob);
+                case LEAVE -> leave(heart.getBlockPos(), mob, worker);
                 case CLEAR -> clear(level, heart, worker);
                 case DONE -> {
                 }
@@ -463,20 +468,56 @@ public final class VillageRescues {
             mob.resetFallDistance();
         }
 
-        private void leave(BlockPos heart, @Nullable PathfinderMob mob) {
+        private void leave(BlockPos heart, @Nullable PathfinderMob mob, @Nullable Villager worker) {
             if (mob == null) {
                 setState(State.CLEAR);
                 return;
             }
-            if (stateTicks == 1 && mob instanceof Villager villager) {
-                villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(heart, WALK_SPEED,
-                        BlockedVillagers.HEART_DISTANCE));
+            if (mob instanceof Villager villager) {
+                walkToHeart(villager, heart, worker);
             }
             if (mob.distanceToSqr(Vec3.atBottomCenterOf(plan.exit())) > LEAVE_DISTANCE * LEAVE_DISTANCE
                     || stateTicks >= LEAVE_TICKS) {
                 again = !FolkNavigation.hasWay(mob, heart, BlockedVillagers.HEART_DISTANCE);
                 setState(State.CLEAR);
             }
+        }
+
+        /**
+         * Gives the villager a walk to the heart, and stops its interactions with the builder.
+         *
+         * <ul>
+         *   <li>The path finder gives no path to a villager that is not on the ground. A villager with no path loses
+         *       its walk target. Thus the walk starts on the ground. With no walk target, the villager gets the walk
+         *       again each {@value #WALK_REFRESH} ticks.</li>
+         *   <li>An interaction of two villagers (a vanilla trade or a vanilla meeting) gives each villager a walk to
+         *       the other. The villager stops its interactions, and the builder stops its interaction with the
+         *       villager. A villager with a walk to another target gets the walk to the heart again at once.</li>
+         * </ul>
+         */
+        private void walkToHeart(Villager villager, BlockPos heart, @Nullable Villager worker) {
+            Brain<Villager> brain = villager.getBrain();
+            brain.eraseMemory(MemoryModuleType.INTERACTION_TARGET);
+            if (worker != null) {
+                Brain<Villager> workerBrain = worker.getBrain();
+                if (workerBrain.getMemory(MemoryModuleType.INTERACTION_TARGET).filter(villager::equals).isPresent()) {
+                    workerBrain.eraseMemory(MemoryModuleType.INTERACTION_TARGET);
+                    workerBrain.eraseMemory(MemoryModuleType.WALK_TARGET);
+                }
+            }
+            if (!villager.onGround()) {
+                return;
+            }
+            Optional<WalkTarget> walk = brain.getMemory(MemoryModuleType.WALK_TARGET);
+            if (walk.isPresent() && walk.get().getTarget().currentBlockPosition().equals(heart)) {
+                return;
+            }
+            if (walk.isEmpty() && walkAt >= 0 && stateTicks - walkAt < WALK_REFRESH) {
+                return;
+            }
+            brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(heart, WALK_SPEED,
+                    BlockedVillagers.HEART_DISTANCE));
+            walkAt = stateTicks;
         }
 
         private void clear(ServerLevel level, VillageHeartBlockEntity heart, @Nullable Villager worker) {
