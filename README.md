@@ -49,7 +49,7 @@ The modpack is the simple way to play. It contains the Folkhold mods and a selec
 3. Start the game and create a new world.
 4. Optional: pre-generate the area around the spawn with Chunky. The game then generates fewer chunks during the play, for example with an elytra or a boat on ice. Use the commands `/chunky spawn`, `/chunky radius 2000` and `/chunky start` (cheats must be on). A radius of 2000 blocks is about 62,500 chunks: the generation takes time, and the world uses more disk space. Chunky continues after a restart of the game.
 
-To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance. The instance needs NeoForge 21.1.259 or later, [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later and [Cartofold](https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases) 0.43.6 or later.
+To use the mods without the modpack, put `folkhold_core`, `folkhold_blocks` and `folkhold_world` from the release in the `mods` folder of a Minecraft 1.21.1 instance. The instance needs NeoForge 21.1.259 or later, [GeckoLib](https://modrinth.com/mod/geckolib) 4.9.3 or later and [Cartofold](https://github.com/Nicolas-s-minecraft-mods/Cartofold/releases) 0.43.6 or later. The client also needs [Confee](https://www.curseforge.com/minecraft/mc-mods/confee) 0.2.0 or later. `folkhold_events` and `folkhold_balance` are optional.
 
 ## Modules
 
@@ -61,7 +61,7 @@ The project has two libraries and three mods. All mods share one version.
 | `blocks` | `folkhold_blocks` | Library of the Folkhold blocks. The blocks act as similar vanilla blocks. The other mods add the game logic. |
 | `world` | `folkhold_world` | Factions, villages, economy, caravans, quests |
 | `balance` | `folkhold_balance` | A limit for the fast nights of the mod Slumber. Planned: farm limits, villager budgets, chunk loading. |
-| `events` | `folkhold_events` | Planned: earthquakes, collapses. The mod is empty. |
+| `events` | `folkhold_events` | Natural events: earthquakes and storms. A stabilizer block protects the buildings near it. |
 
 The packwiz modpack (`modpack/`) adds existing mods for performance, nature and terrain. It also has the mods Markethold (trades), Runehold (enchantments and anvil) and Railhold (trains).
 
