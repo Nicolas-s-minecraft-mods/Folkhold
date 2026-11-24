@@ -22,6 +22,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.server.level.ServerLevel;
@@ -31,6 +32,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.schedule.Activity;
@@ -161,7 +163,8 @@ public final class VillagerSleepGameTests {
     /**
      * A villager of a faction village in its bed stays on its bed when an other villager stands against it (see
      * {@link VillageHomes#staysInBed}). The vanilla behavior {@code SleepInBed} wakes a villager that is lower than 0.4
-     * blocks above its bed, or farther than 1.14 blocks from the middle of the bed.
+     * blocks above its bed, or farther than 1.14 blocks from the middle of the bed. Each villager has its bed as its
+     * home, as in a village.
      */
     @GameTest(template = "arena", timeoutTicks = 200, batch = "villager_sleep_push")
     public static void villagerInItsBedStaysWhenAnOtherVillagerTouchesIt(GameTestHelper helper) {
@@ -185,6 +188,10 @@ public final class VillagerSleepGameTests {
         });
         sleeper.getPersistentData().putLong(Merchants.VILLAGE_TAG, helper.absolutePos(head).asLong());
         BlockPos bed = helper.absolutePos(head);
+        // Each villager holds the ticket of its bed and has the bed as its home, as after VillageHomes#lieDown. With
+        // no home, the vanilla activity REST gives a walk target, and the villager walks in its bed.
+        claimBed(level, sleeper, bed);
+        claimBed(level, walker, helper.absolutePos(nextHead));
         sleeper.startSleeping(bed);
         Vec3 middle = Vec3.atCenterOf(bed);
         // The first move of the sleeper off the middle of its bed, for the message of a failure.
@@ -198,6 +205,11 @@ public final class VillagerSleepGameTests {
             if (moved[0] == null && Math.abs(position.x - middle.x) + Math.abs(position.z - middle.z) > MOVE_LIMIT) {
                 moved[0] = "tick " + helper.getTick() + " at " + position + ", sleeping " + sleeper.isSleeping()
                         + ", pushable " + sleeper.isPushable() + ", motion " + sleeper.getDeltaMovement()
+                        + ", walk target " + sleeper.getBrain().getMemory(MemoryModuleType.WALK_TARGET)
+                                .map(target -> target.getTarget().currentBlockPosition().toShortString()).orElse("none")
+                        + ", home " + sleeper.getBrain().getMemory(MemoryModuleType.HOME)
+                                .map(home -> home.pos().toShortString()).orElse("none")
+                        + ", activity " + sleeper.getBrain().getActiveNonCoreActivity().orElse(null)
                         + ", near " + level.getEntities(sleeper, sleeper.getBoundingBox().inflate(1.0)).stream()
                                 .map(entity -> entity.getType().toShortString() + " at " + entity.position()).toList();
             }
@@ -212,6 +224,15 @@ public final class VillagerSleepGameTests {
                                     + sleeper.position() + ", first move: " + moved[0]);
                 })
                 .thenSucceed();
+    }
+
+    /** Gives a bed to a villager: the villager takes the ticket of the bed and gets the bed as its home. */
+    private static void claimBed(ServerLevel level, Villager villager, BlockPos bed) {
+        BlockPos taken = level.getPoiManager()
+                .take(type -> type.is(PoiTypes.HOME), (type, pos) -> pos.equals(bed), bed, 1)
+                .orElseThrow(() -> new GameTestAssertException("The bed at " + bed.toShortString()
+                        + " must have a free ticket"));
+        villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), taken));
     }
 
     /**
