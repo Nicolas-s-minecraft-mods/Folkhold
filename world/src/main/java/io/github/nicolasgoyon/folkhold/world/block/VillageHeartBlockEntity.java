@@ -23,6 +23,7 @@ import io.github.nicolasgoyon.folkhold.world.entity.FactionGolemEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
 import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
 import io.github.nicolasgoyon.folkhold.world.entity.VillageCat;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.UsePassageGoal;
 import io.github.nicolasgoyon.folkhold.world.faction.Cultures;
 import io.github.nicolasgoyon.folkhold.world.faction.FactionVisuals;
 import io.github.nicolasgoyon.folkhold.world.faction.Reputations;
@@ -96,8 +97,10 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
@@ -108,6 +111,7 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.event.EventHooks;
 
 /**
@@ -136,6 +140,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
     private static final int ROTATION_INTERVAL = 400;
     /** The heart checks the end of the alert once each second. */
     private static final int CHECK_INTERVAL = 20;
+    /** At night, the heart does not close a gate with a monster or a raider at this distance or nearer, in blocks. */
+    private static final double GATE_ENEMY_DISTANCE = 16.0;
     /** The heart checks the pens of its job buildings at this interval, in ticks (see {@link VillagePens}). */
     private static final int PEN_INTERVAL = 200;
     /** The name of the search of the units in the simulation profiler (see {@link #getUnits()}). */
@@ -1493,6 +1499,36 @@ public class VillageHeartBlockEntity extends BlockEntity {
         assignStations();
     }
 
+    /**
+     * Closes the open fence gates of the gates of the village at night, at each check of the heart in a calm
+     * village. A gate with an entity in it, or on the path of a mob near it, stays open (see
+     * {@link UsePassageGoal#isFree}). A gate with a monster or a raider at {@value #GATE_ENEMY_DISTANCE} blocks or
+     * nearer also stays open: a raider keeps the gate that it forced. Thus a gate stays closed at night when the mob that opened it did not close it,
+     * for example a unit with an entity near the gate at the end of its goal. A villager or a unit with a path through
+     * the gate opens it again.
+     *
+     * @return the number of fence gates that the heart closed
+     */
+    public int closeGates() {
+        if (level == null || level.isClientSide()) {
+            return 0;
+        }
+        int count = 0;
+        for (BlockPos gate : layout.gates()) {
+            BlockState gateState = level.getBlockState(gate);
+            if (gateState.getBlock() instanceof FenceGateBlock && gateState.getValue(FenceGateBlock.OPEN)
+                    && UsePassageGoal.isFree(level, gate) && level.getEntitiesOfClass(Mob.class,
+                            new AABB(gate).inflate(GATE_ENEMY_DISTANCE), mob -> mob instanceof Enemy).isEmpty()) {
+                level.setBlock(gate, gateState.setValue(FenceGateBlock.OPEN, false), Block.UPDATE_ALL);
+                if (count == 0) {
+                    level.playSound(null, gate, SoundEvents.FENCE_GATE_CLOSE, SoundSource.BLOCKS, 1.0F, 1.0F);
+                }
+                count++;
+            }
+        }
+        return count;
+    }
+
     /** Lights all the braziers of the village, or puts them all out. */
     private void setBraziers(boolean lit) {
         if (level == null) {
@@ -1861,6 +1897,8 @@ public class VillageHeartBlockEntity extends BlockEntity {
         }
         if (heart.layout.isScanned() && level.isNight() != heart.nightMode) {
             heart.applyDayNight(level.isNight());
+        } else if (heart.layout.isScanned() && heart.nightMode && heart.alertState == AlertState.CALM) {
+            heart.closeGates();
         }
         if (heart.layout.isScanned() && !level.isNight() && heart.alertState == AlertState.CALM) {
             heart.advanceRounds();
