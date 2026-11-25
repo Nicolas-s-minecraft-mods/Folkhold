@@ -28,6 +28,7 @@ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.PathNavigationRegion;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Node;
@@ -81,6 +82,10 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       the gate on its path. At night, the villager closes the gate after it (see {@link UsePassageGoal}). An other fence gate, for example
  *       the gate of a pen, stays closed for the villagers. During an alert, the villagers do not open the
  *       gates.</li>
+ *   <li>A block with a new collision shape asks for a new search of the paths near it (vanilla
+ *       {@code ServerLevel.sendBlockUpdated}). A wooden door and a gate of the calm village are open for this path
+ *       finder in both states. Thus a door or a gate that opens or closes asks for no new search of the path of a
+ *       villager of the village (see {@link #shouldRecomputePath}).</li>
  *   <li>Routes through a gate (see {@link #routeThroughGate}): a long search with no complete path can have a wall of
  *       the village between the villager and its target. For example, the inner wall of a town stands between the
  *       core and the homes of the ring band. The path along the wall to a gate and back is long, and the search
@@ -315,6 +320,30 @@ public final class FolkNavigation extends GroundPathNavigation {
     /** The number of the path searches of this navigation: a repeat of a failed search is not a search. */
     public long searches() {
         return searches;
+    }
+
+    /**
+     * A new block at a position asks for a new search of the path of the villager near it. A wooden door and a gate
+     * of the village are open for the path finder of a villager of the village in both states (see the rules of the
+     * class). Thus a door or a gate of the village that opens or closes does not ask for a new search.
+     *
+     * @param pos the position of the new block
+     * @return true for a new search of the path
+     */
+    @Override
+    public boolean shouldRecomputePath(BlockPos pos) {
+        if (mob instanceof Villager villager && VillageFolk.isVillageFolk(villager)
+                && isOpenBothWays(villager, pos)) {
+            return false;
+        }
+        return super.shouldRecomputePath(pos);
+    }
+
+    /** True if the block at the position is a wooden door, or a fence gate of a gate of the calm village. */
+    private boolean isOpenBothWays(Villager villager, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        return DoorBlock.isWoodenDoor(state)
+                || (state.getBlock() instanceof FenceGateBlock && isOpenableGate(villager, pos));
     }
 
     /**
