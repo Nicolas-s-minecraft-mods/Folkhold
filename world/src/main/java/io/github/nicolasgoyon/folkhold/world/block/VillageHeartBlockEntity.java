@@ -305,6 +305,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
         return villageId;
     }
 
+    /** True if the heart applied the night: the gates of the village are closed (see {@link #applyDayNight}). */
+    public boolean isNightMode() {
+        return nightMode;
+    }
+
     public AlertState getAlertState() {
         return alertState;
     }

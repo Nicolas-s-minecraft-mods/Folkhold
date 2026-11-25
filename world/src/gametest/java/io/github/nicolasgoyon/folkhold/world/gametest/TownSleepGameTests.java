@@ -31,6 +31,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -56,6 +57,8 @@ public final class TownSleepGameTests {
     private static final int NIGHT_TICKS = 2400;
     /** The test waits this number of ticks after the first night tick of the level, for the night check of the heart. */
     private static final int GATE_CHECK_TICKS = 100;
+    /** The message of an open gate gives the entities at this distance from the gate or nearer, in blocks. */
+    private static final double NEAR_GATE = 4.0;
 
     private TownSleepGameTests() {
     }
@@ -159,7 +162,11 @@ public final class TownSleepGameTests {
                     for (BlockPos gate : heart[0].getLayout().gates()) {
                         BlockState state = level.getBlockState(gate);
                         if (state.getBlock() instanceof FenceGateBlock && state.getValue(FenceGateBlock.OPEN)) {
-                            open.add(gate.toShortString());
+                            open.add(gate.toShortString() + " near " + level.getEntitiesOfClass(Entity.class,
+                                    new AABB(gate).inflate(NEAR_GATE)).stream()
+                                    .map(entity -> entity.getType().toShortString() + " at "
+                                            + entity.blockPosition().toShortString())
+                                    .toList());
                         }
                     }
                     helper.assertTrue(open.isEmpty(), "Each gate must be closed at night: open " + open);

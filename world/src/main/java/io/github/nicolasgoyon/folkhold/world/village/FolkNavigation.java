@@ -78,7 +78,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       of the failed search stops this rule.</li>
  *   <li>The gates of the village (see {@link VillageHeartBlockEntity#gateSet}): with the village calm, a closed fence
  *       gate of a gate is a closed wooden door for the path finder of a villager of the village. The villager opens
- *       the gate on its path and closes it after it (see {@link UsePassageGoal}). An other fence gate, for example
+ *       the gate on its path. At night, the villager closes the gate after it (see {@link UsePassageGoal}). An other fence gate, for example
  *       the gate of a pen, stays closed for the villagers. During an alert, the villagers do not open the
  *       gates.</li>
  *   <li>Routes through a gate (see {@link #routeThroughGate}): a long search with no complete path can have a wall of
@@ -258,7 +258,7 @@ public final class FolkNavigation extends GroundPathNavigation {
             return;
         }
         if (passage == null) {
-            passage = new UsePassageGoal(villager, pos -> isOpenableGate(villager, pos));
+            passage = new UsePassageGoal(villager, pos -> isOpenableGate(villager, pos), () -> isNight(villager));
         }
         if (passageRunning) {
             if (passage.canContinueToUse()) {
@@ -271,6 +271,12 @@ public final class FolkNavigation extends GroundPathNavigation {
             passage.start();
             passageRunning = true;
         }
+    }
+
+    /** True if the heart of the village of the villager applied the night: the gates of the village are closed. */
+    private static boolean isNight(Villager villager) {
+        VillageHeartBlockEntity heart = heartOf(villager);
+        return heart != null && heart.isNightMode();
     }
 
     /** True if the position is a fence gate of a gate of the village of the villager, with the village calm. */
