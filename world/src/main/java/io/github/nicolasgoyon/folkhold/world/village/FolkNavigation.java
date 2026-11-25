@@ -117,7 +117,10 @@ public final class FolkNavigation extends GroundPathNavigation {
     static final int MAX_WAY_RANGE = 160;
     /** The search of a way visits this number of nodes at most for each block of its range. */
     static final int WAY_NODES_PER_BLOCK = 32;
-    /** The check of a step up (see {@link #allowsStepUp}) makes the box of the villager smaller by this margin. */
+    /**
+     * The check of a step up (see {@link #allowsStepUp}) and the start of a path (see {@link Evaluator#getStart}) make
+     * the box of the villager smaller by this margin.
+     */
     private static final double BOX_MARGIN = 1.0E-7;
 
     /**
@@ -604,6 +607,38 @@ public final class FolkNavigation extends GroundPathNavigation {
             gates = LongSets.EMPTY_SET;
             pits.clear();
             expanded = null;
+        }
+
+        /**
+         * The start node of a path is a cell under the box of the mob. When the cell of the mob is not a start, the
+         * vanilla start is the first corner of the box that is a start. A side of the box can touch a block, for
+         * example a barrel. Then the corner on this side is in the cell of the block next to the box. This cell can
+         * be across a corner of 2 blocks, for example a fence post and a barrel. The mob cannot walk to it, and it
+         * stays in the corner. This rule makes the box smaller by a very small margin, and takes the first corner of
+         * this box that is a start.
+         */
+        @Override
+        public Node getStart() {
+            Node start = super.getStart();
+            AABB box = mob.getBoundingBox().deflate(BOX_MARGIN, 0.0, BOX_MARGIN);
+            if (isUnder(box, start.x, start.z)) {
+                return start;
+            }
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+            for (double x : new double[] {box.minX, box.maxX}) {
+                for (double z : new double[] {box.minZ, box.maxZ}) {
+                    pos.set(Mth.floor(x), start.y, Mth.floor(z));
+                    if (canStartAt(pos)) {
+                        return getStartNode(pos);
+                    }
+                }
+            }
+            return start;
+        }
+
+        private static boolean isUnder(AABB box, int x, int z) {
+            return x >= Mth.floor(box.minX) && x <= Mth.floor(box.maxX) && z >= Mth.floor(box.minZ)
+                    && z <= Mth.floor(box.maxZ);
         }
 
         @Override
