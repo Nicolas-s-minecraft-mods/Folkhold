@@ -1,5 +1,6 @@
 package io.github.nicolasgoyon.folkhold.world.village;
 
+import io.github.nicolasgoyon.folkhold.core.sim.tick.TickBudget;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitNavigation;
@@ -88,6 +89,13 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       to a gate first: the gate of the wall between the villager and the target with the shortest walk. The path
  *       ends {@value #ROUTE_STEP} blocks behind the gate, on the side of the target. At the end of this path, the
  *       vanilla behaviors search the path to the target again.</li>
+ *   <li>Budget of the searches (see {@link TickBudget}): the searches of the villagers of the faction villages use
+ *       {@value #SEARCH_BUDGET_MILLIS} ms of each server tick at most. After the end of the budget, a search of a
+ *       villager gives no path, and the vanilla behaviors search again at a later tick. A villager that waits
+ *       {@value #SEARCH_MAX_WAIT} ticks or more can search after the end of the budget: one such villager in each
+ *       tick. Thus the villagers that start a walk at the same time, for example at the start of the night, spread
+ *       their searches over some ticks. A path that the navigation gives again with no search does not use the
+ *       budget.</li>
  *   <li>A builder at work gets the navigation of a builder (see
  *       {@link io.github.nicolasgoyon.folkhold.world.construction.BuilderNavigation}). This navigation has no zone: a
  *       builder repairs the towers and the palisade. After the work, the builder gets this navigation again.</li>
@@ -137,6 +145,15 @@ public final class FolkNavigation extends GroundPathNavigation {
      * to the nearer gate first.
      */
     private static final double ROUTE_NEAR_FACTOR = 1.5;
+    /** The searches of the villagers of the faction villages in one server tick use this time at most, in ms. */
+    public static final int SEARCH_BUDGET_MILLIS = 10;
+    /** A villager that waits this number of ticks for a search can search after the end of the budget. */
+    public static final int SEARCH_MAX_WAIT = 20;
+    /** The budget of the searches of the villagers of the faction villages (server thread only). */
+    private static final TickBudget SEARCH_BUDGET = new TickBudget(SEARCH_BUDGET_MILLIS * 1_000_000L,
+            SEARCH_MAX_WAIT);
+    /** The first server tick of the wait of this villager for a search, or {@link TickBudget#NOT_WAITING}. */
+    private long waitingSince = TickBudget.NOT_WAITING;
     /** Opens and closes the gates of the village on the path of the villager, or null before the first use. */
     @Nullable
     private UsePassageGoal passage;
@@ -168,6 +185,44 @@ public final class FolkNavigation extends GroundPathNavigation {
             return null;
         }
         Path path;
+        if (folk && !reusesPath(allowed) && level.getServer() != null) {
+            long now = level.getServer().getTickCount();
+            if (!SEARCH_BUDGET.allows(now, waitingSince)) {
+                if (waitingSince == TickBudget.NOT_WAITING) {
+                    waitingSince = now;
+                }
+                return null;
+            }
+            waitingSince = TickBudget.NOT_WAITING;
+            long start = System.nanoTime();
+            try {
+                path = search(allowed, regionOffset, offsetUpward, accuracy, followRange, true);
+            } finally {
+                SEARCH_BUDGET.record(now, System.nanoTime() - start);
+            }
+        } else {
+            path = search(allowed, regionOffset, offsetUpward, accuracy, followRange, folk);
+        }
+        if (path != null && !zones.isEmpty()) {
+            skipStepsUp(path, zones, mob.blockPosition().getY());
+        }
+        return path;
+    }
+
+    /**
+     * True if the vanilla navigation gives the current path again with no search: the path is not done, and its
+     * target is one of the targets.
+     */
+    private boolean reusesPath(Set<BlockPos> targets) {
+        BlockPos current = getTargetPos();
+        return path != null && !path.isDone() && current != null && targets.contains(current);
+    }
+
+    /** The search of a path: the long search of a villager of a faction village, or the vanilla search. */
+    @Nullable
+    private Path search(Set<BlockPos> allowed, int regionOffset, boolean offsetUpward, int accuracy,
+            float followRange, boolean folk) {
+        Path path;
         if (folk && followRange < PATH_RANGE && !failedLongSearch(allowed)) {
             setMaxVisitedNodesMultiplier(PATH_RANGE / followRange);
             try {
@@ -188,9 +243,6 @@ public final class FolkNavigation extends GroundPathNavigation {
             }
         } else {
             path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
-        }
-        if (path != null && !zones.isEmpty()) {
-            skipStepsUp(path, zones, mob.blockPosition().getY());
         }
         return path;
     }
