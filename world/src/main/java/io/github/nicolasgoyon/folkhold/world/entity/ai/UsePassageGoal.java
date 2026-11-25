@@ -2,6 +2,8 @@ package io.github.nicolasgoyon.folkhold.world.entity.ai;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -39,6 +41,14 @@ import net.minecraft.world.phys.AABB;
  *       follower near the passage is still on the side where the unit started.</li>
  *   <li>After {@link #MAX_TICKS}, the goal stops. If an entity is still near, the passage stays open.</li>
  *   <li>The goal does not start again for the passage that the unit just left behind.</li>
+ *   <li>The goal of a villager (see {@link #UsePassageGoal(Mob, Predicate, BooleanSupplier)}) uses only some
+ *       passages: the gates of its village. The villager closes a passage after it only when a condition is true:
+ *       the gates of the village are closed at night. Thus a gate that is open by day stays open. At night, the last
+ *       villager through a gate closes it, also when an other villager opened it. The villager closes the passage
+ *       when its own path does not go through it, on any side: a villager that turns back also closes it. An entity
+ *       next to the passage does not keep it open: only an entity in the passage and a mob with a path through it
+ *       keep it open. Thus a guard or a golem at its post near a gate does not keep the gate open all night. At
+ *       night, the goal of a villager goes on after {@link #MAX_TICKS} until the passage is clear.</li>
  * </ul>
  *
  * <p>The goal has no flags: it does not stop the movement goals of the unit.
@@ -59,6 +69,11 @@ public class UsePassageGoal extends Goal {
 
     private final Mob mob;
     private final Supplier<List<? extends Entity>> followers;
+    private final Predicate<BlockPos> allowed;
+    /** True if the mob closes the passage after it now. */
+    private final BooleanSupplier closeAfter;
+    /** True for the goal of a villager (see {@link #UsePassageGoal(Mob, Predicate, BooleanSupplier)}). */
+    private final boolean villager;
     @Nullable
     private BlockPos passagePos;
     private float startDirX;
@@ -68,7 +83,7 @@ public class UsePassageGoal extends Goal {
     private int ticks;
 
     public UsePassageGoal(Mob mob) {
-        this(mob, List::of);
+        this(mob, List::of, pos -> true, () -> true, false);
     }
 
     /**
@@ -78,8 +93,27 @@ public class UsePassageGoal extends Goal {
      * @param followers the entities that follow the unit through the passages
      */
     public UsePassageGoal(Mob mob, Supplier<List<? extends Entity>> followers) {
+        this(mob, followers, pos -> true, () -> true, false);
+    }
+
+    /**
+     * Makes the goal of a villager (see the rules of the class).
+     *
+     * @param mob        the villager
+     * @param allowed    true for a position of a passage that the villager opens
+     * @param closeAfter true if the villager closes the passage after it
+     */
+    public UsePassageGoal(Mob mob, Predicate<BlockPos> allowed, BooleanSupplier closeAfter) {
+        this(mob, List::of, allowed, closeAfter, true);
+    }
+
+    private UsePassageGoal(Mob mob, Supplier<List<? extends Entity>> followers, Predicate<BlockPos> allowed,
+            BooleanSupplier closeAfter, boolean villager) {
         this.mob = mob;
         this.followers = followers;
+        this.allowed = allowed;
+        this.closeAfter = closeAfter;
+        this.villager = villager;
     }
 
     /** True if the block is a fence gate or the lower half of a wooden door. */
@@ -126,7 +160,7 @@ public class UsePassageGoal extends Goal {
         for (int i = Math.max(0, next - 1); i < last; i++) {
             Node node = path.getNode(i);
             BlockPos pos = new BlockPos(node.x, node.y, node.z);
-            if (!isPassage(mob.level().getBlockState(pos))
+            if (!isPassage(mob.level().getBlockState(pos)) || !allowed.test(pos)
                     || mob.distanceToSqr(pos.getX() + 0.5, mob.getY(), pos.getZ() + 0.5) > REACH_SQR) {
                 continue;
             }
@@ -142,7 +176,10 @@ public class UsePassageGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return !closed && ticks < MAX_TICKS;
+        if (closed) {
+            return false;
+        }
+        return ticks < MAX_TICKS || (villager && closes());
     }
 
     @Override
@@ -171,6 +208,17 @@ public class UsePassageGoal extends Goal {
             boolean outOfPassage = !mob.getBoundingBox().intersects(passageBox(passagePos, 0.0));
             passed = otherSide && outOfPassage;
         }
+        if (villager) {
+            // A villager can turn back, or stop near the passage: it closes the passage when its path does not go
+            // through it, on any side.
+            if (!pathGoesThrough(mob.getNavigation().getPath(), passagePos) && isClear()) {
+                if (closes()) {
+                    setOpen(false);
+                }
+                closed = true;
+            }
+            return;
+        }
         if (passed && isClear()) {
             setOpen(false);
             closed = true;
@@ -179,10 +227,15 @@ public class UsePassageGoal extends Goal {
 
     @Override
     public void stop() {
-        if (!closed && isClear()) {
+        if (!closed && (!villager || closes()) && isClear()) {
             setOpen(false);
         }
         passagePos = null;
+    }
+
+    /** True if the mob closes the passage after it. */
+    private boolean closes() {
+        return closeAfter.getAsBoolean();
     }
 
     /**
@@ -201,7 +254,7 @@ public class UsePassageGoal extends Goal {
             }
         }
         AABB passage = passageBox(passagePos, 0.0);
-        AABB near = passageBox(passagePos, CLEAR_DISTANCE);
+        AABB near = passageBox(passagePos, villager ? 0.0 : CLEAR_DISTANCE);
         for (LivingEntity entity : mob.level().getEntitiesOfClass(LivingEntity.class,
                 passageBox(passagePos, FOLLOW_DISTANCE), entity -> entity != mob)) {
             if (entity.getBoundingBox().intersects(near)) {

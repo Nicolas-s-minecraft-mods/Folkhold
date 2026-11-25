@@ -64,6 +64,9 @@ import io.github.nicolasgoyon.folkhold.world.village.WallZones;
 import io.github.nicolasgoyon.folkhold.world.village.WarHorn;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.IdleVillagers;
 import io.github.nicolasgoyon.folkhold.world.village.schedule.VillageWorkers;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -216,6 +219,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
     /** The zones of the wall where the villagers do not walk, or null before the first use. Not saved. */
     @Nullable
     private WallZones wallZones;
+    /** The positions of the fence gates of the layout (see {@link #gateSet}), or null before the first use. */
+    @Nullable
+    private LongSet gateSet;
+    /** The fence gates of the layout at the last build of {@link #gateSet}. */
+    private List<BlockPos> gateSetSource = List.of();
     /** True if the last check of the growth found no free plot for the market. Not saved: the next check sets it. */
     private boolean marketNoSpace;
     /**
@@ -295,6 +303,11 @@ public class VillageHeartBlockEntity extends BlockEntity {
 
     public UUID getVillageId() {
         return villageId;
+    }
+
+    /** True if the heart applied the night: the gates of the village are closed (see {@link #applyDayNight}). */
+    public boolean isNightMode() {
+        return nightMode;
     }
 
     public AlertState getAlertState() {
@@ -1197,6 +1210,24 @@ public class VillageHeartBlockEntity extends BlockEntity {
                     .orElse(WallZones.NONE);
         }
         return wallZones;
+    }
+
+    /**
+     * The positions of the fence gates of the gates of the village (see {@link VillageLayout#gates}), as a set of
+     * {@link BlockPos#asLong} values. The set follows the last scan of the layout. The path finder of the villagers
+     * reads it (see {@link FolkNavigation}).
+     *
+     * @return the positions, read only
+     */
+    public LongSet gateSet() {
+        List<BlockPos> gates = layout.gates();
+        if (gateSet == null || !gateSetSource.equals(gates)) {
+            LongSet set = new LongOpenHashSet(gates.size());
+            gates.forEach(gate -> set.add(gate.asLong()));
+            gateSet = LongSets.unmodifiable(set);
+            gateSetSource = List.copyOf(gates);
+        }
+        return gateSet;
     }
 
     /**

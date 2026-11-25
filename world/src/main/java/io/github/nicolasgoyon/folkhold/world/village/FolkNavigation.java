@@ -3,8 +3,11 @@ package io.github.nicolasgoyon.folkhold.world.village;
 import io.github.nicolasgoyon.folkhold.world.block.VillageHeartBlockEntity;
 import io.github.nicolasgoyon.folkhold.world.economy.Merchants;
 import io.github.nicolasgoyon.folkhold.world.entity.ai.UnitNavigation;
+import io.github.nicolasgoyon.folkhold.world.entity.ai.UsePassageGoal;
 import it.unimi.dsi.fastutil.longs.Long2BooleanMap;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -25,10 +28,13 @@ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.PathNavigationRegion;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.pathfinder.PathFinder;
 import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -70,6 +76,18 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       path, the searches of the villager to the same targets use the vanilla range for
  *       {@value #FAILED_SEARCH_TICKS} ticks. A move of more than {@value #FAILED_SEARCH_MOVE} blocks from the start
  *       of the failed search stops this rule.</li>
+ *   <li>The gates of the village (see {@link VillageHeartBlockEntity#gateSet}): with the village calm, a closed fence
+ *       gate of a gate is a closed wooden door for the path finder of a villager of the village. The villager opens
+ *       the gate on its path. At night, the villager closes the gate after it (see {@link UsePassageGoal}). An other fence gate, for example
+ *       the gate of a pen, stays closed for the villagers. During an alert, the villagers do not open the
+ *       gates.</li>
+ *   <li>Routes through a gate (see {@link #routeThroughGate}): a long search with no complete path can have a wall of
+ *       the village between the villager and its target. For example, the inner wall of a town stands between the
+ *       core and the homes of the ring band. The path along the wall to a gate and back is long, and the search
+ *       visits all its nodes near the wall before it finds the gate. Thus, after such a search, the villager walks
+ *       to a gate first: the gate of the wall between the villager and the target with the shortest walk. The path
+ *       ends {@value #ROUTE_STEP} blocks behind the gate, on the side of the target. At the end of this path, the
+ *       vanilla behaviors search the path to the target again.</li>
  *   <li>A builder at work gets the navigation of a builder (see
  *       {@link io.github.nicolasgoyon.folkhold.world.construction.BuilderNavigation}). This navigation has no zone: a
  *       builder repairs the towers and the palisade. After the work, the builder gets this navigation again.</li>
@@ -111,6 +129,19 @@ public final class FolkNavigation extends GroundPathNavigation {
     private BlockPos failedFrom = BlockPos.ZERO;
     /** The game time at the end of the use of the vanilla range after the failed long search. */
     private long failedUntil;
+    /** A route through a gate ends this number of blocks behind the gate, on the side of the target. */
+    public static final int ROUTE_STEP = 2;
+    /**
+     * The score of a gate of a route is the walk to the gate times this factor, plus the walk from the gate to the
+     * target. Thus with 2 gates on one line (the gate of the inner wall and the gate of a ring), the villager goes
+     * to the nearer gate first.
+     */
+    private static final double ROUTE_NEAR_FACTOR = 1.5;
+    /** Opens and closes the gates of the village on the path of the villager, or null before the first use. */
+    @Nullable
+    private UsePassageGoal passage;
+    /** True while {@link #passage} runs. */
+    private boolean passageRunning;
 
     private FolkNavigation(Villager villager, PathNavigation original) {
         super(villager, villager.level());
@@ -148,6 +179,10 @@ public final class FolkNavigation extends GroundPathNavigation {
                 failedTargets = allowed;
                 failedFrom = mob.blockPosition();
                 failedUntil = level.getGameTime() + FAILED_SEARCH_TICKS;
+                Path route = routeThroughGate(allowed, regionOffset, offsetUpward, followRange);
+                if (route != null) {
+                    path = route;
+                }
             } else {
                 failedTargets = null;
             }
@@ -158,6 +193,107 @@ public final class FolkNavigation extends GroundPathNavigation {
             skipStepsUp(path, zones, mob.blockPosition().getY());
         }
         return path;
+    }
+
+    /**
+     * The path to a gate of the village between the villager and the nearest target (see the rules of the class). A
+     * gate is between them when the villager and the target are on 2 sides of the line of the fence gate across
+     * its axis. The path ends {@value #ROUTE_STEP} blocks behind the gate, on the side of the target. With the
+     * village not calm, or with no such gate, or with no complete path to the end of the route, there is no route.
+     *
+     * @return the path, or null with no route
+     */
+    @Nullable
+    private Path routeThroughGate(Set<BlockPos> targets, int regionOffset, boolean offsetUpward, float followRange) {
+        if (!(mob instanceof Villager villager) || !(level instanceof ServerLevel serverLevel)) {
+            return null;
+        }
+        VillageHeartBlockEntity heart = heartOf(villager);
+        if (heart == null || heart.getAlertState() != AlertState.CALM) {
+            return null;
+        }
+        BlockPos from = mob.blockPosition();
+        BlockPos target = targets.stream().min((a, b) -> Double.compare(a.distSqr(from), b.distSqr(from)))
+                .orElseThrow();
+        BlockPos end = null;
+        double best = Double.MAX_VALUE;
+        for (BlockPos gate : heart.getLayout().gates()) {
+            BlockState state = serverLevel.getBlockState(gate);
+            if (!(state.getBlock() instanceof FenceGateBlock)) {
+                continue;
+            }
+            Direction.Axis axis = state.getValue(FenceGateBlock.FACING).getAxis();
+            int side = Integer.signum(target.get(axis) - gate.get(axis));
+            if (side == 0 || Integer.signum(from.get(axis) - gate.get(axis)) != -side) {
+                continue;
+            }
+            double score = ROUTE_NEAR_FACTOR * Math.sqrt(from.distSqr(gate)) + Math.sqrt(gate.distSqr(target));
+            if (score < best) {
+                best = score;
+                end = gate.relative(Direction.fromAxisAndDirection(axis, side > 0 ? Direction.AxisDirection.POSITIVE
+                        : Direction.AxisDirection.NEGATIVE), ROUTE_STEP);
+            }
+        }
+        if (end == null) {
+            return null;
+        }
+        setMaxVisitedNodesMultiplier(PATH_RANGE / followRange);
+        Path path;
+        try {
+            path = super.createPath(Set.of(end), regionOffset, offsetUpward, 1, PATH_RANGE);
+        } finally {
+            resetMaxVisitedNodesMultiplier();
+        }
+        return path != null && path.canReach() ? path : null;
+    }
+
+    /**
+     * Ticks the navigation, then opens and closes the gates of the village on the path of a villager of the village
+     * (see {@link UsePassageGoal}).
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        if (!(mob instanceof Villager villager) || !VillageFolk.isVillageFolk(villager)) {
+            return;
+        }
+        if (passage == null) {
+            passage = new UsePassageGoal(villager, pos -> isOpenableGate(villager, pos), () -> isNight(villager));
+        }
+        if (passageRunning) {
+            if (passage.canContinueToUse()) {
+                passage.tick();
+            } else {
+                passage.stop();
+                passageRunning = false;
+            }
+        } else if (passage.canUse()) {
+            passage.start();
+            passageRunning = true;
+        }
+    }
+
+    /** True if the heart of the village of the villager applied the night: the gates of the village are closed. */
+    private static boolean isNight(Villager villager) {
+        VillageHeartBlockEntity heart = heartOf(villager);
+        return heart != null && heart.isNightMode();
+    }
+
+    /** True if the position is a fence gate of a gate of the village of the villager, with the village calm. */
+    private static boolean isOpenableGate(Villager villager, BlockPos pos) {
+        return gatesOf(villager).contains(pos.asLong());
+    }
+
+    /**
+     * The fence gates of the gates of the village of a villager that the villager can open: the gates of a calm
+     * village (see {@link VillageHeartBlockEntity#gateSet}).
+     *
+     * @param villager the villager
+     * @return the positions as {@link BlockPos#asLong} values, empty with the village not calm or with no heart
+     */
+    public static LongSet gatesOf(Villager villager) {
+        VillageHeartBlockEntity heart = heartOf(villager);
+        return heart == null || heart.getAlertState() != AlertState.CALM ? LongSets.EMPTY_SET : heart.gateSet();
     }
 
     /**
@@ -247,14 +383,21 @@ public final class FolkNavigation extends GroundPathNavigation {
      *         the chunk of its heart not loaded
      */
     public static WallZones zonesOf(Villager villager) {
+        VillageHeartBlockEntity heart = heartOf(villager);
+        return heart == null ? WallZones.NONE : heart.wallZones((ServerLevel) villager.level());
+    }
+
+    /** The heart of the village of a villager of a faction village, or null with its chunk not loaded. */
+    @Nullable
+    private static VillageHeartBlockEntity heartOf(Villager villager) {
         if (!(villager.level() instanceof ServerLevel level) || !VillageFolk.isVillageFolk(villager)) {
-            return WallZones.NONE;
+            return null;
         }
         BlockPos heart = BlockPos.of(villager.getPersistentData().getLong(Merchants.VILLAGE_TAG));
         if (!level.isLoaded(heart) || !(level.getBlockEntity(heart) instanceof VillageHeartBlockEntity entity)) {
-            return WallZones.NONE;
+            return null;
         }
-        return entity.wallZones(level);
+        return entity;
     }
 
     /**
@@ -371,11 +514,13 @@ public final class FolkNavigation extends GroundPathNavigation {
     }
 
     /**
-     * The path types of a vanilla villager. A position in a zone of the wall is a neighbor only of a position in a zone
+     * The path types of a vanilla villager. A closed fence gate of a gate of the village is a closed wooden door. A position in a zone of the wall is a neighbor only of a position in a zone
      * on the same level or above it. A position on a palisade column is a neighbor only of a position on a column.
      */
     private static final class Evaluator extends WalkNodeEvaluator {
         private WallZones zones = WallZones.NONE;
+        /** The fence gates that the villager can open (see {@link #gatesOf}). */
+        private LongSet gates = LongSets.EMPTY_SET;
         /** True for a villager of a faction village: the rules of the pits and of the edges apply. */
         private boolean folk;
         /** The pits of this search (see {@link Pits#isPit}), by position. */
@@ -389,6 +534,7 @@ public final class FolkNavigation extends GroundPathNavigation {
             super.prepare(region, mob);
             zones = mob instanceof Villager villager ? zonesOf(villager) : WallZones.NONE;
             folk = mob instanceof Villager villager && VillageFolk.isVillageFolk(villager);
+            gates = mob instanceof Villager villager ? gatesOf(villager) : LongSets.EMPTY_SET;
         }
 
         @Override
@@ -396,8 +542,20 @@ public final class FolkNavigation extends GroundPathNavigation {
             super.done();
             zones = WallZones.NONE;
             folk = false;
+            gates = LongSets.EMPTY_SET;
             pits.clear();
             expanded = null;
+        }
+
+        @Override
+        public PathType getPathType(PathfindingContext context, int x, int y, int z) {
+            if (!gates.isEmpty() && gates.contains(BlockPos.asLong(x, y, z))) {
+                BlockState state = context.getBlockState(new BlockPos(x, y, z));
+                if (UnitNavigation.isClosedGate(state)) {
+                    return PathType.DOOR_WOOD_CLOSED;
+                }
+            }
+            return super.getPathType(context, x, y, z);
         }
 
         @Override
