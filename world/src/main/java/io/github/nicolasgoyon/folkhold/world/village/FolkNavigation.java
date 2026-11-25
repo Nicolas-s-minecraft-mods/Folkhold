@@ -73,9 +73,9 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       and the villager does not get to its bed.</li>
  *   <li>A long search with no complete path costs about 2 times a vanilla search. The vanilla behaviors search again
  *       at each tick for a walk target that the villager cannot reach. Thus, after a long search with no complete
- *       path, the searches of the villager to the same targets use the vanilla range for
- *       {@value #FAILED_SEARCH_TICKS} ticks. A move of more than {@value #FAILED_SEARCH_MOVE} blocks from the start
- *       of the failed search stops this rule.</li>
+ *       path, the searches of the villager to the same targets do no search for {@value #FAILED_SEARCH_TICKS}
+ *       ticks: they give a copy of the path of the failed search again (or of its route through a gate). A move of
+ *       more than {@value #FAILED_SEARCH_MOVE} blocks from the start of the failed search stops this rule.</li>
  *   <li>The gates of the village (see {@link VillageHeartBlockEntity#gateSet}): with the village calm, a closed fence
  *       gate of a gate is a closed wooden door for the path finder of a villager of the village. The villager opens
  *       the gate on its path. At night, the villager closes the gate after it (see {@link UsePassageGoal}). An other fence gate, for example
@@ -116,19 +116,24 @@ public final class FolkNavigation extends GroundPathNavigation {
     private static final double BOX_MARGIN = 1.0E-7;
 
     /**
-     * After a long search with no complete path, the searches to the same targets use the vanilla range for this
+     * After a long search with no complete path, the searches to the same targets give the failed path again for this
      * time, in ticks.
      */
     public static final int FAILED_SEARCH_TICKS = 100;
-    /** A search at this distance or less from the start of the failed search uses the vanilla range, in blocks. */
+    /** A search at this distance or less from the start of the failed search gives the failed path, in blocks. */
     public static final int FAILED_SEARCH_MOVE = 2;
     /** The targets of the last long search with no complete path, or null. */
     @Nullable
     private Set<BlockPos> failedTargets;
     /** The block of the villager at the start of the last long search with no complete path. */
     private BlockPos failedFrom = BlockPos.ZERO;
-    /** The game time at the end of the use of the vanilla range after the failed long search. */
+    /** The game time at the end of the repeat of the failed long search. */
     private long failedUntil;
+    /** The path of the last long search with no complete path (or its route through a gate), or null. */
+    @Nullable
+    private Path failedPath;
+    /** The number of the path searches of this navigation. */
+    private long searches;
     /** A route through a gate ends this number of blocks behind the gate, on the side of the target. */
     public static final int ROUTE_STEP = 2;
     /**
@@ -168,7 +173,13 @@ public final class FolkNavigation extends GroundPathNavigation {
             return null;
         }
         Path path;
-        if (folk && followRange < PATH_RANGE && !failedLongSearch(allowed)) {
+        boolean failed = folk && failedLongSearch(allowed);
+        if (failed && reusesPath(allowed)) {
+            path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
+        } else if (failed) {
+            path = failedPath == null ? null : failedPath.copy();
+        } else if (folk && followRange < PATH_RANGE) {
+            searches++;
             setMaxVisitedNodesMultiplier(PATH_RANGE / followRange);
             try {
                 path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, PATH_RANGE);
@@ -183,10 +194,15 @@ public final class FolkNavigation extends GroundPathNavigation {
                 if (route != null) {
                     path = route;
                 }
+                failedPath = path == null ? null : path.copy();
             } else {
                 failedTargets = null;
+                failedPath = null;
             }
         } else {
+            if (!reusesPath(allowed)) {
+                searches++;
+            }
             path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
         }
         if (path != null && !zones.isEmpty()) {
@@ -294,6 +310,20 @@ public final class FolkNavigation extends GroundPathNavigation {
     public static LongSet gatesOf(Villager villager) {
         VillageHeartBlockEntity heart = heartOf(villager);
         return heart == null || heart.getAlertState() != AlertState.CALM ? LongSets.EMPTY_SET : heart.gateSet();
+    }
+
+    /** The number of the path searches of this navigation: a repeat of a failed search is not a search. */
+    public long searches() {
+        return searches;
+    }
+
+    /**
+     * True if the vanilla navigation gives the current path again with no search: the path is not done, and its
+     * target is one of the targets.
+     */
+    private boolean reusesPath(Set<BlockPos> targets) {
+        BlockPos current = getTargetPos();
+        return path != null && !path.isDone() && current != null && targets.contains(current);
     }
 
     /**
