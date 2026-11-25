@@ -4,6 +4,7 @@ import io.github.nicolasgoyon.folkhold.blocks.registry.ModBlocks;
 import io.github.nicolasgoyon.folkhold.world.FolkholdWorld;
 import io.github.nicolasgoyon.folkhold.world.config.WorldConfig;
 import io.github.nicolasgoyon.folkhold.world.entity.ArcherEntity;
+import io.github.nicolasgoyon.folkhold.world.entity.GuardEntity;
 import io.github.nicolasgoyon.folkhold.world.registry.ModEntities;
 import java.util.ArrayList;
 import java.util.List;
@@ -306,6 +307,52 @@ public final class ArcherTowerGameTests {
                     helper.assertTrue(hidden.getHealth() == hidden.getMaxHealth(),
                             "The husk in the dead zone must not get a hit");
                     helper.assertFalse(offPlatform[0], "The archer must stay on the platform");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A husk out of the attack radius of the archer: the archer sees it from its post, and it cannot shoot it. The husk
+     * stands on a column near the level of the platform, thus the parapet does not hide it. The archer does not take the husk as target. Thus the husk goes to an other unit: a guard on the ground
+     * takes it and hits it. With an archer that keeps the husk, the attack goal of the archer drops it after 100 ticks,
+     * and no unit fights the husk.
+     */
+    @GameTest(template = "arena_large", timeoutTicks = 600, batch = "archer_tower_out_of_range", skyAccess = true)
+    public static void towerArcherLeavesATargetOutOfItsRangeToAGuard(GameTestHelper helper) {
+        BlockPos post = placeTower(helper);
+        ArcherEntity archer = TestSupport.spawnUnit(helper, ModEntities.ARCHER.get(), POST);
+        archer.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+        archer.setPostPos(post);
+        archer.setHomePos(post);
+        // The column is on the axis of the post, to the north: the corners of the tower do not hide it.
+        BlockPos column = new BlockPos(POST.getX(), 0, 1);
+        for (int y = 1; y < POST.getY(); y++) {
+            helper.setBlock(column.atY(y), Blocks.STONE);
+            helper.setBlock(column.east().atY(y), Blocks.STONE);
+        }
+        Husk husk = helper.spawn(EntityType.HUSK, column.atY(POST.getY()));
+        husk.setNoAi(true);
+        double radius = WorldConfig.ARCHER_ATTACK_RADIUS.get();
+        helper.assertTrue(archer.distanceToSqr(husk) > radius * radius, "The husk must be out of the attack radius: "
+                + Math.round(archer.distanceTo(husk)) + " blocks");
+        helper.assertTrue(archer.getSensing().hasLineOfSight(husk), "The archer must see the husk from its post");
+        helper.assertFalse(archer.hasLineOfFire(husk), "The archer must have no line of fire out of its range");
+        archer.setTarget(husk);
+        helper.assertFalse(archer.getTarget() == husk, "The archer must not take a husk out of its range");
+        GuardEntity guard = TestSupport.spawnUnit(helper, ModEntities.GUARD.get(), column.east().atY(POST.getY()));
+        guard.setHomePos(guard.blockPosition());
+        guard.setTarget(husk);
+        helper.assertTrue(guard.getTarget() == husk, "The guard must take the husk");
+        boolean[] archerTook = {false};
+        helper.onEachTick(() -> archerTook[0] |= archer.getTarget() == husk);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(husk.getLastHurtByMob() == guard,
+                        "The guard must hit the husk"))
+                .thenExecute(() -> {
+                    archer.discard();
+                    guard.discard();
+                    husk.discard();
+                    helper.assertFalse(archerTook[0], "The archer must not take the husk out of its range");
                 })
                 .thenSucceed();
     }

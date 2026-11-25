@@ -20,15 +20,15 @@ import net.minecraft.world.phys.Vec3;
  *       tower (a repair, a stone tower) changes the spots.</li>
  *   <li>A spot has a line of fire to a target when the target is in the range of the unit from the spot, and no block
  *       is on the line from the eyes of the unit at the spot to the eyes of the target.</li>
- *   <li>The query runs the cheap tests first: the line of sight from the current position of the unit, then the range
- *       from the post, then the range from each spot. The ray tests from the spots come last.</li>
+ *   <li>The query runs the cheap tests first: the line of sight and the range from the current position of the unit,
+ *       then the range from the post, then the range from each spot. The ray tests from the spots come last.</li>
  *   <li>The query selects the spot with a line of fire that is nearest to the unit. Thus the unit walks the shortest
  *       distance, and stays at the parapet on the side of the targets. For two spots at the same distance, the spot
  *       nearer to the post wins.</li>
  *   <li>The result of the test of a target stays valid for {@link #CACHE_TICKS}. A target goal tests all the
  *       monsters near the unit, so the cache limits the ray tests.</li>
  *   <li>The spots count only when the unit is on the platform of its post. On the way to its post, the unit has a
- *       line of fire only to the targets that it sees.</li>
+ *       line of fire only to the targets that it sees in its range.</li>
  * </ul>
  */
 public final class FiringPositions {
@@ -63,17 +63,19 @@ public final class FiringPositions {
     }
 
     /**
-     * True if the unit can shoot the target: it sees the target from its current position, or a spot of the platform
-     * of its post has a line of fire to the target. False for a unit with no post that does not see the target.
+     * True if the unit can shoot the target: it sees the target in its range from its current position, or a spot of
+     * the platform of its post has a line of fire to the target. A unit with a post does not shoot a target out of its
+     * range, also when it sees the target: its attack goals drop such a target. A unit with no post has a line of fire
+     * to each target that it sees.
      *
      * @param target the target
-     * @return true if the unit sees the target or a spot has a line of fire to it
+     * @return true if the unit sees the target in its range or a spot has a line of fire to it
      */
     public boolean hasLineOfFire(LivingEntity target) {
-        if (unit.getSensing().hasLineOfSight(target)) {
+        BlockPos post = unit.getPostPos();
+        if (unit.getSensing().hasLineOfSight(target) && (post == null || isInReach(unit.position(), target, 0.0))) {
             return true;
         }
-        BlockPos post = unit.getPostPos();
         if (post == null || !isOnPlatform(post) || !isInReach(Vec3.atBottomCenterOf(post), target, PLATFORM_REACH)) {
             return false;
         }
