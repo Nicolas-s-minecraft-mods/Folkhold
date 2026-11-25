@@ -2,6 +2,7 @@ package io.github.nicolasgoyon.folkhold.world.entity.ai;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -39,6 +40,10 @@ import net.minecraft.world.phys.AABB;
  *       follower near the passage is still on the side where the unit started.</li>
  *   <li>After {@link #MAX_TICKS}, the goal stops. If an entity is still near, the passage stays open.</li>
  *   <li>The goal does not start again for the passage that the unit just left behind.</li>
+ *   <li>A filter can limit the passages of the goal (see {@link #UsePassageGoal(Mob, Predicate)}). With a filter, the
+ *       mob closes only a passage that it opened: an open passage stays open. The navigation of the villagers uses
+ *       the goal for the gates of their village only. Thus a villager opens a gate that is closed at night and
+ *       closes it after it, and a gate that is open by day stays open.</li>
  * </ul>
  *
  * <p>The goal has no flags: it does not stop the movement goals of the unit.
@@ -59,6 +64,11 @@ public class UsePassageGoal extends Goal {
 
     private final Mob mob;
     private final Supplier<List<? extends Entity>> followers;
+    private final Predicate<BlockPos> allowed;
+    /** True if the mob closes only a passage that it opened. */
+    private final boolean closesOnlyOpened;
+    /** True if the passage was closed at the start of the goal. */
+    private boolean openedByMob;
     @Nullable
     private BlockPos passagePos;
     private float startDirX;
@@ -68,7 +78,7 @@ public class UsePassageGoal extends Goal {
     private int ticks;
 
     public UsePassageGoal(Mob mob) {
-        this(mob, List::of);
+        this(mob, List::of, pos -> true, false);
     }
 
     /**
@@ -78,8 +88,25 @@ public class UsePassageGoal extends Goal {
      * @param followers the entities that follow the unit through the passages
      */
     public UsePassageGoal(Mob mob, Supplier<List<? extends Entity>> followers) {
+        this(mob, followers, pos -> true, false);
+    }
+
+    /**
+     * Makes the goal for a mob that uses only some passages.
+     *
+     * @param mob     the mob
+     * @param allowed true for a position of a passage that the mob opens and closes
+     */
+    public UsePassageGoal(Mob mob, Predicate<BlockPos> allowed) {
+        this(mob, List::of, allowed, true);
+    }
+
+    private UsePassageGoal(Mob mob, Supplier<List<? extends Entity>> followers, Predicate<BlockPos> allowed,
+            boolean closesOnlyOpened) {
         this.mob = mob;
         this.followers = followers;
+        this.allowed = allowed;
+        this.closesOnlyOpened = closesOnlyOpened;
     }
 
     /** True if the block is a fence gate or the lower half of a wooden door. */
@@ -126,7 +153,7 @@ public class UsePassageGoal extends Goal {
         for (int i = Math.max(0, next - 1); i < last; i++) {
             Node node = path.getNode(i);
             BlockPos pos = new BlockPos(node.x, node.y, node.z);
-            if (!isPassage(mob.level().getBlockState(pos))
+            if (!isPassage(mob.level().getBlockState(pos)) || !allowed.test(pos)
                     || mob.distanceToSqr(pos.getX() + 0.5, mob.getY(), pos.getZ() + 0.5) > REACH_SQR) {
                 continue;
             }
@@ -157,6 +184,7 @@ public class UsePassageGoal extends Goal {
         ticks = 0;
         startDirX = (float) (passagePos.getX() + 0.5 - mob.getX());
         startDirZ = (float) (passagePos.getZ() + 0.5 - mob.getZ());
+        openedByMob = isClosedPassage(mob.level().getBlockState(passagePos));
         setOpen(true);
     }
 
@@ -172,17 +200,24 @@ public class UsePassageGoal extends Goal {
             passed = otherSide && outOfPassage;
         }
         if (passed && isClear()) {
-            setOpen(false);
+            if (closes()) {
+                setOpen(false);
+            }
             closed = true;
         }
     }
 
     @Override
     public void stop() {
-        if (!closed && isClear()) {
+        if (!closed && closes() && isClear()) {
             setOpen(false);
         }
         passagePos = null;
+    }
+
+    /** True if the mob closes the passage after it. */
+    private boolean closes() {
+        return !closesOnlyOpened || openedByMob;
     }
 
     /**
