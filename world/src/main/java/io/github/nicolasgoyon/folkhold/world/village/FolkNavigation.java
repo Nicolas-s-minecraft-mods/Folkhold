@@ -18,6 +18,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.Brain;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
@@ -64,6 +65,11 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  *       villager (48 blocks). A bed behind the back wall of a deep house can be 3 blocks away in a straight line and
  *       more than 48 blocks away on foot, through the door. With the vanilla limit, the path stops behind the wall,
  *       and the villager does not get to its bed.</li>
+ *   <li>A long search with no complete path costs about 2 times a vanilla search. The vanilla behaviors search again
+ *       at each tick for a walk target that the villager cannot reach. Thus, after a long search with no complete
+ *       path, the searches of the villager to the same targets use the vanilla range for
+ *       {@value #FAILED_SEARCH_TICKS} ticks. A move of more than {@value #FAILED_SEARCH_MOVE} blocks from the start
+ *       of the failed search stops this rule.</li>
  *   <li>A builder at work gets the navigation of a builder (see
  *       {@link io.github.nicolasgoyon.folkhold.world.construction.BuilderNavigation}). This navigation has no zone: a
  *       builder repairs the towers and the palisade. After the work, the builder gets this navigation again.</li>
@@ -91,6 +97,21 @@ public final class FolkNavigation extends GroundPathNavigation {
     /** The check of a step up (see {@link #allowsStepUp}) makes the box of the villager smaller by this margin. */
     private static final double BOX_MARGIN = 1.0E-7;
 
+    /**
+     * After a long search with no complete path, the searches to the same targets use the vanilla range for this
+     * time, in ticks.
+     */
+    public static final int FAILED_SEARCH_TICKS = 100;
+    /** A search at this distance or less from the start of the failed search uses the vanilla range, in blocks. */
+    public static final int FAILED_SEARCH_MOVE = 2;
+    /** The targets of the last long search with no complete path, or null. */
+    @Nullable
+    private Set<BlockPos> failedTargets;
+    /** The block of the villager at the start of the last long search with no complete path. */
+    private BlockPos failedFrom = BlockPos.ZERO;
+    /** The game time at the end of the use of the vanilla range after the failed long search. */
+    private long failedUntil;
+
     private FolkNavigation(Villager villager, PathNavigation original) {
         super(villager, villager.level());
         setCanOpenDoors(true);
@@ -116,12 +137,19 @@ public final class FolkNavigation extends GroundPathNavigation {
             return null;
         }
         Path path;
-        if (folk && followRange < PATH_RANGE) {
+        if (folk && followRange < PATH_RANGE && !failedLongSearch(allowed)) {
             setMaxVisitedNodesMultiplier(PATH_RANGE / followRange);
             try {
                 path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, PATH_RANGE);
             } finally {
                 resetMaxVisitedNodesMultiplier();
+            }
+            if (path == null || !path.canReach()) {
+                failedTargets = allowed;
+                failedFrom = mob.blockPosition();
+                failedUntil = level.getGameTime() + FAILED_SEARCH_TICKS;
+            } else {
+                failedTargets = null;
             }
         } else {
             path = super.createPath(allowed, regionOffset, offsetUpward, accuracy, followRange);
@@ -130,6 +158,28 @@ public final class FolkNavigation extends GroundPathNavigation {
             skipStepsUp(path, zones, mob.blockPosition().getY());
         }
         return path;
+    }
+
+    /**
+     * True if a search of the villager to the targets uses the range {@value #PATH_RANGE}: the villager is a villager
+     * of a faction village, and no recent long search to the same targets failed near its position. The GameTests use
+     * this method.
+     *
+     * @param targets the targets of the search
+     * @return true for a long search
+     */
+    public boolean usesLongSearch(Set<BlockPos> targets) {
+        return mob instanceof Villager villager && VillageFolk.isVillageFolk(villager)
+                && mob.getAttributeValue(Attributes.FOLLOW_RANGE) < PATH_RANGE && !failedLongSearch(targets);
+    }
+
+    /**
+     * True if a search to the targets follows a long search with no complete path to the same targets: the search
+     * starts near the start of the failed search, less than {@value #FAILED_SEARCH_TICKS} ticks after it.
+     */
+    private boolean failedLongSearch(Set<BlockPos> targets) {
+        return failedTargets != null && level.getGameTime() < failedUntil && failedTargets.equals(targets)
+                && mob.blockPosition().distManhattan(failedFrom) <= FAILED_SEARCH_MOVE;
     }
 
     /**

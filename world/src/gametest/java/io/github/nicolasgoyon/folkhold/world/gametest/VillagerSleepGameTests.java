@@ -9,6 +9,7 @@ import io.github.nicolasgoyon.folkhold.world.entity.FactionUnit;
 import io.github.nicolasgoyon.folkhold.world.settlement.SettlementData;
 import io.github.nicolasgoyon.folkhold.world.settlement.Settlements;
 import io.github.nicolasgoyon.folkhold.world.village.AlertState;
+import io.github.nicolasgoyon.folkhold.world.village.FolkNavigation;
 import io.github.nicolasgoyon.folkhold.world.village.VillageFolk;
 import io.github.nicolasgoyon.folkhold.world.village.VillageHomes;
 import io.github.nicolasgoyon.folkhold.world.village.VillageLayout;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -50,6 +52,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -269,6 +272,66 @@ public final class VillagerSleepGameTests {
                             .isPresent(), "The villager must walk around the room and sleep in its bed at "
                                     + bed.toShortString() + ": " + describe(level, villager));
                 })
+                .thenSucceed();
+    }
+
+    /**
+     * After a long search with no complete path, the next searches of the villager to the same target use the vanilla
+     * range (see {@link FolkNavigation#FAILED_SEARCH_TICKS}). A search to an other target, a search after a move of
+     * more than {@link FolkNavigation#FAILED_SEARCH_MOVE} blocks and a search after this time use the long range again.
+     * The villager stands in a closed room, and its walk target is outside the room: no path reaches the target.
+     */
+    @GameTest(template = "arena", timeoutTicks = 200, batch = "villager_sleep_failed_search")
+    public static void villagerWithNoWayToItsTargetSearchesWithTheVanillaRange(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ServerLevel level = helper.getLevel();
+        // The room: walls at x = 1 and x = 9, z = 1 and z = 3, and a roof at y = 4.
+        for (int x = 1; x <= 9; x++) {
+            for (int z = 1; z <= 3; z++) {
+                for (int y = 1; y <= 4; y++) {
+                    if (y == 4 || x == 1 || x == 9 || z == 1 || z == 3) {
+                        helper.setBlock(new BlockPos(x, y, z), Blocks.STONE);
+                    }
+                }
+            }
+        }
+        // The targets are air blocks on the floor: the navigation does not move them.
+        BlockPos goal = helper.absolutePos(new BlockPos(5, 1, 7));
+        Villager villager = helper.spawn(EntityType.VILLAGER, new BlockPos(2, 1, 2));
+        // With no AI, the villager does not move and does not search a path itself. The navigation needs a villager
+        // on the ground.
+        villager.setNoAi(true);
+        villager.setOnGround(true);
+        TestSupport.atTestEnd(helper, villager::discard);
+        villager.getPersistentData().putLong(Merchants.VILLAGE_TAG, helper.absolutePos(new BlockPos(0, 1, 0)).asLong());
+        FolkNavigation.equip(villager);
+        FolkNavigation navigation = (FolkNavigation) villager.getNavigation();
+        Set<BlockPos> target = Set.of(goal);
+        Set<BlockPos> other = Set.of(goal.east(2));
+        long[] failedAt = {0L};
+        helper.startSequence()
+                .thenExecute(() -> {
+                    helper.assertTrue(navigation.usesLongSearch(target), "The first search must be a long search");
+                    Path path = navigation.createPath(goal, 0);
+                    failedAt[0] = level.getGameTime();
+                    helper.assertTrue(path != null && !path.canReach(), "The search must give a path that does not "
+                            + "reach the target outside the room: " + path);
+                    helper.assertFalse(navigation.usesLongSearch(target), "The next search to the target must use "
+                            + "the vanilla range");
+                    helper.assertTrue(navigation.usesLongSearch(other), "A search to an other target must be a long "
+                            + "search");
+                    villager.moveTo(villager.getX() + FolkNavigation.FAILED_SEARCH_MOVE + 1, villager.getY(),
+                            villager.getZ());
+                    helper.assertTrue(navigation.usesLongSearch(target), "A search after a move must be a long search");
+                    villager.moveTo(villager.getX() - FolkNavigation.FAILED_SEARCH_MOVE - 1, villager.getY(),
+                            villager.getZ());
+                    helper.assertFalse(navigation.usesLongSearch(target), "The search from the start of the failed "
+                            + "search must use the vanilla range");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(level.getGameTime() - failedAt[0]
+                        >= FolkNavigation.FAILED_SEARCH_TICKS, "The time of the vanilla range must end"))
+                .thenExecute(() -> helper.assertTrue(navigation.usesLongSearch(target),
+                        "A search after the time of the vanilla range must be a long search"))
                 .thenSucceed();
     }
 
