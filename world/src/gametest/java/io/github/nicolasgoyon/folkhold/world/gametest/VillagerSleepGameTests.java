@@ -350,6 +350,63 @@ public final class VillagerSleepGameTests {
     }
 
     /**
+     * A wooden door that opens or closes asks for no new search of the path of a villager of a faction village (see
+     * {@link FolkNavigation#shouldRecomputePath}): the path finder goes through the door in both states. The
+     * villager keeps its path, and the navigation does no search. An other block near the path keeps the vanilla rule.
+     * The villager stands behind a wall with a door, and its target is on the other side.
+     */
+    @GameTest(template = "arena", timeoutTicks = 100, batch = "villager_sleep_door_path")
+    public static void doorThatOpensAsksForNoNewPathSearch(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        ServerLevel level = helper.getLevel();
+        // The wall: z = 4, from x = 1 to x = 9, 3 blocks high, with a door at x = 5.
+        BlockPos door = new BlockPos(5, 1, 4);
+        for (int x = 1; x <= 9; x++) {
+            for (int y = 1; y <= 3; y++) {
+                if (x != door.getX() || y == 3) {
+                    helper.setBlock(new BlockPos(x, y, 4), Blocks.STONE);
+                }
+            }
+        }
+        helper.setBlock(door, Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.SOUTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
+        helper.setBlock(door.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.SOUTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+        BlockPos goal = helper.absolutePos(new BlockPos(5, 1, 7));
+        Villager villager = helper.spawn(EntityType.VILLAGER, new BlockPos(5, 1, 2));
+        // With no AI, the villager does not move and does not search a path itself.
+        villager.setNoAi(true);
+        villager.setOnGround(true);
+        TestSupport.atTestEnd(helper, villager::discard);
+        villager.getPersistentData().putLong(Merchants.VILLAGE_TAG, helper.absolutePos(new BlockPos(0, 1, 0)).asLong());
+        FolkNavigation.equip(villager);
+        FolkNavigation navigation = (FolkNavigation) villager.getNavigation();
+        BlockPos doorPos = helper.absolutePos(door);
+        helper.startSequence()
+                .thenExecute(() -> {
+                    Path path = navigation.createPath(goal, 0);
+                    helper.assertTrue(path != null && path.canReach(), "The path must go through the door: " + path);
+                    navigation.moveTo(path, 0.5);
+                    long searches = navigation.searches();
+                    BlockState closed = level.getBlockState(doorPos);
+                    ((DoorBlock) closed.getBlock()).setOpen(null, level, closed, doorPos, true);
+                    helper.assertTrue(level.getBlockState(doorPos).getValue(DoorBlock.OPEN), "The door must be open");
+                    helper.assertFalse(navigation.shouldRecomputePath(doorPos),
+                            "A door that opens must ask for no new search of the path");
+                    BlockState open = level.getBlockState(doorPos);
+                    ((DoorBlock) open.getBlock()).setOpen(null, level, open, doorPos, false);
+                    helper.assertFalse(navigation.shouldRecomputePath(doorPos),
+                            "A door that closes must ask for no new search of the path");
+                    helper.assertTrue(navigation.getPath() == path && navigation.searches() == searches,
+                            "The villager must keep its path with no search: " + (navigation.searches() - searches)
+                                    + " searches");
+                    helper.assertTrue(navigation.shouldRecomputePath(helper.absolutePos(new BlockPos(5, 1, 6))),
+                            "An other block near the path must ask for a new search of the path");
+                })
+                .thenSucceed();
+    }
+
+    /**
      * A sleeping villager of a faction village in the bed of an other villager wakes up when the heart gives the bed
      * to its owner (see {@link VillageHomes#claim}). The holder has no place with this bed: its profession is not the
      * profession of the place. Without the wake up, the holder sleeps with no memory {@code HOME}.
