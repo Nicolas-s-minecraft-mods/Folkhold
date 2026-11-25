@@ -18,6 +18,7 @@ import io.github.nicolasgoyon.folkhold.world.village.schedule.WorkerBrains;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -29,12 +30,15 @@ import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.npc.Villager;
@@ -53,6 +57,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -112,6 +117,12 @@ public final class VillagerSleepGameTests {
     private static final int DEEP_ARENA = 32;
     /** A population target that is more than the places of each test village: all the beds get a villager. */
     private static final int FULL_POPULATION = 1000;
+    /** The time of the walk out of the corner of a fence post and a barrel, in ticks. */
+    private static final int FENCE_CORNER_TICKS = 300;
+    /** The move of the villager into the corner of the post and the barrel, on each axis, in blocks. */
+    private static final double FENCE_CORNER_PUSH = 0.1;
+    /** The box of the villager without its sides: a cell that the box only touches is not under the box. */
+    private static final double FENCE_CORNER_MARGIN = 1.0E-7;
 
     private VillagerSleepGameTests() {
     }
@@ -402,6 +413,63 @@ public final class VillagerSleepGameTests {
                                     + " searches");
                     helper.assertTrue(navigation.shouldRecomputePath(helper.absolutePos(new BlockPos(5, 1, 6))),
                             "An other block near the path must ask for a new search of the path");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A villager in the corner between a fence post and a barrel walks out of the corner (see
+     * {@link FolkNavigation}). The villager stands in the cell of the post: its box touches the east side of the post
+     * and the north side of the barrel. The first node of its path is a cell under its box. The villager walks to a
+     * target to the south-west, around the post and the barrel. A market stall has this corner.
+     */
+    @GameTest(template = "arena", timeoutTicks = FENCE_CORNER_TICKS + 20, batch = "villager_sleep_fence_corner")
+    public static void villagerInTheCornerOfAFencePostAndABarrelWalksOut(GameTestHelper helper) {
+        TestSupport.buildFloor(helper);
+        // The post of 2 blocks at (5, 5), and the barrel at (6, 6): the corner is at x = 5.625, z = 6.
+        BlockPos post = new BlockPos(5, 1, 5);
+        helper.setBlock(post, Blocks.OAK_FENCE);
+        helper.setBlock(post.above(), Blocks.OAK_FENCE);
+        BlockPos barrel = new BlockPos(6, 1, 6);
+        helper.setBlock(barrel, Blocks.BARREL);
+        BlockPos goal = helper.absolutePos(new BlockPos(2, 1, 9));
+        Villager villager = helper.spawn(EntityType.VILLAGER, new Vec3(5.95, 1.0, 5.65));
+        long added = helper.getLevel().getGameTime();
+        TestSupport.atTestEnd(helper, villager::discard);
+        BlockPos postPos = helper.absolutePos(post);
+        BlockPos barrelPos = helper.absolutePos(barrel);
+        helper.startSequence()
+                .thenExecute(() -> {
+                    // The move stops at the side of the post and at the side of the barrel, as a push into the corner.
+                    villager.moveTo(Vec3.atBottomCenterOf(postPos).add(0.45, 0.0, 0.15));
+                    villager.move(MoverType.SELF, new Vec3(-FENCE_CORNER_PUSH, 0.0, FENCE_CORNER_PUSH));
+                    // A move with no vertical part sets the villager off the ground: the villager stands on the floor.
+                    villager.setOnGround(true);
+                    AABB box = villager.getBoundingBox();
+                    helper.assertTrue(villager.blockPosition().equals(postPos)
+                            && Mth.floor(box.maxZ) == barrelPos.getZ() && box.maxX > barrelPos.getX(),
+                            "The villager must stand in the cell of the post, against the barrel: " + box);
+                    Path path = villager.getNavigation().createPath(goal, 0);
+                    helper.assertTrue(path != null && path.canReach(), "The villager must have a path: " + path);
+                    BlockPos start = path.getNodePos(0);
+                    AABB inside = box.deflate(FENCE_CORNER_MARGIN, 0.0, FENCE_CORNER_MARGIN);
+                    helper.assertTrue(start.getX() >= Mth.floor(inside.minX) && start.getX() <= Mth.floor(inside.maxX)
+                            && start.getZ() >= Mth.floor(inside.minZ) && start.getZ() <= Mth.floor(inside.maxZ),
+                            "The path must start in a cell under the box of the villager: start "
+                                    + start.toShortString() + ", box " + box);
+                })
+                .thenExecuteFor(FENCE_CORNER_TICKS, () -> {
+                    Brain<Villager> brain = villager.getBrain();
+                    if (brain.getMemory(MemoryModuleType.WALK_TARGET).filter(target -> target.getTarget()
+                            .currentBlockPosition().equals(goal)).isEmpty()) {
+                        brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(goal, 0.5F, 0));
+                    }
+                })
+                .thenExecute(() -> {
+                    TestSupport.assertTicks(helper, villager, added);
+                    helper.assertTrue(villager.blockPosition().distManhattan(goal) <= 1, "The villager must walk out "
+                            + "of the corner to " + goal.toShortString() + ": " + describe(helper.getLevel(), villager)
+                            + String.format(Locale.ROOT, " at %.4f, %.4f", villager.getX(), villager.getZ()));
                 })
                 .thenSucceed();
     }
