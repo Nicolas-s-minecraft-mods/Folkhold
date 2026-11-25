@@ -276,13 +276,14 @@ public final class VillagerSleepGameTests {
     }
 
     /**
-     * After a long search with no complete path, the next searches of the villager to the same target use the vanilla
-     * range (see {@link FolkNavigation#FAILED_SEARCH_TICKS}). A search to an other target, a search after a move of
-     * more than {@link FolkNavigation#FAILED_SEARCH_MOVE} blocks and a search after this time use the long range again.
-     * The villager stands in a closed room, and its walk target is outside the room: no path reaches the target.
+     * After a long search with no complete path, the next searches of the villager to the same target do no search:
+     * they give a copy of the failed path (see {@link FolkNavigation#FAILED_SEARCH_TICKS}). A search to an other
+     * target, a search after a move of more than {@link FolkNavigation#FAILED_SEARCH_MOVE} blocks and a search after
+     * this time use the long range again. The villager stands in a closed room, and its walk target is outside the
+     * room: no path reaches the target.
      */
     @GameTest(template = "arena", timeoutTicks = 200, batch = "villager_sleep_failed_search")
-    public static void villagerWithNoWayToItsTargetSearchesWithTheVanillaRange(GameTestHelper helper) {
+    public static void villagerWithNoWayToItsTargetRepeatsTheFailedPath(GameTestHelper helper) {
         TestSupport.buildFloor(helper);
         ServerLevel level = helper.getLevel();
         // The room: walls at x = 1 and x = 9, z = 1 and z = 3, and a roof at y = 4.
@@ -316,8 +317,15 @@ public final class VillagerSleepGameTests {
                     failedAt[0] = level.getGameTime();
                     helper.assertTrue(path != null && !path.canReach(), "The search must give a path that does not "
                             + "reach the target outside the room: " + path);
-                    helper.assertFalse(navigation.usesLongSearch(target), "The next search to the target must use "
-                            + "the vanilla range");
+                    helper.assertFalse(navigation.usesLongSearch(target), "The next search to the target must not "
+                            + "be a long search");
+                    long searches = navigation.searches();
+                    Path again = navigation.createPath(goal, 0);
+                    helper.assertTrue(navigation.searches() == searches, "The next search to the target must do no "
+                            + "search: " + (navigation.searches() - searches) + " searches");
+                    helper.assertTrue(again != null && !again.canReach() && again != path
+                            && again.getEndNode().asBlockPos().equals(path.getEndNode().asBlockPos()),
+                            "The next search must give a copy of the failed path: " + again);
                     helper.assertTrue(navigation.usesLongSearch(other), "A search to an other target must be a long "
                             + "search");
                     villager.moveTo(villager.getX() + FolkNavigation.FAILED_SEARCH_MOVE + 1, villager.getY(),
@@ -326,12 +334,18 @@ public final class VillagerSleepGameTests {
                     villager.moveTo(villager.getX() - FolkNavigation.FAILED_SEARCH_MOVE - 1, villager.getY(),
                             villager.getZ());
                     helper.assertFalse(navigation.usesLongSearch(target), "The search from the start of the failed "
-                            + "search must use the vanilla range");
+                            + "search must not be a long search");
                 })
                 .thenWaitUntil(() -> helper.assertTrue(level.getGameTime() - failedAt[0]
-                        >= FolkNavigation.FAILED_SEARCH_TICKS, "The time of the vanilla range must end"))
-                .thenExecute(() -> helper.assertTrue(navigation.usesLongSearch(target),
-                        "A search after the time of the vanilla range must be a long search"))
+                        >= FolkNavigation.FAILED_SEARCH_TICKS, "The time of the repeat must end"))
+                .thenExecute(() -> {
+                    helper.assertTrue(navigation.usesLongSearch(target),
+                            "A search after the time of the repeat must be a long search");
+                    long searches = navigation.searches();
+                    navigation.createPath(goal, 0);
+                    helper.assertTrue(navigation.searches() == searches + 1,
+                            "A search after the time of the repeat must search again");
+                })
                 .thenSucceed();
     }
 
