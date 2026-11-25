@@ -267,6 +267,25 @@ public class UsePassageGoal extends Goal {
         return !mob.getBoundingBox().intersects(passage);
     }
 
+    /**
+     * True if no living entity is in a passage, and no mob near the passage has a path through it. The heart of a
+     * village uses this check to close its gates at night.
+     *
+     * @param level the level
+     * @param pos   the position of the passage
+     * @return true if the passage is clear
+     */
+    public static boolean isFree(Level level, BlockPos pos) {
+        AABB passage = passageBox(pos, 0.0);
+        for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, passageBox(pos, FOLLOW_DISTANCE))) {
+            if (entity.getBoundingBox().intersects(passage)
+                    || (entity instanceof Mob other && pathGoesThrough(other.getNavigation().getPath(), pos))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** The box of a passage, two blocks high, with a horizontal margin. */
     private static AABB passageBox(BlockPos pos, double margin) {
         return new AABB(pos).expandTowards(0.0, 1.0, 0.0).inflate(margin, 0.0, margin);
